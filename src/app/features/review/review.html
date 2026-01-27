@@ -1,0 +1,132 @@
+<div style="max-width:1100px;margin:24px auto;padding:16px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;">
+    <h1>Review</h1>
+    <button (click)="goInbox()">← Inbox</button>
+  </div>
+
+  @if (error()) {
+  <p style="color:#b00020;">{{ error() }}</p>
+  }
+
+  @if (loading()) {
+  <p>Cargando…</p>
+  } @else {
+  <div style="display:grid;grid-template-columns: 1fr 1fr;gap:16px;align-items:start;">
+<!-- IZQUIERDA: contexto -->
+<div style="border:1px solid #e8e8e8;border-radius:14px;padding:12px;">
+  <h3>Contexto</h3>
+
+  <!-- Mensaje original -->
+  <div style="margin-top:10px;white-space:pre-wrap;border:1px solid #eee;border-radius:12px;padding:10px;">
+    {{ rawText() || "(sin texto)" }}
+  </div>
+
+  <!-- Portada -->
+  <div style="margin-top:12px;">
+    <div style="font-weight:600;margin-bottom:6px;">Portada</div>
+    @if (coverUrl()) {
+      <img [src]="coverUrl()!"
+           style="width:100%;max-width:340px;height:200px;object-fit:cover;border-radius:12px;border:1px solid #eee;" />
+    } @else {
+      <div style="opacity:.7;">(sin imagen)</div>
+    }
+  </div>
+
+  <!-- Galería RAW -->
+  <div style="margin-top:12px;">
+    <div style="font-weight:600;margin-bottom:6px;">Imágenes</div>
+
+    @if (visibleRawImages().length === 0) {
+      <div style="opacity:.7;">(no hay imágenes visibles)</div>
+    } @else {
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        @for (u of visibleRawImages(); track u) {
+          <div style="width:120px;">
+            <img [src]="u"
+                 style="width:120px;height:120px;object-fit:cover;border-radius:12px;border:1px solid #eee;" />
+
+            <div style="display:flex;gap:6px;margin-top:6px;">
+              <button (click)="setCover(u)" style="flex:1;">
+                @if (coverUrl() === u) { ✓ Portada } @else { Portada }
+              </button>
+              <button (click)="removeImage(u)" style="border:1px solid #b00020;color:#b00020;">
+                Quitar
+              </button>
+            </div>
+          </div>
+        }
+      </div>
+    }
+  </div>
+
+  <div style="margin-top:12px;font-family:ui-monospace, Menlo, monospace;font-size:12px;opacity:.8;">
+    ID: {{ id }}
+  </div>
+</div>
+
+
+
+<!-- DERECHA: formulario -->
+@if (draft(); as d) {
+  <div style="border:1px solid #e8e8e8;border-radius:14px;padding:12px;">
+    <h3>Edición</h3>
+
+    <label style="display:block;margin-top:10px;">Título</label>
+    <input
+      [(ngModel)]="d.listing.title"
+      style="width:100%;padding:8px;"
+    />
+
+    <label style="display:block;margin-top:10px;">Categoría</label>
+    <input
+      [(ngModel)]="d.listing.category_hint"
+      style="width:100%;padding:8px;"
+    />
+
+    <div style="margin-top:14px;">
+      <h4>Items</h4>
+
+      @for (it of d.listing.items; track $index) {
+        <div style="border:1px solid #eee;border-radius:12px;padding:10px;margin-top:10px;">
+          <label>Variante</label>
+          <input
+            [(ngModel)]="it.variant_name"
+            style="width:100%;padding:8px;"
+          />
+
+          <label style="display:block;margin-top:8px;">Precio público (MXN)</label>
+          <input
+            type="number"
+            [(ngModel)]="it.prices[0].amount"
+            style="width:100%;padding:8px;"
+          />
+
+          <label style="display:block;margin-top:8px;">Stock</label>
+          <select
+            [(ngModel)]="it.stock_state"
+            style="width:100%;padding:8px;"
+          >
+            <option value="in_stock">Disponible</option>
+            <option value="last_pair">Última pieza</option>
+            <option value="unknown_qty">Cantidad desconocida</option>
+          </select>
+        </div>
+      }
+    </div>
+
+    <div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end;">
+      <button (click)="save()">Guardar</button>
+      <button (click)="validate()">Validar</button>
+      <button
+        (click)="discard()"
+        style="border:1px solid #b00020;color:#b00020;"
+      >
+        Eliminar
+      </button>
+    </div>
+  </div>
+}
+
+  </div>
+  }
+</div>

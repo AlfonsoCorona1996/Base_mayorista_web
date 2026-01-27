@@ -1,0 +1,19 @@
+<div style="max-width:420px;margin:40px auto;padding:16px;border:1px solid #ddd;border-radius:12px;">
+    <h2 style="margin:0 0 12px;">Base Mayorista — Admin</h2>
+
+    <label>Email</label>
+    <input style="width:100%;padding:10px;margin:6px 0 12px;" [(ngModel)]="email" type="email" />
+
+    <label>Password</label>
+    <input style="width:100%;padding:10px;margin:6px 0 12px;" [(ngModel)]="password" type="password" />
+
+    <button (click)="onLogin()" [disabled]="loading()" style="width:100%;padding:10px;border-radius:10px;">
+        {{ loading() ? "Entrando..." : "Entrar" }}
+    </button>
+
+    @if (error()) {
+    <p style="color:#b00020;margin-top:12px;">
+        {{ error() }}
+    </p>
+    }
+</div>
