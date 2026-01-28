@@ -1,7 +1,8 @@
 import { Component, signal } from "@angular/core";
 import { Router } from "@angular/router";
 import { AuthService } from "../../core/auth.service";
-import { NormalizedListingsService, NormalizedListingDoc } from "../../core/normalized-listings.service";
+import { NormalizedListingsService } from "../../core/normalized-listings.service";
+import type { NormalizedListingDoc } from "../../core/firestore-contracts";
 
 
 @Component({
@@ -60,7 +61,8 @@ export default class Inbox {
     this.error.set(null);
     this.loadingMore.set(true);
     try {
-      const { docs, nextCursor } = await this.svc.listNeedsReview(25);
+      // ✅ FIX: Pasar el cursor actual para continuar la paginación
+      const { docs, nextCursor } = await this.svc.listNeedsReview(25, this.cursor);
 
       this.rows.set([...this.rows(), ...docs]);
       this.cursor = nextCursor;
