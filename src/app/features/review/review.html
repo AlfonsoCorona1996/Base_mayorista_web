@@ -2,15 +2,18 @@
   Review Page - Mobile First UX
   Optimizado para pantallas táctiles
 -->
-<div class="container">
+<div class="review-container">
   <!-- Header -->
-  <header class="header">
+  <header class="review-header">
     <button class="btn-icon" (click)="goInbox()">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M19 12H5M12 19l-7-7 7-7"/>
       </svg>
     </button>
-    <h1 class="title">Revisión</h1>
+    <div class="header-title-section">
+      <h1 class="review-title">📝 Revisión de Producto</h1>
+      <p class="review-subtitle">Validar y editar información</p>
+    </div>
     <div class="header-spacer"></div>
   </header>
 
@@ -97,64 +100,109 @@
     </section>
 
     <!-- =================================================================
-         SECCIÓN 2: IMÁGENES Y COLORES
+         SECCIÓN 2: IMÁGENES
          ================================================================= -->
     <section class="card">
-      <h2 class="section-title">Imágenes y colores</h2>
-
-      <!-- Portada actual -->
-      <div class="cover-preview">
-        <label class="label">Portada</label>
+      <h2 class="section-title">Imágenes y Colores</h2>
+      
+      <!-- Subsección: Imagen de Portada -->
+      <div class="subsection">
+        <h3 class="subsection-title">🖼️ Imagen de Portada</h3>
+        <p class="subsection-hint">
+          Esta es la imagen principal que se muestra en la vista general del producto (por ejemplo, todas las carteras juntas). 
+          <strong>No es un color,</strong> es la imagen de presentación.
+        </p>
+        
         @if (coverUrl()) {
-          <img [src]="coverUrl()!" class="cover-image" alt="Portada"/>
-        } @else {
-          <div class="cover-placeholder">Sin imagen de portada</div>
-        }
-      </div>
-
-      <!-- Galería de imágenes -->
-      <div class="images-grid">
-        @for (img of visibleRawImages(); track img) {
-          <div class="image-card">
-            <img [src]="img" class="image-thumb" alt="Imagen del producto"/>
-            
-            <!-- Color asignado -->
-            <input
-              type="text"
-              [(ngModel)]="imageColors[img]"
-              class="input input-sm"
-              placeholder="Color..."
-            />
-
-            <!-- Acciones -->
-            <div class="image-actions">
-              <button
-                type="button"
-                class="btn btn-sm"
-                [class.btn-primary]="coverUrl() === img"
-                (click)="setCover(img)"
-              >
-                @if (coverUrl() === img) {
-                  ✓ Portada
-                } @else {
-                  Portada
-                }
-              </button>
-              <button
-                type="button"
-                class="btn btn-sm btn-danger"
-                (click)="removeImage(img)"
-              >
-                Quitar
-              </button>
+          <div class="cover-preview-main">
+            <div class="cover-preview-image-wrapper">
+              <img [src]="coverUrl()" class="cover-preview-image" alt="Portada del producto"/>
+              <div class="cover-badge-large">✓ Portada Actual</div>
             </div>
+            <button 
+              type="button" 
+              class="btn btn-sm btn-secondary" 
+              (click)="openCoverSelector()"
+            >
+              🔄 Cambiar Portada
+            </button>
           </div>
+        } @else {
+          <button 
+            type="button" 
+            class="btn btn-primary" 
+            (click)="openCoverSelector()"
+          >
+            + Seleccionar Imagen de Portada
+          </button>
         }
       </div>
 
-      @if (visibleRawImages().length === 0) {
-        <p class="text-muted">No hay imágenes disponibles</p>
-      }
+      <hr class="divider"/>
+
+      <!-- Subsección: Imágenes de Colores -->
+      <div class="subsection">
+        <div class="subsection-header">
+          <div>
+            <h3 class="subsection-title">🎨 Colores Globales del Producto</h3>
+            <p class="subsection-hint">
+              Define aquí TODOS los colores disponibles del producto. Luego podrás asignarlos a cada variante.
+            </p>
+          </div>
+          <div class="colors-actions">
+            <button type="button" class="btn btn-sm btn-primary" (click)="addGlobalColorWithImage()">
+              📷 Con imagen
+            </button>
+            <button type="button" class="btn btn-sm btn-secondary" (click)="addGlobalColorWithoutImage()">
+              ✏️ Solo nombre
+            </button>
+          </div>
+        </div>
+
+        <!-- Galería de colores globales -->
+        <div class="images-gallery">
+          @for (color of (d.product_colors || []); track $index; let i = $index) {
+            <div class="gallery-item">
+              <div class="gallery-item-image-wrapper">
+                @if (hasColorImage(color.image_url)) {
+                  <img [src]="color.image_url" class="gallery-item-image" alt="Imagen de color"/>
+                } @else {
+                  <div class="gallery-item-placeholder">
+                    <span>📷</span>
+                    <span class="placeholder-text">Sin imagen</span>
+                  </div>
+                }
+                
+                <!-- Botón eliminar (visible en hover) -->
+                <button
+                  type="button"
+                  class="gallery-item-remove"
+                  (click)="removeGlobalColorAt(i)"
+                  title="Eliminar color"
+                >
+                  ✕
+                </button>
+              </div>
+              
+              <!-- Editor de color -->
+              <div class="gallery-item-color">
+                <label class="gallery-label">🎨 Color</label>
+                <input
+                  type="text"
+                  [(ngModel)]="color.name"
+                  class="gallery-input"
+                  placeholder="Ej: negro, rosa..."
+                  (blur)="touchDraft()"
+                />
+              </div>
+            </div>
+          }
+        </div>
+
+        @if ((d.product_colors || []).length === 0) {
+          <p class="text-muted">No hay colores definidos. Agrega al menos uno usando los botones de arriba.</p>
+        }
+      </div>
     </section>
 
     <!-- =================================================================
@@ -168,9 +216,39 @@
         </button>
       </div>
 
+      <!-- Checkbox: ¿Colores por variante? -->
+      <div class="form-group">
+        <label class="checkbox-label">
+          <input 
+            type="checkbox" 
+            [checked]="hasVariantColors()"
+            (change)="toggleVariantColors($any($event.target).checked)"
+            class="checkbox"
+          />
+          <span>Las variantes tienen colores diferentes</span>
+        </label>
+        <small class="hint">
+          Marca esto si cada variante tiene un color específico (ej: rosa, azul). 
+          Si todas las variantes comparten los mismos colores, déjalo sin marcar.
+        </small>
+        @if (hasVariantColors()) {
+          <div class="alert alert-success">
+            ✅ <strong>Modo Colores Activado:</strong> Ahora puedes asignar imágenes (con sus colores) a cada variante. 
+            Los colores que editaste en la galería se asignarán automáticamente.
+          </div>
+        }
+      </div>
+
       <!-- Descuentos globales -->
       <div class="global-discounts">
-        <h3 class="subsection-title">Descuentos globales</h3>
+        <div class="global-discounts-header">
+          <h3 class="subsection-title">Descuentos globales</h3>
+          <button type="button" class="btn btn-sm btn-primary" (click)="syncGlobalDiscountsToVariants()">
+            🔄 Aplicar a todas las variantes
+          </button>
+        </div>
+        <small class="hint">Define descuentos que se aplicarán automáticamente a todas las variantes</small>
+        
         @for (tier of d.listing.price_tiers_global; track $index; let i = $index) {
           <div class="discount-row">
             <input
@@ -179,6 +257,7 @@
               class="input input-sm"
               placeholder="Tipo (ej: mayorista)"
               style="flex: 1;"
+              [readonly]="tier.tier_name === 'publico'"
             />
             <input
               type="number"
@@ -186,12 +265,14 @@
               class="input input-sm"
               placeholder="%"
               style="width: 80px;"
+              [readonly]="tier.tier_name === 'publico'"
             />
+            <span class="discount-symbol">%</span>
             <button
               type="button"
               class="btn-icon-sm btn-danger"
               (click)="removeGlobalDiscount(i)"
-              [disabled]="d.listing.price_tiers_global.length <= 1"
+              [disabled]="d.listing.price_tiers_global.length <= 1 || tier.tier_name === 'publico'"
             >
               ✕
             </button>
@@ -236,21 +317,75 @@
               />
             </div>
 
-            <!-- Color -->
             <div class="form-group">
-              <label class="label">Color</label>
-              <div class="color-input-group">
+              <label class="label">SKU</label>
+              @if (variant.sku) {
                 <input
                   type="text"
-                  [(ngModel)]="variant.color"
+                  [value]="variant.sku"
                   class="input"
-                  placeholder="Ej: Rosa, Azul marino"
+                  readonly
                 />
-                <button type="button" class="btn btn-sm" (click)="pickImageForVariant(i)">
-                  📷 Imagen
-                </button>
-              </div>
+                <small class="hint">Identificador único por variante/talla (no editable)</small>
+              } @else {
+                <small class="hint">Se generará automáticamente al guardar/validar.</small>
+              }
             </div>
+
+            <!-- Colores asignados (solo si hasVariantColors está activado) -->
+            @if (hasVariantColors()) {
+              <div class="form-group">
+                <div class="colors-header">
+                  <label class="label">Colores de esta variante</label>
+                  <button type="button" class="btn btn-sm btn-primary" (click)="assignColorToVariant(i)">
+                    + Asignar color
+                  </button>
+                </div>
+                
+                <div class="colors-hint">
+                  💡 <strong>Los colores se definen arriba</strong> en "Colores Globales". Aquí solo seleccionas cuáles aplican para esta variante.
+                </div>
+                
+                <!-- Lista de colores asignados (READ-ONLY) -->
+                @if (variant.colors && variant.colors.length > 0) {
+                  <div class="colors-list-readonly">
+                    @for (color of variant.colors; track $index; let ci = $index) {
+                      <div class="color-chip">
+                        <!-- Miniatura de imagen o placeholder -->
+                        @if (variant.image_urls && variant.image_urls[ci]) {
+                          <img 
+                            [src]="variant.image_urls[ci]" 
+                            alt="{{color}}"
+                            class="color-chip-image"
+                          />
+                        } @else {
+                          <div class="color-chip-placeholder">
+                            📷
+                          </div>
+                        }
+                        
+                        <!-- Nombre del color (READ-ONLY) -->
+                        <span class="color-chip-name">{{ color || 'Sin nombre' }}</span>
+                        
+                        <!-- Botón para eliminar color de esta variante -->
+                        <button
+                          type="button"
+                          class="color-chip-remove"
+                          (click)="removeColorFromVariant(i, ci)"
+                          title="Quitar este color de la variante"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    }
+                  </div>
+                } @else {
+                  <div class="empty-state">
+                    <p>No hay colores asignados. Click en "Asignar color" para agregar.</p>
+                  </div>
+                }
+              </div>
+            }
 
             <!-- Stock -->
             <div class="form-group">
@@ -350,10 +485,37 @@
 @if (showImagePicker()) {
   <div class="modal-overlay" (click)="closeImagePicker()">
     <div class="modal-content" (click)="$event.stopPropagation()">
-      <h3>Seleccionar imagen para variante</h3>
+      <h3>Seleccionar o Subir Imagen</h3>
+      
+      <!-- Opción de subir nueva imagen -->
+      <div class="upload-section">
+        <label class="upload-button">
+          <input 
+            type="file" 
+            accept="image/*" 
+            (change)="uploadNewImage($event)"
+            [disabled]="uploading()"
+            style="display: none;"
+          />
+          @if (uploading()) {
+            <span class="btn btn-primary" style="pointer-events: none;">⏳ Subiendo...</span>
+          } @else {
+            <span class="btn btn-primary">📤 Subir Nueva Imagen</span>
+          }
+        </label>
+        @if (uploadError()) {
+          <div class="upload-error">{{ uploadError() }}</div>
+        }
+      </div>
+      
+      <div class="divider-text">
+        <span>O selecciona una existente</span>
+      </div>
+      
+      <!-- Imágenes existentes -->
       <div class="images-grid">
         @for (img of visibleRawImages(); track img) {
-          <button type="button" class="image-card-clickable" (click)="assignImageToVariant(img)">
+          <button type="button" class="image-card-clickable" (click)="assignImageToColor(img)">
             <img [src]="img" class="image-thumb" alt="Imagen"/>
             @if (imageColors[img]) {
               <div class="image-color-badge">{{ imageColors[img] }}</div>
@@ -361,6 +523,7 @@
           </button>
         }
       </div>
+      
       <button type="button" class="btn btn-secondary" (click)="closeImagePicker()">Cancelar</button>
     </div>
   </div>

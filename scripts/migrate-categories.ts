@@ -5,69 +5,86 @@
  *   npx tsx scripts/migrate-categories.ts
  */
 
-import { initializeApp } from "firebase/app";
-import { getFirestore, collection, doc, setDoc, writeBatch } from "firebase/firestore";
+import * as admin from "firebase-admin";
 import { CATEGORIES_TREE, flattenCategories } from "./categories-data";
+import * as path from "path";
 
-// IMPORTANTE: Usa tu configuración de Firebase
-const firebaseConfig = {
-  apiKey: "TU_API_KEY",
-  authDomain: "TU_AUTH_DOMAIN",
-  projectId: "TU_PROJECT_ID",
-  storageBucket: "TU_STORAGE_BUCKET",
-  messagingSenderId: "TU_SENDER_ID",
-  appId: "TU_APP_ID"
-};
+// Ruta al serviceAccountKey.json del backend
+const serviceAccountPath = path.resolve(
+  __dirname,
+  "../../whatsapp-bot/serviceAccountKey.json"
+);
 
 async function migrateCategories() {
   console.log("🚀 Iniciando migración de categorías...\n");
 
-  // Inicializar Firebase
-  const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
+  try {
+    // Inicializar Firebase Admin
+    const serviceAccount = require(serviceAccountPath);
+    
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+      projectId: "base-mayorista"
+    });
 
-  // Obtener lista plana de categorías
-  const categories = flattenCategories(CATEGORIES_TREE);
-  console.log(`📦 Total de categorías: ${categories.length}\n`);
+    const db = admin.firestore();
+    console.log("✅ Conectado a Firebase\n");
 
-  // Migrar en lotes de 500 (límite de Firestore)
-  const batchSize = 500;
-  let processed = 0;
+    // Obtener lista plana de categorías
+    const categories = flattenCategories(CATEGORIES_TREE);
+    console.log(`📦 Total de categorías a migrar: ${categories.length}\n`);
 
-  for (let i = 0; i < categories.length; i += batchSize) {
-    const batch = writeBatch(db);
-    const chunk = categories.slice(i, i + batchSize);
+    // Migrar en lotes de 500 (límite de Firestore)
+    const batchSize = 500;
+    let processed = 0;
 
-    for (const category of chunk) {
-      const docRef = doc(db, "categories", category.id);
-      batch.set(docRef, {
-        ...category,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      });
-      processed++;
+    for (let i = 0; i < categories.length; i += batchSize) {
+      const batch = db.batch();
+      const chunk = categories.slice(i, i + batchSize);
+
+      for (const category of chunk) {
+        const docRef = db.collection("categories").doc(category.id);
+        batch.set(docRef, {
+          ...category,
+          created_at: admin.firestore.FieldValue.serverTimestamp(),
+          updated_at: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        processed++;
+      }
+
+      await batch.commit();
+      console.log(`✅ Procesadas ${processed}/${categories.length} categorías`);
     }
 
-    await batch.commit();
-    console.log(`✅ Procesadas ${processed}/${categories.length} categorías`);
+    console.log("\n🎉 Migración completada exitosamente!");
+    console.log("\n📋 Resumen por nivel:");
+    
+    const byLevel = categories.reduce((acc, cat) => {
+      acc[cat.level] = (acc[cat.level] || 0) + 1;
+      return acc;
+    }, {} as Record<number, number>);
+
+    Object.entries(byLevel).forEach(([level, count]) => {
+      console.log(`  Nivel ${level}: ${count} categorías`);
+    });
+
+    console.log("\n📊 Categorías por sección:");
+    const roots = categories.filter(c => c.level === 0);
+    roots.forEach(root => {
+      const children = categories.filter(c => c.parentId === root.id);
+      console.log(`  ${root.name}: ${children.length + 1} items`);
+    });
+
+    console.log("\n✅ Verifica en Firebase Console:");
+    console.log("   https://console.firebase.google.com/project/base-mayorista/firestore");
+
+  } catch (error) {
+    console.error("\n❌ Error durante la migración:", error);
+    process.exit(1);
   }
-
-  console.log("\n🎉 Migración completada exitosamente!");
-  console.log("\n📋 Resumen por nivel:");
-  const byLevel = categories.reduce((acc, cat) => {
-    acc[cat.level] = (acc[cat.level] || 0) + 1;
-    return acc;
-  }, {} as Record<number, number>);
-
-  Object.entries(byLevel).forEach(([level, count]) => {
-    console.log(`  Nivel ${level}: ${count} categorías`);
-  });
 
   process.exit(0);
 }
 
 // Ejecutar
-migrateCategories().catch((error) => {
-  console.error("❌ Error durante la migración:", error);
-  process.exit(1);
-});
+migrateCategories();

@@ -62,6 +62,15 @@ export interface ItemPrice {
 }
 
 /**
+ * ProductColor - Color global del producto (Schema v1.1)
+ * Un color se define una vez y se referencia en múltiples variantes
+ */
+export interface ProductColor {
+  name: string;
+  image_url: string | null;
+}
+
+/**
  * ITEM - Estructura REAL del backend (plana, no jerárquica)
  * 
  * NOTA: Esto difiere del plan maestro original que tenía
@@ -75,9 +84,14 @@ export interface NormalizedItem {
   notes: string | null;
   prices: ItemPrice[];
   
-  // Campos visuales para UX
-  color?: string | null; // "Rosa", "Azul marino", etc.
-  image_url?: string | null; // URL de la imagen asociada a esta variante
+  // ✅ SCHEMA v1.1: Solo referencias a colores globales
+  color_names?: string[]; // ["negro", "blanco"] - Referencias a product_colors
+  
+  // DEPRECATED Schema v1: Mantener para compatibilidad
+  colors?: string[]; // ["rosa", "beige", "azul marino"]
+  image_urls?: string[]; // URLs de imágenes (mismo orden que colors)
+  color?: string | null; 
+  image_url?: string | null;
 }
 
 export interface PriceTierGlobal {
@@ -113,13 +127,18 @@ export interface Review {
 }
 
 export interface NormalizedListingDoc {
-  schema_version: "normalized_v1";
+  schema_version: "normalized_v1" | "normalized_v1.1";
   normalized_id: string;
   raw_post_id: string;
   supplier_id: string | null;
   
-  // Campos top-level para UX (agregados por el backend)
-  preview_image_url: string | null;
+  // ✅ SCHEMA v1.1: Portada y colores separados
+  cover_images?: string[]; // ["https://.../todas_las_carteras.jpg"]
+  product_colors?: ProductColor[]; // [{ name: "negro", image_url: "..." }]
+  
+  // DEPRECATED Schema v1: Mantener para compatibilidad
+  preview_image_url?: string | null;
+  
   created_at: any; // Firestore Timestamp
   updated_at: any; // Firestore Timestamp
   
@@ -149,5 +168,5 @@ export interface ReviewPatch {
 
 export type PartialNormalizedUpdate = Partial<Pick<
   NormalizedListingDoc,
-  "supplier_id" | "preview_image_url" | "listing"
+  "supplier_id" | "preview_image_url" | "cover_images" | "product_colors" | "listing"
 >>;
