@@ -1,4 +1,4 @@
-import { Injectable } from "@angular/core";
+import { Injectable, signal, computed } from "@angular/core";
 import { FIREBASE_AUTH, FIRESTORE } from "./firebase.providers";
 import {
   signInWithEmailAndPassword,
@@ -10,35 +10,41 @@ import { doc, getDoc } from "firebase/firestore";
 
 @Injectable({ providedIn: "root" })
 export class AuthService {
-  private _user: User | null = null;
+  // Estado reactivo con signals
+  user = signal<User | null>(null);
+  
+  // Computed: si el usuario está autenticado
+  isAuthenticated = computed(() => this.user() !== null);
+  
+  // Computed: UID del usuario (o null)
+  uid = computed(() => this.user()?.uid ?? null);
 
   constructor() {
-    onAuthStateChanged(FIREBASE_AUTH, (u) => (this._user = u));
-  }
-
-  get user() {
-    return this._user;
+    // Escuchar cambios en el estado de autenticación
+    onAuthStateChanged(FIREBASE_AUTH, (u) => {
+      this.user.set(u);
+    });
   }
 
   async login(email: string, password: string) {
     const cred = await signInWithEmailAndPassword(FIREBASE_AUTH, email, password);
-    this._user = cred.user;
+    this.user.set(cred.user);
     return cred.user;
   }
 
   async logout() {
     await signOut(FIREBASE_AUTH);
-    this._user = null;
+    this.user.set(null);
   }
 
-async isAdmin(): Promise<boolean> {
-  const u = FIREBASE_AUTH.currentUser;
-  if (!u) return false;
+  async isAdmin(): Promise<boolean> {
+    const u = FIREBASE_AUTH.currentUser;
+    if (!u) return false;
 
-  const snap = await getDoc(doc(FIRESTORE, "admins", u.uid));
-  if (!snap.exists()) return false;
+    const snap = await getDoc(doc(FIRESTORE, "admins", u.uid));
+    if (!snap.exists()) return false;
 
-  const data = snap.data();
-  return data?.['active'] === true;
-}
+    const data = snap.data();
+    return data?.['active'] === true;
+  }
 }

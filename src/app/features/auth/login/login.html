@@ -1,19 +1,88 @@
-<div style="max-width:420px;margin:40px auto;padding:16px;border:1px solid #ddd;border-radius:12px;">
-    <h2 style="margin:0 0 12px;">Base Mayorista — Admin</h2>
+<div class="login-container">
+  <!-- Background decoration -->
+  <div class="login-background"></div>
 
-    <label>Email</label>
-    <input style="width:100%;padding:10px;margin:6px 0 12px;" [(ngModel)]="email" type="email" />
+  <!-- Login card -->
+  <div class="login-card">
+    <!-- Header -->
+    <div class="login-header">
+      <div class="login-icon">🛍️</div>
+      <h1 class="login-title">Base Mayorista</h1>
+      <p class="login-subtitle">Panel de Administración</p>
+      
+      <!-- Deep link message -->
+      @if (returnUrl() !== '/inbox') {
+        <div class="deep-link-message">
+          🔗 Inicia sesión para continuar con la revisión
+        </div>
+      }
+    </div>
 
-    <label>Password</label>
-    <input style="width:100%;padding:10px;margin:6px 0 12px;" [(ngModel)]="password" type="password" />
+    <!-- Form -->
+    <form class="login-form" (submit)="onLogin(); $event.preventDefault()">
+      <!-- Email -->
+      <div class="form-group">
+        <label class="form-label">
+          <span class="label-icon">📧</span>
+          Email
+        </label>
+        <input 
+          type="email" 
+          class="form-input"
+          [(ngModel)]="email"
+          name="email"
+          placeholder="admin@ejemplo.com"
+          [disabled]="loading()"
+          required
+          autocomplete="email"
+        />
+      </div>
 
-    <button (click)="onLogin()" [disabled]="loading()" style="width:100%;padding:10px;border-radius:10px;">
-        {{ loading() ? "Entrando..." : "Entrar" }}
-    </button>
+      <!-- Password -->
+      <div class="form-group">
+        <label class="form-label">
+          <span class="label-icon">🔒</span>
+          Contraseña
+        </label>
+        <input 
+          type="password" 
+          class="form-input"
+          [(ngModel)]="password"
+          name="password"
+          placeholder="••••••••"
+          [disabled]="loading()"
+          required
+          autocomplete="current-password"
+        />
+      </div>
 
-    @if (error()) {
-    <p style="color:#b00020;margin-top:12px;">
-        {{ error() }}
-    </p>
-    }
+      <!-- Error message -->
+      @if (error()) {
+        <div class="error-message">
+          <span class="error-icon">⚠️</span>
+          <span>{{ error() }}</span>
+        </div>
+      }
+
+      <!-- Submit button -->
+      <button 
+        type="submit"
+        class="login-button"
+        [disabled]="loading()"
+      >
+        @if (loading()) {
+          <span class="button-spinner"></span>
+          <span>Iniciando sesión...</span>
+        } @else {
+          <span>Iniciar Sesión</span>
+          <span class="button-arrow">→</span>
+        }
+      </button>
+    </form>
+
+    <!-- Footer -->
+    <div class="login-footer">
+      <p>Sistema de gestión de productos mayoristas</p>
+    </div>
+  </div>
 </div>

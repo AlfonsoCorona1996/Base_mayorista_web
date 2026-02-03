@@ -15,74 +15,50 @@ import {
     updateDoc,
     serverTimestamp,
     setDoc,
-    deleteDoc,
 } from "firebase/firestore";
-
-export type StockState = "in_stock" | "last_pair" | "unknown_qty";
-
-export type NormalizedListingDoc = {
-  normalized_id: string;
-  raw_post_id: string;
-  schema_version: string;
-
-  preview_image_url?: string | null;
-  excluded_image_urls?: string[]; // opcional
-
-  created_at?: any;
-  updated_at?: any;
-
-  supplier_id?: string | null;
-
-  listing: {
-    title: string | null;
-    category_hint: string | null;
-    price_tiers_global: any[];
-    items: any[];
-  };
-
-  workflow: {
-    status: "needs_review" | "validated" | "deleted";
-    validated_by: string | null;
-    validated_at: any | null;
-  };
-};
-
-export type ListPage<T> = {
-  docs: T[];
-  nextCursor: any | null; // QueryDocumentSnapshot | null si quieres tiparlo más estricto
-};
-
-
-
-
-export interface ReviewPatch {
-    preview_image_url?: string | null;
-    excluded_image_urls?: string[];
-    edited_by?: string | null;
-}
-
-export type PartialNormalizedUpdate = Partial<Pick<
+import type {
   NormalizedListingDoc,
-  "supplier_id" | "preview_image_url" | "excluded_image_urls" | "listing"
->>;
+  ListPage,
+  ReviewPatch,
+  PartialNormalizedUpdate,
+  StockState,
+} from "./firestore-contracts";
+
+// Re-exportar tipos para compatibilidad
+export type {
+  NormalizedListingDoc,
+  ListPage,
+  ReviewPatch,
+  PartialNormalizedUpdate,
+  StockState,
+};
 
 
 @Injectable({ providedIn: "root" })
 export class NormalizedListingsService {
   private colRef = collection(FIRESTORE, "normalized_listings");
 
-async listNeedsReview(pageSize = 20): Promise<ListPage<NormalizedListingDoc>> {
-    const q = query(
+async listNeedsReview(
+    pageSize = 20,
+    cursor?: QueryDocumentSnapshot<DocumentData> | null
+  ): Promise<ListPage<NormalizedListingDoc>> {
+    let q = query(
       this.colRef,
       where("workflow.status", "==", "needs_review"),
       orderBy("created_at", "desc"),
       limit(pageSize)
     );
-    const snap = await getDocs(q);
-  const docs = snap.docs.map(d => d.data() as NormalizedListingDoc);
-  const nextCursor = snap.docs.length ? snap.docs[snap.docs.length - 1] : null;
 
-  return { docs, nextCursor };
+    // Si hay cursor, continuar desde ahí
+    if (cursor) {
+      q = query(q, startAfter(cursor));
+    }
+
+    const snap = await getDocs(q);
+    const docs = snap.docs.map(d => d.data() as NormalizedListingDoc);
+    const nextCursor = snap.docs.length ? snap.docs[snap.docs.length - 1] : null;
+
+    return { docs, nextCursor };
   }
 
 
@@ -124,13 +100,20 @@ async listNeedsReview(pageSize = 20): Promise<ListPage<NormalizedListingDoc>> {
     await updateDoc(ref, {
       "workflow.status": "validated",
       "workflow.validated_by": uid,
-      "workflow.validated_at": new Date(),
+      "workflow.validated_at": serverTimestamp(),
     } as any);
   }
 
-
-  async discard(id: string): Promise<void> {
+  /**
+   * Rechaza un listing (no lo borra, solo marca como rejected)
+   * Mantiene trazabilidad según principios del sistema
+   */
+  async reject(id: string, uid: string): Promise<void> {
     const ref = doc(this.colRef, id);
-    await deleteDoc(ref);
+    await updateDoc(ref, {
+      "workflow.status": "rejected",
+      "workflow.validated_by": uid,
+      "workflow.validated_at": serverTimestamp(),
+    } as any);
   }
 }

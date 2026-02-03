@@ -1,63 +1,100 @@
-<div style="max-width:1100px;margin:24px auto;padding:16px;">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
-        <div>
-            <h2 style="margin:0;">Inbox — needs_review</h2>
-            <div style="opacity:.75;font-size:13px;">normalized_listings</div>
+<div class="inbox-container">
+    <!-- Header -->
+    <header class="inbox-header">
+        <div class="inbox-header-content">
+            <div class="inbox-title-section">
+                <h1 class="inbox-title">📬 Bandeja de Entrada</h1>
+                <p class="inbox-subtitle">Productos pendientes de revisión</p>
+            </div>
+            <div class="inbox-actions">
+                <button 
+                    class="btn-icon" 
+                    (click)="reload()" 
+                    [disabled]="loading()"
+                    title="Recargar">
+                    🔄
+                </button>
+                <button 
+                    class="btn-logout" 
+                    (click)="logout()">
+                    Cerrar sesión
+                </button>
+            </div>
         </div>
-        <div style="display:flex;gap:8px;align-items:center;">
-            <button (click)="reload()" [disabled]="loading()">Recargar</button>
-            <button (click)="logout()">Salir</button>
-        </div>
-    </div>
+    </header>
 
+    <!-- Error Message -->
     @if (error()) {
-    <p style="color:#b00020;margin-top:12px;">{{ error() }}</p>
+        <div class="alert-error">
+            <strong>⚠️ Error:</strong> {{ error() }}
+        </div>
     }
 
+    <!-- Loading State -->
     @if (loading()) {
-    <p style="margin-top:12px;">Cargando…</p>
+        <div class="loading-state">
+            <div class="spinner-large"></div>
+            <p>Cargando productos...</p>
+        </div>
     } @else {
-    @if (rows().length > 0) {
-    <div style="margin-top:12px;opacity:.8;">
-        Pendientes: <b>{{ rows().length }}</b>
-    </div>
-
-    <div style="margin-top:16px;display:flex;flex-direction:column;gap:10px;">
-        @for (r of rows(); track r.normalized_id) {
-        <div
-            style="display:flex;gap:12px;align-items:center;border:1px solid #e8e8e8;border-radius:14px;padding:10px 12px;">
-            <div style="width:64px;height:64px;border-radius:12px;overflow:hidden;background:#f4f4f4;flex:0 0 auto;">
-                @if (r.preview_image_url) {
-                <img [src]="r.preview_image_url" alt="preview" style="width:100%;height:100%;object-fit:cover;" />
-                } @else {
-                <div
-                    style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;opacity:.6;font-size:12px;">
-                    sin foto
+        <!-- Stats Bar -->
+        @if (rows().length > 0) {
+            <div class="stats-bar">
+                <div class="stat-item">
+                    <span class="stat-value">{{ rows().length }}</span>
+                    <span class="stat-label">Pendiente{{ rows().length !== 1 ? 's' : '' }}</span>
                 </div>
+            </div>
+
+            <!-- Products List -->
+            <div class="products-list">
+                @for (r of rows(); track r.normalized_id) {
+                    <article class="product-card" (click)="open(r.normalized_id)">
+                        <!-- Image -->
+                        <div class="product-image">
+                            @if (r.preview_image_url) {
+                                <img [src]="r.preview_image_url" alt="{{ r.listing.title }}" />
+                            } @else {
+                                <div class="product-image-placeholder">
+                                    <span>📷</span>
+                                    <span class="placeholder-text">Sin imagen</span>
+                                </div>
+                            }
+                        </div>
+
+                        <!-- Content -->
+                        <div class="product-content">
+                            <h3 class="product-title">{{ r.listing.title || "(sin título)" }}</h3>
+                            
+                            <div class="product-meta">
+                                <div class="meta-item">
+                                    <span class="meta-icon">📁</span>
+                                    <span>{{ r.listing.category_hint || "Sin categoría" }}</span>
+                                </div>
+                                <div class="meta-item">
+                                    <span class="meta-icon">🏷️</span>
+                                    <span>{{ r.listing.items.length }} variante{{ r.listing.items.length !== 1 ? 's' : '' }}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Footer -->
+                        <div class="product-footer">
+                            <span class="product-time">⏱️ {{ timeAgo(r.updated_at ?? r.created_at) }}</span>
+                            <button class="btn-review" (click)="open(r.normalized_id); $event.stopPropagation()">
+                                Revisar →
+                            </button>
+                        </div>
+                    </article>
                 }
             </div>
-
-            <div style="flex:1 1 auto;min-width:0;">
-                <div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                    {{ r.listing.title ?? "(sin título)" }}
-                </div>
-
-                <div style="display:flex;gap:10px;flex-wrap:wrap;opacity:.8;font-size:13px;margin-top:2px;">
-                    <span><b>Categoría:</b> {{ r.listing.category_hint ?? "(sin categoría)" }}</span>
-                    <span><b>Items:</b> {{ r.listing.items.length }}</span>
-                </div>
+        } @else {
+            <!-- Empty State -->
+            <div class="empty-state">
+                <div class="empty-icon">✅</div>
+                <h2 class="empty-title">¡Todo al día!</h2>
+                <p class="empty-message">No hay productos pendientes de revisión</p>
             </div>
-
-            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:0 0 auto;">
-                <div style="font-size:12px;opacity:.75;">
-                    {{ timeAgo(r.updated_at ?? r.created_at) }}
-                </div>
-                <button (click)="open(r.normalized_id)">Revisar</button>
-            </div>
-        </div>
         }
-    </div>
-    }
-
     }
 </div>
