@@ -20,7 +20,7 @@
   z-index: 30;
   background: linear-gradient(180deg, #0f172a 0%, #1f2b44 100%);
   color: #d8e2f1;
-  padding: 20px 14px;
+  padding: calc(env(safe-area-inset-top, 0px) + 20px) 14px calc(env(safe-area-inset-bottom, 0px) + 14px);
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -122,8 +122,9 @@
   position: sticky;
   top: 0;
   z-index: 25;
-  height: 56px;
-  padding: 0 12px;
+  min-height: 56px;
+  height: calc(56px + env(safe-area-inset-top, 0px));
+  padding: env(safe-area-inset-top, 0px) 12px 0;
   border-bottom: 1px solid #d4dfed;
   background: rgba(255, 255, 255, 0.97);
   backdrop-filter: blur(6px);
