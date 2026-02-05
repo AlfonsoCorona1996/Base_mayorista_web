@@ -1,0 +1,64 @@
+﻿<div class="main-layout" [class.menu-open]="menuOpen()">
+  <aside class="sidebar" [class.open]="menuOpen()">
+    <div class="brand">
+      <p class="brand-kicker">Base Mayorista</p>
+      <h1 class="brand-title">Panel</h1>
+    </div>
+
+    <nav class="menu">
+      <a
+        routerLink="/main/dashboard"
+        routerLinkActive="active"
+        [routerLinkActiveOptions]="{ exact: true }"
+        (click)="closeMenu()"
+      >
+        Dashboard
+      </a>
+      <a routerLink="/main/validacion" routerLinkActive="active" (click)="closeMenu()">
+        Validacion
+      </a>
+      <a routerLink="/main/catalogo" routerLinkActive="active" (click)="closeMenu()">
+        Catalogo
+      </a>
+      <a routerLink="/main/inventario" routerLinkActive="active" (click)="closeMenu()">
+        Inventario
+      </a>
+      <a routerLink="/main/edicion-productos" routerLinkActive="active" (click)="closeMenu()">
+        <span class="menu-link-text">Edicion productos</span>
+        <span class="menu-badge">En construccion</span>
+      </a>
+      <a routerLink="/main/proveedores" routerLinkActive="active" (click)="closeMenu()">Proveedores</a>
+      <a routerLink="/main/categorias" routerLinkActive="active" (click)="closeMenu()">Categorias</a>
+      <a routerLink="/main/pedidos" routerLinkActive="active" (click)="closeMenu()">
+        <span class="menu-link-text">Pedidos</span>
+        <span class="menu-badge">En construccion</span>
+      </a>
+    </nav>
+
+    <button type="button" class="btn-logout" (click)="logout()">
+      Cerrar sesion
+    </button>
+  </aside>
+
+  <div class="content-wrapper">
+    <header class="topbar">
+      <button type="button" class="menu-toggle" (click)="toggleMenu()" aria-label="Abrir o cerrar menu">
+        {{ menuOpen() ? 'Cerrar' : 'Menu' }}
+      </button>
+      <span class="topbar-title">Administracion</span>
+    </header>
+
+    <main class="content" (click)="closeMenu()">
+      <router-outlet />
+    </main>
+  </div>
+</div>
+
+@if (menuOpen()) {
+  <button
+    type="button"
+    class="backdrop"
+    aria-label="Cerrar menu"
+    (click)="closeMenu()"
+  ></button>
+}

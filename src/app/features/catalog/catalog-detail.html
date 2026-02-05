@@ -1,0 +1,110 @@
+﻿<div class="detail-page">
+  <header class="detail-header">
+    <button type="button" class="btn btn-outline" (click)="goCatalog()">Volver al catalogo</button>
+    <div class="header-actions">
+      <button type="button" class="btn btn-danger" (click)="markAllOutOfStock()">Marcar todo agotado</button>
+      <button type="button" class="btn btn-secondary" (click)="markAllInStock()">Marcar todo disponible</button>
+      <button type="button" class="btn btn-primary" (click)="saveInventory()" [disabled]="saving() || loading()">
+        {{ saving() ? "Guardando..." : "Guardar inventario" }}
+      </button>
+    </div>
+  </header>
+
+  @if (error()) {
+    <div class="alert-error"><strong>Error:</strong> {{ error() }}</div>
+  }
+
+  @if (saveMessage()) {
+    <div class="alert-success">{{ saveMessage() }}</div>
+  }
+
+  @if (loading()) {
+    <section class="loading-state">
+      <div class="spinner"></div>
+      <p>Cargando producto...</p>
+    </section>
+  } @else if (doc(); as d) {
+    <section class="summary-card">
+      <div class="summary-media">
+        @if (coverUrl()) {
+          <img [src]="coverUrl()" alt="{{ d.listing.title || 'Producto' }}" class="summary-image" />
+        } @else {
+          <div class="summary-image-placeholder">Sin imagen</div>
+        }
+      </div>
+
+      <div class="summary-content">
+        <h1 class="summary-title">{{ d.listing.title || "(sin titulo)" }}</h1>
+
+        <div class="summary-meta">
+          <span class="chip">{{ supplierName() }}</span>
+          <span class="chip">{{ d.listing.category_hint || "Sin categoria" }}</span>
+          <span class="chip">SKU variantes: {{ d.listing.items.length }}</span>
+        </div>
+
+        <div class="summary-stock">
+          Estado general:
+          <span class="stock-pill" [class]="'stock-pill ' + stockClass(productStockState())">
+            {{ stockLabel(productStockState()) }}
+          </span>
+        </div>
+      </div>
+    </section>
+
+    <section class="variants-grid">
+      @for (item of d.listing.items; track $index; let i = $index) {
+        <article class="variant-card">
+          <div class="variant-head">
+            <h2>{{ variantLabel(item, i) }}</h2>
+            <button type="button" class="btn btn-danger btn-xs" (click)="setVariantOutOfStock(i)">
+              Agotar variante
+            </button>
+          </div>
+
+          <div class="variant-row">
+            <span class="label">SKU</span>
+            <span class="value">{{ item.sku || "Sin SKU" }}</span>
+          </div>
+
+          <div class="variant-row">
+            <span class="label">Estado variante</span>
+            <select
+              class="input"
+              [ngModel]="item.stock_state"
+              (ngModelChange)="onVariantStateChange(i, $event)"
+            >
+              @for (opt of stockStates; track opt.value) {
+                <option [ngValue]="opt.value">{{ opt.label }}</option>
+              }
+            </select>
+          </div>
+
+          <div class="colors-section">
+            <h3>Stock por color</h3>
+
+            @if ((item.color_stock || []).length === 0) {
+              <p class="muted">Esta variante no tiene colores definidos.</p>
+            } @else {
+              <div class="color-rows">
+                @for (color of (item.color_stock || []); track $index; let ci = $index) {
+                  <div class="color-row">
+                    <span class="color-name">{{ color.color_name }}</span>
+                    <select
+                      class="input"
+                      [ngModel]="color.stock_state"
+                      (ngModelChange)="onColorStateChange(i, ci, $event)"
+                    >
+                      @for (opt of stockStates; track opt.value) {
+                        <option [ngValue]="opt.value">{{ opt.label }}</option>
+                      }
+                    </select>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        </article>
+      }
+    </section>
+  }
+</div>

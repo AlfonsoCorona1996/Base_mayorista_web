@@ -1,6 +1,6 @@
 import { Injectable, signal } from "@angular/core";
 import { FIRESTORE } from "./firebase.providers";
-import { collection, getDocs, doc, setDoc, updateDoc, query, orderBy } from "firebase/firestore";
+import { collection, doc, getDocs, orderBy, query, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
 
 export interface Supplier {
   supplier_id: string;
@@ -8,116 +8,112 @@ export interface Supplier {
   contact_phone?: string;
   contact_name?: string;
   active: boolean;
-  created_at: any;
+  created_at?: any;
+  updated_at?: any;
   notes?: string;
 }
 
-/**
- * Servicio de proveedores
- * 
- * TODO: Completar CRUD en Firestore collection "suppliers"
- * Por ahora lista demo + métodos para cargar de Firestore
- */
 @Injectable({ providedIn: "root" })
 export class SuppliersService {
   private colRef = collection(FIRESTORE, "suppliers");
 
-  // Lista demo para empezar
+  // Fallback local para entorno sin datos remotos.
   private demoSuppliers: Supplier[] = [
     {
       supplier_id: "frodam",
       display_name: "Frodam (Tenis)",
       contact_phone: "+52 33 1234 5678",
-      contact_name: "Juan Pérez",
+      contact_name: "Juan Perez",
       active: true,
       created_at: new Date(),
-      notes: "Proveedor principal de tenis. Cada imagen = una variant."
+      notes: "Proveedor principal de tenis. Cada imagen = una variante.",
     },
     {
       supplier_id: "corseteria_guadalupana",
-      display_name: "Corsetería Guadalupana",
+      display_name: "Corseteria Guadalupana",
       contact_phone: "+52 33 9876 5432",
-      contact_name: "María López",
+      contact_name: "Maria Lopez",
       active: true,
       created_at: new Date(),
-      notes: "Pijamas, lencería. Usa emojis y 'Unitalla'."
+      notes: "Pijamas y lenceria. Usa talla unica en muchos productos.",
     },
-    {
-      supplier_id: "miel_canela",
-      display_name: "Miel & Canela",
-      contact_phone: "+52 33 5555 1234",
-      active: true,
-      created_at: new Date(),
-      notes: "Solo imágenes con precios incrustados."
-    },
-    {
-      supplier_id: "demo_generico",
-      display_name: "Proveedor Genérico",
-      active: false,
-      created_at: new Date(),
-      notes: "Proveedor de prueba inactivo."
-    }
   ];
 
   suppliers = signal<Supplier[]>(this.demoSuppliers);
 
   constructor() {
-    // Cargar proveedores reales de Firestore al inicio
-    this.loadFromFirestore().catch((e) => {
-      console.warn("No se pudieron cargar proveedores de Firestore, usando demo:", e);
+    this.loadFromFirestore().catch((error) => {
+      console.warn("No se pudieron cargar proveedores desde Firestore. Se usa fallback local.", error);
     });
   }
 
-  /**
-   * Carga proveedores desde Firestore
-   */
   async loadFromFirestore(): Promise<void> {
     try {
       const q = query(this.colRef, orderBy("display_name", "asc"));
       const snap = await getDocs(q);
-      
-      if (!snap.empty) {
-        const loaded = snap.docs.map((d) => d.data() as Supplier);
-        this.suppliers.set(loaded);
-      }
-    } catch (e) {
-      console.error("Error cargando proveedores:", e);
-      // Mantener lista demo si falla
+
+      const loaded = snap.docs.map((entry) => {
+        const data = entry.data() as Partial<Supplier>;
+        return this.normalizeSupplier(data, entry.id);
+      });
+
+      this.suppliers.set(loaded);
+    } catch (error) {
+      console.error("Error cargando proveedores:", error);
+      // En error real mantenemos la ultima lista disponible.
     }
   }
 
-  /**
-   * Obtiene solo proveedores activos
-   */
   getActive(): Supplier[] {
-    return this.suppliers().filter((s) => s.active);
+    return this.suppliers().filter((supplier) => supplier.active);
   }
 
-  /**
-   * Obtiene proveedor por ID
-   */
   getById(id: string): Supplier | null {
-    return this.suppliers().find((s) => s.supplier_id === id) || null;
+    return this.suppliers().find((supplier) => supplier.supplier_id === id) || null;
   }
 
-  /**
-   * Crea o actualiza un proveedor
-   */
   async save(supplier: Supplier): Promise<void> {
-    const ref = doc(this.colRef, supplier.supplier_id);
-    await setDoc(ref, supplier, { merge: true });
-    
-    // Recargar lista
+    const supplierId = (supplier.supplier_id || "").trim();
+    if (!supplierId) throw new Error("supplier_id requerido");
+
+    const now = serverTimestamp();
+    const payload: Supplier = {
+      ...supplier,
+      supplier_id: supplierId,
+      display_name: (supplier.display_name || supplierId).trim(),
+      active: supplier.active ?? true,
+      created_at: supplier.created_at ?? now,
+      updated_at: now,
+    };
+
+    await setDoc(doc(this.colRef, supplierId), payload, { merge: true });
     await this.loadFromFirestore();
   }
 
-  /**
-   * Desactiva un proveedor (no lo borra)
-   */
-  async deactivate(supplierId: string): Promise<void> {
+  async setActive(supplierId: string, active: boolean): Promise<void> {
     const ref = doc(this.colRef, supplierId);
-    await updateDoc(ref, { active: false });
-    
+    await updateDoc(ref, {
+      active,
+      updated_at: serverTimestamp(),
+    });
     await this.loadFromFirestore();
+  }
+
+  async deactivate(supplierId: string): Promise<void> {
+    await this.setActive(supplierId, false);
+  }
+
+  private normalizeSupplier(data: Partial<Supplier>, fallbackId: string): Supplier {
+    const supplierId = (data.supplier_id || fallbackId || "").trim();
+    return {
+      supplier_id: supplierId,
+      display_name: (data.display_name || supplierId).trim(),
+      contact_phone: data.contact_phone || "",
+      contact_name: data.contact_name || "",
+      active: data.active ?? true,
+      created_at: data.created_at ?? null,
+      updated_at: data.updated_at ?? null,
+      notes: data.notes || "",
+    };
   }
 }

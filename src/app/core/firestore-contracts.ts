@@ -53,12 +53,17 @@ export interface RawPost {
 // NORMALIZED_LISTING - Editable, propuesta estructurada
 // ============================================================================
 
-export type StockState = "in_stock" | "last_pair" | "unknown_qty";
+export type StockState = "in_stock" | "last_pair" | "out_of_stock" | "unknown_qty";
 
 export interface ItemPrice {
   amount: number | null;
   currency: string;
   tier_name: string; // "publico", "asociada", "mayoreo", etc.
+}
+
+export interface VariantColorStock {
+  color_name: string;
+  stock_state: StockState;
 }
 
 /**
@@ -86,6 +91,7 @@ export interface NormalizedItem {
   
   // ✅ SCHEMA v1.1: Solo referencias a colores globales
   color_names?: string[]; // ["negro", "blanco"] - Referencias a product_colors
+  color_stock?: VariantColorStock[]; // Estado de stock por color dentro de la variante
   
   // DEPRECATED Schema v1: Mantener para compatibilidad
   colors?: string[]; // ["rosa", "beige", "azul marino"]

@@ -1,0 +1,206 @@
+<section class="suppliers-page">
+  <header class="page-header">
+    <div>
+      <h1>Proveedores</h1>
+      <p>Gestiona los proveedores que alimentan el flujo de validacion y catalogo.</p>
+    </div>
+    <button type="button" class="btn btn-secondary" (click)="reload()" [disabled]="loading()">
+      {{ loading() ? "Actualizando..." : "Actualizar" }}
+    </button>
+  </header>
+
+  <section class="stats-grid">
+    <article class="stat-card">
+      <p>Total</p>
+      <strong>{{ allSuppliers().length }}</strong>
+    </article>
+    <article class="stat-card">
+      <p>Activos</p>
+      <strong>{{ activeCount() }}</strong>
+    </article>
+    <article class="stat-card">
+      <p>Inactivos</p>
+      <strong>{{ inactiveCount() }}</strong>
+    </article>
+  </section>
+
+  @if (error()) {
+    <div class="alert alert-error">{{ error() }}</div>
+  }
+
+  @if (success()) {
+    <div class="alert alert-success">{{ success() }}</div>
+  }
+
+  <section class="panel filters-panel">
+    <input
+      type="text"
+      class="input"
+      [ngModel]="searchTerm()"
+      (ngModelChange)="searchTerm.set($event)"
+      placeholder="Buscar por nombre, ID, contacto o notas"
+    />
+
+    <div class="filters-row">
+      <select class="input" [ngModel]="statusFilter()" (ngModelChange)="onStatusFilterChange($event)">
+        <option value="all">Todos</option>
+        <option value="active">Solo activos</option>
+        <option value="inactive">Solo inactivos</option>
+      </select>
+
+      <button
+        type="button"
+        class="btn btn-outline"
+        (click)="clearFilters()"
+        [disabled]="!searchTerm().trim() && statusFilter() === 'all'"
+      >
+        Limpiar filtros
+      </button>
+    </div>
+  </section>
+
+  <section class="content-grid">
+    <article class="panel form-panel">
+      <div class="form-header">
+        <h2>{{ editingId() ? "Editar proveedor" : "Nuevo proveedor" }}</h2>
+        @if (editingId()) {
+          <button type="button" class="btn btn-ghost" (click)="cancelEdit()">Cancelar</button>
+        }
+      </div>
+
+      <form (submit)="saveSupplier(); $event.preventDefault()" class="form-grid">
+        <label class="field">
+          <span>ID proveedor</span>
+          <input
+            type="text"
+            class="input"
+            [(ngModel)]="draft.supplier_id"
+            name="supplier_id"
+            placeholder="ej: frodam"
+            [disabled]="editingId() !== null"
+          />
+          <small>Si lo dejas vacio, se genera automaticamente desde el nombre.</small>
+        </label>
+
+        <label class="field">
+          <span>Nombre visible *</span>
+          <input
+            type="text"
+            class="input"
+            [(ngModel)]="draft.display_name"
+            name="display_name"
+            placeholder="Nombre comercial"
+            required
+          />
+        </label>
+
+        <label class="field">
+          <span>Nombre de contacto</span>
+          <input
+            type="text"
+            class="input"
+            [(ngModel)]="draft.contact_name"
+            name="contact_name"
+            placeholder="Persona de contacto"
+          />
+        </label>
+
+        <label class="field">
+          <span>Telefono</span>
+          <input
+            type="text"
+            class="input"
+            [(ngModel)]="draft.contact_phone"
+            name="contact_phone"
+            placeholder="+52..."
+          />
+        </label>
+
+        <label class="field">
+          <span>Notas</span>
+          <textarea
+            class="input textarea"
+            [(ngModel)]="draft.notes"
+            name="notes"
+            rows="3"
+            placeholder="Reglas o detalles operativos"
+          ></textarea>
+        </label>
+
+        <label class="checkbox-row">
+          <input type="checkbox" [(ngModel)]="draft.active" name="active" />
+          <span>Proveedor activo</span>
+        </label>
+
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary" [disabled]="saving()">
+            {{ saving() ? "Guardando..." : editingId() ? "Actualizar" : "Crear proveedor" }}
+          </button>
+          <button type="button" class="btn btn-outline" (click)="startCreate()">Limpiar</button>
+        </div>
+      </form>
+    </article>
+
+    <article class="panel list-panel">
+      <div class="list-header">
+        <h2>Lista de proveedores</h2>
+        <p>{{ filteredSuppliers().length }} resultado(s)</p>
+      </div>
+
+      @if (loading()) {
+        <p class="empty">Cargando proveedores...</p>
+      } @else if (filteredSuppliers().length === 0) {
+        <p class="empty">No hay proveedores para mostrar con esos filtros.</p>
+      } @else {
+        <div class="supplier-list">
+          @for (supplier of filteredSuppliers(); track supplier.supplier_id) {
+            <article class="supplier-card" [class.inactive]="!supplier.active">
+              <header>
+                <div>
+                  <h3>{{ supplier.display_name }}</h3>
+                  <p class="supplier-id">ID: {{ supplier.supplier_id }}</p>
+                </div>
+                <span class="status-pill" [class.status-off]="!supplier.active">
+                  {{ supplier.active ? "Activo" : "Inactivo" }}
+                </span>
+              </header>
+
+              <div class="meta-grid">
+                <p><strong>Contacto:</strong> {{ supplier.contact_name || "Sin dato" }}</p>
+                <p><strong>Telefono:</strong> {{ supplier.contact_phone || "Sin dato" }}</p>
+              </div>
+
+              @if (supplier.notes) {
+                <p class="notes">{{ supplier.notes }}</p>
+              }
+
+              <div class="card-actions">
+                <button type="button" class="btn btn-outline" (click)="startEdit(supplier)">Editar</button>
+
+                @if (supplier.active) {
+                  <button
+                    type="button"
+                    class="btn btn-danger"
+                    (click)="toggleActive(supplier, false)"
+                    [disabled]="isBusy(supplier.supplier_id)"
+                  >
+                    {{ isBusy(supplier.supplier_id) ? "Guardando..." : "Desactivar" }}
+                  </button>
+                } @else {
+                  <button
+                    type="button"
+                    class="btn btn-secondary"
+                    (click)="toggleActive(supplier, true)"
+                    [disabled]="isBusy(supplier.supplier_id)"
+                  >
+                    {{ isBusy(supplier.supplier_id) ? "Guardando..." : "Activar" }}
+                  </button>
+                }
+              </div>
+            </article>
+          }
+        </div>
+      }
+    </article>
+  </section>
+</section>

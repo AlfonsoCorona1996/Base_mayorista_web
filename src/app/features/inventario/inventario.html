@@ -1,0 +1,415 @@
+<section class="inventory-page">
+  <header class="page-header">
+    <div>
+      <h1>Inventario interno</h1>
+      <p>
+        Registra devoluciones o piezas sueltas que se quedan contigo. Aqui puedes crear, editar, ajustar
+        cantidad y eliminar registros rapidamente.
+      </p>
+    </div>
+
+    <button type="button" class="btn btn-secondary" (click)="reload()" [disabled]="loading()">
+      {{ loading() ? "Actualizando..." : "Actualizar" }}
+    </button>
+  </header>
+
+  <section class="stats-grid">
+    <article class="stat-card">
+      <p>Items</p>
+      <strong>{{ rows().length }}</strong>
+    </article>
+    <article class="stat-card">
+      <p>Piezas totales</p>
+      <strong>{{ totalUnits() }}</strong>
+    </article>
+    <article class="stat-card">
+      <p>Pocas piezas</p>
+      <strong>{{ lowStockCount() }}</strong>
+    </article>
+    <article class="stat-card">
+      <p>Agotados</p>
+      <strong>{{ soldOutCount() }}</strong>
+    </article>
+  </section>
+
+  @if (error()) {
+    <div class="alert alert-error">{{ error() }}</div>
+  }
+
+  @if (success()) {
+    <div class="alert alert-success">{{ success() }}</div>
+  }
+
+  <section class="panel filters-panel">
+    <input
+      type="text"
+      class="input"
+      [ngModel]="searchTerm()"
+      (ngModelChange)="searchTerm.set($event)"
+      placeholder="Buscar por nombre, categoria, color o proveedor"
+    />
+
+    <div class="filters-row">
+      <select class="input" [ngModel]="stockFilter()" (ngModelChange)="onStockFilterChange($event)">
+        <option value="all">Todo el inventario</option>
+        <option value="low">Pocas piezas (1 a 3)</option>
+        <option value="sold_out">Solo agotados</option>
+      </select>
+
+      <button
+        type="button"
+        class="btn btn-outline"
+        (click)="clearFilters()"
+        [disabled]="!searchTerm().trim() && stockFilter() === 'all'"
+      >
+        Limpiar filtros
+      </button>
+    </div>
+  </section>
+
+  <section class="content-grid">
+    <article class="panel form-panel">
+      <div class="form-header">
+        <h2>{{ editingId() ? "Editar item" : "Nuevo item" }}</h2>
+        @if (editingId()) {
+          <button type="button" class="btn btn-ghost" (click)="startCreate()">Nuevo</button>
+        }
+      </div>
+
+      <form class="form-grid" (submit)="save(); $event.preventDefault()">
+        <label class="field">
+          <span>Nombre del producto *</span>
+          <input
+            type="text"
+            class="input"
+            [(ngModel)]="draft.title"
+            name="title"
+            placeholder="Ejemplo: Cobertor polar"
+            required
+          />
+        </label>
+
+        <label class="field category-field">
+          <span>Categoria * (seleccion obligatoria)</span>
+          <div class="category-input-row">
+            <input
+              type="text"
+              class="input"
+              [ngModel]="categoryQuery()"
+              (ngModelChange)="onCategoryInputChange($event)"
+              (focus)="onCategoryInputFocus()"
+              (blur)="onCategoryInputBlur()"
+              name="category_query"
+              autocomplete="off"
+              placeholder="Escribe 2+ letras para buscar"
+            />
+            <button type="button" class="btn btn-outline" (click)="openCategoryTree()">Arbol</button>
+          </div>
+
+          @if (categoryConfirmed()) {
+            <small class="category-confirmed">Categoria seleccionada: {{ draft.category_hint }}</small>
+          }
+
+          @if (categoryDropdownOpen()) {
+            <div class="category-dropdown" role="listbox">
+              @if (filteredCategoryOptions().length === 0) {
+                <p class="category-empty">Sin coincidencias (prueba con mas texto o usa el arbol).</p>
+              } @else {
+                @for (category of filteredCategoryOptions(); track category.id) {
+                  <button
+                    type="button"
+                    class="category-option"
+                    (mousedown)="$event.preventDefault()"
+                    (click)="selectCategory(category.fullPath)"
+                  >
+                    {{ category.fullPath }}
+                  </button>
+                }
+              }
+            </div>
+          }
+        </label>
+
+        <div class="form-columns">
+          <label class="field">
+            <span>Proveedor</span>
+            <select class="input" [(ngModel)]="draft.supplier_id" name="supplier_id">
+              <option value="">Sin proveedor</option>
+              @for (supplier of supplierOptions(); track supplier.supplier_id) {
+                <option [value]="supplier.supplier_id">{{ supplier.display_name }}</option>
+              }
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Cantidad disponible *</span>
+            <input
+              type="number"
+              min="0"
+              class="input"
+              [(ngModel)]="draft.quantity_on_hand"
+              name="quantity_on_hand"
+              required
+            />
+          </label>
+        </div>
+
+        <div class="form-columns">
+          <label class="field">
+            <span>Variante o modelo</span>
+            <input
+              type="text"
+              class="input"
+              [(ngModel)]="draft.variant_name"
+              name="variant_name"
+              placeholder="Ejemplo: Matrimonial"
+            />
+          </label>
+
+          <label class="field">
+            <span>Talla</span>
+            <input
+              type="text"
+              class="input"
+              [(ngModel)]="draft.size_label"
+              name="size_label"
+              placeholder="Ejemplo: Unitalla"
+            />
+          </label>
+        </div>
+
+        <div class="form-columns">
+          <label class="field">
+            <span>Color</span>
+            <input
+              type="text"
+              class="input"
+              [(ngModel)]="draft.color_name"
+              name="color_name"
+              placeholder="Ejemplo: Negro"
+            />
+          </label>
+
+          <label class="field">
+            <span>Precio unitario (opcional)</span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              class="input"
+              [(ngModel)]="draft.unit_price"
+              name="unit_price"
+              placeholder="Ejemplo: 399"
+            />
+          </label>
+        </div>
+
+        <label class="field">
+          <span>Imagenes del item</span>
+          <div class="upload-actions">
+            <button
+              type="button"
+              class="camera-btn"
+              (click)="openPicker(cameraInput)"
+              [disabled]="uploadingImages()"
+            >
+              <span class="camera-icon">📷</span>
+              <span>{{ uploadingImages() ? "Subiendo..." : "Tomar foto" }}</span>
+            </button>
+
+            <button
+              type="button"
+              class="btn btn-outline"
+              (click)="openPicker(galleryInput)"
+              [disabled]="uploadingImages()"
+            >
+              Elegir de galeria
+            </button>
+          </div>
+
+          <input
+            #cameraInput
+            type="file"
+            class="visually-hidden"
+            accept="image/*"
+            capture="environment"
+            multiple
+            (change)="onImageFilesSelected($event)"
+          />
+
+          <input
+            #galleryInput
+            type="file"
+            class="visually-hidden"
+            accept="image/*"
+            multiple
+            (change)="onImageFilesSelected($event)"
+          />
+          <small>Desde celular puedes tomar foto directa. Maximo 5MB por imagen.</small>
+        </label>
+
+        @if (draft.image_urls.length > 0) {
+          <div class="image-grid">
+            @for (url of draft.image_urls; track url; let imageIndex = $index) {
+              <article class="image-card">
+                <img [src]="url" alt="Imagen de inventario" />
+                <button type="button" class="image-remove" (click)="removeDraftImage(imageIndex)">Quitar</button>
+              </article>
+            }
+          </div>
+        }
+
+        <label class="field">
+          <span>Notas</span>
+          <textarea
+            class="input textarea"
+            [(ngModel)]="draft.notes"
+            name="notes"
+            rows="3"
+            placeholder="Motivo, condicion de la pieza, detalle de devolucion"
+          ></textarea>
+        </label>
+
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary" [disabled]="saving() || uploadingImages()">
+            {{ saving() ? "Guardando..." : editingId() ? "Guardar cambios" : "Agregar a inventario" }}
+          </button>
+          <button type="button" class="btn btn-outline" (click)="startCreate()">Limpiar</button>
+        </div>
+      </form>
+    </article>
+
+    <article class="panel list-panel">
+      <div class="list-header">
+        <h2>Items registrados</h2>
+        <p>{{ filteredRows().length }} resultado(s)</p>
+      </div>
+
+      @if (loading()) {
+        <p class="empty">Cargando inventario...</p>
+      } @else if (filteredRows().length === 0) {
+        <p class="empty">No hay items para mostrar con esos filtros.</p>
+      } @else {
+        <div class="inventory-list">
+          @for (item of filteredRows(); track item.inventory_id) {
+            <article class="inventory-card" [class.card-out]="item.quantity_on_hand === 0">
+              <header>
+                <div>
+                  <h3>{{ item.title }}</h3>
+                </div>
+                <span class="stock-tag" [class]="'stock-tag ' + stockClass(item.quantity_on_hand)">
+                  {{ stockTag(item.quantity_on_hand) }}
+                </span>
+              </header>
+
+              @if (primaryImage(item); as imageUrl) {
+                <div class="card-image-wrap">
+                  <img [src]="imageUrl" alt="Imagen de {{ item.title }}" class="card-image" />
+                  @if (item.image_urls.length > 1) {
+                    <span class="image-count">+{{ item.image_urls.length - 1 }} foto(s)</span>
+                  }
+                </div>
+              }
+
+              <div class="meta-grid">
+                <p><strong>Categoria:</strong> {{ item.category_hint || "Sin categoria" }}</p>
+                <p><strong>Proveedor:</strong> {{ supplierName(item.supplier_id) }}</p>
+                <p><strong>Variante:</strong> {{ item.variant_name || "Sin variante" }}</p>
+                <p><strong>Color:</strong> {{ item.color_name || "Sin color" }}</p>
+                <p><strong>Talla:</strong> {{ item.size_label || "Sin talla" }}</p>
+                <p><strong>Precio:</strong> {{ item.unit_price ? ('$' + item.unit_price) : "Sin precio" }}</p>
+              </div>
+
+              @if (item.notes) {
+                <p class="notes">{{ item.notes }}</p>
+              }
+
+              <div class="qty-row">
+                <strong>Cantidad:</strong>
+                <button
+                  type="button"
+                  class="qty-btn"
+                  (click)="adjustQty(item, -1)"
+                  [disabled]="item.quantity_on_hand === 0 || isBusy(item.inventory_id)"
+                >
+                  -
+                </button>
+                <span class="qty-value">{{ item.quantity_on_hand }}</span>
+                <button
+                  type="button"
+                  class="qty-btn"
+                  (click)="adjustQty(item, 1)"
+                  [disabled]="isBusy(item.inventory_id)"
+                >
+                  +
+                </button>
+              </div>
+
+              <div class="card-actions">
+                <button type="button" class="btn btn-outline" (click)="startEdit(item)">Editar</button>
+                <button
+                  type="button"
+                  class="btn btn-danger"
+                  (click)="remove(item)"
+                  [disabled]="isBusy(item.inventory_id)"
+                >
+                  {{ isBusy(item.inventory_id) ? "Procesando..." : "Eliminar" }}
+                </button>
+              </div>
+            </article>
+          }
+        </div>
+      }
+    </article>
+  </section>
+</section>
+
+@if (categoryTreeOpen()) {
+  <div class="tree-overlay" (click)="closeCategoryTree()"></div>
+  <aside class="category-tree-sheet" role="dialog" aria-modal="true" aria-label="Selector de categoria">
+    <header class="sheet-header">
+      <h3>Seleccionar categoria</h3>
+      <button type="button" class="btn btn-ghost" (click)="closeCategoryTree()">Cerrar</button>
+    </header>
+
+    <div class="sheet-path">
+      <button type="button" class="btn btn-outline" (click)="goBackCategoryTree()" [disabled]="!categoryTreeParentId()">
+        Subir nivel
+      </button>
+
+      @if (categoryTreeBreadcrumb().length === 0) {
+        <p>Raiz</p>
+      } @else {
+        <p>
+          @for (crumb of categoryTreeBreadcrumb(); track crumb.id; let isLast = $last) {
+            <span>{{ crumb.name }}</span>@if (!isLast) { <span> > </span> }
+          }
+        </p>
+      }
+    </div>
+
+    @if (categoryTreeRows().length === 0) {
+      <p class="empty">No hay subcategorias en este nivel.</p>
+    } @else {
+      <div class="sheet-list">
+        @for (category of categoryTreeRows(); track category.id) {
+          <article class="sheet-row">
+            <button type="button" class="sheet-main" (click)="openCategoryBranch(category)">
+              <span>{{ category.name }}</span>
+              @if (hasCategoryChildren(category.id)) {
+                <small>Abrir</small>
+              } @else {
+                <small>Seleccionar</small>
+              }
+            </button>
+            @if (hasCategoryChildren(category.id)) {
+              <button type="button" class="btn btn-outline" (click)="selectCategoryFromTree(category, $event)">
+                Usar
+              </button>
+            }
+          </article>
+        }
+      </div>
+    }
+  </aside>
+}
