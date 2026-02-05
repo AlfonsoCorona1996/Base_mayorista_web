@@ -28,6 +28,7 @@ export default class CategoriasPage {
   showInactive = signal(false);
 
   selectedCategoryId = signal<string | null>(null);
+  activeMegaRootId = signal<string | null>(null);
   editingId = signal<string | null>(null);
   expandedMap = signal<Record<string, boolean>>({});
 
@@ -131,6 +132,25 @@ export default class CategoriasPage {
     return this.childrenMap().get(selected.id) || [];
   });
 
+  megaRoots = computed(() => this.sortCategories(this.visibleCategories().filter((category) => !category.parentId)));
+
+  megaActiveRoot = computed(() => {
+    const roots = this.megaRoots();
+    const current = this.activeMegaRootId();
+    return roots.find((root) => root.id === current) || roots[0] || null;
+  });
+
+  megaColumns = computed(() => {
+    const root = this.megaActiveRoot();
+    if (!root) return [];
+
+    const children = this.childrenMap().get(root.id) || [];
+    return children.map((child) => ({
+      child,
+      grandchildren: this.childrenMap().get(child.id) || [],
+    }));
+  });
+
   availableParentOptions = computed(() => {
     const editingId = this.editingId();
     const rows = this.sortCategories(this.categories().filter((category) => category.active));
@@ -206,7 +226,14 @@ export default class CategoriasPage {
       this.expandedMap.update((current) => ({ ...current, [categoryId]: true }));
     }
 
+    const rootId = this.findRootId(categoryId);
+    if (rootId) this.activeMegaRootId.set(rootId);
+
     this.startEdit(category);
+  }
+
+  setMegaRoot(rootId: string) {
+    this.activeMegaRootId.set(rootId);
   }
 
   selectFromSearch(categoryId: string) {
@@ -341,10 +368,12 @@ export default class CategoriasPage {
 
     if (!fallback) {
       this.selectedCategoryId.set(null);
+      this.activeMegaRootId.set(null);
       this.startCreateRoot();
       return;
     }
 
+    this.activeMegaRootId.set(fallback.id);
     this.selectCategory(fallback.id);
   }
 
@@ -409,5 +438,17 @@ export default class CategoriasPage {
   private normalizeOrder(value: number): number {
     if (!Number.isFinite(value)) return 999;
     return Math.max(0, Math.round(value));
+  }
+
+  private findRootId(categoryId: string): string | null {
+    const map = this.categoryById();
+    let cursor = map.get(categoryId) || null;
+    if (!cursor) return null;
+
+    while (cursor?.parentId) {
+      cursor = map.get(cursor.parentId) || null;
+    }
+
+    return cursor?.id || null;
   }
 }

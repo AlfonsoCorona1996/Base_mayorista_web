@@ -69,6 +69,57 @@
         </div>
       </div>
 
+      @if (megaRoots().length > 0) {
+        <section class="mega-browser">
+          <aside class="mega-roots">
+            @for (root of megaRoots(); track root.id) {
+              <button
+                type="button"
+                class="mega-root-btn"
+                [class.active]="activeMegaRootId() === root.id"
+                (click)="setMegaRoot(root.id)"
+              >
+                {{ root.name }}
+              </button>
+            }
+          </aside>
+
+          <div class="mega-content">
+            @if (megaActiveRoot(); as activeRoot) {
+              <h3>{{ activeRoot.name }}</h3>
+            }
+
+            @if (megaColumns().length === 0) {
+              <p class="empty">Esta categoria raiz no tiene subcategorias aun.</p>
+            } @else {
+              <div class="mega-columns">
+                @for (column of megaColumns(); track column.child.id) {
+                  <article class="mega-column">
+                    <button type="button" class="mega-column-title" (click)="selectCategory(column.child.id)">
+                      {{ column.child.name }}
+                    </button>
+
+                    @if (column.grandchildren.length === 0) {
+                      <button type="button" class="mega-leaf" (click)="selectCategory(column.child.id)">
+                        Usar esta categoria
+                      </button>
+                    } @else {
+                      <div class="mega-leaf-list">
+                        @for (leaf of column.grandchildren; track leaf.id) {
+                          <button type="button" class="mega-leaf" (click)="selectCategory(leaf.id)">
+                            {{ leaf.name }}
+                          </button>
+                        }
+                      </div>
+                    }
+                  </article>
+                }
+              </div>
+            }
+          </div>
+        </section>
+      }
+
       @if (searchResults().length > 0) {
         <div class="search-results">
           <p class="search-title">Resultados</p>
