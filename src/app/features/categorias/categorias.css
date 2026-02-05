@@ -100,6 +100,102 @@
   gap: 6px;
 }
 
+.mega-browser {
+  margin-top: 10px;
+  border: 1px solid #dce7f3;
+  border-radius: 12px;
+  overflow: hidden;
+  display: grid;
+}
+
+.mega-roots {
+  background: linear-gradient(180deg, #22303f 0%, #1c2935 100%);
+  display: grid;
+  gap: 2px;
+  padding: 6px;
+}
+
+.mega-root-btn {
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #e6edf5;
+  text-align: left;
+  min-height: 34px;
+  padding: 0 10px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.mega-root-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.mega-root-btn.active {
+  background: #0f7bb7;
+  color: #fff;
+}
+
+.mega-content {
+  background: #fff;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.mega-content h3 {
+  margin: 0;
+  color: #132f4a;
+  font-size: 1rem;
+}
+
+.mega-columns {
+  display: grid;
+  gap: 10px;
+}
+
+.mega-column {
+  border: 1px solid #dbe8f4;
+  border-radius: 10px;
+  padding: 8px;
+  display: grid;
+  gap: 6px;
+}
+
+.mega-column-title {
+  border: 0;
+  background: transparent;
+  color: #143250;
+  text-align: left;
+  font-size: 0.88rem;
+  font-weight: 700;
+  padding: 2px 0;
+  cursor: pointer;
+}
+
+.mega-column-title:hover {
+  color: #0f7bb7;
+}
+
+.mega-leaf-list {
+  display: grid;
+  gap: 4px;
+}
+
+.mega-leaf {
+  border: 0;
+  background: transparent;
+  color: #47647f;
+  text-align: left;
+  font-size: 0.78rem;
+  padding: 2px 0;
+  cursor: pointer;
+}
+
+.mega-leaf:hover {
+  color: #0f7bb7;
+}
+
 .search-title {
   margin: 0;
   color: #4b6884;
@@ -452,5 +548,14 @@
 
   .toolbar-actions {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mega-browser {
+    grid-template-columns: 220px minmax(0, 1fr);
+    min-height: 300px;
+  }
+
+  .mega-columns {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }

@@ -90,7 +90,7 @@
         </label>
 
         <label class="field category-field">
-          <span>Categoria * (seleccion obligatoria)</span>
+          <span>Categoria * (sin subcategorias)</span>
           <div class="category-input-row">
             <input
               type="text"
@@ -101,7 +101,7 @@
               (blur)="onCategoryInputBlur()"
               name="category_query"
               autocomplete="off"
-              placeholder="Escribe 2+ letras para buscar"
+              placeholder="Escribe para buscar"
             />
             <button type="button" class="btn btn-outline" (click)="openCategoryTree()">Arbol</button>
           </div>
@@ -109,6 +109,20 @@
           @if (categoryConfirmed()) {
             <small class="category-confirmed">Categoria seleccionada: {{ draft.category_hint }}</small>
           }
+
+          <div class="category-status">
+            @if (categoryConfirmed() && selectedCategoryId()) {
+              <span class="status-chip chip-ok">
+                <span aria-hidden="true">✓</span>
+                <span>Nivel final seleccionado</span>
+              </span>
+            } @else {
+              <span class="status-chip chip-pending">
+                <span aria-hidden="true">!</span>
+                <span>Selecciona una categoria</span>
+              </span>
+            }
+          </div>
 
           @if (categoryDropdownOpen()) {
             <div class="category-dropdown" role="listbox">
@@ -119,10 +133,14 @@
                   <button
                     type="button"
                     class="category-option"
+                    [class.category-option-parent]="hasCategoryChildren(category.id)"
                     (mousedown)="$event.preventDefault()"
-                    (click)="selectCategory(category.fullPath)"
+                    (click)="selectCategory(category)"
                   >
                     {{ category.fullPath }}
+                    @if (hasCategoryChildren(category.id)) {
+                      <small> (padre, entra al arbol)</small>
+                    }
                   </button>
                 }
               }
@@ -214,16 +232,7 @@
               [disabled]="uploadingImages()"
             >
               <span class="camera-icon">📷</span>
-              <span>{{ uploadingImages() ? "Subiendo..." : "Tomar foto" }}</span>
-            </button>
-
-            <button
-              type="button"
-              class="btn btn-outline"
-              (click)="openPicker(galleryInput)"
-              [disabled]="uploadingImages()"
-            >
-              Elegir de galeria
+              <span>{{ uploadingImages() ? "Subiendo..." : "Agregar imagenes" }}</span>
             </button>
           </div>
 
@@ -232,20 +241,10 @@
             type="file"
             class="visually-hidden"
             accept="image/*"
-            capture="environment"
             multiple
             (change)="onImageFilesSelected($event)"
           />
-
-          <input
-            #galleryInput
-            type="file"
-            class="visually-hidden"
-            accept="image/*"
-            multiple
-            (change)="onImageFilesSelected($event)"
-          />
-          <small>Desde celular puedes tomar foto directa. Maximo 5MB por imagen.</small>
+          <small>Maximo 5MB por imagen.</small>
         </label>
 
         @if (draft.image_urls.length > 0) {
@@ -368,7 +367,7 @@
   <div class="tree-overlay" (click)="closeCategoryTree()"></div>
   <aside class="category-tree-sheet" role="dialog" aria-modal="true" aria-label="Selector de categoria">
     <header class="sheet-header">
-      <h3>Seleccionar categoria</h3>
+      <h3>Seleccionar categoria final</h3>
       <button type="button" class="btn btn-ghost" (click)="closeCategoryTree()">Cerrar</button>
     </header>
 
@@ -402,11 +401,6 @@
                 <small>Seleccionar</small>
               }
             </button>
-            @if (hasCategoryChildren(category.id)) {
-              <button type="button" class="btn btn-outline" (click)="selectCategoryFromTree(category, $event)">
-                Usar
-              </button>
-            }
           </article>
         }
       </div>
