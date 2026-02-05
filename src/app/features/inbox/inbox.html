@@ -1,100 +1,86 @@
-<div class="inbox-container">
-    <!-- Header -->
-    <header class="inbox-header">
-        <div class="inbox-header-content">
-            <div class="inbox-title-section">
-                <h1 class="inbox-title">📬 Bandeja de Entrada</h1>
-                <p class="inbox-subtitle">Productos pendientes de revisión</p>
-            </div>
-            <div class="inbox-actions">
-                <button 
-                    class="btn-icon" 
-                    (click)="reload()" 
-                    [disabled]="loading()"
-                    title="Recargar">
-                    🔄
-                </button>
-                <button 
-                    class="btn-logout" 
-                    (click)="logout()">
-                    Cerrar sesión
-                </button>
-            </div>
-        </div>
-    </header>
+﻿<div class="inbox-container">
+  <header class="inbox-header">
+    <div class="inbox-title-section">
+      <h1 class="inbox-title">Validacion</h1>
+      <p class="inbox-subtitle">Productos pendientes por revisar y publicar</p>
+    </div>
 
-    <!-- Error Message -->
-    @if (error()) {
-        <div class="alert-error">
-            <strong>⚠️ Error:</strong> {{ error() }}
-        </div>
-    }
+    <div class="inbox-actions">
+      <button class="btn-icon" (click)="reload()" [disabled]="loading()" title="Recargar">
+        Actualizar
+      </button>
+    </div>
+  </header>
 
-    <!-- Loading State -->
-    @if (loading()) {
-        <div class="loading-state">
-            <div class="spinner-large"></div>
-            <p>Cargando productos...</p>
+  @if (error()) {
+    <div class="alert-error"><strong>Error:</strong> {{ error() }}</div>
+  }
+
+  @if (loading()) {
+    <div class="loading-state">
+      <div class="spinner-large"></div>
+      <p>Cargando productos...</p>
+    </div>
+  } @else {
+    @if (rows().length > 0) {
+      <div class="stats-bar">
+        <div class="stat-item">
+          <span class="stat-value">{{ rows().length }}</span>
+          <span class="stat-label">pendiente{{ rows().length !== 1 ? 's' : '' }}</span>
         </div>
-    } @else {
-        <!-- Stats Bar -->
-        @if (rows().length > 0) {
-            <div class="stats-bar">
-                <div class="stat-item">
-                    <span class="stat-value">{{ rows().length }}</span>
-                    <span class="stat-label">Pendiente{{ rows().length !== 1 ? 's' : '' }}</span>
+      </div>
+
+      <div class="products-list">
+        @for (r of rows(); track r.normalized_id) {
+          <article class="product-card" (click)="open(r.normalized_id)">
+            <div class="product-image">
+              @if (r.preview_image_url) {
+                <img [src]="r.preview_image_url" alt="{{ r.listing.title }}" />
+              } @else {
+                <div class="product-image-placeholder">
+                  <span>Sin imagen</span>
                 </div>
+              }
             </div>
 
-            <!-- Products List -->
-            <div class="products-list">
-                @for (r of rows(); track r.normalized_id) {
-                    <article class="product-card" (click)="open(r.normalized_id)">
-                        <!-- Image -->
-                        <div class="product-image">
-                            @if (r.preview_image_url) {
-                                <img [src]="r.preview_image_url" alt="{{ r.listing.title }}" />
-                            } @else {
-                                <div class="product-image-placeholder">
-                                    <span>📷</span>
-                                    <span class="placeholder-text">Sin imagen</span>
-                                </div>
-                            }
-                        </div>
+            <div class="product-content">
+              <h3 class="product-title">{{ r.listing.title || "(sin titulo)" }}</h3>
 
-                        <!-- Content -->
-                        <div class="product-content">
-                            <h3 class="product-title">{{ r.listing.title || "(sin título)" }}</h3>
-                            
-                            <div class="product-meta">
-                                <div class="meta-item">
-                                    <span class="meta-icon">📁</span>
-                                    <span>{{ r.listing.category_hint || "Sin categoría" }}</span>
-                                </div>
-                                <div class="meta-item">
-                                    <span class="meta-icon">🏷️</span>
-                                    <span>{{ r.listing.items.length }} variante{{ r.listing.items.length !== 1 ? 's' : '' }}</span>
-                                </div>
-                            </div>
-                        </div>
+              <div class="product-meta">
+                <div class="meta-item">
+                  <span class="meta-icon">Categoria:</span>
+                  <span>{{ r.listing.category_hint || "Sin categoria" }}</span>
+                </div>
+                <div class="meta-item">
+                  <span class="meta-icon">Variantes:</span>
+                  <span>{{ r.listing.items.length }}</span>
+                </div>
+              </div>
+            </div>
 
-                        <!-- Footer -->
-                        <div class="product-footer">
-                            <span class="product-time">⏱️ {{ timeAgo(r.updated_at ?? r.created_at) }}</span>
-                            <button class="btn-review" (click)="open(r.normalized_id); $event.stopPropagation()">
-                                Revisar →
-                            </button>
-                        </div>
-                    </article>
-                }
+            <div class="product-footer">
+              <span class="product-time">Actualizado {{ timeAgo(r.updated_at ?? r.created_at) }}</span>
+              <button class="btn-review" (click)="open(r.normalized_id); $event.stopPropagation()">
+                Revisar
+              </button>
             </div>
-        } @else {
-            <!-- Empty State -->
-            <div class="empty-state">
-                <div class="empty-icon">✅</div>
-                <h2 class="empty-title">¡Todo al día!</h2>
-                <p class="empty-message">No hay productos pendientes de revisión</p>
-            </div>
+          </article>
         }
+      </div>
+
+      @if (hasMore()) {
+        <div class="load-more-wrapper">
+          <button class="btn-review" (click)="loadMore()" [disabled]="loadingMore()">
+            {{ loadingMore() ? "Cargando..." : "Cargar mas" }}
+          </button>
+        </div>
+      }
+    } @else {
+      <div class="empty-state">
+        <div class="empty-icon">Listo</div>
+        <h2 class="empty-title">No hay pendientes</h2>
+        <p class="empty-message">Cuando entren nuevos productos apareceran aqui.</p>
+      </div>
     }
+  }
 </div>

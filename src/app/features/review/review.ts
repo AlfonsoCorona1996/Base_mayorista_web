@@ -1377,7 +1377,7 @@ export default class ReviewPage {
 
       // Validar
       await this.svc.validate(this.id, uid);
-      await this.router.navigateByUrl("/inbox");
+      await this.router.navigateByUrl("/main/validacion");
     } catch (e: any) {
       this.error.set(e?.message || String(e));
     }
@@ -1394,14 +1394,14 @@ export default class ReviewPage {
       }
       
       await this.svc.reject(this.id, uid);
-      await this.router.navigateByUrl("/inbox");
+      await this.router.navigateByUrl("/main/validacion");
     } catch (e: any) {
       this.error.set(e?.message || String(e));
     }
   }
 
   goInbox() {
-    this.router.navigateByUrl("/inbox");
+    this.router.navigateByUrl("/main/validacion");
   }
   
   // ============================================================================

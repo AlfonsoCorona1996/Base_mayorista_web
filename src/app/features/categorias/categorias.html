@@ -1,0 +1,221 @@
+<section class="categories-page">
+  <header class="page-header">
+    <div>
+      <h1>Categorias por niveles</h1>
+      <p>Estructura padre/hijas tipo arbol para administrar jerarquia de catalogo.</p>
+    </div>
+
+    <div class="header-actions">
+      <button type="button" class="btn btn-secondary" (click)="reload()" [disabled]="loading()">
+        {{ loading() ? "Actualizando..." : "Actualizar" }}
+      </button>
+      <button type="button" class="btn btn-outline" (click)="startCreateRoot()">Nueva raiz</button>
+      <button type="button" class="btn btn-outline" (click)="startCreateChild()" [disabled]="!selectedCategory()">
+        Nueva hija
+      </button>
+    </div>
+  </header>
+
+  <section class="stats-grid">
+    <article class="stat-card">
+      <p>Raices</p>
+      <strong>{{ rootCount() }}</strong>
+    </article>
+    <article class="stat-card">
+      <p>Total categorias</p>
+      <strong>{{ totalCount() }}</strong>
+    </article>
+    <article class="stat-card">
+      <p>Visibles</p>
+      <strong>{{ visibleCount() }}</strong>
+    </article>
+    <article class="stat-card">
+      <p>Niveles</p>
+      <strong>{{ maxDepth() + 1 }}</strong>
+    </article>
+  </section>
+
+  @if (error()) {
+    <div class="alert alert-error">{{ error() }}</div>
+  }
+
+  @if (success()) {
+    <div class="alert alert-success">{{ success() }}</div>
+  }
+
+  <section class="workspace">
+    <article class="panel tree-panel">
+      <div class="tree-toolbar">
+        <input
+          type="text"
+          class="input"
+          [ngModel]="searchTerm()"
+          (ngModelChange)="searchTerm.set($event)"
+          placeholder="Buscar categoria por nombre, path o ID"
+        />
+
+        <label class="toggle-row">
+          <input
+            type="checkbox"
+            [ngModel]="showInactive()"
+            (ngModelChange)="onShowInactiveChange($event)"
+          />
+          <span>Mostrar inactivas</span>
+        </label>
+
+        <div class="toolbar-actions">
+          <button type="button" class="btn btn-outline" (click)="expandAllVisible()">Expandir arbol</button>
+          <button type="button" class="btn btn-outline" (click)="collapseAllVisible()">Colapsar arbol</button>
+        </div>
+      </div>
+
+      @if (searchResults().length > 0) {
+        <div class="search-results">
+          <p class="search-title">Resultados</p>
+          <div class="search-list">
+            @for (result of searchResults(); track result.id) {
+              <button type="button" class="search-item" (click)="selectFromSearch(result.id)">
+                <span>{{ result.fullPath }}</span>
+                <small>ID: {{ result.id }}</small>
+              </button>
+            }
+          </div>
+        </div>
+      }
+
+      @if (treeRows().length === 0) {
+        <p class="empty">No hay categorias para mostrar.</p>
+      } @else {
+        <div class="tree-list">
+          @for (row of treeRows(); track row.category.id) {
+            <div class="tree-row" [style.--depth]="row.depth" [class.selected]="selectedCategoryId() === row.category.id">
+              <button
+                type="button"
+                class="tree-expander"
+                (click)="toggleExpanded(row.category.id, $event)"
+                [disabled]="!row.hasChildren"
+                [attr.aria-label]="row.expanded ? 'Colapsar' : 'Expandir'"
+              >
+                @if (row.hasChildren) {
+                  {{ row.expanded ? "-" : "+" }}
+                } @else {
+                  .
+                }
+              </button>
+
+              <button type="button" class="tree-node" (click)="selectCategory(row.category.id)">
+                <span class="node-main">
+                  <span class="node-name">{{ row.category.name }}</span>
+                  @if (!row.category.active) {
+                    <span class="node-flag">Inactiva</span>
+                  }
+                </span>
+                <span class="node-meta">N{{ row.category.level }} | {{ row.childCount }} hijas</span>
+              </button>
+            </div>
+          }
+        </div>
+      }
+    </article>
+
+    <article class="panel editor-panel">
+      <div class="editor-head">
+        <h2>{{ isEditing() ? "Editar categoria" : "Crear categoria" }}</h2>
+
+        @if (selectedCategory(); as selected) {
+          <p>{{ selected.fullPath }}</p>
+        } @else {
+          <p>Selecciona una categoria para editar o crea una nueva raiz.</p>
+        }
+      </div>
+
+      <form class="form-grid" (submit)="saveCategory(); $event.preventDefault()">
+        <label class="field">
+          <span>Nombre *</span>
+          <input
+            type="text"
+            class="input"
+            [(ngModel)]="formName"
+            name="form_name"
+            placeholder="Ejemplo: Vestidos"
+            required
+          />
+        </label>
+
+        <label class="field">
+          <span>Categoria padre</span>
+          <select class="input" [(ngModel)]="formParentId" name="form_parent_id">
+            <option value="">Sin padre (nivel 0)</option>
+            @for (parent of availableParentOptions(); track parent.id) {
+              <option [value]="parent.id">{{ parent.fullPath }}</option>
+            }
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Orden</span>
+          <input type="number" min="0" class="input" [(ngModel)]="formOrder" name="form_order" />
+        </label>
+
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary" [disabled]="saving()">
+            {{ saving() ? "Guardando..." : isEditing() ? "Guardar cambios" : "Crear categoria" }}
+          </button>
+          <button type="button" class="btn btn-ghost" (click)="startCreateRoot()">Limpiar</button>
+        </div>
+      </form>
+
+      @if (selectedCategory(); as selected) {
+        <section class="selected-details">
+          <div class="pill-row">
+            <span class="pill" [class.pill-off]="!selected.active">
+              {{ selected.active ? "Activa" : "Inactiva" }}
+            </span>
+            <span class="pill">Nivel {{ selected.level }}</span>
+            <span class="pill">{{ childCount(selected.id) }} hijas directas</span>
+          </div>
+
+          <div class="detail-actions">
+            @if (selected.active) {
+              <button
+                type="button"
+                class="btn btn-danger"
+                (click)="toggleSelectedActive(false)"
+                [disabled]="isBusy(selected.id)"
+              >
+                {{ isBusy(selected.id) ? "Guardando..." : "Desactivar" }}
+              </button>
+            } @else {
+              <button
+                type="button"
+                class="btn btn-secondary"
+                (click)="toggleSelectedActive(true)"
+                [disabled]="isBusy(selected.id)"
+              >
+                {{ isBusy(selected.id) ? "Guardando..." : "Activar" }}
+              </button>
+            }
+            <button type="button" class="btn btn-outline" (click)="startCreateChild()">Crear hija de esta</button>
+          </div>
+
+          <div class="children-preview">
+            <h3>Subcategorias directas</h3>
+
+            @if (selectedChildren().length === 0) {
+              <p class="empty">Esta categoria no tiene hijas directas.</p>
+            } @else {
+              <div class="child-list">
+                @for (child of selectedChildren(); track child.id) {
+                  <button type="button" class="child-item" (click)="selectCategory(child.id)">
+                    <span>{{ child.name }}</span>
+                    <small>N{{ child.level }}</small>
+                  </button>
+                }
+              </div>
+            }
+          </div>
+        </section>
+      }
+    </article>
+  </section>
+</section>

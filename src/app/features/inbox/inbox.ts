@@ -1,4 +1,4 @@
-import { Component, signal } from "@angular/core";
+﻿import { Component, signal } from "@angular/core";
 import { Router } from "@angular/router";
 import { AuthService } from "../../core/auth.service";
 import { NormalizedListingsService } from "../../core/normalized-listings.service";
@@ -31,7 +31,7 @@ export default class Inbox {
 
   shortId(id: string) {
     if (!id) return "";
-    return id.length > 12 ? `${id.slice(0, 6)}…${id.slice(-4)}` : id;
+    return id.length > 12 ? `${id.slice(0, 6)}â€¦${id.slice(-4)}` : id;
   }
 
   async reload() {
@@ -46,7 +46,7 @@ export default class Inbox {
       this.cursor = nextCursor;
       this.hasMore.set(Boolean(nextCursor));
     } catch (e: any) {
-      this.error.set(e?.message || "Error cargando inbox");
+      this.error.set(e?.message || "Error cargando validacion");
     } finally {
       this.loading.set(false);
     }
@@ -61,21 +61,21 @@ export default class Inbox {
     this.error.set(null);
     this.loadingMore.set(true);
     try {
-      // ✅ FIX: Pasar el cursor actual para continuar la paginación
+      // âœ… FIX: Pasar el cursor actual para continuar la paginaciÃ³n
       const { docs, nextCursor } = await this.svc.listNeedsReview(25, this.cursor);
 
       this.rows.set([...this.rows(), ...docs]);
       this.cursor = nextCursor;
       this.hasMore.set(Boolean(nextCursor));
     } catch (e: any) {
-      this.error.set(e?.message || "Error cargando más");
+      this.error.set(e?.message || "Error cargando mÃ¡s");
     } finally {
       this.loadingMore.set(false);
     }
   }
 
   async open(id: string) {
-    await this.router.navigateByUrl(`/review/${id}`);
+    await this.router.navigateByUrl(`/main/review/${id}`);
   }
 
   async logout() {
@@ -106,3 +106,4 @@ export default class Inbox {
   }
 
 }
+

@@ -38,7 +38,13 @@ export class AuthService {
   }
 
   async isAdmin(): Promise<boolean> {
-    const u = FIREBASE_AUTH.currentUser;
+    // Evita condiciones de carrera justo después del login:
+    // a veces currentUser tarda unos ms en reflejarse.
+    let u = FIREBASE_AUTH.currentUser ?? this.user();
+    if (!u) {
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      u = FIREBASE_AUTH.currentUser ?? this.user();
+    }
     if (!u) return false;
 
     const snap = await getDoc(doc(FIRESTORE, "admins", u.uid));
