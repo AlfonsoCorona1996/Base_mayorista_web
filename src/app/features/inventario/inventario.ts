@@ -341,7 +341,7 @@ export default class InventarioPage {
 
     const selectedId = this.selectedCategoryId();
     if (!selectedId) {
-      this.error.set("Selecciona una categoria final valida.");
+      this.error.set("Selecciona una categoria valida.");
       return;
     }
 

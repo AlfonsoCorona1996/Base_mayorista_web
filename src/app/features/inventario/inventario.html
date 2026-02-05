@@ -90,7 +90,7 @@
         </label>
 
         <label class="field category-field">
-          <span>Categoria final * (sin subcategorias)</span>
+          <span>Categoria * (sin subcategorias)</span>
           <div class="category-input-row">
             <input
               type="text"
@@ -101,7 +101,7 @@
               (blur)="onCategoryInputBlur()"
               name="category_query"
               autocomplete="off"
-              placeholder="Escribe 2+ letras para buscar"
+              placeholder="Escribe para buscar"
             />
             <button type="button" class="btn btn-outline" (click)="openCategoryTree()">Arbol</button>
           </div>
@@ -119,7 +119,7 @@
             } @else {
               <span class="status-chip chip-pending">
                 <span aria-hidden="true">!</span>
-                <span>Selecciona una categoria final</span>
+                <span>Selecciona una categoria</span>
               </span>
             }
           </div>
@@ -232,16 +232,7 @@
               [disabled]="uploadingImages()"
             >
               <span class="camera-icon">📷</span>
-              <span>{{ uploadingImages() ? "Subiendo..." : "Tomar foto" }}</span>
-            </button>
-
-            <button
-              type="button"
-              class="btn btn-outline"
-              (click)="openPicker(galleryInput)"
-              [disabled]="uploadingImages()"
-            >
-              Elegir de galeria
+              <span>{{ uploadingImages() ? "Subiendo..." : "Agregar imagenes" }}</span>
             </button>
           </div>
 
@@ -250,20 +241,10 @@
             type="file"
             class="visually-hidden"
             accept="image/*"
-            capture="environment"
             multiple
             (change)="onImageFilesSelected($event)"
           />
-
-          <input
-            #galleryInput
-            type="file"
-            class="visually-hidden"
-            accept="image/*"
-            multiple
-            (change)="onImageFilesSelected($event)"
-          />
-          <small>Desde celular puedes tomar foto directa. Maximo 5MB por imagen.</small>
+          <small>Maximo 5MB por imagen.</small>
         </label>
 
         @if (draft.image_urls.length > 0) {
