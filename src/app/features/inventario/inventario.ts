@@ -46,6 +46,7 @@ export default class InventarioPage {
   categoryQuery = signal("");
   categoryDropdownOpen = signal(false);
   categoryConfirmed = signal(false);
+  selectedCategoryId = signal<string | null>(null);
   categoryTreeOpen = signal(false);
   categoryTreeParentId = signal<string | null>(null);
 
@@ -170,6 +171,7 @@ export default class InventarioPage {
     this.draft = this.emptyDraft();
     this.categoryQuery.set("");
     this.categoryConfirmed.set(false);
+    this.selectedCategoryId.set(null);
     this.categoryDropdownOpen.set(false);
     this.error.set(null);
     this.success.set(null);
@@ -194,6 +196,7 @@ export default class InventarioPage {
 
     this.categoryQuery.set(item.category_hint || "");
     this.categoryConfirmed.set(Boolean(item.category_hint));
+    this.selectedCategoryId.set(this.findCategoryIdByPath(item.category_hint || ""));
     this.categoryDropdownOpen.set(false);
     this.error.set(null);
     this.success.set(null);
@@ -203,6 +206,7 @@ export default class InventarioPage {
     this.categoryQuery.set(value);
     this.draft.category_hint = value;
     this.categoryConfirmed.set(false);
+    this.selectedCategoryId.set(null);
     this.categoryDropdownOpen.set(value.trim().length >= 2);
   }
 
@@ -214,10 +218,18 @@ export default class InventarioPage {
     setTimeout(() => this.categoryDropdownOpen.set(false), 120);
   }
 
-  selectCategory(path: string) {
-    this.categoryQuery.set(path);
-    this.draft.category_hint = path;
+  selectCategory(category: Category) {
+    if (this.hasCategoryChildren(category.id)) {
+      this.error.set("Para productos debes seleccionar una categoria final (sin subcategorias).");
+      this.categoryConfirmed.set(false);
+      this.selectedCategoryId.set(null);
+      return;
+    }
+
+    this.categoryQuery.set(category.fullPath);
+    this.draft.category_hint = category.fullPath;
     this.categoryConfirmed.set(true);
+    this.selectedCategoryId.set(category.id);
     this.categoryDropdownOpen.set(false);
     this.categoryTreeOpen.set(false);
   }
@@ -242,15 +254,10 @@ export default class InventarioPage {
 
   openCategoryBranch(category: Category) {
     if (!this.hasCategoryChildren(category.id)) {
-      this.selectCategory(category.fullPath);
+      this.selectCategory(category);
       return;
     }
     this.categoryTreeParentId.set(category.id);
-  }
-
-  selectCategoryFromTree(category: Category, event?: Event) {
-    event?.stopPropagation();
-    this.selectCategory(category.fullPath);
   }
 
   hasCategoryChildren(categoryId: string): boolean {
@@ -329,6 +336,17 @@ export default class InventarioPage {
 
     if (!this.categoryConfirmed()) {
       this.error.set("Selecciona la categoria desde la lista de sugerencias.");
+      return;
+    }
+
+    const selectedId = this.selectedCategoryId();
+    if (!selectedId) {
+      this.error.set("Selecciona una categoria final valida.");
+      return;
+    }
+
+    if (this.hasCategoryChildren(selectedId)) {
+      this.error.set("Selecciona una categoria final (ultima del arbol), no una categoria padre.");
       return;
     }
 
@@ -467,5 +485,10 @@ export default class InventarioPage {
       if (a.order !== b.order) return a.order - b.order;
       return a.name.localeCompare(b.name, "es", { sensitivity: "base" });
     });
+  }
+
+  private findCategoryIdByPath(path: string): string | null {
+    if (!path) return null;
+    return this.categoryOptions().find((category) => category.fullPath === path)?.id || null;
   }
 }

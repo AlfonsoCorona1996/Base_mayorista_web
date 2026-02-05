@@ -90,7 +90,7 @@
         </label>
 
         <label class="field category-field">
-          <span>Categoria * (seleccion obligatoria)</span>
+          <span>Categoria final * (sin subcategorias)</span>
           <div class="category-input-row">
             <input
               type="text"
@@ -110,6 +110,20 @@
             <small class="category-confirmed">Categoria seleccionada: {{ draft.category_hint }}</small>
           }
 
+          <div class="category-status">
+            @if (categoryConfirmed() && selectedCategoryId()) {
+              <span class="status-chip chip-ok">
+                <span aria-hidden="true">✓</span>
+                <span>Nivel final seleccionado</span>
+              </span>
+            } @else {
+              <span class="status-chip chip-pending">
+                <span aria-hidden="true">!</span>
+                <span>Selecciona una categoria final</span>
+              </span>
+            }
+          </div>
+
           @if (categoryDropdownOpen()) {
             <div class="category-dropdown" role="listbox">
               @if (filteredCategoryOptions().length === 0) {
@@ -119,10 +133,14 @@
                   <button
                     type="button"
                     class="category-option"
+                    [class.category-option-parent]="hasCategoryChildren(category.id)"
                     (mousedown)="$event.preventDefault()"
-                    (click)="selectCategory(category.fullPath)"
+                    (click)="selectCategory(category)"
                   >
                     {{ category.fullPath }}
+                    @if (hasCategoryChildren(category.id)) {
+                      <small> (padre, entra al arbol)</small>
+                    }
                   </button>
                 }
               }
@@ -368,7 +386,7 @@
   <div class="tree-overlay" (click)="closeCategoryTree()"></div>
   <aside class="category-tree-sheet" role="dialog" aria-modal="true" aria-label="Selector de categoria">
     <header class="sheet-header">
-      <h3>Seleccionar categoria</h3>
+      <h3>Seleccionar categoria final</h3>
       <button type="button" class="btn btn-ghost" (click)="closeCategoryTree()">Cerrar</button>
     </header>
 
@@ -402,11 +420,6 @@
                 <small>Seleccionar</small>
               }
             </button>
-            @if (hasCategoryChildren(category.id)) {
-              <button type="button" class="btn btn-outline" (click)="selectCategoryFromTree(category, $event)">
-                Usar
-              </button>
-            }
           </article>
         }
       </div>
