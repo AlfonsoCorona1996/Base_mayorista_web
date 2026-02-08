@@ -18,8 +18,8 @@
   transform: translateX(-100%);
   transition: transform 0.22s ease;
   z-index: 30;
-  background: linear-gradient(180deg, #0f172a 0%, #1f2b44 100%);
-  color: #d8e2f1;
+  background: linear-gradient(180deg, #131b2a 0%, #202f49 100%);
+  color: #e1e9f6;
   padding: calc(env(safe-area-inset-top, 0px) + 20px) 14px calc(env(safe-area-inset-bottom, 0px) + 14px);
   display: flex;
   flex-direction: column;
@@ -33,30 +33,85 @@
 
 .brand-kicker {
   margin: 0;
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: #8aa0c6;
+  color: #a3b4cf;
 }
 
 .brand-title {
   margin: 4px 0 0;
   font-size: 1.35rem;
-  color: #f7fbff;
+  color: #f1f6ff;
 }
 
 .menu {
   display: grid;
+  gap: 12px;
+}
+
+.menu-section {
+  display: grid;
   gap: 8px;
 }
 
-.menu a {
+.menu-section-header {
+  border: 0;
+  background: transparent;
+  color: #b1c0d8;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 4px 0;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.menu-section-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.menu-section-icon {
+  font-size: 0.9rem;
+  opacity: 0.9;
+}
+
+.menu-section-header:hover {
+  color: #edf3ff;
+}
+
+.menu-section-chevron {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+@media (min-width: 960px) {
+  .menu-section-header {
+    font-size: 0.72rem;
+    letter-spacing: 0.18em;
+  }
+}
+
+.menu-subnav {
+  display: grid;
+  gap: 6px;
+  padding-left: 10px;
+  border-left: 1px solid rgba(177, 192, 216, 0.3);
+}
+
+.menu-subnav a {
   text-decoration: none;
-  color: #d3def0;
-  font-size: 0.95rem;
+  color: #e3ecf9;
+  font-size: 0.9rem;
   font-weight: 600;
   border-radius: 10px;
-  padding: 10px 12px;
+  padding: 9px 10px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -64,12 +119,12 @@
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-.menu a:hover {
-  background: rgba(138, 160, 198, 0.2);
+.menu-subnav a:hover {
+  background: rgba(177, 192, 216, 0.18);
 }
 
-.menu a.active {
-  background: #7dd3fc;
+.menu-subnav a.active {
+  background: #8ad2ff;
   color: #0f172a;
 }
 
@@ -89,7 +144,7 @@
   padding: 2px 6px;
 }
 
-.menu a.active .menu-badge {
+.menu-subnav a.active .menu-badge {
   border-color: rgba(15, 23, 42, 0.25);
   color: #0f172a;
   background: rgba(15, 23, 42, 0.1);

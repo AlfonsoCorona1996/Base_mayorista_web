@@ -374,10 +374,13 @@ export default class InventarioPage {
       };
 
       const itemId = await this.inventory.save(payload);
-      this.success.set(this.editingId() ? "Item actualizado" : "Item agregado al inventario");
+      const isEditing = Boolean(this.editingId());
+      this.success.set(isEditing ? "Item actualizado" : "Item agregado al inventario");
       const saved = this.rows().find((row) => row.inventory_id === itemId);
-      if (saved) {
-        this.startEdit(saved);
+      if (isEditing) {
+        if (saved) {
+          this.startEdit(saved);
+        }
       } else {
         this.startCreate();
       }

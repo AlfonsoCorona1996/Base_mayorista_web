@@ -1,0 +1,1365 @@
+import { Component, ElementRef, OnInit, ViewChild, computed, inject, signal } from "@angular/core";
+import { DatePipe } from "@angular/common";
+import { FormsModule } from "@angular/forms";
+import { ActivatedRoute, Router, RouterLink } from "@angular/router";
+import { CustomersService } from "../../core/customers.service";
+import { SuppliersService } from "../../core/suppliers.service";
+import { OrdersService, Order, OrderEvent, OrderItem, OrderItemState, OrderStatus, PackageRecord, Incident, IncidentSeverity } from "../../core/orders.service";
+import { RoutesService } from "../../core/routes.service";
+import { InventoryService, InventoryItem } from "../../core/inventory.service";
+import { NormalizedListingsService, NormalizedListingDoc } from "../../core/normalized-listings.service";
+
+@Component({
+  standalone: true,
+  selector: "app-pedido-detalle",
+  imports: [FormsModule, RouterLink, DatePipe],
+  templateUrl: "./pedido-detalle.html",
+  styleUrl: "./pedido-detalle.css",
+})
+export default class PedidoDetallePage implements OnInit {
+  private route = inject(ActivatedRoute);
+  private router = inject(Router);
+  private orders = inject(OrdersService);
+  private customers = inject(CustomersService);
+  private suppliers = inject(SuppliersService);
+  private rutas = inject(RoutesService);
+  private inventory = inject(InventoryService);
+  private catalog = inject(NormalizedListingsService);
+
+  @ViewChild("incidentsSection") incidentsSection?: ElementRef<HTMLElement>;
+  @ViewChild("packagesSection") packagesSection?: ElementRef<HTMLElement>;
+  @ViewChild("timelineSection") timelineSection?: ElementRef<HTMLElement>;
+
+  orderId = signal<string>("");
+  error = signal<string | null>(null);
+
+  order = computed<Order | null>(() => this.orders.getById(this.orderId()));
+  incidents = signal<Incident[]>([]);
+  events = signal<OrderEvent[]>([]);
+  eventsCursor = signal<any>(null);
+  eventsLoading = signal(false);
+  eventsHasMore = signal(true);
+  debugMode = signal(false);
+  userRole = signal("admin");
+
+  incidentModalOpen = signal(false);
+  incidentType = signal("GENERAL");
+  incidentSeverity = signal<IncidentSeverity>("medium");
+  incidentTitle = signal("");
+  incidentReason = signal("");
+  incidentAssignee = signal("");
+  incidentSaving = signal(false);
+  showResolvedIncidents = signal(false);
+
+  resolveModalOpen = signal(false);
+  resolveNote = signal("");
+  resolveTarget = signal<Incident | null>(null);
+  assignModalOpen = signal(false);
+  assignTarget = signal<Incident | null>(null);
+
+  uploadingEvidence = signal<Record<string, boolean>>({});
+
+  plannedModalOpen = signal(false);
+  plannedPackagesInput = signal(1);
+  actionModalOpen = signal(false);
+  actionContext = signal<{ actionId: string; label: string } | null>(null);
+  actionError = signal<string | null>(null);
+  actionSaving = signal(false);
+  lateChangeApproved = signal(false);
+  selectedPackageId = signal<string | null>(null);
+  supplierEta = signal("");
+  addItemModalOpen = signal(false);
+  newItemSupplierId = signal<string | null>(null);
+  newItemProductId = signal<string | null>(null);
+  selectedPreviewHasColorImage = signal(true);
+
+  pendingItems = computed(() => (this.order()?.items || []).filter((item) => item.state !== "entregado" && item.state !== "pagado"));
+  totals = computed(() => {
+    const items = this.order()?.items || [];
+    let totalPublic = 0;
+    let totalCost = 0;
+    for (const item of items) {
+      const qty = item.quantity || 0;
+      const pricePublic = item.price_public ?? 0;
+      const priceCost = item.price_cost ?? 0;
+      totalPublic += pricePublic * qty;
+      totalCost += priceCost * qty;
+    }
+    const margin = totalPublic - totalCost;
+    return {
+      totalPublic,
+      totalCost,
+      margin,
+    };
+  });
+
+  newItemTitle = signal("");
+  newItemSearch = signal("");
+  newItemSource = signal<"catalogo" | "inventario">("catalogo");
+  newItemVariant = signal("");
+  newItemColor = signal("");
+  newItemInventoryId = signal<string | null>(null);
+  newItemQty = signal(1);
+  newItemPricePublic = signal<number | null>(null);
+  newItemPriceCost = signal<number | null>(null);
+  newItemDiscount = signal<number | null>(25);
+  supplierDiscountPct = signal<number | null>(null);
+  supplierDiscountLabel = signal<string | null>(null);
+  selectedPreview = signal<{ title: string; variant: string; color: string; image: string | null; source: string } | null>(null);
+  selectedCatalogDoc = signal<NormalizedListingDoc | null>(null);
+  inventoryLoaded = signal(false);
+  catalogLoaded = signal(false);
+  showProductList = signal(false);
+  suppressProductBlur = signal(false);
+  lockItemFields = signal(false);
+  catalogVariantOptions = signal<string[]>([]);
+  catalogColorOptions = signal<string[]>([]);
+  assigneeOptions = computed(() =>
+    this.customers
+      .getActive()
+      .map((c) => `${c.first_name} ${c.last_name}`.trim())
+      .filter(Boolean)
+  );
+  supplierOptions = computed(() => this.suppliers.getActive());
+
+  inventorySuggestions = computed(() => {
+    if (this.newItemSource() !== "inventario") return [];
+    const term = this.newItemSearch().trim().toLowerCase();
+    if (term.length < 2) return [];
+    return this.inventory.items()
+      .filter((item) => {
+        const blob = [item.title, item.color_name || "", item.variant_name || "", item.size_label || ""]
+          .join(" ")
+          .toLowerCase();
+        return blob.includes(term);
+      })
+      .slice(0, 6);
+  });
+  catalogSuggestions = computed(() => {
+    if (this.newItemSource() !== "catalogo") return [];
+    const term = this.newItemSearch().trim().toLowerCase();
+    if (term.length < 2) return [];
+    const matches: { doc: NormalizedListingDoc; variant: any; color: string; image: string | null }[] = [];
+    for (const doc of this.catalogRows || []) {
+      const listing: any = doc.listing || { items: [] };
+      const title = (listing.title || "").toLowerCase();
+      const cat = (listing.category_hint || "").toLowerCase();
+      const variants = listing.items || [];
+      for (const v of variants) {
+        const colors: string[] = v.color_names || v.colors || [];
+        const blob = [title, cat, v.variant_name || "", colors.join(" ")].join(" ").toLowerCase();
+        if (!blob.includes(term)) continue;
+        const colorHit = colors.find((c) => c.toLowerCase().includes(term)) || colors[0] || "";
+        const colorImage =
+          (doc.product_colors || []).find((c) => c.name?.toLowerCase() === colorHit?.toLowerCase())?.image_url ||
+          doc.cover_images?.[0] ||
+          null;
+        matches.push({ doc, variant: v, color: colorHit, image: colorImage });
+        break; // first variant hit is enough per doc for now
+      }
+    }
+    return matches.slice(0, 6);
+  });
+
+  private catalogRows: NormalizedListingDoc[] = [];
+
+  ngOnInit() {
+    this.orderId.set(this.route.snapshot.paramMap.get("id") || "");
+    Promise.all([
+      this.orders.loadFromFirestore(),
+      this.customers.loadFromFirestore().catch(() => null),
+      this.suppliers.loadFromFirestore().catch(() => null),
+      this.rutas.loadFromFirestore().catch(() => null),
+      this.inventory.loadFromFirestore().catch(() => null),
+      this.catalog.listValidated(120).then((page) => {
+        this.catalogRows = page.docs;
+        this.catalogLoaded.set(true);
+      }).catch(() => null),
+    ]).then(() => {
+      this.inventoryLoaded.set(true);
+      if (!this.orders.getById(this.orderId())) {
+        this.error.set("Pedido no encontrado");
+        return;
+      }
+      this.loadIncidents();
+      this.refreshEvents();
+    });
+
+    this.route.queryParamMap.subscribe((params) => {
+      const focus = params.get("focus");
+      this.debugMode.set(params.get("debug") === "1");
+      if (!focus) return;
+      setTimeout(() => this.applyFocus(focus), 60);
+    });
+  }
+
+  async loadIncidents() {
+    const orderId = this.orderId();
+    if (!orderId) return;
+    const list = await this.orders.listIncidents(orderId).catch(() => []);
+    this.incidents.set(list);
+  }
+
+  openIncidents(): Incident[] {
+    return this.incidents().filter((inc) => inc.status === "open");
+  }
+
+  resolvedIncidents(): Incident[] {
+    return this.incidents().filter((inc) => inc.status === "resolved");
+  }
+
+  toggleResolved() {
+    this.showResolvedIncidents.update((current) => !current);
+  }
+
+  async loadEvents() {
+    const orderId = this.orderId();
+    if (!orderId) return;
+    if (this.eventsLoading() || !this.eventsHasMore()) return;
+    this.eventsLoading.set(true);
+    try {
+      const page = await this.orders.listEventsPage(orderId, 20, this.eventsCursor()).catch(() => ({ events: [], cursor: null }));
+      this.events.update((current) => [...current, ...page.events]);
+      this.eventsCursor.set(page.cursor ?? null);
+      if (!page.events.length) this.eventsHasMore.set(false);
+    } finally {
+      this.eventsLoading.set(false);
+    }
+  }
+
+  async refreshEvents() {
+    this.events.set([]);
+    this.eventsCursor.set(null);
+    this.eventsHasMore.set(true);
+    await this.loadEvents();
+  }
+
+  customerName(order: Order | null): string {
+    if (!order) return "";
+    const row = this.customers.getById(order.customer_id);
+    if (!row) return "Cliente sin nombre";
+    return `${row.first_name} ${row.last_name}`.trim();
+  }
+
+  routeName(order: Order | null): string {
+    if (!order || !order.route_id) return "Sin ruta";
+    return this.rutas.getById(order.route_id)?.name || order.route_id;
+  }
+
+  statusLabel(status: OrderStatus): string {
+    const map: Record<OrderStatus, string> = {
+      borrador: "Borrador",
+      confirmando_proveedor: "Confirmando",
+      reservado_inventario: "Reservado",
+      solicitado_proveedor: "Solicitado",
+      en_transito: "En tránsito",
+      recibido_qa: "Recibido/QA",
+      empaque: "Empaque",
+      en_ruta: "En ruta",
+      entregado: "Entregado",
+      pago_pendiente: "Pago pendiente",
+      pagado: "Pagado",
+      cancelado: "Cancelado",
+      devuelto: "Devuelto",
+    };
+    return map[status];
+  }
+
+  statusClass(status: OrderStatus): string {
+    switch (status) {
+      case "entregado":
+      case "pagado":
+        return "chip success";
+      case "cancelado":
+      case "devuelto":
+        return "chip danger";
+      case "pago_pendiente":
+        return "chip warning";
+      case "empaque":
+      case "en_ruta":
+      case "en_transito":
+        return "chip accent";
+      default:
+        return "chip info";
+    }
+  }
+
+  eventActor(event: any): string {
+    if (!event) return "Usuario";
+    if (typeof event.actor === "string" && event.actor.trim()) return event.actor;
+    if (event.actor?.name) return event.actor.name;
+    if (event.meta?.system) return "Sistema";
+    return "Usuario";
+  }
+
+  relativeTime(value: string | Date | null | undefined): string {
+    if (!value) return "";
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    const diffMs = Date.now() - date.getTime();
+    const diffMin = Math.round(Math.abs(diffMs) / 60000);
+    if (diffMin < 1) return "Justo ahora";
+    if (diffMin < 60) return `Hace ${diffMin} min`;
+    const diffHours = Math.round(diffMin / 60);
+    if (diffHours < 24) return `Hace ${diffHours} h`;
+    const diffDays = Math.round(diffHours / 24);
+    if (diffDays < 7) return `Hace ${diffDays} d`;
+    const diffWeeks = Math.round(diffDays / 7);
+    if (diffWeeks < 5) return `Hace ${diffWeeks} sem`;
+    const diffMonths = Math.round(diffDays / 30);
+    if (diffMonths < 12) return `Hace ${diffMonths} mes`;
+    const diffYears = Math.round(diffDays / 365);
+    return `Hace ${diffYears} a`;
+  }
+
+  allowedCapabilities(order: Order | null, userRole: string) {
+    if (!order) {
+      return {
+        canEditItems: false,
+        canConfirmItems: false,
+        canRegisterReception: false,
+        canCreatePackages: false,
+        canAssignItemsToPackages: false,
+        canPrintLabels: false,
+        canDeliverByPackage: false,
+        canRegisterPayment: false,
+        canPack: false,
+        limitedEdit: false,
+      };
+    }
+    if (userRole === "viewer") {
+      return {
+        canEditItems: false,
+        canConfirmItems: false,
+        canRegisterReception: false,
+        canCreatePackages: false,
+        canAssignItemsToPackages: false,
+        canPrintLabels: false,
+        canDeliverByPackage: false,
+        canRegisterPayment: false,
+        canPack: false,
+        limitedEdit: false,
+      };
+    }
+    switch (order.status) {
+      case "borrador":
+        return {
+          canEditItems: true,
+          canConfirmItems: false,
+          canRegisterReception: false,
+          canCreatePackages: false,
+          canAssignItemsToPackages: false,
+          canPrintLabels: false,
+          canDeliverByPackage: false,
+          canRegisterPayment: false,
+          canPack: false,
+          limitedEdit: false,
+        };
+      case "confirmando_proveedor":
+      case "reservado_inventario":
+      case "solicitado_proveedor":
+      case "en_transito":
+        return {
+          canEditItems: true,
+          canConfirmItems: true,
+          canRegisterReception: false,
+          canCreatePackages: false,
+          canAssignItemsToPackages: false,
+          canPrintLabels: false,
+          canDeliverByPackage: false,
+          canRegisterPayment: false,
+          canPack: false,
+          limitedEdit: true,
+        };
+      case "recibido_qa":
+      case "empaque":
+        return {
+          canEditItems: false,
+          canConfirmItems: false,
+          canRegisterReception: true,
+          canCreatePackages: true,
+          canAssignItemsToPackages: true,
+          canPrintLabels: true,
+          canDeliverByPackage: false,
+          canRegisterPayment: false,
+          canPack: true,
+          limitedEdit: false,
+        };
+      case "en_ruta":
+        return {
+          canEditItems: false,
+          canConfirmItems: false,
+          canRegisterReception: false,
+          canCreatePackages: false,
+          canAssignItemsToPackages: false,
+          canPrintLabels: true,
+          canDeliverByPackage: true,
+          canRegisterPayment: false,
+          canPack: false,
+          limitedEdit: true,
+        };
+      case "pagado":
+        return {
+          canEditItems: false,
+          canConfirmItems: false,
+          canRegisterReception: false,
+          canCreatePackages: false,
+          canAssignItemsToPackages: false,
+          canPrintLabels: false,
+          canDeliverByPackage: false,
+          canRegisterPayment: false,
+          canPack: false,
+          limitedEdit: false,
+        };
+      case "pago_pendiente":
+        return {
+          canEditItems: false,
+          canConfirmItems: false,
+          canRegisterReception: false,
+          canCreatePackages: false,
+          canAssignItemsToPackages: false,
+          canPrintLabels: false,
+          canDeliverByPackage: false,
+          canRegisterPayment: true,
+          canPack: false,
+          limitedEdit: false,
+        };
+      case "entregado":
+      default:
+        return {
+          canEditItems: false,
+          canConfirmItems: false,
+          canRegisterReception: false,
+          canCreatePackages: false,
+          canAssignItemsToPackages: false,
+          canPrintLabels: false,
+          canDeliverByPackage: false,
+          canRegisterPayment: false,
+          canPack: false,
+          limitedEdit: false,
+        };
+    }
+  }
+
+  phaseAction(order: Order | null): { actionId: string; label: string } | null {
+    if (!order) return null;
+    switch (order.status) {
+      case "borrador":
+      case "confirmando_proveedor":
+      case "reservado_inventario":
+      case "solicitado_proveedor":
+      case "en_transito":
+        return { actionId: "confirm_items", label: "Confirmar existencias" };
+      case "recibido_qa":
+        return { actionId: "pack", label: "Empacar" };
+      case "empaque":
+        return { actionId: "dispatch", label: "Preparar salida" };
+      case "en_ruta":
+        return { actionId: "deliver", label: "Registrar entrega" };
+      case "pago_pendiente":
+        return { actionId: "register_payment", label: "Registrar pago/conciliar" };
+      default:
+        return null;
+    }
+  }
+
+  openActionModal(order: Order | null) {
+    const action = this.phaseAction(order);
+    if (!order || !action) return;
+    if (action.actionId === "confirm_items" && order.items.length === 0) {
+      this.actionContext.set(action);
+      this.actionError.set("No hay items en el pedido.");
+      this.actionModalOpen.set(true);
+      return;
+    }
+    this.actionContext.set(action);
+    this.actionError.set(null);
+    this.actionModalOpen.set(true);
+  }
+
+  closeActionModal() {
+    this.actionModalOpen.set(false);
+  }
+
+  closedPackagesCount(order: Order): number {
+    return (order.packages || []).filter((pkg) => ["armado", "en_ruta", "entregado"].includes(pkg.state)).length;
+  }
+
+  deliveredPackagesCount(order: Order): number {
+    return (order.packages || []).filter((pkg) => pkg.state === "entregado").length;
+  }
+
+  unassignedConfirmedItems(order: Order): number {
+    const assigned = new Set<string>();
+    for (const pkg of order.packages || []) {
+      for (const id of pkg.item_ids || []) assigned.add(id);
+    }
+    return (order.items || []).filter((item) => {
+      const isConfirmed = !["entregado", "pagado", "cancelado", "devuelto"].includes(item.state);
+      return isConfirmed && !assigned.has(item.item_id);
+    }).length;
+  }
+
+  canDispatch(order: Order): boolean {
+    const planned = this.plannedPackages(order);
+    if (planned === null) return false;
+    if (this.closedPackagesCount(order) < planned) return false;
+    if (this.unassignedConfirmedItems(order) > 0) return false;
+    return true;
+  }
+
+  supplierNameById(supplierId: string | null | undefined): string {
+    if (!supplierId) return "Sin proveedor";
+    return this.suppliers.getById(supplierId)?.display_name || supplierId;
+  }
+
+  groupedItemsBySupplier(order: Order): { supplierId: string | null; supplierName: string; items: OrderItem[] }[] {
+    const groups = new Map<string | null, OrderItem[]>();
+    for (const item of order.items || []) {
+      const key = item.supplier_id ?? null;
+      const list = groups.get(key) || [];
+      list.push(item);
+      groups.set(key, list);
+    }
+    return Array.from(groups.entries()).map(([supplierId, items]) => ({
+      supplierId,
+      supplierName: this.supplierNameById(supplierId),
+      items,
+    }));
+  }
+
+  confirmedItems(order: Order): OrderItem[] {
+    return (order.items || []).filter((item) => item.confirmation_state === "confirmed");
+  }
+
+  allItemsResolved(order: Order): boolean {
+    return (order.items || []).every((item) => item.confirmation_state && item.confirmation_state !== "pending");
+  }
+
+  unresolvedItemsCount(order: Order): number {
+    return (order.items || []).filter((item) => !item.confirmation_state || item.confirmation_state === "pending").length;
+  }
+
+  missingSupplierCount(order: Order): number {
+    return this.confirmedItems(order).filter((item) => !item.supplier_id).length;
+  }
+
+  canEditItems(order: Order | null): boolean {
+    if (!order) return false;
+    const base = this.allowedCapabilities(order, this.userRole()).canEditItems;
+    return base || (order.status === "en_ruta" && this.lateChangeApproved());
+  }
+
+  nextStatus(order: Order | null): OrderStatus | null {
+    if (!order) return null;
+    const flow: OrderStatus[] = [
+      "borrador",
+      "confirmando_proveedor",
+      "reservado_inventario",
+      "solicitado_proveedor",
+      "en_transito",
+      "recibido_qa",
+      "empaque",
+      "en_ruta",
+      "entregado",
+      "pago_pendiente",
+      "pagado",
+    ];
+    const idx = flow.indexOf(order.status);
+    if (idx === -1 || idx === flow.length - 1) return null;
+    return flow[idx + 1];
+  }
+
+  advance(order: Order | null) {
+    const next = this.nextStatus(order);
+    if (order && next) this.orders.updateStatus(order.order_id, next);
+  }
+
+  setItemState(orderId: string, item: OrderItem, state: OrderItemState) {
+    this.orders.updateItemState(orderId, item.item_id, state);
+  }
+
+  async confirmItem(order: Order, item: OrderItem) {
+    await this.orders.updateItemConfirmationState(order.order_id, item.item_id, "confirmed");
+  }
+
+  async markOutOfStock(order: Order, item: OrderItem) {
+    await this.orders.updateItemConfirmationState(order.order_id, item.item_id, "out_of_stock");
+  }
+
+  async markSubstitute(order: Order, item: OrderItem) {
+    await this.orders.updateItemConfirmationState(order.order_id, item.item_id, "substitute");
+  }
+
+  async receiveItem(order: Order, item: OrderItem) {
+    await this.orders.updateItemState(order.order_id, item.item_id, "recibido_qa");
+    await this.orders.logEvent(order.order_id, "ITEM_RECEIVED_QA", `Recibido/QA: ${item.title}`, {
+      itemId: item.item_id,
+    });
+  }
+
+  async markPacked(order: Order, item: OrderItem) {
+    await this.orders.updateItemState(order.order_id, item.item_id, "empaque");
+    await this.orders.logEvent(order.order_id, "ITEM_PACKED", `Empaque: ${item.title}`, {
+      itemId: item.item_id,
+    });
+  }
+
+  async markMissing(order: Order, item: OrderItem) {
+    await this.orders.updateItemConfirmationState(order.order_id, item.item_id, "out_of_stock");
+    await this.orders.updateItemState(order.order_id, item.item_id, "cancelado");
+    await this.orders.createIncident(order.order_id, {
+      orderId: order.order_id,
+      packageId: null,
+      itemId: item.item_id,
+      type: "ITEM_MISSING",
+      title: "Item faltante",
+      severity: "high",
+      reason: `Faltante en recepción: ${item.title}`,
+      evidenceUrls: [],
+      createdBy: "admin",
+    });
+    await this.orders.logEvent(order.order_id, "ITEM_MISSING", `Faltante: ${item.title}`, {
+      itemId: item.item_id,
+    });
+  }
+
+  async markDamaged(order: Order, item: OrderItem) {
+    await this.orders.updateItemConfirmationState(order.order_id, item.item_id, "out_of_stock");
+    await this.orders.updateItemState(order.order_id, item.item_id, "devuelto");
+    await this.orders.createIncident(order.order_id, {
+      orderId: order.order_id,
+      packageId: null,
+      itemId: item.item_id,
+      type: "ITEM_DAMAGED",
+      title: "Item dañado",
+      severity: "high",
+      reason: `Dañado en recepción: ${item.title}`,
+      evidenceUrls: [],
+      createdBy: "admin",
+    });
+    await this.orders.logEvent(order.order_id, "ITEM_DAMAGED", `Dañado: ${item.title}`, {
+      itemId: item.item_id,
+    });
+  }
+
+  createPackage(order: Order | null) {
+    if (!order) return;
+    if (this.requiresPlannedPackages(order)) return;
+    const seq = order.packages.length + 1;
+    const planned = order.planned_packages ?? seq;
+    const pkg: PackageRecord = {
+      package_id: `pack-${Date.now()}`,
+      label: `Paquete ${seq}/${planned}`,
+      sequence: seq,
+      total_packages: planned,
+      state: "armado",
+      amount_due: null,
+      item_ids: order.items.map((i) => i.item_id),
+      created_at: new Date().toISOString(),
+    };
+    this.orders.addPackage(order.order_id, pkg);
+    this.orders.logEvent(order.order_id, "PACKAGE_CREATED", `Paquete ${seq}/${planned} creado`, {
+      packageId: pkg.package_id,
+    });
+  }
+
+  async closePackage(order: Order, pkg: PackageRecord) {
+    await this.orders.setPackageState(order.order_id, pkg.package_id, "armado");
+    await this.orders.logEvent(order.order_id, "PACKAGE_CLOSED", `Paquete cerrado ${pkg.label}`, {
+      packageId: pkg.package_id,
+    });
+  }
+
+  async toggleItemAssignment(order: Order, pkgId: string, item: OrderItem, checked: boolean) {
+    const packages = order.packages.map((pkg) => {
+      if (pkg.package_id !== pkgId) return pkg;
+      const ids = new Set(pkg.item_ids || []);
+      if (checked) ids.add(item.item_id);
+      else ids.delete(item.item_id);
+      return { ...pkg, item_ids: Array.from(ids) };
+    });
+    await this.orders.updatePackages(order.order_id, packages);
+    await this.orders.logEvent(order.order_id, "PACKAGE_ASSIGNMENT", `Asignación en paquete ${pkgId}`, {
+      packageId: pkgId,
+      itemId: item.item_id,
+      assigned: checked,
+    });
+  }
+
+  async autoDistribute(order: Order) {
+    const packages = order.packages.slice();
+    if (packages.length === 0) return;
+    const items = order.items.map((i) => i.item_id);
+    const next = packages.map((pkg, idx) => ({
+      ...pkg,
+      item_ids: items.filter((_, i) => i % packages.length === idx),
+    }));
+    await this.orders.updatePackages(order.order_id, next);
+    await this.orders.logEvent(order.order_id, "PACKAGE_AUTO_DISTRIBUTE", "Auto distribución de items", {});
+  }
+
+  isItemAssigned(order: Order, pkgId: string | null, itemId: string): boolean {
+    if (!pkgId) return false;
+    const pkg = order.packages.find((p) => p.package_id === pkgId);
+    if (!pkg) return false;
+    return (pkg.item_ids || []).includes(itemId);
+  }
+
+  plannedPackages(order: Order | null): number | null {
+    if (!order) return null;
+    const planned = order.planned_packages;
+    if (planned === null || planned === undefined) return null;
+    return Math.max(1, Number(planned));
+  }
+
+  statusRank(status: OrderStatus): number {
+    const flow: OrderStatus[] = [
+      "borrador",
+      "confirmando_proveedor",
+      "reservado_inventario",
+      "solicitado_proveedor",
+      "en_transito",
+      "recibido_qa",
+      "empaque",
+      "en_ruta",
+      "entregado",
+      "pago_pendiente",
+      "pagado",
+      "cancelado",
+      "devuelto",
+    ];
+    const idx = flow.indexOf(status);
+    return idx === -1 ? 0 : idx;
+  }
+
+  requiresPlannedPackages(order: Order | null): boolean {
+    if (!order) return false;
+    if (["cancelado", "devuelto"].includes(order.status)) return false;
+    const planned = this.plannedPackages(order);
+    if (planned !== null) return false;
+    return this.statusRank(order.status) >= this.statusRank("recibido_qa");
+  }
+
+  openPlannedPackages() {
+    const order = this.order();
+    if (!order) return;
+    this.plannedPackagesInput.set(1);
+    this.plannedModalOpen.set(true);
+  }
+
+  async savePlannedPackages() {
+    const order = this.order();
+    if (!order) return;
+    const planned = Math.max(1, Number(this.plannedPackagesInput() || 1));
+    await this.orders.updatePlannedPackages(order.order_id, planned);
+    this.plannedModalOpen.set(false);
+  }
+
+  closePlannedPackages() {
+    this.plannedModalOpen.set(false);
+  }
+
+  openAddItemModal() {
+    this.addItemModalOpen.set(true);
+  }
+
+  closeAddItemModal() {
+    this.resetAddItemForm();
+    this.addItemModalOpen.set(false);
+  }
+
+  private resetAddItemForm() {
+    this.newItemTitle.set("");
+    this.newItemVariant.set("");
+    this.newItemColor.set("");
+    this.newItemQty.set(1);
+    this.newItemPricePublic.set(null);
+    this.newItemPriceCost.set(null);
+    this.supplierDiscountPct.set(null);
+    this.supplierDiscountLabel.set(null);
+    this.newItemSearch.set("");
+    this.newItemInventoryId.set(null);
+    this.newItemSupplierId.set(null);
+    this.newItemProductId.set(null);
+    this.lockItemFields.set(false);
+    this.catalogVariantOptions.set([]);
+    this.catalogColorOptions.set([]);
+    this.selectedPreview.set(null);
+    this.selectedCatalogDoc.set(null);
+    this.selectedPreviewHasColorImage.set(true);
+    this.showProductList.set(false);
+  }
+
+  packageDisplayLabel(order: Order, pkg: PackageRecord): string {
+    const seq = pkg.sequence || 1;
+    const total = pkg.total_packages || this.plannedPackages(order) || seq;
+    return `Paquete ${seq}/${total}`;
+  }
+
+  printLabel(order: Order, pkg: PackageRecord) {
+    const seq = pkg.sequence || 1;
+    const total = pkg.total_packages || this.plannedPackages(order) || seq;
+    const customer = this.customerName(order);
+    const route = this.routeName(order);
+    const items = order.items.map((i) => `${i.title} x${i.quantity}`).join(", ") || "Sin items";
+    const amount = pkg.amount_due !== null ? this.formatCurrency(pkg.amount_due) : "Por cobrar";
+    const html = `
+      <html>
+        <head>
+          <title>Etiqueta ${order.order_id}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 16px; }
+            h1 { font-size: 18px; margin: 0 0 8px; }
+            .row { margin: 6px 0; }
+            .label { font-weight: 700; }
+            .qr { margin-top: 12px; padding: 8px; border: 1px dashed #999; }
+          </style>
+        </head>
+        <body>
+          <h1>Etiqueta de paquete</h1>
+          <div class="row"><span class="label">Cliente:</span> ${customer}</div>
+          <div class="row"><span class="label">Ruta:</span> ${route}</div>
+          <div class="row"><span class="label">Pedido:</span> ${order.order_id}</div>
+          <div class="row"><span class="label">Paquete:</span> ${seq}/${total}</div>
+          <div class="row"><span class="label">Items:</span> ${items}</div>
+          <div class="row"><span class="label">Cobranza:</span> ${amount}</div>
+          <div class="qr"><span class="label">QR:</span> ${pkg.package_id}</div>
+        </body>
+      </html>
+    `;
+    const win = window.open("", "_blank");
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    win.print();
+  }
+
+  async deliverPackage(order: Order, pkg: PackageRecord) {
+    await this.orders.setPackageState(order.order_id, pkg.package_id, "entregado");
+    await this.orders.logEvent(order.order_id, "PACKAGE_DELIVERED", `Paquete entregado ${pkg.label}`, {
+      packageId: pkg.package_id,
+    });
+    const planned = this.plannedPackages(order);
+    if (planned !== null && this.deliveredPackagesCount(order) < planned) {
+      const reason = prompt("Motivo entrega parcial:") || "";
+      await this.orders.createIncident(order.order_id, {
+        orderId: order.order_id,
+        packageId: pkg.package_id,
+        itemId: null,
+        type: "PARTIAL_DELIVERY",
+        title: "Entrega parcial",
+        severity: "high",
+        reason: reason || "Entrega parcial registrada.",
+        evidenceUrls: [],
+        createdBy: "admin",
+      });
+    }
+  }
+
+  async registerPayment(order: Order) {
+    await this.orders.logEvent(order.order_id, "PAYMENT_REGISTERED", "Pago registrado/conciliado", {});
+  }
+
+  async dispatchOrder(order: Order) {
+    if (!this.canDispatch(order)) {
+      await this.orders.createIncident(order.order_id, {
+        orderId: order.order_id,
+        packageId: null,
+        itemId: null,
+        type: "DISPATCH_BLOCKED",
+        title: "Bloqueo de salida",
+        severity: "high",
+        reason: "Paquetes incompletos o items sin asignar.",
+        evidenceUrls: [],
+        createdBy: "admin",
+      });
+      await this.orders.logEvent(order.order_id, "DISPATCH_BLOCKED", "Salida bloqueada por precondiciones", {});
+      this.actionError.set("No se puede preparar salida: faltan paquetes cerrados o items asignados.");
+      return;
+    }
+    await this.orders.logEvent(order.order_id, "DISPATCH_READY", "Salida preparada", {});
+    this.actionError.set(null);
+  }
+
+  async requestLateChange(order: Order) {
+    await this.orders.createIncident(order.order_id, {
+      orderId: order.order_id,
+      packageId: null,
+      itemId: null,
+      type: "LATE_CHANGE",
+      title: "Cambio tardío",
+      severity: "medium",
+      reason: "Solicitud de cambio tardío en ruta.",
+      evidenceUrls: [],
+      createdBy: "admin",
+    });
+    await this.orders.logEvent(order.order_id, "LATE_CHANGE_REQUESTED", "Cambio tardío solicitado", {});
+    this.lateChangeApproved.set(true);
+  }
+
+  async createSupplierRequest(order: Order) {
+    const confirmed = this.confirmedItems(order);
+    if (confirmed.length === 0) {
+      this.actionError.set("No hay items confirmados para solicitar.");
+      return;
+    }
+    const missingSupplier = this.missingSupplierCount(order);
+    if (missingSupplier > 0) {
+      this.actionError.set(`Falta proveedor en catálogo para ${missingSupplier} items.`);
+      return;
+    }
+    if (this.actionSaving()) return;
+    this.actionSaving.set(true);
+    const eta = this.supplierEta().trim() || null;
+    const grouped = new Map<string, OrderItem[]>();
+    for (const item of confirmed) {
+      const supplierId = item.supplier_id as string;
+      const list = grouped.get(supplierId) || [];
+      list.push(item);
+      grouped.set(supplierId, list);
+    }
+    const groups = Array.from(grouped.entries()).map(([supplierId, items]) => ({
+      supplierId,
+      supplierName: this.supplierNameById(supplierId),
+      eta,
+      items: items.map((item) => ({
+        orderItemId: item.item_id,
+        productId: item.product_id || null,
+        qty: item.quantity,
+        variant: item.variant || null,
+        color: item.color || null,
+      })),
+    }));
+    try {
+      await this.orders.createSupplierOrders(order.order_id, groups, "admin");
+      await this.orders.logEvent(order.order_id, "PROCUREMENT_CREATED", "Solicitudes creadas", {
+        supplierOrderCount: groups.length,
+        eta,
+      });
+      await this.refreshEvents();
+      this.actionError.set(null);
+      this.closeActionModal();
+    } finally {
+      this.actionSaving.set(false);
+    }
+  }
+
+  async markInTransit(order: Order) {
+    const eta = this.supplierEta().trim() || null;
+    const supplierOrders = await this.orders.listSupplierOrders(order.order_id).catch(() => []);
+    const hasSupplierOrders = supplierOrders.length > 0;
+    const hasConfirmedSupplierItems = this.confirmedItems(order).some((item) => item.supplier_id);
+    if (!hasSupplierOrders && !hasConfirmedSupplierItems) {
+      this.actionError.set("No hay solicitudes a proveedor ni items confirmados con proveedor.");
+      return;
+    }
+    if (this.actionSaving()) return;
+    this.actionSaving.set(true);
+    try {
+      await this.orders.updateStatus(order.order_id, "en_transito");
+      await this.orders.logEvent(order.order_id, "MARKED_INBOUND", "Pedido marcado en tránsito", { eta });
+      await this.refreshEvents();
+      this.actionError.set(null);
+      this.closeActionModal();
+    } finally {
+      this.actionSaving.set(false);
+    }
+  }
+
+  async confirmExistences(order: Order) {
+    if (!this.allItemsResolved(order)) {
+      this.actionError.set("Aún hay items sin resolver.");
+      return;
+    }
+    if (this.actionSaving()) return;
+    this.actionSaving.set(true);
+    try {
+      await this.orders.logEvent(order.order_id, "EXISTENCES_CONFIRMED", "Existencias confirmadas", {
+        items: order.items.length,
+      });
+      await this.refreshEvents();
+      this.actionError.set(null);
+      this.closeActionModal();
+    } finally {
+      this.actionSaving.set(false);
+    }
+  }
+
+  openIncidentModal() {
+    this.incidentType.set("GENERAL");
+    this.incidentSeverity.set("medium");
+    this.incidentTitle.set("Incidencia general");
+    this.incidentReason.set("");
+    this.incidentAssignee.set("");
+    this.incidentModalOpen.set(true);
+  }
+
+  closeIncidentModal() {
+    this.incidentModalOpen.set(false);
+  }
+
+  async createIncident() {
+    const order = this.order();
+    if (!order) return;
+    const reason = this.incidentReason().trim();
+    if (!reason) return;
+    this.incidentSaving.set(true);
+    try {
+      await this.orders.createIncident(order.order_id, {
+        orderId: order.order_id,
+        packageId: null,
+        itemId: null,
+        type: this.incidentType(),
+        severity: this.incidentSeverity(),
+        title: this.incidentTitle().trim() || this.incidentType(),
+        reason,
+        assigneeId: this.incidentAssignee().trim() || null,
+        evidenceUrls: [],
+        createdBy: "admin",
+      });
+      await this.loadIncidents();
+      await this.refreshEvents();
+      this.incidentModalOpen.set(false);
+    } finally {
+      this.incidentSaving.set(false);
+    }
+  }
+
+  openResolveModal(incident: Incident) {
+    this.resolveTarget.set(incident);
+    this.resolveNote.set("");
+    this.resolveModalOpen.set(true);
+  }
+
+  closeResolveModal() {
+    this.resolveModalOpen.set(false);
+  }
+
+  async confirmResolve() {
+    const order = this.order();
+    const incident = this.resolveTarget();
+    if (!order || !incident) return;
+    await this.orders.resolveIncident(order.order_id, incident.id, this.resolveNote().trim(), "admin");
+    await this.loadIncidents();
+    await this.refreshEvents();
+    this.resolveModalOpen.set(false);
+  }
+
+  async attachEvidence(incident: Incident, event: Event) {
+    const order = this.order();
+    if (!order) return;
+    const input = event.target as HTMLInputElement;
+    if (!input.files || input.files.length === 0) return;
+    const file = input.files[0];
+    this.uploadingEvidence.update((current) => ({ ...current, [incident.id]: true }));
+    try {
+      await this.orders.uploadIncidentEvidence(order.order_id, incident.id, file, "admin");
+      await this.loadIncidents();
+      await this.refreshEvents();
+    } finally {
+      this.uploadingEvidence.update((current) => ({ ...current, [incident.id]: false }));
+      input.value = "";
+    }
+  }
+
+  openAssignModal(incident: Incident) {
+    this.assignTarget.set(incident);
+    this.incidentAssignee.set(incident.assigneeId || "");
+    this.assignModalOpen.set(true);
+  }
+
+  closeAssignModal() {
+    this.assignModalOpen.set(false);
+  }
+
+  async confirmAssign() {
+    const order = this.order();
+    const incident = this.assignTarget();
+    if (!order || !incident) return;
+    const assignee = this.incidentAssignee().trim();
+    if (!assignee) return;
+    await this.orders.updateIncident(order.order_id, incident.id, {
+      assigneeId: assignee,
+    }, "admin");
+    await this.loadIncidents();
+    await this.refreshEvents();
+    this.assignModalOpen.set(false);
+  }
+
+  scrollToTimeline() {
+    this.timelineSection?.nativeElement.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  applyFocus(focus: string) {
+    if (focus === "incidents" || focus === "incidents:new") {
+      this.incidentsSection?.nativeElement.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (focus === "incidents:new") this.openIncidentModal();
+    } else if (focus === "packages") {
+      this.packagesSection?.nativeElement.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
+
+  packageCode(order: Order, pkg: PackageRecord): string {
+    return JSON.stringify(
+      {
+        orderId: order.order_id,
+        packageId: pkg.package_id,
+        seq: pkg.sequence,
+        total: pkg.total_packages,
+        amountDue: pkg.amount_due,
+      },
+      null,
+      0,
+    );
+  }
+
+  qrPlaceholder(order: Order, pkg: PackageRecord): string {
+    return `QR:${order.order_id}:${pkg.package_id}:${pkg.sequence}/${pkg.total_packages}`;
+  }
+
+  backToList() {
+    this.router.navigate(["/main/pedidos"]);
+  }
+
+  addItem(order: Order | null) {
+    if (!order) return;
+    const caps = this.allowedCapabilities(order, this.userRole());
+    const canLateChange = order.status === "en_ruta" && this.lateChangeApproved();
+    if (!caps.canEditItems && !canLateChange) return;
+    if (!this.selectedPreview()) {
+      this.error.set("Selecciona un producto del catálogo o inventario.");
+      return;
+    }
+    const title = this.newItemTitle().trim();
+    if (!title) {
+      this.error.set("Escribe el nombre del producto");
+      return;
+    }
+    const qty = Math.max(1, this.newItemQty());
+    const item: OrderItem = {
+      item_id: "",
+      title,
+      variant: this.newItemVariant().trim() || null,
+      color: this.newItemColor().trim() || null,
+      quantity: qty,
+      source: this.newItemSource(),
+      state: "reservado_inventario",
+      confirmation_state: "pending",
+      supplier_id: this.newItemSupplierId(),
+      product_id: this.newItemProductId(),
+      price_public: this.newItemPricePublic(),
+      price_cost: this.newItemPriceCost(),
+      discount_pct: this.newItemDiscount(),
+      inventory_id: this.newItemInventoryId(),
+      image_url: this.selectedPreview()?.image || null,
+    };
+    this.orders.addItem(order.order_id, item);
+    this.orders.logEvent(order.order_id, "ITEM_ADDED", `Item agregado: ${item.title}`, {
+      itemId: item.item_id,
+    });
+    if (item.source === "inventario" && item.inventory_id) {
+      this.inventory.adjustQuantity(item.inventory_id, -qty).catch(() => null);
+    }
+    this.newItemTitle.set("");
+    this.newItemVariant.set("");
+    this.newItemColor.set("");
+    this.newItemQty.set(1);
+    this.newItemPricePublic.set(null);
+    this.newItemPriceCost.set(null);
+    this.supplierDiscountPct.set(null);
+    this.supplierDiscountLabel.set(null);
+    this.newItemSearch.set("");
+    this.newItemInventoryId.set(null);
+    this.newItemSupplierId.set(null);
+    this.newItemProductId.set(null);
+    this.lockItemFields.set(false);
+    this.catalogVariantOptions.set([]);
+    this.catalogColorOptions.set([]);
+    this.selectedPreview.set(null);
+    this.selectedCatalogDoc.set(null);
+  }
+
+  async removeItem(order: Order | null, item: OrderItem) {
+    if (!order) return;
+    const caps = this.allowedCapabilities(order, this.userRole());
+    const canLateChange = order.status === "en_ruta" && this.lateChangeApproved();
+    if (!caps.canEditItems && !canLateChange) return;
+    const ok = confirm(`Quitar "${item.title}" del pedido?`);
+    if (!ok) return;
+
+    if (item.source === "inventario" && item.inventory_id) {
+      await this.inventory.adjustQuantity(item.inventory_id, item.quantity).catch(() => null);
+    }
+
+    const nextItems = order.items.filter((row) => row.item_id !== item.item_id);
+    await this.orders.updateItems(order.order_id, nextItems);
+    await this.orders.logEvent(order.order_id, "ITEM_REMOVED", `Item removido: ${item.title}`, {
+      itemId: item.item_id,
+    });
+  }
+
+  pickInventory(item: InventoryItem) {
+    const image = item.image_urls?.[0] || null;
+    this.newItemTitle.set(item.title);
+    this.newItemVariant.set(item.variant_name || item.size_label || "");
+    this.newItemColor.set(item.color_name || "");
+    this.newItemPriceCost.set(item.unit_price || null);
+    this.newItemSource.set("inventario");
+    this.newItemInventoryId.set(item.inventory_id);
+    this.newItemSupplierId.set(item.supplier_id || null);
+    this.newItemProductId.set(item.inventory_id || null);
+    this.showProductList.set(false);
+    this.lockItemFields.set(true);
+    this.catalogVariantOptions.set([]);
+    this.catalogColorOptions.set([]);
+    this.supplierDiscountPct.set(null);
+    this.supplierDiscountLabel.set(null);
+    this.selectedPreviewHasColorImage.set(Boolean(image));
+    this.selectedPreview.set({
+      title: item.title,
+      variant: this.newItemVariant(),
+      color: this.newItemColor(),
+      image,
+      source: "Inventario",
+    });
+    this.selectedCatalogDoc.set(null);
+  }
+
+  pickCatalog(doc: NormalizedListingDoc, variant: any, color: string) {
+    const listing = doc.listing || { items: [] } as any;
+    const variants = (listing.items || []).map((it: any) => it.variant_name || "Sin variante");
+    const colors = (variant?.color_names || variant?.colors || []).filter(Boolean);
+    const pricePublic = variant?.prices?.[0]?.amount ?? null;
+    const discountTier = (listing.price_tiers_global || []).find(
+      (tier: any) => tier.discount_percent !== null && tier.discount_percent !== undefined
+    );
+    const discountPct = discountTier?.discount_percent ?? null;
+    const discountLabel = discountTier?.tier_name ? `Descuento ${discountTier.tier_name}` : "Descuento proveedor";
+    const computedCost =
+      pricePublic !== null && discountPct !== null
+        ? Number((pricePublic * (1 - discountPct / 100)).toFixed(2))
+        : null;
+    const colorImage =
+      (doc.product_colors || []).find((c) => c.name?.toLowerCase() === color?.toLowerCase())?.image_url || null;
+    const image = colorImage || doc.cover_images?.[0] || null;
+    this.newItemTitle.set(listing.title || "Producto sin nombre");
+    this.newItemVariant.set(variant?.variant_name || variants[0] || "");
+    this.newItemColor.set(color || colors[0] || "");
+    this.newItemPricePublic.set(pricePublic);
+    this.newItemPriceCost.set(computedCost);
+    this.newItemSource.set("catalogo");
+    this.newItemInventoryId.set(null);
+    this.newItemSupplierId.set(doc.supplier_id || null);
+    this.newItemProductId.set(doc.normalized_id || null);
+    this.showProductList.set(false);
+    this.lockItemFields.set(true);
+    this.catalogVariantOptions.set([...new Set(variants)]);
+    this.catalogColorOptions.set(colors);
+    this.supplierDiscountPct.set(discountPct);
+    this.supplierDiscountLabel.set(discountLabel);
+    this.selectedPreviewHasColorImage.set(Boolean(colorImage));
+    this.selectedPreview.set({
+      title: this.newItemTitle(),
+      variant: this.newItemVariant(),
+      color: this.newItemColor(),
+      image,
+      source: "Catálogo",
+    });
+    this.selectedCatalogDoc.set(doc);
+  }
+
+  closeProductListSoon() {
+    if (this.suppressProductBlur()) {
+      this.suppressProductBlur.set(false);
+      return;
+    }
+    setTimeout(() => this.showProductList.set(false), 120);
+  }
+
+  beginProductPick() {
+    this.suppressProductBlur.set(true);
+  }
+
+  onVariantChange(value: string) {
+    this.newItemVariant.set(value);
+    const doc = this.selectedCatalogDoc();
+    if (!doc) return;
+    const listing: any = doc.listing || { items: [] };
+    const variant = (listing.items || []).find((it: any) => it.variant_name === value) || null;
+    if (!variant) return;
+    const pricePublic = variant?.prices?.[0]?.amount ?? null;
+    this.newItemPricePublic.set(pricePublic);
+    const discountPct = this.supplierDiscountPct();
+    const computedCost =
+      pricePublic !== null && discountPct !== null
+        ? Number((pricePublic * (1 - discountPct / 100)).toFixed(2))
+        : null;
+    this.newItemPriceCost.set(computedCost);
+
+    const colors = (variant?.color_names || variant?.colors || []).filter(Boolean);
+    this.catalogColorOptions.set(colors);
+    const currentColor = this.newItemColor();
+    if (colors.length > 0) {
+      const nextColor = colors.find((c: string) => c.toLowerCase() === currentColor.toLowerCase()) || colors[0];
+      this.newItemColor.set(nextColor);
+    }
+    const colorImage =
+      (doc.product_colors || []).find((c) => c.name?.toLowerCase() === this.newItemColor().toLowerCase())?.image_url ||
+      doc.cover_images?.[0] ||
+      null;
+    const hasColorImage = Boolean(
+      (doc.product_colors || []).find((c) => c.name?.toLowerCase() === this.newItemColor().toLowerCase())?.image_url
+    );
+    this.selectedPreviewHasColorImage.set(hasColorImage);
+    this.selectedPreview.update((prev) =>
+      prev
+        ? {
+            ...prev,
+            variant: value,
+            color: this.newItemColor(),
+            image: colorImage,
+          }
+        : prev
+    );
+  }
+
+  onColorChange(value: string) {
+    this.newItemColor.set(value);
+    const doc = this.selectedCatalogDoc();
+    if (!doc) return;
+    const colorImage =
+      (doc.product_colors || []).find((c) => c.name?.toLowerCase() === value.toLowerCase())?.image_url ||
+      doc.cover_images?.[0] ||
+      null;
+    const hasColorImage = Boolean(
+      (doc.product_colors || []).find((c) => c.name?.toLowerCase() === value.toLowerCase())?.image_url
+    );
+    this.selectedPreviewHasColorImage.set(hasColorImage);
+    this.selectedPreview.update((prev) =>
+      prev
+        ? {
+            ...prev,
+            color: value,
+            image: colorImage,
+          }
+        : prev
+    );
+  }
+
+  formatCurrency(value: number | null): string {
+    if (value === null || value === undefined || Number.isNaN(value)) return "";
+    return new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(value);
+  }
+
+  itemPriceLabel(item: OrderItem): string {
+    const value = item.price_public ?? item.price_cost ?? null;
+    if (value === null || value === undefined || Number.isNaN(value)) return "Sin precio";
+    return this.formatCurrency(value);
+  }
+}
+
+
+
+

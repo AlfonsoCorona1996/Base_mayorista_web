@@ -1,0 +1,239 @@
+<section class="clients-page">
+  <header class="page-header">
+    <div>
+      <h1>Clientas</h1>
+      <p>Gestiona datos esenciales y mant�n los insights separados para evitar ruido.</p>
+    </div>
+
+    <button type="button" class="btn btn-secondary" (click)="reload()" [disabled]="loading()">
+      {{ loading() ? "Actualizando..." : "Actualizar" }}
+    </button>
+  </header>
+
+  <section class="stats-grid">
+    <article class="stat-card">
+      <p>Total</p>
+      <strong>{{ allCustomers().length }}</strong>
+    </article>
+    <article class="stat-card">
+      <p>Activas</p>
+      <strong>{{ activeCount() }}</strong>
+    </article>
+    <article class="stat-card">
+      <p>Inactivas</p>
+      <strong>{{ inactiveCount() }}</strong>
+    </article>
+  </section>
+
+  @if (error()) {
+    <div class="alert alert-error">{{ error() }}</div>
+  }
+
+  @if (success()) {
+    <div class="alert alert-success">{{ success() }}</div>
+  }
+
+  <section class="panel filters-panel">
+    <input
+      type="text"
+      class="input"
+      [ngModel]="searchTerm()"
+      (ngModelChange)="searchTerm.set($event)"
+      placeholder="Buscar por nombre, WhatsApp, ruta o localidad"
+    />
+
+    <div class="filters-row">
+      <select class="input" [ngModel]="statusFilter()" (ngModelChange)="onStatusFilterChange($event)">
+        <option value="all">Todas</option>
+        <option value="active">Solo activas</option>
+        <option value="inactive">Solo inactivas</option>
+      </select>
+
+      <button type="button" class="btn btn-outline" (click)="clearFilters()" [disabled]="!searchTerm().trim() && statusFilter() === 'all'">
+        Limpiar filtros
+      </button>
+    </div>
+  </section>
+
+  <section class="content-grid">
+    <article class="panel form-panel">
+      <div class="form-header">
+        <h2>{{ editingId() ? "Editar clienta" : "Nueva clienta" }}</h2>
+        @if (editingId()) {
+          <button type="button" class="btn btn-ghost" (click)="startCreate()">Nueva</button>
+        }
+      </div>
+
+      <form class="form-grid" (submit)="saveCustomer(); $event.preventDefault()">
+        <div class="form-columns">
+          <label class="field">
+            <span>Nombre *</span>
+            <input type="text" class="input" [(ngModel)]="draft.first_name" name="first_name" required />
+          </label>
+
+          <label class="field">
+            <span>Apellido *</span>
+            <input type="text" class="input" [(ngModel)]="draft.last_name" name="last_name" required />
+          </label>
+        </div>
+
+        <label class="field">
+          <span>WhatsApp *</span>
+          <input type="tel" class="input" [(ngModel)]="draft.whatsapp" name="whatsapp" placeholder="+52 33 1234 5678" required />
+        </label>
+
+        <div class="form-columns">
+          <label class="field">
+            <span>Ruta</span>
+            <select class="input" [(ngModel)]="draft.route_id" name="route_id">
+              <option value="">Sin ruta</option>
+              @for (route of routes(); track route.route_id) {
+                <option [value]="route.route_id">{{ route.name }}</option>
+              }
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Localidad</span>
+            <select class="input" [(ngModel)]="draft.locality_id" name="locality_id">
+              <option value="">Sin localidad</option>
+              @for (locality of localities(); track locality.locality_id) {
+                <option [value]="locality.locality_id">{{ locality.name }}</option>
+              }
+            </select>
+          </label>
+        </div>
+
+        <label class="field">
+          <span>Estado</span>
+          <select class="input" [(ngModel)]="draft.active" name="active">
+            <option [ngValue]="true">Activa</option>
+            <option [ngValue]="false">Inactiva</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Notas</span>
+          <textarea class="input textarea" [(ngModel)]="draft.notes" name="notes" rows="3" placeholder="Preferencias, instrucciones, etc."></textarea>
+        </label>
+
+        <button type="button" class="btn btn-outline" (click)="showInsights.set(!showInsights())">
+          {{ showInsights() ? "Ocultar" : "Mostrar" }} analitica
+        </button>
+
+        @if (showInsights()) {
+          <div class="insights-panel">
+            <p class="insights-title">Insights (opcional)</p>
+            <div class="form-columns">
+              <label class="field">
+                <span>Ultima compra</span>
+                <input type="date" class="input" [(ngModel)]="draft.insights_last_order" name="insights_last_order" />
+              </label>
+              <label class="field">
+                <span>Total pedidos</span>
+                <input type="number" min="0" class="input" [(ngModel)]="draft.insights_total_orders" name="insights_total_orders" />
+              </label>
+            </div>
+
+            <div class="form-columns">
+              <label class="field">
+                <span>Total gastado</span>
+                <input type="number" min="0" step="0.01" class="input" [(ngModel)]="draft.insights_total_spent" name="insights_total_spent" />
+              </label>
+              <label class="field">
+                <span>Ticket promedio</span>
+                <input type="number" min="0" step="0.01" class="input" [(ngModel)]="draft.insights_avg_order" name="insights_avg_order" />
+              </label>
+            </div>
+
+            <div class="form-columns">
+              <label class="field">
+                <span>Piezas promedio</span>
+                <input type="number" min="0" class="input" [(ngModel)]="draft.insights_avg_units" name="insights_avg_units" />
+              </label>
+              <label class="field">
+                <span>Frecuencia (dias)</span>
+                <input type="number" min="0" class="input" [(ngModel)]="draft.insights_frequency_days" name="insights_frequency_days" />
+              </label>
+            </div>
+
+            <label class="field">
+              <span>Categorias preferidas</span>
+              <input type="text" class="input" [(ngModel)]="draft.insights_categories" name="insights_categories" placeholder="Ej. Cobertores, Ropa" />
+              <small>Separadas por comas.</small>
+            </label>
+
+            <label class="field">
+              <span>Productos preferidos</span>
+              <input type="text" class="input" [(ngModel)]="draft.insights_products" name="insights_products" placeholder="Ej. Cobertor polar" />
+              <small>Separadas por comas.</small>
+            </label>
+          </div>
+        }
+
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary" [disabled]="saving()">
+            {{ saving() ? "Guardando..." : editingId() ? "Guardar cambios" : "Crear clienta" }}
+          </button>
+          <button type="button" class="btn btn-outline" (click)="startCreate()">Limpiar</button>
+        </div>
+      </form>
+    </article>
+
+    <article class="panel list-panel">
+      <div class="list-header">
+        <h2>Clientas registradas</h2>
+        <p>{{ filteredCustomers().length }} resultado(s)</p>
+      </div>
+
+      @if (loading()) {
+        <p class="empty">Cargando clientas...</p>
+      } @else if (filteredCustomers().length === 0) {
+        <p class="empty">No hay clientas con esos filtros.</p>
+      } @else {
+        <div class="client-list">
+          @for (customer of filteredCustomers(); track customer.customer_id) {
+            <article class="client-card" [class.card-off]="!customer.active">
+              <header>
+                <div>
+                  <h3>{{ customer.first_name }} {{ customer.last_name }}</h3>
+                  <p>{{ customer.whatsapp }}</p>
+                </div>
+                <span class="status-tag" [class]="'status-tag ' + (customer.active ? 'tag-on' : 'tag-off')">
+                  {{ customer.active ? "Activa" : "Inactiva" }}
+                </span>
+              </header>
+
+              <div class="meta-grid">
+                <p><strong>Ruta:</strong> {{ routeName(customer.route_id) }}</p>
+                <p><strong>Localidad:</strong> {{ localityName(customer.locality_id) }}</p>
+                <p><strong>Ultima compra:</strong> {{ customer.insights?.last_order_at || "Sin datos" }}</p>
+                <p><strong>Total pedidos:</strong> {{ customer.insights?.total_orders ?? "Sin datos" }}</p>
+              </div>
+
+              @if (customer.tags?.length) {
+                <div class="tag-row">
+                  @for (tag of customer.tags; track tag) {
+                    <span class="tag">{{ tag }}</span>
+                  }
+                </div>
+              }
+
+              <div class="card-actions">
+                <button type="button" class="btn btn-outline" (click)="startEdit(customer)">Editar</button>
+                <button
+                  type="button"
+                  class="btn btn-danger"
+                  (click)="toggleActive(customer, !customer.active)"
+                  [disabled]="isBusy(customer.customer_id)"
+                >
+                  {{ isBusy(customer.customer_id) ? "Procesando..." : customer.active ? "Desactivar" : "Activar" }}
+                </button>
+              </div>
+            </article>
+          }
+        </div>
+      }
+    </article>
+  </section>
+</section>

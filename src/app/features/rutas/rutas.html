@@ -1,0 +1,185 @@
+<section class="routes-page">
+  <header class="page-header">
+    <div>
+      <h1>Rutas</h1>
+      <p>Organiza localidades en el orden exacto de entrega.</p>
+    </div>
+
+    <button type="button" class="btn btn-secondary" (click)="reload()" [disabled]="loading()">
+      {{ loading() ? "Actualizando..." : "Actualizar" }}
+    </button>
+  </header>
+
+  <section class="stats-grid">
+    <article class="stat-card">
+      <p>Total</p>
+      <strong>{{ allRoutes().length }}</strong>
+    </article>
+    <article class="stat-card">
+      <p>Activas</p>
+      <strong>{{ activeCount() }}</strong>
+    </article>
+    <article class="stat-card">
+      <p>Inactivas</p>
+      <strong>{{ inactiveCount() }}</strong>
+    </article>
+  </section>
+
+  @if (error()) {
+    <div class="alert alert-error">{{ error() }}</div>
+  }
+
+  @if (success()) {
+    <div class="alert alert-success">{{ success() }}</div>
+  }
+
+  <section class="panel filters-panel">
+    <input
+      type="text"
+      class="input"
+      [ngModel]="searchTerm()"
+      (ngModelChange)="searchTerm.set($event)"
+      placeholder="Buscar ruta o localidad"
+    />
+
+    <div class="filters-row">
+      <select class="input" [ngModel]="statusFilter()" (ngModelChange)="onStatusFilterChange($event)">
+        <option value="all">Todas</option>
+        <option value="active">Solo activas</option>
+        <option value="inactive">Solo inactivas</option>
+      </select>
+
+      <button type="button" class="btn btn-outline" (click)="clearFilters()" [disabled]="!searchTerm().trim() && statusFilter() === 'all'">
+        Limpiar filtros
+      </button>
+    </div>
+  </section>
+
+  <section class="content-grid">
+    <article class="panel form-panel">
+      <div class="form-header">
+        <h2>{{ editingId() ? "Editar ruta" : "Nueva ruta" }}</h2>
+        @if (editingId()) {
+          <button type="button" class="btn btn-ghost" (click)="startCreate()">Nueva</button>
+        }
+      </div>
+
+      <form class="form-grid" (submit)="saveRoute(); $event.preventDefault()">
+        <label class="field">
+          <span>Nombre *</span>
+          <input type="text" class="input" [(ngModel)]="draft.name" name="name" required />
+        </label>
+
+        <label class="field">
+          <span>Estado</span>
+          <select class="input" [(ngModel)]="draft.active" name="active">
+            <option [ngValue]="true">Activa</option>
+            <option [ngValue]="false">Inactiva</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Notas</span>
+          <textarea class="input textarea" [(ngModel)]="draft.notes" name="notes" rows="3"></textarea>
+        </label>
+
+        <div class="route-builder">
+          <p class="builder-title">Localidades en orden</p>
+
+          <div class="builder-controls">
+            <select
+              class="input"
+              [ngModel]="selectedLocalityId()"
+              (ngModelChange)="selectedLocalityId.set($event)"
+              [ngModelOptions]="{ standalone: true }"
+            >
+              <option value="">Selecciona localidad</option>
+              @for (locality of availableLocalities(); track locality.locality_id) {
+                <option [value]="locality.locality_id">{{ locality.name }}</option>
+              }
+            </select>
+
+            <button type="button" class="btn btn-outline" (click)="addLocality()">Agregar</button>
+          </div>
+
+          @if (draft.locality_ids.length === 0) {
+            <p class="empty">Aun no agregas localidades a esta ruta.</p>
+          } @else {
+            <div class="route-list">
+              @for (localityId of draft.locality_ids; track localityId; let idx = $index) {
+                <div class="route-item">
+                  <div>
+                    {{ localityName(localityId) }}
+                  </div>
+                  <div class="route-actions">
+                    <button type="button" class="btn btn-danger remove-x" (click)="removeLocality(idx)">X</button>
+                  </div>
+                </div>
+              }
+            </div>
+          }
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary" [disabled]="saving()">
+            {{ saving() ? "Guardando..." : editingId() ? "Guardar cambios" : "Crear ruta" }}
+          </button>
+          <button type="button" class="btn btn-outline" (click)="startCreate()">Limpiar</button>
+        </div>
+      </form>
+    </article>
+
+    <article class="panel list-panel">
+      <div class="list-header">
+        <h2>Rutas registradas</h2>
+        <p>{{ filteredRoutes().length }} resultado(s)</p>
+      </div>
+
+      @if (loading()) {
+        <p class="empty">Cargando rutas...</p>
+      } @else if (filteredRoutes().length === 0) {
+        <p class="empty">No hay rutas con esos filtros.</p>
+      } @else {
+        <div class="route-cards">
+          @for (route of filteredRoutes(); track route.route_id) {
+            <article class="route-card" [class.card-off]="!route.active">
+              <header>
+                <div>
+                  <h3>{{ route.name }}</h3>
+                  <p>{{ route.locality_ids.length }} localidades</p>
+                </div>
+                <span class="status-tag" [class]="'status-tag ' + (route.active ? 'tag-on' : 'tag-off')">
+                  {{ route.active ? "Activa" : "Inactiva" }}
+                </span>
+              </header>
+
+              @if (route.locality_ids.length > 0) {
+                <div class="route-preview">
+              @for (localityId of route.locality_ids; track localityId; let idx = $index) {
+                    <span>{{ localityName(localityId) }}</span>
+                  }
+                </div>
+              }
+
+              <div class="card-actions compact-actions">
+                <button type="button" class="btn btn-outline route-action-btn" (click)="startEdit(route)">
+                  <span aria-hidden="true">✏️</span>
+                  <span>Editar</span>
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-danger route-action-btn"
+                  (click)="toggleActive(route, !route.active)"
+                  [disabled]="isBusy(route.route_id)"
+                >
+                  <span aria-hidden="true">{{ route.active ? "⛔" : "✅" }}</span>
+                  <span>{{ isBusy(route.route_id) ? "Procesando..." : route.active ? "Desactivar" : "Activar" }}</span>
+                </button>
+              </div>
+            </article>
+          }
+        </div>
+      }
+    </article>
+  </section>
+</section>

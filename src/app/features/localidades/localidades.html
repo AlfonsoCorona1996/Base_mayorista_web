@@ -1,0 +1,147 @@
+<section class="localidades-page">
+  <header class="page-header">
+    <div>
+      <h1>Localidades</h1>
+      <p>Define las localidades que forman parte de las rutas de entrega.</p>
+    </div>
+
+    <button type="button" class="btn btn-secondary" (click)="reload()" [disabled]="loading()">
+      {{ loading() ? "Actualizando..." : "Actualizar" }}
+    </button>
+  </header>
+
+  <section class="stats-grid">
+    <article class="stat-card">
+      <p>Total</p>
+      <strong>{{ allLocalities().length }}</strong>
+    </article>
+    <article class="stat-card">
+      <p>Activas</p>
+      <strong>{{ activeCount() }}</strong>
+    </article>
+    <article class="stat-card">
+      <p>Inactivas</p>
+      <strong>{{ inactiveCount() }}</strong>
+    </article>
+  </section>
+
+  @if (error()) {
+    <div class="alert alert-error">{{ error() }}</div>
+  }
+
+  @if (success()) {
+    <div class="alert alert-success">{{ success() }}</div>
+  }
+
+  <section class="panel filters-panel">
+    <input
+      type="text"
+      class="input"
+      [ngModel]="searchTerm()"
+      (ngModelChange)="searchTerm.set($event)"
+      placeholder="Buscar localidad o estado"
+    />
+
+    <div class="filters-row">
+      <select class="input" [ngModel]="statusFilter()" (ngModelChange)="onStatusFilterChange($event)">
+        <option value="all">Todas</option>
+        <option value="active">Solo activas</option>
+        <option value="inactive">Solo inactivas</option>
+      </select>
+
+      <button type="button" class="btn btn-outline" (click)="clearFilters()" [disabled]="!searchTerm().trim() && statusFilter() === 'all'">
+        Limpiar filtros
+      </button>
+    </div>
+  </section>
+
+  <section class="content-grid">
+    <article class="panel form-panel">
+      <div class="form-header">
+        <h2>{{ editingId() ? "Editar localidad" : "Nueva localidad" }}</h2>
+        @if (editingId()) {
+          <button type="button" class="btn btn-ghost" (click)="startCreate()">Nueva</button>
+        }
+      </div>
+
+      <form class="form-grid" (submit)="saveLocality(); $event.preventDefault()">
+        <label class="field">
+          <span>Nombre *</span>
+          <input type="text" class="input" [(ngModel)]="draft.name" name="name" required />
+        </label>
+
+        <label class="field">
+          <span>Notas</span>
+          <textarea class="input textarea" [(ngModel)]="draft.notes" name="notes" rows="3"></textarea>
+        </label>
+
+        <label class="field">
+          <span>Estado</span>
+          <select class="input" [(ngModel)]="draft.active" name="active">
+            <option [ngValue]="true">Activa</option>
+            <option [ngValue]="false">Inactiva</option>
+          </select>
+        </label>
+
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary" [disabled]="saving()">
+            {{ saving() ? "Guardando..." : editingId() ? "Guardar cambios" : "Crear localidad" }}
+          </button>
+          <button type="button" class="btn btn-outline" (click)="startCreate()">Limpiar</button>
+        </div>
+      </form>
+    </article>
+
+    <article class="panel list-panel">
+      <div class="list-header">
+        <h2>Localidades registradas</h2>
+        <p>{{ filteredLocalities().length }} resultado(s)</p>
+      </div>
+
+      @if (loading()) {
+        <p class="empty">Cargando localidades...</p>
+      } @else if (filteredLocalities().length === 0) {
+        <p class="empty">No hay localidades con esos filtros.</p>
+      } @else {
+        <div class="locality-list">
+          @for (locality of filteredLocalities(); track locality.locality_id) {
+            <article class="locality-card" [class.card-off]="!locality.active">
+              <header>
+                <div>
+                  <h3>{{ locality.name }}</h3>
+                </div>
+                <span class="status-tag" [class]="'status-tag ' + (locality.active ? 'tag-on' : 'tag-off')">
+                  {{ locality.active ? "Activa" : "Inactiva" }}
+                </span>
+              </header>
+
+              <div class="locality-body">
+                @if (locality.notes) {
+                  <p class="notes">{{ locality.notes }}</p>
+                } @else {
+                  <p class="notes muted">Sin notas</p>
+                }
+
+                <div class="card-actions compact-actions">
+                  <button type="button" class="btn btn-outline route-action-btn" (click)="startEdit(locality)">
+                    <span aria-hidden="true">✏️</span>
+                    <span>Editar</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-danger route-action-btn"
+                    (click)="toggleActive(locality, !locality.active)"
+                    [disabled]="isBusy(locality.locality_id)"
+                  >
+                    <span aria-hidden="true">{{ locality.active ? "⛔" : "✅" }}</span>
+                    <span>{{ isBusy(locality.locality_id) ? "Procesando..." : locality.active ? "Desactivar" : "Activar" }}</span>
+                  </button>
+                </div>
+              </div>
+            </article>
+          }
+        </div>
+      }
+    </article>
+  </section>
+</section>

@@ -1,0 +1,39 @@
+Acuerdos y supuestos sobre el módulo de pedidos (05-feb-2026)
+-------------------------------------------------------------
+1) Flujo de estados:
+   Pedido: borrador → confirmando_proveedor → reservado_inventario → solicitado_proveedor → en_transito → recibido_qa → empaque → en_ruta → entregado → pago_pendiente → pagado. Atajos: cancelado, devuelto.
+   Item: hereda mismos estados; puede cancelarse o devolverse de forma individual.
+   Paquete: armado → en_ruta → entregado → devuelto. Cada pedido puede tener N paquetes.
+
+2) QR y etiquetas:
+   - Cada producto lleva QR con {sku/variant/color/productId}.
+   - Cada paquete lleva QR con {orderId, packageId, seq/total, routeId, amountDue}. Se usará para salida de bodega y entrega.
+   - Se generará en front (svg/canvas) y se imprime con window.print; si luego se integra impresora térmica se podrá usar qz-tray.
+
+3) Escaneo:
+   - Escanear producto al empacar valida que pertenece al pedido y lo marca como empaquetado.
+   - Escanear paquete en salida a ruta mueve paquete a “en_ruta”.
+   - Escanear paquete en entrega lo pasa a “entregado” y registra cobro; si hay devolución abre subflujo.
+
+4) Empaque y reservas:
+   - Items de inventario se marcan “reservado_inventario” al agregarse a un pedido.
+   - Se puede crear varios paquetes; cada paquete muestra QR y monto a cobrar.
+
+5) UI/UX mobile-first:
+   - Lista de pedidos en tarjetas con chips de estado, contadores de items/paquetes y acciones “Avanzar” y “Ver detalle”.
+   - Detalle con pestañas lógicas (resumen, productos, paquetes, timeline). Acciones flotantes según estado.
+   - Empaque con botón de escaneo (cámara), cierre de paquete y generación de QR.
+
+6) Datos mínimos:
+   - Pedido: customer_id, route_id, estado, totales, timestamps, notas.
+   - Item: product_id/sku/variant/color, fuente (catalogo|inventario), estado, descuentos, cantidad.
+   - Paquete: orderId, packageId, seq, totalPackages, state, amountDue, item_ids.
+   - Eventos de timeline con timestamp y actor.
+
+7) Inventario y catálogo:
+   - Pedidos pueden mezclar productos de catálogo y de inventario; los de inventario bloquean stock al agregarse.
+
+8) Pendientes futuros:
+   - Reemplazar datos mock por Firestore.
+   - Integrar scanner (p.ej. @zxing/ngx-scanner) y generador QR (@techiediaries/ngx-qrcode o qrious).
+   - Etiquetas térmicas configurables y pairing con impresora chica (SKU) y grande (paquetes).

@@ -6,33 +6,92 @@
     </div>
 
     <nav class="menu">
-      <a
-        routerLink="/main/dashboard"
-        routerLinkActive="active"
-        [routerLinkActiveOptions]="{ exact: true }"
-        (click)="closeMenu()"
-      >
-        Dashboard
-      </a>
-      <a routerLink="/main/validacion" routerLinkActive="active" (click)="closeMenu()">
-        Validacion
-      </a>
-      <a routerLink="/main/catalogo" routerLinkActive="active" (click)="closeMenu()">
-        Catalogo
-      </a>
-      <a routerLink="/main/inventario" routerLinkActive="active" (click)="closeMenu()">
-        Inventario
-      </a>
-      <a routerLink="/main/edicion-productos" routerLinkActive="active" (click)="closeMenu()">
-        <span class="menu-link-text">Edicion productos</span>
-        <span class="menu-badge">En construccion</span>
-      </a>
-      <a routerLink="/main/proveedores" routerLinkActive="active" (click)="closeMenu()">Proveedores</a>
-      <a routerLink="/main/categorias" routerLinkActive="active" (click)="closeMenu()">Categorias</a>
-      <a routerLink="/main/pedidos" routerLinkActive="active" (click)="closeMenu()">
-        <span class="menu-link-text">Pedidos</span>
-        <span class="menu-badge">En construccion</span>
-      </a>
+      <div class="menu-section">
+        <button
+          type="button"
+          class="menu-section-header"
+          (click)="toggleGroup('operacion')"
+          [attr.aria-expanded]="isGroupOpen('operacion')"
+          aria-controls="menu-operacion"
+        >
+          <span class="menu-section-title">
+            <span class="menu-section-icon" aria-hidden="true">⚙️</span>
+            Operacion
+          </span>
+          <span class="menu-section-chevron">{{ isGroupOpen('operacion') ? '–' : '+' }}</span>
+        </button>
+        @if (isGroupOpen('operacion')) {
+          <div class="menu-subnav" id="menu-operacion">
+            <a
+              routerLink="/main/dashboard"
+              routerLinkActive="active"
+              [routerLinkActiveOptions]="{ exact: true }"
+              (click)="closeMenu()"
+            >
+              Dashboard
+            </a>
+            <a routerLink="/main/validacion" routerLinkActive="active" (click)="closeMenu()">
+              Validacion
+            </a>
+            <a routerLink="/main/pedidos" routerLinkActive="active" (click)="closeMenu()">
+              <span class="menu-link-text">Pedidos</span>
+            </a>
+          </div>
+        }
+      </div>
+
+      <div class="menu-section">
+        <button
+          type="button"
+          class="menu-section-header"
+          (click)="toggleGroup('catalogo')"
+          [attr.aria-expanded]="isGroupOpen('catalogo')"
+          aria-controls="menu-catalogo"
+        >
+          <span class="menu-section-title">
+            <span class="menu-section-icon" aria-hidden="true">📦</span>
+            Catalogo
+          </span>
+          <span class="menu-section-chevron">{{ isGroupOpen('catalogo') ? '–' : '+' }}</span>
+        </button>
+        @if (isGroupOpen('catalogo')) {
+          <div class="menu-subnav" id="menu-catalogo">
+            <a routerLink="/main/catalogo" routerLinkActive="active" (click)="closeMenu()">
+              Catalogo
+            </a>
+            <a routerLink="/main/edicion-productos" routerLinkActive="active" (click)="closeMenu()">
+              <span class="menu-link-text">Edicion productos</span>
+              <span class="menu-badge">En construccion</span>
+            </a>
+            <a routerLink="/main/categorias" routerLinkActive="active" (click)="closeMenu()">Categorias</a>
+            <a routerLink="/main/proveedores" routerLinkActive="active" (click)="closeMenu()">Proveedores</a>
+            <a routerLink="/main/inventario" routerLinkActive="active" (click)="closeMenu()">Inventario</a>
+          </div>
+        }
+      </div>
+
+      <div class="menu-section">
+        <button
+          type="button"
+          class="menu-section-header"
+          (click)="toggleGroup('clientes')"
+          [attr.aria-expanded]="isGroupOpen('clientes')"
+          aria-controls="menu-clientes"
+        >
+          <span class="menu-section-title">
+            <span class="menu-section-icon" aria-hidden="true">👥</span>
+            Clientas
+          </span>
+          <span class="menu-section-chevron">{{ isGroupOpen('clientes') ? '–' : '+' }}</span>
+        </button>
+        @if (isGroupOpen('clientes')) {
+          <div class="menu-subnav" id="menu-clientes">
+            <a routerLink="/main/clientas" routerLinkActive="active" (click)="closeMenu()">Clientas</a>
+            <a routerLink="/main/rutas" routerLinkActive="active" (click)="closeMenu()">Rutas</a>
+            <a routerLink="/main/localidades" routerLinkActive="active" (click)="closeMenu()">Localidades</a>
+          </div>
+        }
+      </div>
     </nav>
 
     <button type="button" class="btn-logout" (click)="logout()">
