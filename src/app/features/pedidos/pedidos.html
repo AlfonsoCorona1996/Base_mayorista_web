@@ -1,0 +1,255 @@
+<section class="page">
+  <header class="page-head">
+    <div>
+      <p class="eyebrow">Pedidos</p>
+      <h1>Seguimiento end-to-end</h1>
+      <p class="muted">Confirma con proveedor, reserva inventario y entrega sin perder trazabilidad.</p>
+    </div>
+  </header>
+
+  <section class="quick-create">
+    <div class="qc-head">
+      <div>
+        <p class="eyebrow">Crear pedido</p>
+        <p class="muted">Escribe para buscar clienta; ruta se autollenará.</p>
+      </div>
+      <button type="button" class="btn primary" (click)="createOrder()" [disabled]="creating() || !canCreateOrder()">
+        Crear
+      </button>
+    </div>
+    <div class="qc-grid">
+      <div class="autocomplete">
+        <input
+          class="input"
+          type="text"
+          placeholder="Busca por nombre o WhatsApp"
+          [(ngModel)]="customerQuery"
+          (focus)="showCustomerList.set(true)"
+          (blur)="closeCustomerListSoon()"
+          (ngModelChange)="newCustomerId.set(''); showCustomerList.set(true)"
+        />
+        @if (showCustomerList() && customerSuggestions().length > 0) {
+          <div class="auto-list" (mousedown)="$event.preventDefault()">
+            @for (c of customerSuggestions(); track c.customer_id) {
+              <button type="button" (click)="pickCustomer(c.customer_id)">
+                <div class="auto-name">{{ c.first_name }} {{ c.last_name }}</div>
+                <div class="auto-meta">{{ c.whatsapp }}</div>
+              </button>
+            }
+          </div>
+        } @else if (showCustomerList() && customerQuery().trim().length >= 2) {
+          <div class="auto-list auto-empty" (mousedown)="$event.preventDefault()">
+            <div class="auto-empty-text">No existe una clienta con ese nombre.</div>
+          </div>
+        }
+      </div>
+      <div class="pill route-pill">
+        Ruta: <strong>{{ inferredRouteName() }}</strong>
+      </div>
+      <input class="input" type="text" placeholder="Notas (opcional)" [(ngModel)]="newNotes" />
+    </div>
+  </section>
+
+  <div class="filters">
+    <input
+      type="search"
+      placeholder="Buscar por clienta, producto o ID"
+      [(ngModel)]="search"
+      class="input"
+    />
+
+    <select class="input" [(ngModel)]="routeFilter">
+      @for (route of routeOptions(); track route.id) {
+        <option [value]="route.id">{{ route.name }}</option>
+      }
+    </select>
+  </div>
+
+  <div class="intent-tabs" role="tablist" aria-label="Filtros por intención">
+    @for (intent of intentOptions; track intent.id) {
+      <button
+        type="button"
+        class="intent-chip"
+        [class.active]="intentFilter() === intent.id"
+        (click)="setIntentFilter(intent.id)"
+        role="tab"
+        [attr.aria-selected]="intentFilter() === intent.id"
+      >
+        {{ intent.label }}
+      </button>
+    }
+  </div>
+
+  @if (loading()) {
+    <p class="muted">Cargando pedidos…</p>
+  }
+
+  @if (error()) {
+    <div class="alert error">{{ error() }}</div>
+  }
+
+  <div class="grid">
+    @for (order of filtered(); track order.order_id) {
+      <article class="order-card" (click)="open(order.order_id)">
+        <div class="order-head">
+          <div class="order-title">
+            <p class="eyebrow">Pedido {{ order.order_id }}</p>
+            <div class="title-row">
+              <h3>{{ customerName(order.customer_id) }}</h3>
+              <span class="chip" [class]="statusClass(order.status)">{{ statusLabel(order.status) }}</span>
+              @if (hasIncompletePackages(order)) {
+                <span class="chip danger tiny">INCOMPLETO</span>
+              }
+              @if (hasPaymentPending(order)) {
+                <span class="chip warning tiny">$ pendiente</span>
+              }
+              @if (hasIncidents(order)) {
+                <span class="chip tiny warning">{{ incidentsLabel(order) }}</span>
+                @if (order.has_high_incident) {
+                  <span class="chip tiny danger">CRÍTICO</span>
+                }
+              }
+            </div>
+            <p class="muted">{{ routeName(order.route_id) }}</p>
+          </div>
+        </div>
+
+        <div class="meta">
+          <span>{{ order.items.length }} items</span>
+          <span>Paquetes {{ packagesSummary(order) }}</span>
+          <span>Actualizado {{ order.updated_at | date: "shortDate" }}</span>
+        </div>
+
+        <div class="pills">
+          @for (item of order.items.slice(0, 3); track item.item_id) {
+            <span class="pill">{{ item.title }}</span>
+          }
+          @if (order.items.length > 3) {
+            <span class="pill more">+{{ order.items.length - 3 }}</span>
+          }
+        </div>
+
+        <div class="actions">
+          <button
+            type="button"
+            class="btn primary"
+            [disabled]="primaryAction(order).disabled"
+            [attr.title]="primaryAction(order).disabled ? primaryAction(order).disabledReason : null"
+            [attr.aria-label]="primaryAction(order).label + ' para ' + customerName(order.customer_id)"
+            [attr.aria-describedby]="primaryAction(order).disabled && primaryAction(order).disabledReason ? 'cta-reason-' + order.order_id : null"
+            (click)="openActionSheet(order); $event.stopPropagation();"
+          >
+            {{ primaryAction(order).label }}
+          </button>
+          @if (primaryAction(order).disabled && primaryAction(order).disabledReason) {
+            <p class="action-reason" [attr.id]="'cta-reason-' + order.order_id">
+              {{ primaryAction(order).disabledReason }}
+            </p>
+          }
+          <a
+            class="btn link secondary-link"
+            [routerLink]="['/main/pedidos', order.order_id]"
+            (click)="$event.stopPropagation();"
+          >
+            Ver detalle
+          </a>
+        </div>
+      </article>
+    }
+  </div>
+
+  @if (filtered().length === 0 && !loading()) {
+    <div class="empty">
+      <p class="eyebrow">Sin resultados</p>
+      <p class="muted">Crea tu primer pedido o ajusta los filtros.</p>
+    </div>
+  }
+
+  @if (plannedModalOpen() && plannedOrder()) {
+    <div class="sheet-backdrop" (click)="closePlannedPackages()">
+      <div class="sheet" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+        <div class="sheet-handle" aria-hidden="true"></div>
+        <h2>¿Cuántos paquetes esperas?</h2>
+        <p class="muted">
+          {{ customerName(plannedOrder()?.customer_id || "") }} · {{ routeName(plannedOrder()?.route_id || null) }}
+        </p>
+        <div class="sheet-field">
+          <label>Paquetes planificados</label>
+          <input type="number" min="1" class="input" [(ngModel)]="plannedPackagesInput" />
+        </div>
+        <div class="sheet-actions">
+          <button type="button" class="btn primary" (click)="savePlannedPackages()">Guardar</button>
+          <button type="button" class="btn ghost" (click)="closePlannedPackages()">Ahora no</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (actionSheetOpen() && sheetOrder() && sheetAction() && sheetChecklist()) {
+    <div class="sheet-backdrop" (click)="closeActionSheet()">
+      <div class="sheet" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+        <div class="sheet-handle" aria-hidden="true"></div>
+        <h2>{{ sheetAction()?.label }}</h2>
+        <p class="muted">
+          {{ customerName(sheetOrder()?.customer_id || "") }} · {{ routeName(sheetOrder()?.route_id || null) }}
+        </p>
+        <div class="sheet-summary">
+          <span>{{ sheetOrder()?.items?.length ?? 0 }} items</span>
+          <span>Paquetes {{ packagesSummarySafe(sheetOrder()) }}</span>
+          <span>Actualizado {{ sheetOrder()?.updated_at | date: "shortDate" }}</span>
+        </div>
+        <div class="sheet-checklist">
+          <p class="eyebrow">Checklist</p>
+          <ul>
+            @for (row of sheetChecklist()?.items || []; track $index) {
+              <li [class.ok]="row.ok" [class.bad]="!row.ok">
+                <span class="check-indicator">{{ row.ok ? "✓" : "!" }}</span>
+                {{ row.text }}
+              </li>
+            }
+          </ul>
+        </div>
+        @if (sheetChecklist()?.blocking) {
+          <div class="sheet-warning">
+            <p class="eyebrow">Qué falta</p>
+            <ul>
+              @for (row of sheetChecklist()?.items || []; track $index) {
+                @if (!row.ok) {
+                  <li>{{ row.text }}</li>
+                }
+              }
+            </ul>
+          </div>
+        }
+        @if (sheetAction()?.actionId === "register_delivery_payment" && isPartialDelivery(sheetOrder())) {
+          <div class="sheet-field">
+            <label>Motivo entrega parcial</label>
+            <textarea
+              class="input"
+              rows="3"
+              [(ngModel)]="partialReason"
+              (ngModelChange)="partialReasonError.set(null)"
+            ></textarea>
+            @if (partialReasonError()) {
+              <p class="error-text">{{ partialReasonError() }}</p>
+            }
+          </div>
+        }
+        <div class="sheet-actions">
+          <button
+            type="button"
+            class="btn primary"
+            [disabled]="sheetChecklist()?.blocking && !(sheetAction()?.actionId === 'register_delivery_payment' && isPartialDelivery(sheetOrder()) && partialReason().trim())"
+            (click)="continuePrimary()"
+          >
+            Continuar
+          </button>
+          @if (sheetChecklist()?.blocking || (sheetAction()?.actionId === "register_delivery_payment" && isPartialDelivery(sheetOrder()))) {
+            <button type="button" class="btn ghost" (click)="createIncidentFromSheet()">Crear incidencia</button>
+          }
+          <button type="button" class="btn ghost" (click)="resolveNow()">Resolver ahora</button>
+        </div>
+      </div>
+    </div>
+  }
+</section>

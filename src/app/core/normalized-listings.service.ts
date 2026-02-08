@@ -69,7 +69,7 @@ export class NormalizedListingsService {
   }
 
   async listValidated(
-    pageSize = 20,
+    pageSize = 50,
     cursor?: QueryDocumentSnapshot<DocumentData> | null
   ): Promise<ListPage<NormalizedListingDoc>> {
     return this.listByWorkflowStatus("validated", pageSize, cursor);

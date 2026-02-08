@@ -31,6 +31,18 @@ export const routes: Routes = [
         loadComponent: () => import("./features/inventario/inventario").then((m) => m.default),
       },
       {
+        path: "clientas",
+        loadComponent: () => import("./features/clientas/clientas").then((m) => m.default),
+      },
+      {
+        path: "rutas",
+        loadComponent: () => import("./features/rutas/rutas").then((m) => m.default),
+      },
+      {
+        path: "localidades",
+        loadComponent: () => import("./features/localidades/localidades").then((m) => m.default),
+      },
+      {
         path: "edicion-productos",
         data: {
           title: "Edicion de productos",
@@ -49,12 +61,11 @@ export const routes: Routes = [
       },
       {
         path: "pedidos",
-        data: {
-          title: "Gestion de pedidos",
-          description: "Pantalla en construccion para seguimiento de pedidos end-to-end.",
-        },
-        loadComponent: () =>
-          import("./features/under-construction/under-construction").then((m) => m.default),
+        loadComponent: () => import("./features/pedidos/pedidos").then((m) => m.default),
+      },
+      {
+        path: "pedidos/:id",
+        loadComponent: () => import("./features/pedidos/pedido-detalle").then((m) => m.default),
       },
       {
         path: "review/:id",
