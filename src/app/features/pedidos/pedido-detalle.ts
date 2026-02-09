@@ -14,7 +14,7 @@ import { NormalizedListingsService, NormalizedListingDoc } from "../../core/norm
   selector: "app-pedido-detalle",
   imports: [FormsModule, RouterLink, DatePipe],
   templateUrl: "./pedido-detalle.html",
-  styleUrl: "./pedido-detalle.css",
+  styleUrls: ["./pedido-detalle.css", "./pedido-detalle-cards.css"],
 })
 export default class PedidoDetallePage implements OnInit {
   private route = inject(ActivatedRoute);
