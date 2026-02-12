@@ -4,53 +4,110 @@
       <h1>Inventario interno</h1>
       <p>
         Registra devoluciones o piezas sueltas que se quedan contigo. Aqui puedes crear, editar, ajustar
-        cantidad y eliminar registros rapidamente.
+        cantidad y eliminar registros rapido.
       </p>
     </div>
 
     <button type="button" class="btn btn-secondary" (click)="reload()" [disabled]="loading()">
+      <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path d="M21 12a9 9 0 1 1-2.64-6.36"></path>
+        <path d="M21 3v6h-6"></path>
+      </svg>
       {{ loading() ? "Actualizando..." : "Actualizar" }}
     </button>
   </header>
 
-  <section class="stats-grid">
-    <article class="stat-card">
-      <p>Items</p>
-      <strong>{{ rows().length }}</strong>
-    </article>
-    <article class="stat-card">
-      <p>Piezas totales</p>
-      <strong>{{ totalUnits() }}</strong>
-    </article>
-    <article class="stat-card">
-      <p>Pocas piezas</p>
-      <strong>{{ lowStockCount() }}</strong>
-    </article>
-    <article class="stat-card">
-      <p>Agotados</p>
-      <strong>{{ soldOutCount() }}</strong>
-    </article>
+  <section class="stats-grid" aria-label="Resumen de inventario">
+    <button type="button" class="stat-card stat-card-featured" (click)="applyQuickFilter('all')">
+      <div class="stat-head">
+        <p>Inversion total</p>
+        <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M12 1v22"></path>
+          <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7H14.5a3.5 3.5 0 0 1 0 7H6"></path>
+        </svg>
+      </div>
+      <strong>{{ formatMoney(totalInvestment()) }}</strong>
+      <small>Costo unitario x existencias</small>
+    </button>
+
+    <button type="button" class="stat-card" (click)="applyQuickFilter('sold_out')" [class.stat-card-active]="stockFilter() === 'sold_out'">
+      <div class="stat-head">
+        <p>Agotados</p>
+        <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+          <path d="M12 9v4"></path>
+          <path d="M12 17h.01"></path>
+        </svg>
+      </div>
+      <strong>{{ formatCount(soldOutCount()) }}</strong>
+    </button>
+
+    <button type="button" class="stat-card" (click)="applyQuickFilter('low')" [class.stat-card-active]="stockFilter() === 'low'">
+      <div class="stat-head">
+        <p>Pocas piezas</p>
+        <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M21 12a9 9 0 1 1-2.64-6.36"></path>
+          <path d="M21 3v6h-6"></path>
+        </svg>
+      </div>
+      <strong>{{ formatCount(lowStockCount()) }}</strong>
+    </button>
+
+    <button type="button" class="stat-card" (click)="applyQuickFilter('all')" [class.stat-card-active]="stockFilter() === 'all'">
+      <div class="stat-head">
+        <p>Piezas totales</p>
+        <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+        </svg>
+      </div>
+      <strong>{{ formatCount(totalUnits()) }}</strong>
+    </button>
+
+    <button type="button" class="stat-card" (click)="applyQuickFilter('all')" [class.stat-card-active]="stockFilter() === 'all'">
+      <div class="stat-head">
+        <p>Items</p>
+        <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M3 7h18"></path>
+          <path d="M5 7v11a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7"></path>
+          <path d="M9 7V5a3 3 0 0 1 6 0v2"></path>
+        </svg>
+      </div>
+      <strong>{{ formatCount(rows().length) }}</strong>
+    </button>
   </section>
 
   @if (error()) {
-    <div class="alert alert-error">{{ error() }}</div>
+    <div class="alert alert-error" role="alert">{{ error() }}</div>
   }
 
   @if (success()) {
-    <div class="alert alert-success">{{ success() }}</div>
+    <div class="alert alert-success" role="status">{{ success() }}</div>
   }
 
   <section class="panel filters-panel">
-    <input
-      type="text"
-      class="input"
-      [ngModel]="searchTerm()"
-      (ngModelChange)="searchTerm.set($event)"
-      placeholder="Buscar por nombre, categoria, color o proveedor"
-    />
+    <div class="filters-head">
+      <h2>Filtros</h2>
+      @if (hasActiveFilters()) {
+        <small>Activos</small>
+      } @else {
+        <small>Sin filtros activos</small>
+      }
+    </div>
+
+    <label class="field" for="inventory-search">
+      <span>Buscar item</span>
+      <input
+        id="inventory-search"
+        type="text"
+        class="input"
+        [ngModel]="searchTerm()"
+        (ngModelChange)="searchTerm.set($event)"
+        placeholder="Nombre, categoria, color, proveedor o nota"
+      />
+    </label>
 
     <div class="filters-row">
-      <select class="input" [ngModel]="stockFilter()" (ngModelChange)="onStockFilterChange($event)">
+      <select class="input" [ngModel]="stockFilter()" (ngModelChange)="onStockFilterChange($event)" aria-label="Filtro de stock">
         <option value="all">Todo el inventario</option>
         <option value="low">Pocas piezas (1 a 3)</option>
         <option value="sold_out">Solo agotados</option>
@@ -60,7 +117,7 @@
         type="button"
         class="btn btn-outline"
         (click)="clearFilters()"
-        [disabled]="!searchTerm().trim() && stockFilter() === 'all'"
+        [disabled]="!hasActiveFilters()"
       >
         Limpiar filtros
       </button>
@@ -90,7 +147,7 @@
         </label>
 
         <label class="field category-field">
-          <span>Categoria * (sin subcategorias)</span>
+          <span>Categoria *</span>
           <div class="category-input-row">
             <input
               type="text"
@@ -103,7 +160,6 @@
               autocomplete="off"
               placeholder="Escribe para buscar"
             />
-            <button type="button" class="btn btn-outline" (click)="openCategoryTree()">Arbol</button>
           </div>
 
           @if (categoryConfirmed()) {
@@ -113,12 +169,18 @@
           <div class="category-status">
             @if (categoryConfirmed() && selectedCategoryId()) {
               <span class="status-chip chip-ok">
-                <span aria-hidden="true">✓</span>
+                <svg class="chip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <path d="m5 13 4 4L19 7"></path>
+                </svg>
                 <span>Nivel final seleccionado</span>
               </span>
             } @else {
               <span class="status-chip chip-pending">
-                <span aria-hidden="true">!</span>
+                <svg class="chip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <path d="M12 9v4"></path>
+                  <path d="M12 17h.01"></path>
+                  <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                </svg>
                 <span>Selecciona una categoria</span>
               </span>
             }
@@ -127,7 +189,7 @@
           @if (categoryDropdownOpen()) {
             <div class="category-dropdown" role="listbox">
               @if (filteredCategoryOptions().length === 0) {
-                <p class="category-empty">Sin coincidencias (prueba con mas texto o usa el arbol).</p>
+                <p class="category-empty">Sin coincidencias (prueba con mas texto).</p>
               } @else {
                 @for (category of filteredCategoryOptions(); track category.id) {
                   <button
@@ -139,7 +201,7 @@
                   >
                     {{ category.fullPath }}
                     @if (hasCategoryChildren(category.id)) {
-                      <small> (padre, entra al arbol)</small>
+                      <small> (categoria padre, selecciona una final)</small>
                     }
                   </button>
                 }
@@ -209,7 +271,7 @@
           </label>
 
           <label class="field">
-            <span>Precio unitario (opcional)</span>
+            <span>Precio costo</span>
             <input
               type="number"
               min="0"
@@ -229,9 +291,12 @@
               type="button"
               class="camera-btn"
               (click)="openPicker(cameraInput)"
-              [disabled]="uploadingImages()"
+              [disabled]="uploadingImages() || remainingImageSlots() === 0"
             >
-              <span class="camera-icon">📷</span>
+              <svg class="camera-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M4 7h4l2-2h4l2 2h4v12H4z"></path>
+                <circle cx="12" cy="13" r="3"></circle>
+              </svg>
               <span>{{ uploadingImages() ? "Subiendo..." : "Agregar imagenes" }}</span>
             </button>
           </div>
@@ -244,7 +309,7 @@
             multiple
             (change)="onImageFilesSelected($event)"
           />
-          <small>Maximo 5MB por imagen.</small>
+          <small>Maximo 5MB por imagen. Puedes subir hasta 8 por item ({{ remainingImageSlots() }} restantes).</small>
         </label>
 
         @if (draft.image_urls.length > 0) {
@@ -287,7 +352,12 @@
       @if (loading()) {
         <p class="empty">Cargando inventario...</p>
       } @else if (filteredRows().length === 0) {
-        <p class="empty">No hay items para mostrar con esos filtros.</p>
+        <div class="empty-state">
+          <p class="empty">No hay items para mostrar con esos filtros.</p>
+          @if (hasActiveFilters()) {
+            <button type="button" class="btn btn-outline" (click)="clearFilters()">Restablecer filtros</button>
+          }
+        </div>
       } @else {
         <div class="inventory-list">
           @for (item of filteredRows(); track item.inventory_id) {
@@ -308,6 +378,16 @@
                     <span class="image-count">+{{ item.image_urls.length - 1 }} foto(s)</span>
                   }
                 </div>
+              } @else {
+                <div class="card-image-wrap">
+                  <div class="card-image-placeholder" aria-hidden="true">
+                    <svg class="card-image-placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M4 7h4l2-2h4l2 2h4v12H4z"></path>
+                      <circle cx="12" cy="13" r="3"></circle>
+                    </svg>
+                    <span>Sin foto</span>
+                  </div>
+                </div>
               }
 
               <div class="meta-grid">
@@ -325,34 +405,56 @@
 
               <div class="qty-row">
                 <strong>Cantidad:</strong>
-                <button
-                  type="button"
-                  class="qty-btn"
-                  (click)="adjustQty(item, -1)"
-                  [disabled]="item.quantity_on_hand === 0 || isBusy(item.inventory_id)"
-                >
-                  -
-                </button>
-                <span class="qty-value">{{ item.quantity_on_hand }}</span>
-                <button
-                  type="button"
-                  class="qty-btn"
-                  (click)="adjustQty(item, 1)"
-                  [disabled]="isBusy(item.inventory_id)"
-                >
-                  +
-                </button>
+                <div class="qty-control">
+                  <button
+                    type="button"
+                    class="qty-btn"
+                    (click)="adjustQty(item, -1)"
+                    [disabled]="item.quantity_on_hand === 0 || isBusy(item.inventory_id)"
+                    [attr.aria-label]="'Disminuir cantidad de ' + item.title"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <path d="M5 12h14"></path>
+                    </svg>
+                  </button>
+                  <span class="qty-value">{{ item.quantity_on_hand }}</span>
+                  <button
+                    type="button"
+                    class="qty-btn"
+                    (click)="adjustQty(item, 1)"
+                    [disabled]="isBusy(item.inventory_id)"
+                    [attr.aria-label]="'Aumentar cantidad de ' + item.title"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <path d="M12 5v14"></path>
+                      <path d="M5 12h14"></path>
+                    </svg>
+                  </button>
+                </div>
               </div>
 
               <div class="card-actions">
-                <button type="button" class="btn btn-outline" (click)="startEdit(item)">Editar</button>
+                <button type="button" class="btn btn-outline" (click)="startEdit(item)">
+                  <svg class="action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path d="M12 20h9"></path>
+                    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path>
+                  </svg>
+                  <span>Editar</span>
+                </button>
                 <button
                   type="button"
                   class="btn btn-danger"
-                  (click)="remove(item)"
+                  (click)="askRemove(item)"
                   [disabled]="isBusy(item.inventory_id)"
                 >
-                  {{ isBusy(item.inventory_id) ? "Procesando..." : "Eliminar" }}
+                  <svg class="action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path d="M3 6h18"></path>
+                    <path d="M8 6V4h8v2"></path>
+                    <path d="M19 6l-1 14H6L5 6"></path>
+                    <path d="M10 11v6"></path>
+                    <path d="M14 11v6"></path>
+                  </svg>
+                  <span>{{ isBusy(item.inventory_id) ? "Procesando..." : "Eliminar" }}</span>
                 </button>
               </div>
             </article>
@@ -405,5 +507,21 @@
         }
       </div>
     }
+  </aside>
+}
+
+@if (deleteDialogItem(); as itemToDelete) {
+  <div class="tree-overlay" (click)="cancelRemove()"></div>
+  <aside class="confirm-sheet" role="dialog" aria-modal="true" aria-label="Confirmar eliminacion">
+    <h3>Eliminar item</h3>
+    <p>
+      Vas a eliminar <strong>{{ itemToDelete.title }}</strong>. Esta accion no se puede deshacer.
+    </p>
+    <div class="confirm-actions">
+      <button type="button" class="btn btn-outline" (click)="cancelRemove()">Cancelar</button>
+      <button type="button" class="btn btn-danger" (click)="confirmRemove()" [disabled]="isBusy(itemToDelete.inventory_id)">
+        {{ isBusy(itemToDelete.inventory_id) ? "Procesando..." : "Eliminar item" }}
+      </button>
+    </div>
   </aside>
 }

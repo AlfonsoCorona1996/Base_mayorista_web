@@ -572,7 +572,16 @@
               <div class="listbox" role="listbox">
                 @for (s of inventorySuggestions(); track s.inventory_id) {
                   <button type="button" class="listbox-option" (mousedown)="$event.preventDefault(); beginProductPick(); pickInventory(s)" (touchstart)="$event.preventDefault(); beginProductPick(); pickInventory(s)" (click)="beginProductPick(); pickInventory(s)">
-                    <img class="listbox-thumb" [src]="s.image_urls[0] || 'https://via.placeholder.com/56?text=Prod'" alt="" />
+                    @if (s.image_urls[0]) {
+                      <img class="listbox-thumb" [src]="s.image_urls[0]" alt="" />
+                    } @else {
+                      <div class="photo-placeholder photo-placeholder-sm" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M4 7h4l2-2h4l2 2h4v12H4z"></path>
+                          <circle cx="12" cy="13" r="3"></circle>
+                        </svg>
+                      </div>
+                    }
                     <div>
                       <div class="card-title">{{ s.title }}</div>
                       <div class="card-meta">{{ s.variant_name || s.size_label || "Variante" }} · {{ s.color_name || "Color" }}</div>
@@ -582,7 +591,16 @@
                 }
                 @for (c of catalogSuggestions(); track c.doc.normalized_id) {
                   <button type="button" class="listbox-option" (mousedown)="$event.preventDefault(); beginProductPick(); pickCatalog(c.doc, c.variant, c.color)" (touchstart)="$event.preventDefault(); beginProductPick(); pickCatalog(c.doc, c.variant, c.color)" (click)="beginProductPick(); pickCatalog(c.doc, c.variant, c.color)">
-                    <img class="listbox-thumb" [src]="c.image || 'https://via.placeholder.com/56?text=Prod'" alt="" />
+                    @if (c.image) {
+                      <img class="listbox-thumb" [src]="c.image" alt="" />
+                    } @else {
+                      <div class="photo-placeholder photo-placeholder-sm" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M4 7h4l2-2h4l2 2h4v12H4z"></path>
+                          <circle cx="12" cy="13" r="3"></circle>
+                        </svg>
+                      </div>
+                    }
                     <div>
                       <div class="card-title">{{ c.doc.listing.title }}</div>
                       <div class="card-meta">{{ c.doc.listing.category_hint || "Sin categoría" }}</div>
@@ -595,7 +613,16 @@
           </div>
           @if (selectedPreview(); as preview) {
             <div class="preview">
-              <img [src]="preview.image || 'https://via.placeholder.com/80?text=Prod'" alt="" />
+              @if (preview.image) {
+                <img [src]="preview.image" alt="" />
+              } @else {
+                <div class="photo-placeholder photo-placeholder-md" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 7h4l2-2h4l2 2h4v12H4z"></path>
+                    <circle cx="12" cy="13" r="3"></circle>
+                  </svg>
+                </div>
+              }
               <div>
                 <p class="preview-title">{{ preview.title }}</p>
                 <p class="preview-meta">{{ preview.variant }} · {{ preview.color }}</p>
@@ -679,41 +706,43 @@
             />
           </div>
           <div class="field">
-            <label>Precio público</label>
-            <div class="money">
+            <label>Precio final</label>
+            <div class="money" [class.money-invalid]="priceRuleInvalid()">
               <span>MXN</span>
-              <input
-                class="input"
-                type="number"
-                [(ngModel)]="newItemPricePublic"
-                [readonly]="lockItemFields()"
-                [disabled]="!selectedPreview() || !canEditItems(current)"
-              />
-            </div>
-          </div>
-          <div class="field">
-            <label>{{ supplierDiscountLabel() || "Descuento proveedor" }}</label>
-            <div class="money">
-              <span>%</span>
               <input
                 class="input"
                 type="text"
-                [value]="supplierDiscountPct() === null ? '' : (supplierDiscountPct() + '%')"
-                readonly
+                [value]="priceDisplayValue('final')"
+                (focus)="onPriceInputFocus('final')"
+                (input)="onPriceInputChange('final', $any($event.target).value)"
+                (blur)="onPriceInputBlur('final')"
                 [disabled]="!selectedPreview() || !canEditItems(current)"
               />
             </div>
           </div>
           <div class="field">
-            <label>Costo proveedor</label>
-            <div class="money">
+            <label>Precio clienta</label>
+            <div class="money money-readonly" [class.money-invalid]="priceRuleInvalid()">
               <span>MXN</span>
               <input
                 class="input"
-                type="number"
-                [(ngModel)]="newItemPriceCost"
-                [readonly]="lockItemFields()"
-                [disabled]="!selectedPreview() || !canEditItems(current)"
+                type="text"
+                [value]="priceDisplayValue('clienta')"
+                readonly
+                disabled
+              />
+            </div>
+          </div>
+          <div class="field">
+            <label>Precio costo</label>
+            <div class="money money-readonly">
+              <span>MXN</span>
+              <input
+                class="input"
+                type="text"
+                [value]="priceDisplayValue('costo')"
+                readonly
+                disabled
               />
             </div>
           </div>

@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from "@angular/core";
+import { Component, HostListener, computed, inject, signal } from "@angular/core";
 import { FormsModule } from "@angular/forms";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { CategoriesService, Category } from "../../core/categories.service";
@@ -31,11 +31,14 @@ interface InventoryDraft {
   styleUrl: "./inventario.css",
 })
 export default class InventarioPage {
+  private static readonly MAX_IMAGES = 8;
+
   loading = signal(false);
   saving = signal(false);
   uploadingImages = signal(false);
   busyById = signal<Record<string, boolean>>({});
   editingId = signal<string | null>(null);
+  deleteDialogItem = signal<InventoryItem | null>(null);
 
   error = signal<string | null>(null);
   success = signal<string | null>(null);
@@ -67,6 +70,9 @@ export default class InventarioPage {
   lowStockCount = computed(() => this.rows().filter((row) => row.quantity_on_hand > 0 && row.quantity_on_hand <= 3).length);
 
   soldOutCount = computed(() => this.rows().filter((row) => row.quantity_on_hand === 0).length);
+  totalInvestment = computed(() =>
+    this.rows().reduce((sum, row) => sum + (row.unit_price || 0) * row.quantity_on_hand, 0),
+  );
 
   categoryOptions = computed(() => this.categories.getAll());
 
@@ -120,6 +126,7 @@ export default class InventarioPage {
   });
 
   supplierOptions = computed(() => this.suppliers.getActive());
+  hasActiveFilters = computed(() => Boolean(this.searchTerm().trim()) || this.stockFilter() !== "all");
 
   filteredRows = computed(() => {
     const term = this.searchTerm().trim().toLowerCase();
@@ -175,6 +182,7 @@ export default class InventarioPage {
     this.categoryDropdownOpen.set(false);
     this.error.set(null);
     this.success.set(null);
+    this.deleteDialogItem.set(null);
   }
 
   startEdit(item: InventoryItem) {
@@ -200,6 +208,7 @@ export default class InventarioPage {
     this.categoryDropdownOpen.set(false);
     this.error.set(null);
     this.success.set(null);
+    this.deleteDialogItem.set(null);
   }
 
   onCategoryInputChange(value: string) {
@@ -274,6 +283,18 @@ export default class InventarioPage {
 
     try {
       const uploadedUrls: string[] = [];
+      const alreadyUploaded = this.draft.image_urls.length;
+      const incoming = files.length;
+
+      if (alreadyUploaded >= InventarioPage.MAX_IMAGES) {
+        throw new Error(`Ya alcanzaste el maximo de ${InventarioPage.MAX_IMAGES} imagenes por item.`);
+      }
+
+      if (alreadyUploaded + incoming > InventarioPage.MAX_IMAGES) {
+        throw new Error(
+          `Solo puedes tener hasta ${InventarioPage.MAX_IMAGES} imagenes. Ya tienes ${alreadyUploaded} y estas intentando subir ${incoming}.`,
+        );
+      }
 
       for (const file of Array.from(files)) {
         if (!file.type.startsWith("image/")) {
@@ -311,6 +332,10 @@ export default class InventarioPage {
     input.click();
   }
 
+  remainingImageSlots(): number {
+    return Math.max(0, InventarioPage.MAX_IMAGES - this.draft.image_urls.length);
+  }
+
   clearFilters() {
     this.searchTerm.set("");
     this.stockFilter.set("all");
@@ -322,6 +347,10 @@ export default class InventarioPage {
       return;
     }
     this.stockFilter.set("all");
+  }
+
+  applyQuickFilter(next: StockFilter) {
+    this.stockFilter.set(next);
   }
 
   async save() {
@@ -346,7 +375,7 @@ export default class InventarioPage {
     }
 
     if (this.hasCategoryChildren(selectedId)) {
-      this.error.set("Selecciona una categoria final (ultima del arbol), no una categoria padre.");
+      this.error.set("Selecciona una categoria final, no una categoria padre.");
       return;
     }
 
@@ -391,10 +420,22 @@ export default class InventarioPage {
     }
   }
 
-  async remove(item: InventoryItem) {
-    const ok = confirm(`Eliminar "${item.title}" del inventario? Esta accion no se puede deshacer.`);
-    if (!ok) return;
+  askRemove(item: InventoryItem) {
+    this.deleteDialogItem.set(item);
+  }
 
+  cancelRemove() {
+    this.deleteDialogItem.set(null);
+  }
+
+  async confirmRemove() {
+    const item = this.deleteDialogItem();
+    if (!item) return;
+    await this.remove(item);
+    this.deleteDialogItem.set(null);
+  }
+
+  private async remove(item: InventoryItem) {
     this.setBusy(item.inventory_id, true);
     this.error.set(null);
     this.success.set(null);
@@ -453,8 +494,33 @@ export default class InventarioPage {
     return "tag-ok";
   }
 
+  formatMoney(value: number): string {
+    return new Intl.NumberFormat("es-MX", {
+      style: "currency",
+      currency: "MXN",
+      maximumFractionDigits: 2,
+    }).format(value);
+  }
+
+  formatCount(value: number): string {
+    return new Intl.NumberFormat("es-MX", {
+      maximumFractionDigits: 0,
+    }).format(value);
+  }
+
   primaryImage(item: InventoryItem): string | null {
     return item.image_urls?.[0] || null;
+  }
+
+  @HostListener("document:keydown.escape")
+  onEscapePressed() {
+    if (this.categoryTreeOpen()) {
+      this.closeCategoryTree();
+      return;
+    }
+    if (this.deleteDialogItem()) {
+      this.cancelRemove();
+    }
   }
 
   private setBusy(itemId: string, value: boolean) {

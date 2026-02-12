@@ -5,11 +5,18 @@ import { FormsModule } from "@angular/forms";
 import { NormalizedListingsService } from "../../core/normalized-listings.service";
 import { AuthService } from "../../core/auth.service";
 import { CategoriesService, Category } from "../../core/categories.service";
-import { SuppliersService, Supplier } from "../../core/suppliers.service";
+import { SuppliersService } from "../../core/suppliers.service";
 import { doc, getDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { FIRESTORE, STORAGE } from "../../core/firebase.providers";
-import type { NormalizedListingDoc, RawPost, NormalizedItem, ItemPrice, PriceTierGlobal, ProductColor } from "../../core/firestore-contracts";
+import type {
+  ItemPricesV3,
+  NormalizedItemV3,
+  NormalizedListingDocV3,
+  RawPost,
+  StockState,
+} from "../../core/firestore-contracts";
+import { isNormalizedListingDocV3 } from "../../core/firestore-contracts";
 
 @Component({
   standalone: true,
@@ -19,6 +26,7 @@ import type { NormalizedListingDoc, RawPost, NormalizedItem, ItemPrice, PriceTie
   styleUrl: "./review.css",
 })
 export default class ReviewPage {
+  private readonly requiredSchemaVersion = "normalized_v3.0";
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private svc = inject(NormalizedListingsService);
@@ -31,8 +39,8 @@ export default class ReviewPage {
   loading = signal(false);
   error = signal<string | null>(null);
 
-  doc = signal<NormalizedListingDoc | null>(null);
-  draft = signal<NormalizedListingDoc | null>(null);
+  doc = signal<NormalizedListingDocV3 | null>(null);
+  draft = signal<NormalizedListingDocV3 | null>(null);
 
   // Contexto RAW (solo lectura)
   rawText = signal<string>("");
@@ -43,6 +51,7 @@ export default class ReviewPage {
 
   // Mapa: URL imagen → color asignado
   imageColors: Record<string, string> = {};
+  private globalColorOriginalByIndex: Record<number, string> = {};
 
   // Categorías
   categorySearch = "";
@@ -60,14 +69,26 @@ export default class ReviewPage {
   // Upload de imágenes
   uploading = signal(false);
   uploadError = signal<string | null>(null);
-
-  // ¿Las variantes tienen colores diferentes? (DEFAULT: false)
   hasVariantColors = signal(false);
+
+  readonly stockOptions: Array<{ value: StockState; label: string }> = [
+    { value: "in_stock", label: "Disponible" },
+    { value: "last_pair", label: "Ultima pieza" },
+    { value: "out_of_stock", label: "Agotado" },
+    { value: "unknown_qty", label: "Sin confirmar" },
+  ];
 
   visibleRawImages = computed(() => {
     const ex = new Set(this.excludedImages());
     return (this.rawImages() || []).filter(u => !!u && !ex.has(u));
   });
+
+  private moneyFormatter = new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  private priceInputBuffers: Record<string, string> = {};
+  private priceAlertShownByKey = new Set<string>();
 
   // ✅ Schema v1.1: Portada con fallback a v1
   coverUrl = computed(() => {
@@ -88,28 +109,6 @@ export default class ReviewPage {
     return first;
   });
   
-  // ✅ Schema v1.1: Colores globales del producto
-  globalColors = computed(() => {
-    const d = this.draft();
-    if (!d) return [];
-    
-    // v1.1: Usar product_colors si existe
-    if (d.product_colors && d.product_colors.length > 0) {
-      return d.product_colors;
-    }
-    
-    // v1: Construir desde imageColors (estado actual del componente)
-    const colors: ProductColor[] = [];
-    
-    for (const [url, name] of Object.entries(this.imageColors)) {
-      if (name && name.trim() !== '') {
-        colors.push({ name, image_url: url });
-      }
-    }
-    
-    return colors;
-  });
-
   async ngOnInit() {
     // Asegurar que las categorías estén cargadas
     await this.categoriesService.loadCategories();
@@ -123,10 +122,13 @@ export default class ReviewPage {
       this.error.set(null);
 
       const d = await this.svc.getById(this.id);
+      if (!this.isRequiredSchema(d)) {
+        throw new Error(`Esquema no soportado. Se requiere ${this.requiredSchemaVersion}.`);
+      }
       this.doc.set(d);
 
       // copia editable
-      const clone = structuredClone(d);
+      const clone = structuredClone(d) as NormalizedListingDocV3;
       // defaults
       if (!clone.review) {
         clone.review = {
@@ -150,30 +152,20 @@ export default class ReviewPage {
         this.draft.set({ ...this.draft()!, preview_image_url: first });
       }
 
-      // Migrar datos antiguos al nuevo formato si es necesario
-      this.migrateToNewFormat();
-      
-      // ✅ Normalizar a v1.1 en memoria PRIMERO (compatible con v1)
-      this.normalizeToV1_1(clone);
+      // v3: Normalizar estructura editable de variantes/precios/colores
+      this.normalizeV3Draft(clone);
 
       // Inicializar colores desde variantes existentes (ahora con product_colors si es v1.1)
       this.initializeImageColors();
       
       // ✅ Agregar imágenes de product_colors a rawImages si no están ya
       this.syncProductColorsToRawImages();
-
-      // Auto-detectar si hay colores y activar checkbox
-      // NO detectar colores automáticamente - usuario decide si marca el checkbox
-      // this.detectAndActivateColors();
+      this.syncGlobalColorsToVariantsIfNeeded();
 
       // Inicializar búsqueda de categoría con la actual
       if (clone.listing.category_hint) {
         this.categorySearch = clone.listing.category_hint;
       }
-
-      // Normalizar descuentos globales y sincronizar con precios
-      this.normalizeGlobalDiscounts();
-      this.syncGlobalDiscountsToVariants();
 
     } catch (e: any) {
       this.error.set(e?.message || String(e));
@@ -203,190 +195,7 @@ export default class ReviewPage {
       return;
     }
 
-    // FALLBACK: Schema v1 - Extraer colores de variantes existentes
-    console.log('⚠️ product_colors no encontrado, usando fallback v1');
-    d.listing.items.forEach(item => {
-      // Manejar formato nuevo (arrays)
-      if (item.colors && item.image_urls) {
-        item.colors.forEach((color, index) => {
-          const url = item.image_urls![index];
-          if (url && color) {
-            this.imageColors[url] = color;
-          }
-        });
-      }
-      
-      // LEGACY: Manejar formato antiguo (strings)
-      if (item.image_url && item.color) {
-        this.imageColors[item.image_url] = item.color;
-      }
-    });
-    console.log('✅ Colores inicializados (v1):', Object.keys(this.imageColors).length);
-  }
-
-  /**
-   * Migra datos antiguos (color, image_url) al formato nuevo (colors[], image_urls[])
-   */
-  private migrateToNewFormat() {
-    const d = this.draft();
-    if (!d) return;
-
-    let migrated = false;
-
-    d.listing.items.forEach(item => {
-      // Si tiene formato antiguo pero no el nuevo, migrar
-      if ((item.color || item.image_url) && (!item.colors || !item.image_urls)) {
-        item.colors = item.color ? [item.color] : [];
-        item.image_urls = item.image_url ? [item.image_url] : [];
-        migrated = true;
-      }
-
-      // Asegurar que siempre haya arrays (aunque vacíos)
-      if (!item.colors) item.colors = [];
-      if (!item.image_urls) item.image_urls = [];
-    });
-
-    if (migrated) {
-      console.log("✅ Datos migrados al nuevo formato (colors[], image_urls[])");
-      this.draft.set({ ...d });
-    }
-  }
-
-  /**
-   * Detecta si hay colores en las variantes y activa el checkbox automáticamente
-   */
-  /**
-   * Normaliza datos v1 a v1.1 en memoria (sin guardar)
-   * Esto permite compatibilidad hacia atrás con datos antiguos
-   */
-  private normalizeToV1_1(doc: NormalizedListingDoc): void {
-    // Si ya es v1.1 y tiene product_colors, no hacer nada
-    if (doc.schema_version === "normalized_v1.1" && doc.product_colors) {
-      console.log("✅ Documento ya es v1.1, no requiere normalización");
-      return;
-    }
-
-    console.log("🔄 Normalizando datos v1 → v1.1 en memoria...");
-    console.log("📊 Datos actuales del documento:");
-    console.log("  - Schema:", doc.schema_version);
-    console.log("  - preview_image_url:", doc.preview_image_url);
-    console.log("  - Items:", doc.listing.items.length);
-    
-    // Debug: ver qué tiene el primer item
-    const firstItem = doc.listing.items[0];
-    if (firstItem) {
-      console.log("  - Primer item tiene colors:", firstItem.colors);
-      console.log("  - Primer item tiene image_urls:", firstItem.image_urls);
-      console.log("  - Primer item tiene color_names:", firstItem.color_names);
-    }
-
-    // 1. Construir cover_images desde preview_image_url
-    if (!doc.cover_images || doc.cover_images.length === 0) {
-      if (doc.preview_image_url) {
-        doc.cover_images = [doc.preview_image_url];
-        console.log("  ✓ cover_images creado desde preview_image_url");
-      } else {
-        doc.cover_images = [];
-        console.log("  ⚠️ No hay preview_image_url, cover_images vacío");
-      }
-    }
-
-    // 2. Construir product_colors desde imageColors actuales o desde items
-    if (!doc.product_colors || doc.product_colors.length === 0) {
-      const colorMap = new Map<string, string | null>();
-
-      // Intentar desde imageColors del componente (probablemente vacío aún)
-      for (const [url, name] of Object.entries(this.imageColors)) {
-        if (name && name.trim() !== '') {
-          colorMap.set(name, url);
-        }
-      }
-      console.log(`  - Colores desde imageColors: ${colorMap.size}`);
-
-      // Si no hay colores en imageColors, extraer del primer item (v1)
-      if (colorMap.size === 0) {
-        console.log("  - Intentando extraer colores del primer item...");
-        if (firstItem?.colors && firstItem?.image_urls) {
-          console.log(`  - Primer item tiene ${firstItem.colors.length} colores`);
-          firstItem.colors.forEach((color, i) => {
-            if (color && color.trim() !== '') {
-              const url = firstItem.image_urls![i] || null;
-              colorMap.set(color, url);
-              console.log(`    ✓ ${color} → ${url?.substring(0, 50) || 'null'}`);
-            }
-          });
-        } else {
-          console.log("  ❌ Primer item NO tiene colors o image_urls");
-        }
-      }
-
-      doc.product_colors = Array.from(colorMap.entries()).map(([name, url]) => ({
-        name,
-        image_url: url
-      }));
-      
-      console.log(`  ✓ product_colors creado con ${doc.product_colors.length} colores`);
-    }
-
-    // 3. Construir color_names para cada item
-    doc.listing.items.forEach(item => {
-      if (!item.color_names || item.color_names.length === 0) {
-        if (item.colors && item.colors.length > 0) {
-          item.color_names = [...item.colors];
-        } else {
-          item.color_names = [];
-        }
-      }
-    });
-
-    console.log("✅ Normalización completada:", {
-      cover_images: doc.cover_images.length,
-      product_colors: doc.product_colors.length,
-      items_with_color_names: doc.listing.items.filter(i => i.color_names && i.color_names.length > 0).length
-    });
-  }
-
-  private detectAndActivateColors() {
-    const d = this.draft();
-    if (!d) return;
-
-    // Verificar si alguna variante tiene colores
-    const hasColors = d.listing.items.some(item => 
-      (item.color_names && item.color_names.length > 0) ||
-      (item.colors && item.colors.length > 0 && item.colors.some(c => c && c.trim() !== ''))
-    );
-
-    if (hasColors) {
-      console.log("✅ Colores detectados - activando checkbox automáticamente");
-      this.hasVariantColors.set(true);
-    }
-  }
-
-  /**
-   * Toggle checkbox de colores e inicializa arrays si es necesario
-   */
-  toggleVariantColors(checked: boolean) {
-    this.hasVariantColors.set(checked);
-
-    if (checked) {
-      const d = this.draft();
-      if (!d) return;
-
-      const cover = d.cover_images?.[0] ?? d.preview_image_url ?? null;
-      d.preview_image_url = cover;
-      d.cover_images = cover ? [cover] : [];
-
-      // Inicializar colores vacíos si no existen
-      d.listing.items.forEach(item => {
-        if (!item.colors || item.colors.length === 0) {
-          item.colors = [""];
-          item.image_urls = [""];
-        }
-      });
-
-      this.draft.set({ ...d });
-      console.log("✅ Checkbox activado - arrays de colores inicializados");
-    }
+    console.log('✅ Colores inicializados:', Object.keys(this.imageColors).length);
   }
 
   private async loadRawContext(rawPostId: string) {
@@ -496,84 +305,14 @@ export default class ReviewPage {
       d.cover_images = nextCover ? [nextCover] : [];
     }
 
-    // 🔄 Eliminar esta imagen de todas las variantes que la usan
-    d.listing.items.forEach(item => {
-      if (item.image_urls && item.colors) {
-        // Encontrar todos los índices donde está esta imagen
-        const indicesToRemove: number[] = [];
-        item.image_urls.forEach((imgUrl, index) => {
-          if (imgUrl === url) {
-            indicesToRemove.push(index);
-          }
-        });
-
-        // Eliminar en orden inverso para no afectar los índices
-        indicesToRemove.reverse().forEach(index => {
-          item.image_urls!.splice(index, 1);
-          item.colors!.splice(index, 1);
-        });
-      }
-    });
-
     this.draft.set({ ...d });
-    console.log("🗑️ Imagen eliminada de galería y variantes:", url);
+    console.log("🗑️ Imagen eliminada de galería:", url);
   }
 
-  /**
-   * Se llama cuando el usuario edita un color en la galería de imágenes
-   * Sincroniza los cambios con las variantes que usan esa imagen
-   */
-  onColorChanged() {
-    console.log("✅ Colores actualizados en galería:", this.imageColors);
-    
-    const d = this.draft();
-    if (!d) return;
-
-    // Actualizar colores en todas las variantes que usan las imágenes modificadas
-    d.listing.items.forEach(item => {
-      if (item.image_urls && item.colors) {
-        item.image_urls.forEach((url, index) => {
-          if (url && this.imageColors[url]) {
-            // Actualizar el nombre del color si la imagen tiene uno en la galería
-            item.colors![index] = this.imageColors[url];
-          }
-        });
-      }
-    });
-
-    this.draft.set({ ...d });
-    console.log("🔄 Colores sincronizados en variantes");
-  }
-
-  /**
-   * Imágenes de colores (independientes de la portada)
-   */
-  visibleColorImages = computed(() => {
-    return this.visibleRawImages();
-  });
-
-  /**
-   * Abre modal para seleccionar/cambiar la imagen de portada
-   */
   openCoverSelector() {
     this.currentVariantIndex = -2; // Valor especial para indicar "selección de portada"
     this.currentColorIndex = -1;
     this.showImagePicker.set(true);
-  }
-
-  /**
-   * Elimina una imagen de color (NO la portada)
-   */
-  removeColorImage(url: string) {
-    if (!url) return;
-    if (url === this.coverUrl()) {
-      alert("No puedes eliminar la imagen de portada desde aquí. Usa el botón 'Cambiar Portada'.");
-      return;
-    }
-
-    if (confirm("¿Eliminar esta imagen de color?\n\nSe eliminará también de todas las variantes que la usen.")) {
-      this.removeImage(url); // Usa el método existente
-    }
   }
 
   /**
@@ -603,6 +342,8 @@ export default class ReviewPage {
       image_url: null
     });
     this.addColorReferencesToSharedItems(d, colorName, null);
+    this.ensureGlobalColorsInAllVariants(d);
+    this.syncGlobalColorsToVariantsIfNeeded();
 
     this.draft.set({ ...d });
     console.log("✅ Color global sin imagen creado:", colorName);
@@ -617,6 +358,7 @@ export default class ReviewPage {
 
     d.product_colors.splice(index, 1);
     this.removeColorReferencesFromItems(d, removed.name);
+    this.syncGlobalColorsToVariantsIfNeeded();
     this.draft.set({ ...d });
   }
 
@@ -630,79 +372,144 @@ export default class ReviewPage {
     this.draft.set({ ...d });
   }
 
-  private removeColorReferencesFromItems(d: NormalizedListingDoc, colorName: string) {
+  onGlobalColorFocus(index: number, name: string | null | undefined) {
+    this.globalColorOriginalByIndex[index] = (name || "").trim();
+  }
+
+  onGlobalColorBlur(index: number) {
+    const d = this.draft();
+    if (!d) return;
+
+    const previousName = (this.globalColorOriginalByIndex[index] || "").trim();
+    const currentName = (d.product_colors?.[index]?.name || "").trim();
+
+    if (previousName && currentName && previousName !== currentName) {
+      d.listing.items.forEach((item) => {
+        item.color_stock = item.color_stock.map((entry) =>
+          (entry.color_name || "").trim() === previousName
+            ? { ...entry, color_name: currentName }
+            : entry
+        );
+      });
+    } else if (previousName && !currentName) {
+      this.removeColorReferencesFromItems(d, previousName);
+    }
+
+    const seen = new Set<string>();
+    d.product_colors = (d.product_colors || [])
+      .map((color) => ({
+        name: (color.name || "").trim(),
+        image_url: color.image_url ?? null,
+      }))
+      .filter((color) => {
+        if (!color.name || seen.has(color.name)) return false;
+        seen.add(color.name);
+        return true;
+      });
+
+    const validNames = new Set(d.product_colors.map((color) => color.name));
+    d.listing.items.forEach((item) => {
+      item.color_stock = item.color_stock.filter((entry) => validNames.has((entry.color_name || "").trim()));
+    });
+
+    this.ensureGlobalColorsInAllVariants(d);
+    this.syncGlobalColorsToVariantsIfNeeded();
+    this.draft.set({ ...d });
+    delete this.globalColorOriginalByIndex[index];
+  }
+
+  toggleVariantColors(checked: boolean) {
+    this.hasVariantColors.set(checked);
+    const d = this.draft();
+    if (!d) return;
+
+    if (checked) {
+      d.listing.items.forEach((item) => {
+        const parentState = this.normalizeStockState(item.stock_state) || "in_stock";
+        item.color_stock = (item.color_stock || []).map((entry) => ({
+          ...entry,
+          stock_state: parentState,
+        }));
+      });
+      this.draft.set({ ...d });
+      return;
+    }
+
+    if (!checked) {
+      this.syncGlobalColorsToVariantsIfNeeded();
+      this.draft.set({ ...d });
+    }
+  }
+
+  private removeColorReferencesFromItems(d: NormalizedListingDocV3, colorName: string) {
     const target = (colorName || "").trim();
     if (!target) return;
 
-    d.listing.items.forEach(item => {
-      // v1.1 canonical references
-      if (item.color_names) {
-        item.color_names = item.color_names.filter(name => (name || "").trim() !== target);
-      }
-
-      // v1 arrays used by el frontend actual
-      if (item.colors) {
-        if (item.image_urls) {
-          const nextColors: string[] = [];
-          const nextImages: string[] = [];
-
-          item.colors.forEach((name, index) => {
-            if ((name || "").trim() !== target) {
-              nextColors.push(name);
-              nextImages.push(item.image_urls![index] || "");
-            }
-          });
-
-          item.colors = nextColors;
-          item.image_urls = nextImages;
-        } else {
-          item.colors = item.colors.filter(name => (name || "").trim() !== target);
-        }
-      }
-
-      // legacy scalar
-      if (item.color && item.color.trim() === target) {
-        item.color = null;
-      }
+    d.listing.items.forEach((item) => {
+      item.color_stock = item.color_stock.filter((entry) => (entry?.color_name || "").trim() !== target);
     });
   }
 
-  private addColorReferencesToSharedItems(d: NormalizedListingDoc, colorName: string, imageUrl: string | null) {
+  private addColorReferencesToSharedItems(
+    d: NormalizedListingDocV3,
+    colorName: string,
+    _imageUrl: string | null
+  ) {
     const name = (colorName || "").trim();
     if (!name) return;
 
-    // Si el usuario trabaja por variante, no forzar propagación global.
-    if (this.hasVariantColors()) return;
-
-    // Solo propagar automáticamente cuando todas las variantes comparten el mismo set actual.
-    const sets = d.listing.items.map(item => {
-      const names = Array.from(new Set([
-        ...(item.colors || []).map(x => (x || "").trim()).filter(Boolean),
-        ...(item.color_names || []).map(x => (x || "").trim()).filter(Boolean),
-      ])).sort();
-      return names.join("|");
-    });
-    if (sets.length > 1 && new Set(sets).size > 1) return;
-
-    d.listing.items.forEach(item => {
-      if (!item.colors) item.colors = [];
-      if (!item.color_names) item.color_names = [];
-      if (!item.image_urls) item.image_urls = [];
-
-      const existsInColors = item.colors.some(x => (x || "").trim() === name);
-      if (!existsInColors) {
-        item.colors.push(name);
-        item.image_urls.push(imageUrl || "");
-      }
-
-      const existsInColorNames = item.color_names.some(x => (x || "").trim() === name);
-      if (!existsInColorNames) {
-        item.color_names.push(name);
+    d.listing.items.forEach((item) => {
+      const exists = item.color_stock.some((x) => (x?.color_name || "").trim() === name);
+      if (!exists) {
+        item.color_stock.push({
+          color_name: name,
+          stock_state: this.normalizeStockState(item.stock_state) || "in_stock",
+        });
       }
     });
   }
 
-  private normalizeColorReferencesForSave(d: NormalizedListingDoc) {
+  private syncGlobalColorsToVariantsIfNeeded() {
+    if (this.hasVariantColors()) return;
+    const d = this.draft();
+    if (!d) return;
+
+    const globalNames = (d.product_colors || [])
+      .map((color) => (color.name || "").trim())
+      .filter(Boolean);
+
+    d.listing.items.forEach((item) => {
+      const existingByName = new Map(
+        (item.color_stock || []).map((entry) => [entry.color_name.trim(), entry.stock_state])
+      );
+      const fallbackState = this.normalizeStockState(item.stock_state) || "in_stock";
+      item.color_stock = globalNames.map((name) => ({
+        color_name: name,
+        stock_state: existingByName.get(name) || fallbackState,
+      }));
+    });
+  }
+
+  private ensureGlobalColorsInAllVariants(d: NormalizedListingDocV3) {
+    const globalNames = (d.product_colors || [])
+      .map((color) => (color.name || "").trim())
+      .filter(Boolean);
+
+    d.listing.items.forEach((item) => {
+      const existing = new Set((item.color_stock || []).map((entry) => (entry.color_name || "").trim()));
+      const parentState = this.normalizeStockState(item.stock_state) || "in_stock";
+
+      globalNames.forEach((name) => {
+        if (existing.has(name)) return;
+        item.color_stock.push({
+          color_name: name,
+          stock_state: parentState,
+        });
+      });
+    });
+  }
+
+  private normalizeColorReferencesForSave(d: NormalizedListingDocV3) {
     const normalizedColors = (d.product_colors || [])
       .map(c => ({
         name: (c.name || "").trim(),
@@ -713,38 +520,21 @@ export default class ReviewPage {
     d.product_colors = normalizedColors;
     const validNames = new Set(normalizedColors.map(c => c.name));
 
-    d.listing.items.forEach(item => {
-      const sourceNames = [
-        ...(item.colors || []),
-        ...(item.color_names || []),
-      ];
-
-      const sourceImages = Array.isArray(item.image_urls) ? item.image_urls : [];
-      const nextColors: string[] = [];
-      const nextImages: string[] = [];
+    d.listing.items.forEach((item) => {
       const seen = new Set<string>();
+      const normalizedStock = item.color_stock
+        .map((entry) => ({
+          color_name: (entry?.color_name || "").trim(),
+          stock_state: this.normalizeStockState(entry?.stock_state) || "unknown_qty",
+        }))
+        .filter((entry) => {
+          if (!entry.color_name || !validNames.has(entry.color_name)) return false;
+          if (seen.has(entry.color_name)) return false;
+          seen.add(entry.color_name);
+          return true;
+        });
 
-      sourceNames.forEach((rawName, index) => {
-        const name = (rawName || "").trim();
-        if (!name || !validNames.has(name)) return;
-        if (seen.has(name)) return;
-        seen.add(name);
-        nextColors.push(name);
-        if (sourceImages.length > 0) {
-          nextImages.push(sourceImages[index] || "");
-        }
-      });
-
-      item.colors = nextColors;
-      item.color_names = Array.from(new Set(nextColors));
-
-      if (Array.isArray(item.image_urls)) {
-        item.image_urls = sourceImages.length > 0 ? nextImages : [];
-      }
-
-      if (item.color && !validNames.has(item.color)) {
-        item.color = null;
-      }
+      item.color_stock = normalizedStock;
     });
   }
 
@@ -760,7 +550,7 @@ export default class ReviewPage {
     return normalized.slice(0, maxLen);
   }
 
-  private ensureVariantSkus(d: NormalizedListingDoc) {
+  private ensureVariantSkus(d: NormalizedListingDocV3) {
     const supplierToken = this.toSkuToken(d.supplier_id, "SUP", 6);
     const listingToken = this.toSkuToken(d.normalized_id, "LIST", 8);
     const used = new Set<string>();
@@ -792,6 +582,157 @@ export default class ReviewPage {
     });
   }
 
+  private isRequiredSchema(doc: unknown): doc is NormalizedListingDocV3 {
+    return isNormalizedListingDocV3(doc) && doc.schema_version === this.requiredSchemaVersion;
+  }
+
+  private normalizeV3Draft(d: NormalizedListingDocV3): void {
+    if (!Array.isArray(d.cover_images)) {
+      d.cover_images = d.preview_image_url ? [d.preview_image_url] : [];
+    }
+    if (!Array.isArray(d.product_colors)) {
+      d.product_colors = [];
+    }
+
+    d.listing.items.forEach((item, index: number) => {
+      if (!item.variant_id || `${item.variant_id}`.trim() === "") {
+        item.variant_id = item.sku || item.variant_name || `variant_${index + 1}`;
+      }
+
+      const names = new Set<string>();
+      item.color_stock = item.color_stock
+        .map((entry) => ({
+          color_name: (entry?.color_name || "").trim(),
+          stock_state: this.normalizeStockState(entry?.stock_state) || "unknown_qty",
+        }))
+        .filter((entry) => {
+          if (!entry.color_name || names.has(entry.color_name)) return false;
+          names.add(entry.color_name);
+          return true;
+        });
+
+      const normalizedState = this.normalizeStockState(item.stock_state);
+      item.stock_state = !normalizedState || normalizedState === "unknown_qty" ? "in_stock" : normalizedState;
+
+      const price = item.prices as ItemPricesV3;
+      const fallbackCurrency =
+        typeof price?.currency === "string" && price.currency.trim() ? price.currency.trim() : "MXN";
+      const costo = this.toValidNumber(price?.precio_costo);
+      const precioFinalFromDoc = this.toValidNumber(price?.precio_final);
+      const precioFinal = precioFinalFromDoc ?? (costo !== null ? this.roundMoney(costo * 2) : null);
+
+      item.prices = {
+        precio_costo: costo,
+        precio_final: precioFinal,
+        precio_clienta: null,
+        currency: fallbackCurrency,
+      };
+
+      this.recalculateVariantPrices(item);
+    });
+  }
+
+  private recalculateVariantPrices(item: NormalizedItemV3): void {
+    const cost = this.toValidNumber(item.prices?.precio_costo);
+    const finalPrice = this.toValidNumber(item.prices?.precio_final);
+    const clientPrice = finalPrice !== null ? this.roundMoney(finalPrice * 0.75) : null;
+    item.prices = {
+      precio_costo: cost,
+      precio_final: finalPrice,
+      precio_clienta: clientPrice,
+      currency: item.prices?.currency || "MXN",
+    };
+  }
+
+  private toValidNumber(value: unknown): number | null {
+    if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return null;
+    return this.roundMoney(value);
+  }
+
+  private roundMoney(value: number): number {
+    return Math.round(value * 100) / 100;
+  }
+
+  onPriceInputChange(variantIndex: number, field: "costo" | "final", rawValue: string) {
+    const d = this.draft();
+    if (!d) return;
+    const item = d.listing.items[variantIndex];
+    if (!item) return;
+
+    this.priceInputBuffers[this.priceBufferKey(variantIndex, field)] = rawValue;
+    const parsed = this.parsePriceInput(rawValue);
+
+    item.prices = {
+      ...item.prices,
+      precio_costo: field === "costo" ? parsed : item.prices.precio_costo,
+      precio_final: field === "final" ? parsed : item.prices.precio_final,
+      currency: item.prices?.currency || "MXN",
+    };
+    this.recalculateVariantPrices(item);
+    this.draft.set({ ...d });
+  }
+
+  onPriceInputBlur(variantIndex: number, field: "costo" | "final") {
+    const d = this.draft();
+    if (!d) return;
+    const item = d.listing.items[variantIndex];
+    if (!item) return;
+
+    const value = field === "costo" ? item.prices.precio_costo : item.prices.precio_final;
+    const key = this.priceBufferKey(variantIndex, field);
+    this.priceInputBuffers[key] = this.formatNumberOnly(value);
+    this.notifyPriceLossIfNeeded(variantIndex, item);
+  }
+
+  getPriceInputValue(variantIndex: number, field: "costo" | "final"): string {
+    const key = this.priceBufferKey(variantIndex, field);
+    if (Object.prototype.hasOwnProperty.call(this.priceInputBuffers, key)) {
+      return this.priceInputBuffers[key];
+    }
+
+    const d = this.draft();
+    if (!d) return "";
+    const item = d.listing.items[variantIndex];
+    if (!item) return "";
+    const value = field === "costo" ? item.prices.precio_costo : item.prices.precio_final;
+    return this.formatNumberOnly(value);
+  }
+
+  private parsePriceInput(rawValue: string): number | null {
+    const cleaned = (rawValue || "").replace(/,/g, "").trim();
+    if (!cleaned) return null;
+    const parsed = Number(cleaned);
+    if (!Number.isFinite(parsed) || parsed < 0) return null;
+    return this.roundMoney(parsed);
+  }
+
+  private formatNumberOnly(value: number | null | undefined): string {
+    if (typeof value !== "number" || !Number.isFinite(value)) return "";
+    return this.moneyFormatter.format(value);
+  }
+
+  private priceBufferKey(variantIndex: number, field: "costo" | "final"): string {
+    return `${variantIndex}:${field}`;
+  }
+
+  isPriceLossRisk(item: NormalizedItemV3): boolean {
+    const cost = this.toValidNumber(item.prices?.precio_costo);
+    const client = this.toValidNumber(item.prices?.precio_clienta);
+    return cost !== null && client !== null && client < cost;
+  }
+
+  private notifyPriceLossIfNeeded(variantIndex: number, item: NormalizedItemV3): void {
+    const key = `variant_${variantIndex}`;
+    if (this.isPriceLossRisk(item)) {
+      if (!this.priceAlertShownByKey.has(key)) {
+        this.priceAlertShownByKey.add(key);
+        alert("Precio clienta no puede ser menor a precio costo. Eso significa perdidas.");
+      }
+      return;
+    }
+    this.priceAlertShownByKey.delete(key);
+  }
+
   /**
    * VARIANTES: Asigna un color global a una variante específica
    */
@@ -814,6 +755,37 @@ export default class ReviewPage {
     this.showImagePicker.set(true);
   }
 
+  getGlobalColorOptions(): Array<{ name: string; image_url: string | null }> {
+    const d = this.draft();
+    if (!d) return [];
+    return (d.product_colors || [])
+      .map((color) => ({
+        name: (color.name || "").trim(),
+        image_url: color.image_url ?? null,
+      }))
+      .filter((color) => color.name.length > 0);
+  }
+
+  assignGlobalColorToCurrentVariant(colorName: string) {
+    const d = this.draft();
+    if (!d || this.currentVariantIndex < 0) return;
+
+    const variant = d.listing.items[this.currentVariantIndex];
+    const normalizedName = (colorName || "").trim();
+    if (!normalizedName) return;
+
+    const exists = variant.color_stock.some((entry) => entry.color_name === normalizedName);
+    if (!exists) {
+      variant.color_stock.push({
+        color_name: normalizedName,
+        stock_state: this.normalizeStockState(variant.stock_state) || "in_stock",
+      });
+    }
+
+    this.draft.set({ ...d });
+    this.closeImagePicker();
+  }
+
   // ==========================================================================
   // VARIANTES
   // ==========================================================================
@@ -822,23 +794,25 @@ export default class ReviewPage {
     const d = this.draft();
     if (!d) return;
 
-    const newVariant: NormalizedItem = {
+    const newVariant: NormalizedItemV3 = {
+      variant_id: `variant_${d.listing.items.length + 1}`,
       variant_name: null,
       sku: null,
       stock_state: "unknown_qty",
       notes: null,
-      colors: [],       // NUEVO: array vacío
-      image_urls: [],   // NUEVO: array vacío
-      prices: [
-        {
-          amount: null,
-          currency: "MXN",
-          tier_name: "publico"
-        }
-      ]
+      color_stock: [],
+      prices: {
+        precio_costo: null,
+        precio_clienta: null,
+        precio_final: null,
+        currency: "MXN",
+      },
     };
 
+    newVariant.stock_state = "in_stock";
+
     d.listing.items.push(newVariant);
+    this.syncGlobalColorsToVariantsIfNeeded();
     this.draft.set({ ...d });
   }
 
@@ -856,29 +830,6 @@ export default class ReviewPage {
   }
 
   /**
-   * Agrega un nuevo color (con su imagen) a una variante - Abre modal para seleccionar
-   */
-  addColorToVariant(variantIndex: number) {
-    const d = this.draft();
-    if (!d) return;
-
-    const variant = d.listing.items[variantIndex];
-    
-    // Asegurar que existan los arrays
-    if (!variant.colors) variant.colors = [];
-    if (!variant.image_urls) variant.image_urls = [];
-
-    // Agregar slot vacío temporalmente
-    const newIndex = variant.colors.length;
-    variant.colors.push("");
-    variant.image_urls.push("");
-    this.draft.set({ ...d });
-
-    // Abrir modal para seleccionar imagen
-    this.pickImageForColor(variantIndex, newIndex);
-  }
-
-  /**
    * Elimina un color (y su imagen) de una variante
    */
   removeColorFromVariant(variantIndex: number, colorIndex: number) {
@@ -886,77 +837,16 @@ export default class ReviewPage {
     if (!d) return;
 
     const variant = d.listing.items[variantIndex];
-    
-    if (!variant.colors || !variant.image_urls) return;
-    if (variant.colors.length <= 1) {
-      alert("Debe haber al menos un color");
-      return;
-    }
 
-    if (confirm(`¿Eliminar el color "${variant.colors[colorIndex]}"?`)) {
-      variant.colors.splice(colorIndex, 1);
-      variant.image_urls.splice(colorIndex, 1);
+    const current = variant.color_stock[colorIndex];
+    if (!current) return;
+
+    if (confirm(`¿Eliminar el color "${current.color_name}"?`)) {
+      variant.color_stock.splice(colorIndex, 1);
       this.draft.set({ ...d });
     }
   }
 
-  /**
-   * Mueve un color hacia arriba en la lista
-   */
-  moveColorUp(variantIndex: number, colorIndex: number) {
-    if (colorIndex === 0) return; // Ya está al inicio
-
-    const d = this.draft();
-    if (!d) return;
-
-    const variant = d.listing.items[variantIndex];
-    if (!variant.colors || !variant.image_urls) return;
-
-    // Intercambiar color
-    [variant.colors[colorIndex], variant.colors[colorIndex - 1]] = 
-    [variant.colors[colorIndex - 1], variant.colors[colorIndex]];
-
-    // Intercambiar imagen
-    [variant.image_urls[colorIndex], variant.image_urls[colorIndex - 1]] = 
-    [variant.image_urls[colorIndex - 1], variant.image_urls[colorIndex]];
-
-    this.draft.set({ ...d });
-  }
-
-  /**
-   * Mueve un color hacia abajo en la lista
-   */
-  moveColorDown(variantIndex: number, colorIndex: number) {
-    const d = this.draft();
-    if (!d) return;
-
-    const variant = d.listing.items[variantIndex];
-    if (!variant.colors || !variant.image_urls) return;
-    if (colorIndex === variant.colors.length - 1) return; // Ya está al final
-
-    // Intercambiar color
-    [variant.colors[colorIndex], variant.colors[colorIndex + 1]] = 
-    [variant.colors[colorIndex + 1], variant.colors[colorIndex]];
-
-    // Intercambiar imagen
-    [variant.image_urls[colorIndex], variant.image_urls[colorIndex + 1]] = 
-    [variant.image_urls[colorIndex + 1], variant.image_urls[colorIndex]];
-
-    this.draft.set({ ...d });
-  }
-
-  /**
-   * Selecciona una imagen de la galería para un color específico
-   */
-  pickImageForColor(variantIndex: number, colorIndex: number) {
-    this.currentVariantIndex = variantIndex;
-    this.currentColorIndex = colorIndex;
-    this.showImagePicker.set(true);
-  }
-
-  /**
-   * Asigna una imagen a un color específico
-   */
   assignImageToColor(imageUrl: string) {
     const d = this.draft();
     if (!d) return;
@@ -980,6 +870,7 @@ export default class ReviewPage {
         image_url: imageUrl
       });
       this.addColorReferencesToSharedItems(d, colorName, imageUrl);
+      this.ensureGlobalColorsInAllVariants(d);
 
       this.draft.set({ ...d });
       this.closeImagePicker();
@@ -990,10 +881,6 @@ export default class ReviewPage {
     // Caso normal: Asignar color global a una variante
     if (this.currentVariantIndex >= 0) {
       const variant = d.listing.items[this.currentVariantIndex];
-      
-      // Asegurar arrays
-      if (!variant.colors) variant.colors = [];
-      if (!variant.image_urls) variant.image_urls = [];
 
       // Si es agregar nuevo (currentColorIndex === -1)
       if (this.currentColorIndex === -1) {
@@ -1003,7 +890,11 @@ export default class ReviewPage {
           .map(c => c.name)
           .filter(Boolean);
 
-        let colorName = "Sin nombre";
+        let colorName = "";
+        if (options.length === 0) {
+          alert("Solo puedes asignar colores globales existentes.");
+          return;
+        }
         if (options.length === 1) {
           colorName = options[0];
         } else if (options.length > 1) {
@@ -1015,13 +906,21 @@ export default class ReviewPage {
             : options[0];
         }
 
-        variant.colors.push(colorName);
-        variant.image_urls.push(imageUrl);
+        const exists = variant.color_stock.some((entry) => entry.color_name === colorName);
+        if (!exists) {
+          variant.color_stock.push({
+            color_name: colorName,
+            stock_state: variant.stock_state || "in_stock",
+          });
+        }
       } else {
         // Cambiar color existente
         const firstMatch = (d.product_colors || []).find(c => (c.image_url || "") === imageUrl)?.name;
-        variant.colors[this.currentColorIndex] = firstMatch || this.imageColors[imageUrl] || "Sin nombre";
-        variant.image_urls[this.currentColorIndex] = imageUrl;
+        const replacement = firstMatch || this.imageColors[imageUrl] || "Sin nombre";
+        const target = variant.color_stock[this.currentColorIndex];
+        if (target) {
+          target.color_name = replacement;
+        }
       }
 
       this.draft.set({ ...d });
@@ -1107,6 +1006,7 @@ export default class ReviewPage {
             image_url: downloadURL
           });
           this.addColorReferencesToSharedItems(d, colorName, downloadURL);
+          this.syncGlobalColorsToVariantsIfNeeded();
           this.draft.set({ ...d });
         }
         this.closeImagePicker();
@@ -1142,144 +1042,6 @@ export default class ReviewPage {
   }
 
   // ==========================================================================
-  // PRECIOS
-  // ==========================================================================
-
-  addPriceToVariant(variantIndex: number) {
-    const d = this.draft();
-    if (!d) return;
-
-    const variant = d.listing.items[variantIndex];
-    variant.prices.push({
-      amount: null,
-      currency: "MXN",
-      tier_name: ""
-    });
-
-    this.draft.set({ ...d });
-  }
-
-  removePriceFromVariant(variantIndex: number, priceIndex: number) {
-    const d = this.draft();
-    if (!d) return;
-
-    const variant = d.listing.items[variantIndex];
-    if (variant.prices.length <= 1) {
-      alert("Debe haber al menos un precio");
-      return;
-    }
-
-    variant.prices.splice(priceIndex, 1);
-    this.draft.set({ ...d });
-  }
-
-  // ==========================================================================
-  // DESCUENTOS GLOBALES
-  // ==========================================================================
-
-  addGlobalDiscount() {
-    const d = this.draft();
-    if (!d) return;
-
-    d.listing.price_tiers_global.push({
-      tier_name: "",
-      discount_percent: null,
-      notes: null
-    });
-
-    this.draft.set({ ...d });
-  }
-
-  removeGlobalDiscount(index: number) {
-    const d = this.draft();
-    if (!d || d.listing.price_tiers_global.length <= 1) {
-      alert("Debe haber al menos un tier de precio");
-      return;
-    }
-
-    d.listing.price_tiers_global.splice(index, 1);
-    this.draft.set({ ...d });
-  }
-
-  // ==========================================================================
-  // SINCRONIZACIÓN DE DESCUENTOS GLOBALES → PRECIOS
-  // ==========================================================================
-
-  /**
-   * Calcula el precio con descuento aplicado
-   */
-  calculateDiscountedPrice(basePrice: number, discountPercent: number): number {
-    if (!basePrice || !discountPercent) return basePrice;
-    return Math.round(basePrice * (1 - discountPercent / 100) * 100) / 100;
-  }
-
-  /**
-   * Sincroniza los descuentos globales con los precios de todas las variantes
-   * Crea/actualiza precios automáticamente basados en price_tiers_global
-   */
-  syncGlobalDiscountsToVariants() {
-    const d = this.draft();
-    if (!d) return;
-
-    // Para cada variante
-    d.listing.items.forEach(variant => {
-      // Obtener precio público (base)
-      const publicoPrice = variant.prices.find(p => p.tier_name === "publico");
-      if (!publicoPrice?.amount) return;
-
-      // Para cada tier global
-      d.listing.price_tiers_global.forEach(tier => {
-        // Saltar "publico" (es el precio base)
-        if (tier.tier_name === "publico") return;
-
-        // Buscar si ya existe este tier en los precios de la variante
-        let existingPrice = variant.prices.find(p => p.tier_name === tier.tier_name);
-
-        if (tier.discount_percent !== null && tier.discount_percent !== undefined) {
-          // Calcular nuevo precio
-          const newAmount = this.calculateDiscountedPrice(publicoPrice.amount!, tier.discount_percent);
-
-          if (existingPrice) {
-            // Actualizar precio existente
-            existingPrice.amount = newAmount;
-          } else {
-            // Crear nuevo precio
-            variant.prices.push({
-              amount: newAmount,
-              currency: "MXN",
-              tier_name: tier.tier_name
-            });
-          }
-        } else {
-          // Si no hay descuento, eliminar el precio si existe
-          if (existingPrice) {
-            const index = variant.prices.indexOf(existingPrice);
-            variant.prices.splice(index, 1);
-          }
-        }
-      });
-    });
-
-    this.draft.set({ ...d });
-  }
-
-  /**
-   * Normaliza los descuentos globales (asegura que "publico" sea 0%)
-   */
-  normalizeGlobalDiscounts() {
-    const d = this.draft();
-    if (!d) return;
-
-    // Asegurar que "publico" tenga 0% de descuento
-    const publicoTier = d.listing.price_tiers_global.find(t => t.tier_name === "publico");
-    if (publicoTier) {
-      publicoTier.discount_percent = 0;
-    }
-
-    this.draft.set({ ...d });
-  }
-
-  // ==========================================================================
   // ACCIONES FINALES
   // ==========================================================================
 
@@ -1287,6 +1049,9 @@ export default class ReviewPage {
     try {
       const d = this.draft();
       if (!d) return;
+      if (!this.isRequiredSchema(d)) {
+        throw new Error(`Esquema no soportado. Se requiere ${this.requiredSchemaVersion}.`);
+      }
 
       const cover = d.cover_images?.[0] ?? d.preview_image_url ?? null;
       d.preview_image_url = cover;
@@ -1298,14 +1063,22 @@ export default class ReviewPage {
         return;
       }
 
-      // Actualizar colores en imageColors desde variantes
-      d.listing.items.forEach(item => {
-        if (item.image_url && item.color) {
-          this.imageColors[item.image_url] = item.color;
-        }
+      d.listing.items.forEach((item) => {
+        this.recalculateVariantPrices(item);
       });
 
-      // v1.1: mantener integridad entre product_colors y items.color_names/colors
+      const invalidPrices = d.listing.items.some(
+        (item) =>
+          typeof item.prices.precio_costo === "number" &&
+          typeof item.prices.precio_clienta === "number" &&
+          item.prices.precio_clienta < item.prices.precio_costo
+      );
+      if (invalidPrices) {
+        alert("Regla de precios invalida: precio final x 0.75 no puede ser menor a precio costo.");
+        return;
+      }
+
+      // v3: mantener integridad entre product_colors y items.color_stock
       this.normalizeColorReferencesForSave(d);
       // SKU por variante/talla (solo si está vacío)
       this.ensureVariantSkus(d);
@@ -1362,13 +1135,18 @@ export default class ReviewPage {
         return;
       }
 
-      // Validar que cada variante tenga precio
+      // Validar que cada variante tenga precio de costo y respete margen mínimo
       const invalidVariants = d.listing.items.filter(
-        item => !item.prices.some(p => p.amount && p.amount > 0)
+        (item) =>
+          !item.prices ||
+          typeof item.prices.precio_costo !== "number" ||
+          item.prices.precio_costo <= 0 ||
+          typeof item.prices.precio_clienta !== "number" ||
+          item.prices.precio_clienta < item.prices.precio_costo
       );
 
       if (invalidVariants.length > 0) {
-        alert("Todas las variantes deben tener al menos un precio válido");
+        alert("Todas las variantes deben tener precio costo válido y precio clienta mayor o igual al costo");
         return;
       }
 
@@ -1405,25 +1183,9 @@ export default class ReviewPage {
   }
   
   // ============================================================================
-  // MÉTODOS DE UTILIDAD PARA SCHEMA v1.1
+  // MÉTODOS DE UTILIDAD V3
   // ============================================================================
-  
-  /**
-   * Obtiene los nombres de colores de una variante (v1.1 compatible)
-   */
-  getItemColorNames(item: NormalizedItem): string[] {
-    // Priorizar color_names (v1.1)
-    if (item.color_names && item.color_names.length > 0) {
-      return item.color_names;
-    }
-    
-    // Fallback a colors (v1)
-    return item.colors || [];
-  }
-  
-  /**
-   * Obtiene la imagen de un color específico desde product_colors
-   */
+
   getColorImage(colorName: string): string | null {
     const d = this.draft();
     if (!d) return null;
@@ -1432,66 +1194,14 @@ export default class ReviewPage {
     return color?.image_url || null;
   }
   
-  /**
-   * Actualiza un color global (se refleja en todos los items que lo usen)
-   */
-  updateGlobalColorName(oldName: string, newName: string) {
-    const d = this.draft();
-    if (!d) return;
-    
-    // Actualizar en product_colors
-    const color = d.product_colors?.find(c => c.name === oldName);
-    if (color) {
-      color.name = newName;
-    }
-    
-    // Actualizar referencias en todos los items
-    d.listing.items.forEach(item => {
-      if (item.color_names) {
-        const index = item.color_names.indexOf(oldName);
-        if (index !== -1) {
-          item.color_names[index] = newName;
-        }
-      }
-    });
-    
-    this.draft.set({ ...d });
+  private normalizeStockState(value: unknown): StockState | null {
+    if (typeof value !== "string") return null;
+    const valid: StockState[] = ["in_stock", "last_pair", "out_of_stock", "unknown_qty"];
+    return valid.includes(value as StockState) ? (value as StockState) : null;
   }
-  
-  /**
-   * Agrega un nuevo color global
-   */
-  addGlobalColorWithDetails(name: string, imageUrl: string | null) {
-    const d = this.draft();
-    if (!d) return;
-    
-    if (!d.product_colors) {
-      d.product_colors = [];
-    }
-    
-    d.product_colors.push({
-      name: name,
-      image_url: imageUrl
-    });
-    
-    this.draft.set({ ...d });
-  }
-  
-  /**
-   * Elimina un color global y todas sus referencias
-   */
-  removeGlobalColorByName(colorName: string) {
-    const d = this.draft();
-    if (!d) return;
-    
-    // Remover de product_colors
-    if (d.product_colors) {
-      d.product_colors = d.product_colors.filter(c => c.name !== colorName);
-    }
-    
-    // Remover referencias en items
-    this.removeColorReferencesFromItems(d, colorName);
-    
-    this.draft.set({ ...d });
+
+  formatMoney(value: number | null | undefined, currency = "MXN"): string {
+    if (typeof value !== "number" || !Number.isFinite(value)) return "--";
+    return `${currency} ${this.moneyFormatter.format(value)}`;
   }
 }

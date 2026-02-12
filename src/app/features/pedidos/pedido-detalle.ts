@@ -102,7 +102,14 @@ export default class PedidoDetallePage implements OnInit {
   newItemQty = signal(1);
   newItemPricePublic = signal<number | null>(null);
   newItemPriceCost = signal<number | null>(null);
-  newItemDiscount = signal<number | null>(25);
+  newItemPriceClienta = signal<number | null>(null);
+  newItemDiscount = signal<number | null>(null);
+  priceInputFocused = signal<"final" | "clienta" | "costo" | null>(null);
+  priceInputDraft = signal<{ final: string; clienta: string; costo: string }>({
+    final: "",
+    clienta: "",
+    costo: "",
+  });
   supplierDiscountPct = signal<number | null>(null);
   supplierDiscountLabel = signal<string | null>(null);
   selectedPreview = signal<{ title: string; variant: string; color: string; image: string | null; source: string } | null>(null);
@@ -146,15 +153,13 @@ export default class PedidoDetallePage implements OnInit {
       const cat = (listing.category_hint || "").toLowerCase();
       const variants = listing.items || [];
       for (const v of variants) {
-        const colors: string[] = v.color_names || v.colors || [];
+        const colors = this.getVariantColors(v);
         const blob = [title, cat, v.variant_name || "", colors.join(" ")].join(" ").toLowerCase();
         if (!blob.includes(term)) continue;
         const colorHit = colors.find((c) => c.toLowerCase().includes(term)) || colors[0] || "";
-        const colorImage =
-          (doc.product_colors || []).find((c) => c.name?.toLowerCase() === colorHit?.toLowerCase())?.image_url ||
-          doc.cover_images?.[0] ||
-          null;
-        matches.push({ doc, variant: v, color: colorHit, image: colorImage });
+        const colorImage = this.resolveColorImage(doc, colorHit);
+        const image = colorImage || v?.image_url || doc.cover_images?.[0] || doc.preview_image_url || null;
+        matches.push({ doc, variant: v, color: colorHit, image });
         break; // first variant hit is enough per doc for now
       }
     }
@@ -776,6 +781,9 @@ export default class PedidoDetallePage implements OnInit {
     this.newItemQty.set(1);
     this.newItemPricePublic.set(null);
     this.newItemPriceCost.set(null);
+    this.newItemPriceClienta.set(null);
+    this.priceInputFocused.set(null);
+    this.priceInputDraft.set({ final: "", clienta: "", costo: "" });
     this.supplierDiscountPct.set(null);
     this.supplierDiscountLabel.set(null);
     this.newItemSearch.set("");
@@ -1138,6 +1146,10 @@ export default class PedidoDetallePage implements OnInit {
       return;
     }
     const qty = Math.max(1, this.newItemQty());
+    if (this.isClientaBelowCosto()) {
+      alert("Precio clienta no puede ser menor a precio costo.");
+      return;
+    }
     const item: OrderItem = {
       item_id: "",
       title,
@@ -1168,6 +1180,9 @@ export default class PedidoDetallePage implements OnInit {
     this.newItemQty.set(1);
     this.newItemPricePublic.set(null);
     this.newItemPriceCost.set(null);
+    this.newItemPriceClienta.set(null);
+    this.priceInputFocused.set(null);
+    this.priceInputDraft.set({ final: "", clienta: "", costo: "" });
     this.supplierDiscountPct.set(null);
     this.supplierDiscountLabel.set(null);
     this.newItemSearch.set("");
@@ -1202,10 +1217,15 @@ export default class PedidoDetallePage implements OnInit {
 
   pickInventory(item: InventoryItem) {
     const image = item.image_urls?.[0] || null;
+    const costo = item.unit_price || null;
+    const final = costo !== null ? Number((costo * 2).toFixed(2)) : null;
     this.newItemTitle.set(item.title);
     this.newItemVariant.set(item.variant_name || item.size_label || "");
     this.newItemColor.set(item.color_name || "");
-    this.newItemPriceCost.set(item.unit_price || null);
+    this.newItemPricePublic.set(final);
+    this.newItemPriceClienta.set(this.computeClientaPrice(final));
+    this.newItemPriceCost.set(costo);
+    this.updatePriceDraftFromSignals();
     this.newItemSource.set("inventario");
     this.newItemInventoryId.set(item.inventory_id);
     this.newItemSupplierId.set(item.supplier_id || null);
@@ -1230,25 +1250,18 @@ export default class PedidoDetallePage implements OnInit {
   pickCatalog(doc: NormalizedListingDoc, variant: any, color: string) {
     const listing = doc.listing || { items: [] } as any;
     const variants = (listing.items || []).map((it: any) => it.variant_name || "Sin variante");
-    const colors = (variant?.color_names || variant?.colors || []).filter(Boolean);
-    const pricePublic = variant?.prices?.[0]?.amount ?? null;
-    const discountTier = (listing.price_tiers_global || []).find(
-      (tier: any) => tier.discount_percent !== null && tier.discount_percent !== undefined
-    );
-    const discountPct = discountTier?.discount_percent ?? null;
-    const discountLabel = discountTier?.tier_name ? `Descuento ${discountTier.tier_name}` : "Descuento proveedor";
-    const computedCost =
-      pricePublic !== null && discountPct !== null
-        ? Number((pricePublic * (1 - discountPct / 100)).toFixed(2))
-        : null;
-    const colorImage =
-      (doc.product_colors || []).find((c) => c.name?.toLowerCase() === color?.toLowerCase())?.image_url || null;
-    const image = colorImage || doc.cover_images?.[0] || null;
+    const colors = this.getVariantColors(variant);
+    const selectedColor = color || colors[0] || "";
+    const prices = this.getVariantPriceSet(variant);
+    const colorImage = this.resolveColorImage(doc, selectedColor);
+    const image = colorImage || variant?.image_url || doc.cover_images?.[0] || doc.preview_image_url || null;
     this.newItemTitle.set(listing.title || "Producto sin nombre");
     this.newItemVariant.set(variant?.variant_name || variants[0] || "");
-    this.newItemColor.set(color || colors[0] || "");
-    this.newItemPricePublic.set(pricePublic);
-    this.newItemPriceCost.set(computedCost);
+    this.newItemColor.set(selectedColor);
+    this.newItemPricePublic.set(prices.final);
+    this.newItemPriceClienta.set(this.computeClientaPrice(prices.final));
+    this.newItemPriceCost.set(prices.costo);
+    this.updatePriceDraftFromSignals();
     this.newItemSource.set("catalogo");
     this.newItemInventoryId.set(null);
     this.newItemSupplierId.set(doc.supplier_id || null);
@@ -1257,8 +1270,8 @@ export default class PedidoDetallePage implements OnInit {
     this.lockItemFields.set(true);
     this.catalogVariantOptions.set([...new Set(variants)]);
     this.catalogColorOptions.set(colors);
-    this.supplierDiscountPct.set(discountPct);
-    this.supplierDiscountLabel.set(discountLabel);
+    this.supplierDiscountPct.set(null);
+    this.supplierDiscountLabel.set(null);
     this.selectedPreviewHasColorImage.set(Boolean(colorImage));
     this.selectedPreview.set({
       title: this.newItemTitle(),
@@ -1289,37 +1302,31 @@ export default class PedidoDetallePage implements OnInit {
     const listing: any = doc.listing || { items: [] };
     const variant = (listing.items || []).find((it: any) => it.variant_name === value) || null;
     if (!variant) return;
-    const pricePublic = variant?.prices?.[0]?.amount ?? null;
-    this.newItemPricePublic.set(pricePublic);
-    const discountPct = this.supplierDiscountPct();
-    const computedCost =
-      pricePublic !== null && discountPct !== null
-        ? Number((pricePublic * (1 - discountPct / 100)).toFixed(2))
-        : null;
-    this.newItemPriceCost.set(computedCost);
+    const prices = this.getVariantPriceSet(variant);
+    this.newItemPricePublic.set(prices.final);
+    this.newItemPriceClienta.set(this.computeClientaPrice(prices.final));
+    this.newItemPriceCost.set(prices.costo);
+    this.updatePriceDraftFromSignals();
 
-    const colors = (variant?.color_names || variant?.colors || []).filter(Boolean);
+    const colors = this.getVariantColors(variant);
     this.catalogColorOptions.set(colors);
-    const currentColor = this.newItemColor();
+    const currentColor = this.newItemColor().trim();
     if (colors.length > 0) {
       const nextColor = colors.find((c: string) => c.toLowerCase() === currentColor.toLowerCase()) || colors[0];
       this.newItemColor.set(nextColor);
     }
-    const colorImage =
-      (doc.product_colors || []).find((c) => c.name?.toLowerCase() === this.newItemColor().toLowerCase())?.image_url ||
-      doc.cover_images?.[0] ||
-      null;
-    const hasColorImage = Boolean(
-      (doc.product_colors || []).find((c) => c.name?.toLowerCase() === this.newItemColor().toLowerCase())?.image_url
-    );
+    const selectedColor = this.newItemColor().trim();
+    const colorImage = this.resolveColorImage(doc, selectedColor);
+    const image = colorImage || variant?.image_url || doc.cover_images?.[0] || doc.preview_image_url || null;
+    const hasColorImage = Boolean(colorImage);
     this.selectedPreviewHasColorImage.set(hasColorImage);
     this.selectedPreview.update((prev) =>
       prev
         ? {
             ...prev,
             variant: value,
-            color: this.newItemColor(),
-            image: colorImage,
+            color: selectedColor,
+            image,
           }
         : prev
     );
@@ -1329,23 +1336,155 @@ export default class PedidoDetallePage implements OnInit {
     this.newItemColor.set(value);
     const doc = this.selectedCatalogDoc();
     if (!doc) return;
-    const colorImage =
-      (doc.product_colors || []).find((c) => c.name?.toLowerCase() === value.toLowerCase())?.image_url ||
-      doc.cover_images?.[0] ||
-      null;
-    const hasColorImage = Boolean(
-      (doc.product_colors || []).find((c) => c.name?.toLowerCase() === value.toLowerCase())?.image_url
-    );
+    const listing: any = doc.listing || { items: [] };
+    const variant = (listing.items || []).find((it: any) => (it.variant_name || "") === this.newItemVariant()) || null;
+    const colorImage = this.resolveColorImage(doc, value);
+    const image = colorImage || variant?.image_url || doc.cover_images?.[0] || doc.preview_image_url || null;
+    const hasColorImage = Boolean(colorImage);
     this.selectedPreviewHasColorImage.set(hasColorImage);
     this.selectedPreview.update((prev) =>
       prev
         ? {
             ...prev,
             color: value,
-            image: colorImage,
+            image,
           }
         : prev
     );
+  }
+
+  private getVariantColors(variant: any): string[] {
+    const fromColorStock = (variant?.color_stock || []).map((entry: any) => entry?.color_name);
+    const fromColorNames = Array.isArray(variant?.color_names) ? variant.color_names : [];
+    const fromLegacy = Array.isArray(variant?.colors) ? variant.colors : [];
+    const all = [...fromColorStock, ...fromColorNames, ...fromLegacy]
+      .map((value) => (typeof value === "string" ? value.trim() : ""))
+      .filter(Boolean);
+    return Array.from(new Set(all));
+  }
+
+  private resolveColorImage(doc: NormalizedListingDoc, colorName: string | null | undefined): string | null {
+    const target = (colorName || "").trim().toLowerCase();
+    if (!target) return null;
+    return (
+      (doc.product_colors || []).find((c) => (c.name || "").trim().toLowerCase() === target)?.image_url || null
+    );
+  }
+
+  private getVariantPriceSet(variant: any): { final: number | null; clienta: number | null; costo: number | null } {
+    const prices = variant?.prices;
+    if (Array.isArray(prices)) {
+      const amount = prices[0]?.amount;
+      return {
+        final: typeof amount === "number" ? amount : null,
+        clienta: null,
+        costo: null,
+      };
+    }
+    if (prices && typeof prices === "object") {
+      return {
+        final: typeof prices.precio_final === "number" ? prices.precio_final : null,
+        clienta: typeof prices.precio_clienta === "number" ? prices.precio_clienta : null,
+        costo: typeof prices.precio_costo === "number" ? prices.precio_costo : null,
+      };
+    }
+    return { final: null, clienta: null, costo: null };
+  }
+
+  priceDisplayValue(field: "final" | "clienta" | "costo"): string {
+    if (this.priceInputFocused() === field) {
+      return this.priceInputDraft()[field];
+    }
+    const value = this.getPriceValue(field);
+    return this.formatThousands(value);
+  }
+
+  onPriceInputFocus(field: "final" | "clienta" | "costo") {
+    this.priceInputFocused.set(field);
+    const current = this.getPriceValue(field);
+    this.priceInputDraft.update((draft) => ({
+      ...draft,
+      [field]: current === null ? "" : String(current),
+    }));
+  }
+
+  onPriceInputChange(field: "final" | "clienta" | "costo", raw: string) {
+    this.priceInputDraft.update((draft) => ({ ...draft, [field]: raw }));
+    this.setPriceValue(field, this.parseMoney(raw));
+  }
+
+  onPriceInputBlur(field: "final" | "clienta" | "costo") {
+    const raw = this.priceInputDraft()[field];
+    this.setPriceValue(field, this.parseMoney(raw));
+    this.priceInputFocused.set(null);
+    this.updatePriceDraftFromSignals();
+    if (field === "final" || field === "costo") {
+      this.warnIfClientaBelowCosto();
+    }
+  }
+
+  priceRuleInvalid(): boolean {
+    return this.isClientaBelowCosto();
+  }
+
+  private updatePriceDraftFromSignals() {
+    this.priceInputDraft.set({
+      final: this.newItemPricePublic() === null ? "" : String(this.newItemPricePublic()),
+      clienta: this.newItemPriceClienta() === null ? "" : String(this.newItemPriceClienta()),
+      costo: this.newItemPriceCost() === null ? "" : String(this.newItemPriceCost()),
+    });
+  }
+
+  private getPriceValue(field: "final" | "clienta" | "costo"): number | null {
+    if (field === "final") return this.newItemPricePublic();
+    if (field === "clienta") return this.newItemPriceClienta();
+    return this.newItemPriceCost();
+  }
+
+  private setPriceValue(field: "final" | "clienta" | "costo", value: number | null) {
+    if (field === "final") {
+      this.newItemPricePublic.set(value);
+      this.newItemPriceClienta.set(this.computeClientaPrice(value));
+      return;
+    }
+    if (field === "clienta") {
+      this.newItemPriceClienta.set(value);
+      return;
+    }
+    this.newItemPriceCost.set(value);
+  }
+
+  private parseMoney(raw: string): number | null {
+    const normalized = (raw || "").replace(/,/g, "").trim();
+    if (!normalized) return null;
+    const parsed = Number(normalized);
+    if (!Number.isFinite(parsed)) return null;
+    return Number(parsed.toFixed(2));
+  }
+
+  private formatThousands(value: number | null): string {
+    if (value === null || value === undefined || Number.isNaN(value)) return "";
+    return new Intl.NumberFormat("es-MX", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    }).format(value);
+  }
+
+  private computeClientaPrice(finalPrice: number | null): number | null {
+    if (finalPrice === null || finalPrice === undefined || Number.isNaN(finalPrice)) return null;
+    return Number((finalPrice * 0.75).toFixed(2));
+  }
+
+  private isClientaBelowCosto(): boolean {
+    const clienta = this.newItemPriceClienta();
+    const costo = this.newItemPriceCost();
+    if (clienta === null || costo === null) return false;
+    return clienta < costo;
+  }
+
+  private warnIfClientaBelowCosto() {
+    if (!this.isClientaBelowCosto()) return;
+    alert("Precio clienta no puede ser menor a precio costo.");
   }
 
   formatCurrency(value: number | null): string {
@@ -1359,7 +1498,5 @@ export default class PedidoDetallePage implements OnInit {
     return this.formatCurrency(value);
   }
 }
-
-
 
 
