@@ -4,7 +4,12 @@ import { Router } from "@angular/router";
 import type { DocumentData, QueryDocumentSnapshot } from "firebase/firestore";
 import { NormalizedListingsService } from "../../core/normalized-listings.service";
 import { SuppliersService } from "../../core/suppliers.service";
-import type { NormalizedItem, NormalizedListingDoc, StockState } from "../../core/firestore-contracts";
+import type {
+  NormalizedItemV3,
+  NormalizedListingDocV3,
+  StockState,
+} from "../../core/firestore-contracts";
+import { isNormalizedListingDocV3 } from "../../core/firestore-contracts";
 
 @Component({
   standalone: true,
@@ -14,6 +19,7 @@ import type { NormalizedItem, NormalizedListingDoc, StockState } from "../../cor
   styleUrl: "./catalog.css",
 })
 export default class CatalogPage {
+  private readonly requiredSchemaVersion = "normalized_v3.0";
   readonly stockStates: StockState[] = ["in_stock", "last_pair", "out_of_stock", "unknown_qty"];
   readonly stockFilterOptions: Array<{ value: StockState | ""; label: string }> = [
     { value: "", label: "Estado (todos)" },
@@ -30,7 +36,7 @@ export default class CatalogPage {
   statusFilter = signal<StockState | "">("");
   hideOutOfStock = signal(false);
 
-  rows = signal<NormalizedListingDoc[]>([]);
+  rows = signal<NormalizedListingDocV3[]>([]);
   loading = signal(false);
   loadingMore = signal(false);
   error = signal<string | null>(null);
@@ -131,9 +137,18 @@ export default class CatalogPage {
 
     try {
       const { docs, nextCursor } = await this.svc.listValidated(24);
-      this.rows.set(docs);
+      const v3Docs = docs.filter((doc) => this.isRequiredSchema(doc));
+      const skipped = docs.length - v3Docs.length;
+
+      this.rows.set(v3Docs);
       this.cursor = nextCursor;
       this.hasMore.set(Boolean(nextCursor));
+
+      if (skipped > 0) {
+        this.error.set(
+          `Se omitieron ${skipped} registro(s) con esquema incompatible. Solo se admite ${this.requiredSchemaVersion}.`
+        );
+      }
     } catch (e: any) {
       this.error.set(e?.message || "Error cargando catalogo");
     } finally {
@@ -151,9 +166,18 @@ export default class CatalogPage {
     this.loadingMore.set(true);
     try {
       const { docs, nextCursor } = await this.svc.listValidated(24, this.cursor);
-      this.rows.set([...this.rows(), ...docs]);
+      const v3Docs = docs.filter((doc) => this.isRequiredSchema(doc));
+      const skipped = docs.length - v3Docs.length;
+
+      this.rows.set([...this.rows(), ...v3Docs]);
       this.cursor = nextCursor;
       this.hasMore.set(Boolean(nextCursor));
+
+      if (skipped > 0) {
+        this.error.set(
+          `Se omitieron ${skipped} registro(s) con esquema incompatible. Solo se admite ${this.requiredSchemaVersion}.`
+        );
+      }
     } catch (e: any) {
       this.error.set(e?.message || "Error cargando mas");
     } finally {
@@ -233,12 +257,12 @@ export default class CatalogPage {
     return supplier?.display_name || supplierId;
   }
 
-  getCoverImage(doc: NormalizedListingDoc): string | null {
+  getCoverImage(doc: NormalizedListingDocV3): string | null {
     const cover = doc.cover_images?.[0];
     return cover || doc.preview_image_url || null;
   }
 
-  getStockState(doc: NormalizedListingDoc): StockState {
+  getStockState(doc: NormalizedListingDocV3): StockState {
     const states = doc.listing.items.flatMap((item) => {
       const colorStates = (item.color_stock || []).map((entry) => this.normalizeStockState(entry.stock_state));
       return [this.normalizeStockState(item.stock_state), ...colorStates];
@@ -279,7 +303,7 @@ export default class CatalogPage {
     }
   }
 
-  getColorNames(doc: NormalizedListingDoc): string[] {
+  getColorNames(doc: NormalizedListingDocV3): string[] {
     const fromGlobal = (doc.product_colors || []).map((c) => (c.name || "").trim()).filter(Boolean);
     if (fromGlobal.length > 0) {
       return Array.from(new Set(fromGlobal));
@@ -288,7 +312,7 @@ export default class CatalogPage {
     const fromItems = doc.listing.items
       .flatMap((item) => {
         const fromColorStock = (item.color_stock || []).map((entry) => entry.color_name);
-        return [...fromColorStock, ...(item.color_names || []), ...(item.colors || [])];
+        return fromColorStock;
       })
       .map((name) => (name || "").trim())
       .filter(Boolean);
@@ -319,8 +343,8 @@ export default class CatalogPage {
     this.busyById.update((current) => ({ ...current, [normalizedId]: value }));
   }
 
-  private toItemOutOfStock(item: NormalizedItem): NormalizedItem {
-    const next: NormalizedItem = {
+  private toItemOutOfStock(item: NormalizedItemV3): NormalizedItemV3 {
+    const next: NormalizedItemV3 = {
       ...item,
       stock_state: "out_of_stock",
     };
@@ -333,16 +357,17 @@ export default class CatalogPage {
     return next;
   }
 
-  private getItemColors(item: NormalizedItem): string[] {
-    const list = [
-      ...(item.color_stock || []).map((entry) => entry.color_name),
-      ...(item.color_names || []),
-      ...(item.colors || []),
-    ]
+  private getItemColors(item: NormalizedItemV3): string[] {
+    const list = (item.color_stock || [])
+      .map((entry) => entry.color_name)
       .map((name) => (name || "").trim())
       .filter(Boolean);
 
     return Array.from(new Set(list));
+  }
+
+  private isRequiredSchema(doc: unknown): doc is NormalizedListingDocV3 {
+    return isNormalizedListingDocV3(doc) && doc.schema_version === this.requiredSchemaVersion;
   }
 
   private normalizeStockState(value: unknown): StockState | null {

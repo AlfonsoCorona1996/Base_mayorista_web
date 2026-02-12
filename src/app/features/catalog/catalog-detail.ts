@@ -3,7 +3,12 @@ import { FormsModule } from "@angular/forms";
 import { ActivatedRoute, Router } from "@angular/router";
 import { NormalizedListingsService } from "../../core/normalized-listings.service";
 import { SuppliersService } from "../../core/suppliers.service";
-import type { NormalizedItem, NormalizedListingDoc, StockState } from "../../core/firestore-contracts";
+import type {
+  NormalizedItemV3,
+  NormalizedListingDocV3,
+  StockState,
+} from "../../core/firestore-contracts";
+import { isNormalizedListingDocV3 } from "../../core/firestore-contracts";
 
 @Component({
   standalone: true,
@@ -13,6 +18,7 @@ import type { NormalizedItem, NormalizedListingDoc, StockState } from "../../cor
   styleUrl: "./catalog-detail.css",
 })
 export default class CatalogDetailPage {
+  private readonly requiredSchemaVersion = "normalized_v3.0";
   readonly stockStates: Array<{ value: StockState; label: string }> = [
     { value: "in_stock", label: "Disponible" },
     { value: "last_pair", label: "Ultima pieza" },
@@ -27,7 +33,7 @@ export default class CatalogDetailPage {
   error = signal<string | null>(null);
   saveMessage = signal<string | null>(null);
 
-  doc = signal<NormalizedListingDoc | null>(null);
+  doc = signal<NormalizedListingDocV3 | null>(null);
 
   private svc = inject(NormalizedListingsService);
   private suppliers = inject(SuppliersService);
@@ -83,17 +89,14 @@ export default class CatalogDetailPage {
     }
   }
 
-  variantLabel(item: NormalizedItem, index: number): string {
+  variantLabel(item: NormalizedItemV3, index: number): string {
     const name = (item.variant_name || "").trim();
     return name || `Variante ${index + 1}`;
   }
 
-  getVariantColors(item: NormalizedItem): string[] {
-    const names = [
-      ...(item.color_stock || []).map((entry) => entry.color_name),
-      ...(item.color_names || []),
-      ...(item.colors || []),
-    ]
+  getVariantColors(item: NormalizedItemV3): string[] {
+    const names = (item.color_stock || [])
+      .map((entry) => entry.color_name)
       .map((name) => (name || "").trim())
       .filter(Boolean);
 
@@ -150,7 +153,7 @@ export default class CatalogDetailPage {
     if (!d) return;
 
     d.listing.items = d.listing.items.map((item) => {
-      const next: NormalizedItem = {
+      const next: NormalizedItemV3 = {
         ...item,
         stock_state: "out_of_stock",
       };
@@ -171,7 +174,7 @@ export default class CatalogDetailPage {
     if (!d) return;
 
     d.listing.items = d.listing.items.map((item) => {
-      const next: NormalizedItem = {
+      const next: NormalizedItemV3 = {
         ...item,
         stock_state: "in_stock",
       };
@@ -217,7 +220,11 @@ export default class CatalogDetailPage {
 
     try {
       const loaded = await this.svc.getById(this.id);
-      const clone = structuredClone(loaded) as NormalizedListingDoc;
+      if (!this.isRequiredSchema(loaded)) {
+        throw new Error(`Esquema no soportado. Se requiere ${this.requiredSchemaVersion}.`);
+      }
+
+      const clone = structuredClone(loaded) as NormalizedListingDocV3;
       clone.listing.items.forEach((item) => this.ensureColorStock(item));
       this.doc.set(clone);
     } catch (e: any) {
@@ -227,7 +234,7 @@ export default class CatalogDetailPage {
     }
   }
 
-  private ensureColorStock(item: NormalizedItem) {
+  private ensureColorStock(item: NormalizedItemV3) {
     const colors = this.getVariantColors(item);
     const fallbackState = this.normalizeStockState(item.stock_state) || "unknown_qty";
     const map = new Map<string, StockState>();
@@ -247,7 +254,7 @@ export default class CatalogDetailPage {
     item.color_stock = Array.from(map.entries()).map(([color_name, stock_state]) => ({ color_name, stock_state }));
   }
 
-  private syncVariantStateFromColors(item: NormalizedItem) {
+  private syncVariantStateFromColors(item: NormalizedItemV3) {
     const states = (item.color_stock || [])
       .map((entry) => this.normalizeStockState(entry.stock_state))
       .filter((state): state is StockState => Boolean(state));
@@ -272,5 +279,9 @@ export default class CatalogDetailPage {
     if (typeof value !== "string") return null;
     const valid: StockState[] = ["in_stock", "last_pair", "out_of_stock", "unknown_qty"];
     return valid.includes(value as StockState) ? (value as StockState) : null;
+  }
+
+  private isRequiredSchema(doc: unknown): doc is NormalizedListingDocV3 {
+    return isNormalizedListingDocV3(doc) && doc.schema_version === this.requiredSchemaVersion;
   }
 }

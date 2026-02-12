@@ -66,6 +66,13 @@ export interface VariantColorStock {
   stock_state: StockState;
 }
 
+export interface ItemPricesV3 {
+  precio_costo: number | null;
+  precio_clienta: number | null;
+  precio_final: number | null;
+  currency: string;
+}
+
 /**
  * ProductColor - Color global del producto (Schema v1.1)
  * Un color se define una vez y se referencia en múltiples variantes
@@ -100,6 +107,17 @@ export interface NormalizedItem {
   image_url?: string | null;
 }
 
+export interface NormalizedItemV3 {
+  variant_id: string;
+  variant_name: string | null;
+  sku: string | null;
+  stock_state: StockState;
+  notes: string | null;
+  color_stock: VariantColorStock[];
+  prices: ItemPricesV3;
+  image_url?: string | null; // legacy-compatible para UI existente
+}
+
 export interface PriceTierGlobal {
   discount_percent: number | null;
   notes: string | null;
@@ -111,6 +129,12 @@ export interface NormalizedListing {
   category_hint: string | null;
   price_tiers_global: PriceTierGlobal[];
   items: NormalizedItem[];
+}
+
+export interface NormalizedListingV3 {
+  title: string | null;
+  category_hint: string | null;
+  items: NormalizedItemV3[];
 }
 
 export type WorkflowStatus = "needs_review" | "validated" | "rejected";
@@ -133,7 +157,7 @@ export interface Review {
 }
 
 export interface NormalizedListingDoc {
-  schema_version: "normalized_v1" | "normalized_v1.1";
+  schema_version: "normalized_v1" | "normalized_v1.1" | "normalized_v3.0";
   normalized_id: string;
   raw_post_id: string;
   supplier_id: string | null;
@@ -149,6 +173,21 @@ export interface NormalizedListingDoc {
   updated_at: any; // Firestore Timestamp
   
   listing: NormalizedListing;
+  workflow: Workflow;
+  review: Review;
+}
+
+export interface NormalizedListingDocV3 {
+  schema_version: "normalized_v3.0";
+  normalized_id: string;
+  raw_post_id: string;
+  supplier_id: string | null;
+  cover_images: string[];
+  product_colors: ProductColor[];
+  preview_image_url?: string | null; // legacy-compatible
+  created_at: any;
+  updated_at: any;
+  listing: NormalizedListingV3;
   workflow: Workflow;
   review: Review;
 }
@@ -172,7 +211,20 @@ export interface ReviewPatch {
   edited_by?: string | null;
 }
 
-export type PartialNormalizedUpdate = Partial<Pick<
-  NormalizedListingDoc,
-  "supplier_id" | "preview_image_url" | "cover_images" | "product_colors" | "listing"
->>;
+export interface PartialNormalizedUpdate {
+  supplier_id?: string | null;
+  preview_image_url?: string | null;
+  cover_images?: string[];
+  product_colors?: ProductColor[];
+  listing?: NormalizedListing | NormalizedListingV3;
+}
+
+export function isNormalizedListingDocV3(value: unknown): value is NormalizedListingDocV3 {
+  if (!value || typeof value !== "object") return false;
+  const doc = value as Record<string, any>;
+  if (doc["schema_version"] !== "normalized_v3.0") return false;
+  if (!doc["listing"] || typeof doc["listing"] !== "object") return false;
+  const listing = doc["listing"] as Record<string, unknown>;
+  if (!Array.isArray(listing["items"])) return false;
+  return true;
+}
