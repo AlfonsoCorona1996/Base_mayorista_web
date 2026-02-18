@@ -1,9 +1,11 @@
-﻿<div class="main-layout" [class.menu-open]="menuOpen()">
+<div class="main-layout" [class.menu-open]="menuOpen()">
   <aside class="sidebar" [class.open]="menuOpen()">
-    <div class="brand">
-      <p class="brand-kicker">Base Mayorista</p>
-      <h1 class="brand-title">Panel</h1>
-      <p class="brand-user">{{ access.displayName() }}</p>
+    <div class="profile-card">
+      <div class="profile-avatar" aria-hidden="true">{{ userInitials() }}</div>
+      <div class="profile-meta">
+        <p class="profile-name">{{ access.displayName() }}</p>
+        <p class="profile-role">{{ roleLabel() }}</p>
+      </div>
     </div>
 
     <nav class="menu">
@@ -11,23 +13,15 @@
         <button
           type="button"
           class="menu-section-header"
-          (click)="toggleGroup('operacion')"
-          [attr.aria-expanded]="isGroupOpen('operacion')"
-          aria-controls="menu-operacion"
+          (click)="toggleGroup('operaciones')"
+          [attr.aria-expanded]="isGroupOpen('operaciones')"
+          aria-controls="menu-operaciones"
         >
-          <span class="menu-section-title">
-            <span class="menu-section-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                <circle cx="12" cy="12" r="3"></circle>
-                <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.02.02a2 2 0 1 1-2.83 2.83l-.02-.02a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.04 1.56V21a2 2 0 1 1-4 0v-.03a1.7 1.7 0 0 0-1.04-1.56 1.7 1.7 0 0 0-1.87.34l-.02.02a2 2 0 1 1-2.83-2.83l.02-.02A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.04H3a2 2 0 1 1 0-4h.03A1.7 1.7 0 0 0 4.6 8.92a1.7 1.7 0 0 0-.34-1.87l-.02-.02a2 2 0 1 1 2.83-2.83l.02.02a1.7 1.7 0 0 0 1.87.34H9A1.7 1.7 0 0 0 10.04 3V3a2 2 0 1 1 4 0v.03A1.7 1.7 0 0 0 15.08 4.6h.01a1.7 1.7 0 0 0 1.87-.34l.02-.02a2 2 0 1 1 2.83 2.83l-.02.02a1.7 1.7 0 0 0-.34 1.87V9c.22.64.83 1.06 1.5 1.04H21a2 2 0 1 1 0 4h-.03A1.7 1.7 0 0 0 19.4 15z"></path>
-              </svg>
-            </span>
-            Operacion
-          </span>
-          <span class="menu-section-chevron">{{ isGroupOpen('operacion') ? '–' : '+' }}</span>
+          <span class="menu-section-title">Operaciones</span>
+          <span class="menu-section-chevron">{{ isGroupOpen('operaciones') ? '-' : '+' }}</span>
         </button>
-        @if (isGroupOpen('operacion')) {
-          <div class="menu-subnav" id="menu-operacion">
+        @if (isGroupOpen('operaciones')) {
+          <div class="menu-subnav" id="menu-operaciones">
             @if (can('dashboard')) {
               <a
                 routerLink="/main/dashboard"
@@ -35,15 +29,104 @@
                 [routerLinkActiveOptions]="{ exact: true }"
                 (click)="closeMenu()"
               >
-                Dashboard
+                <span class="menu-item-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="7" height="9"></rect>
+                    <rect x="14" y="3" width="7" height="5"></rect>
+                    <rect x="14" y="12" width="7" height="9"></rect>
+                    <rect x="3" y="16" width="7" height="5"></rect>
+                  </svg>
+                </span>
+                <span>Dashboard</span>
               </a>
-            }
-            @if (can('validacion')) {
-              <a routerLink="/main/validacion" routerLinkActive="active" (click)="closeMenu()">Validacion</a>
             }
             @if (can('pedidos')) {
               <a routerLink="/main/pedidos" routerLinkActive="active" (click)="closeMenu()">
-                <span class="menu-link-text">Pedidos</span>
+                <span class="menu-item-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 7h18"></path>
+                    <path d="M3 12h18"></path>
+                    <path d="M3 17h12"></path>
+                  </svg>
+                </span>
+                <span>Pedidos</span>
+              </a>
+            }
+            @if (can('validacion')) {
+              <a routerLink="/main/validacion" routerLinkActive="active" (click)="closeMenu()">
+                <span class="menu-item-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="m20 6-11 11-5-5"></path>
+                  </svg>
+                </span>
+                <span>Validacion</span>
+              </a>
+            }
+            @if (can('clientas')) {
+              <a routerLink="/main/clientas" routerLinkActive="active" (click)="closeMenu()">
+                <span class="menu-item-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="9" cy="7" r="4"></circle>
+                    <path d="M20 8v6"></path>
+                    <path d="M23 11h-6"></path>
+                  </svg>
+                </span>
+                <span>Clientes</span>
+              </a>
+            }
+          </div>
+        }
+      </div>
+
+      <div class="menu-section">
+        <button
+          type="button"
+          class="menu-section-header"
+          (click)="toggleGroup('logistica')"
+          [attr.aria-expanded]="isGroupOpen('logistica')"
+          aria-controls="menu-logistica"
+        >
+          <span class="menu-section-title">Red de Distribucion</span>
+          <span class="menu-section-chevron">{{ isGroupOpen('logistica') ? '-' : '+' }}</span>
+        </button>
+        @if (isGroupOpen('logistica')) {
+          <div class="menu-subnav" id="menu-logistica">
+            @if (can('inventario')) {
+              <a routerLink="/main/inventario" routerLinkActive="active" (click)="closeMenu()">
+                <span class="menu-item-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 7.5 12 3l9 4.5-9 4.5L3 7.5z"></path>
+                    <path d="M3 12l9 4.5L21 12"></path>
+                    <path d="M3 16.5 12 21l9-4.5"></path>
+                  </svg>
+                </span>
+                <span>Inventario</span>
+              </a>
+            }
+            @if (can('rutas')) {
+              <a routerLink="/main/rutas" routerLinkActive="active" (click)="closeMenu()">
+                <span class="menu-item-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 20h18"></path>
+                    <circle cx="7" cy="20" r="1"></circle>
+                    <circle cx="17" cy="20" r="1"></circle>
+                    <path d="M5 20V8h8"></path>
+                    <path d="M13 8h6l2 5h-8z"></path>
+                  </svg>
+                </span>
+                <span>Rutas</span>
+              </a>
+            }
+            @if (can('localidades')) {
+              <a routerLink="/main/localidades" routerLinkActive="active" (click)="closeMenu()">
+                <span class="menu-item-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 21s7-5.5 7-11a7 7 0 1 0-14 0c0 5.5 7 11 7 11z"></path>
+                    <circle cx="12" cy="10" r="2.5"></circle>
+                  </svg>
+                </span>
+                <span>Localidades</span>
               </a>
             }
           </div>
@@ -58,73 +141,46 @@
           [attr.aria-expanded]="isGroupOpen('catalogo')"
           aria-controls="menu-catalogo"
         >
-          <span class="menu-section-title">
-            <span class="menu-section-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                <path d="M3 7.5 12 3l9 4.5-9 4.5L3 7.5z"></path>
-                <path d="M3 12l9 4.5L21 12"></path>
-                <path d="M3 16.5 12 21l9-4.5"></path>
-              </svg>
-            </span>
-            Catalogo
-          </span>
-          <span class="menu-section-chevron">{{ isGroupOpen('catalogo') ? '–' : '+' }}</span>
+          <span class="menu-section-title">Catalogo</span>
+          <span class="menu-section-chevron">{{ isGroupOpen('catalogo') ? '-' : '+' }}</span>
         </button>
         @if (isGroupOpen('catalogo')) {
           <div class="menu-subnav" id="menu-catalogo">
             @if (can('catalogo')) {
-              <a routerLink="/main/catalogo" routerLinkActive="active" (click)="closeMenu()">Catalogo</a>
-            }
-            @if (can('edicion_productos')) {
-              <a routerLink="/main/edicion-productos" routerLinkActive="active" (click)="closeMenu()">
-                <span class="menu-link-text">Edicion productos</span>
-                <span class="menu-badge">En construccion</span>
+              <a routerLink="/main/catalogo" routerLinkActive="active" (click)="closeMenu()">
+                <span class="menu-item-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5V4.5A2.5 2.5 0 0 1 6.5 2z"></path>
+                  </svg>
+                </span>
+                <span>Productos</span>
               </a>
             }
             @if (can('categorias')) {
-              <a routerLink="/main/categorias" routerLinkActive="active" (click)="closeMenu()">Categorias</a>
+              <a routerLink="/main/categorias" routerLinkActive="active" (click)="closeMenu()">
+                <span class="menu-item-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 12h18"></path>
+                    <path d="M3 6h18"></path>
+                    <path d="M3 18h18"></path>
+                  </svg>
+                </span>
+                <span>Categorias</span>
+              </a>
             }
             @if (can('proveedores')) {
-              <a routerLink="/main/proveedores" routerLinkActive="active" (click)="closeMenu()">Proveedores</a>
-            }
-            @if (can('inventario')) {
-              <a routerLink="/main/inventario" routerLinkActive="active" (click)="closeMenu()">Inventario</a>
-            }
-          </div>
-        }
-      </div>
-
-      <div class="menu-section">
-        <button
-          type="button"
-          class="menu-section-header"
-          (click)="toggleGroup('clientes')"
-          [attr.aria-expanded]="isGroupOpen('clientes')"
-          aria-controls="menu-clientes"
-        >
-          <span class="menu-section-title">
-            <span class="menu-section-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                <circle cx="8.5" cy="7" r="3.5"></circle>
-                <path d="M20 8v6"></path>
-                <path d="M23 11h-6"></path>
-              </svg>
-            </span>
-            Clientas
-          </span>
-          <span class="menu-section-chevron">{{ isGroupOpen('clientes') ? '–' : '+' }}</span>
-        </button>
-        @if (isGroupOpen('clientes')) {
-          <div class="menu-subnav" id="menu-clientes">
-            @if (can('clientas')) {
-              <a routerLink="/main/clientas" routerLinkActive="active" (click)="closeMenu()">Clientas</a>
-            }
-            @if (can('rutas')) {
-              <a routerLink="/main/rutas" routerLinkActive="active" (click)="closeMenu()">Rutas</a>
-            }
-            @if (can('localidades')) {
-              <a routerLink="/main/localidades" routerLinkActive="active" (click)="closeMenu()">Localidades</a>
+              <a routerLink="/main/proveedores" routerLinkActive="active" (click)="closeMenu()">
+                <span class="menu-item-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M20 7h-9"></path>
+                    <path d="M14 17H5"></path>
+                    <circle cx="17" cy="17" r="3"></circle>
+                    <circle cx="7" cy="7" r="3"></circle>
+                  </svg>
+                </span>
+                <span>Proveedores</span>
+              </a>
             }
           </div>
         }
@@ -135,33 +191,44 @@
           <button
             type="button"
             class="menu-section-header"
-            (click)="toggleGroup('seguridad')"
-            [attr.aria-expanded]="isGroupOpen('seguridad')"
-            aria-controls="menu-seguridad"
+            (click)="toggleGroup('configuracion')"
+            [attr.aria-expanded]="isGroupOpen('configuracion')"
+            aria-controls="menu-configuracion"
           >
-            <span class="menu-section-title">
-              <span class="menu-section-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                  <rect x="3" y="11" width="18" height="10" rx="2"></rect>
-                  <path d="M7 11V8a5 5 0 1 1 10 0v3"></path>
-                </svg>
-              </span>
-              Seguridad
-            </span>
-            <span class="menu-section-chevron">{{ isGroupOpen('seguridad') ? '–' : '+' }}</span>
+            <span class="menu-section-title">Configuracion</span>
+            <span class="menu-section-chevron">{{ isGroupOpen('configuracion') ? '-' : '+' }}</span>
           </button>
-          @if (isGroupOpen('seguridad')) {
-            <div class="menu-subnav" id="menu-seguridad">
-              <a routerLink="/main/usuarios" routerLinkActive="active" (click)="closeMenu()">Usuarios</a>
+          @if (isGroupOpen('configuracion')) {
+            <div class="menu-subnav" id="menu-configuracion">
+              <a routerLink="/main/usuarios" routerLinkActive="active" (click)="closeMenu()">
+                <span class="menu-item-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="8.5" cy="7" r="3.5"></circle>
+                    <path d="M20 8v6"></path>
+                    <path d="M23 11h-6"></path>
+                  </svg>
+                </span>
+                <span>Usuarios</span>
+              </a>
             </div>
           }
         </div>
       }
     </nav>
 
-    <button type="button" class="btn-logout" (click)="logout()">
-      Cerrar sesion
-    </button>
+    <div class="sidebar-footer">
+      <button type="button" class="menu-footer-action" (click)="logout()">
+        <span class="menu-item-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+            <path d="m16 17 5-5-5-5"></path>
+            <path d="M21 12H9"></path>
+          </svg>
+        </span>
+        <span>Cerrar sesion</span>
+      </button>
+    </div>
   </aside>
 
   <div class="content-wrapper">
@@ -186,4 +253,3 @@
     (click)="closeMenu()"
   ></button>
 }
-

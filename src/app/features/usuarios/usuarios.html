@@ -93,31 +93,22 @@
                   <thead>
                     <tr>
                       <th>Seccion</th>
-                      @for (role of roleColumns; track role) {
-                        <th>{{ roleLabel(role) }}</th>
-                      }
-                      <th>Usuario</th>
+                      <th>Permitir</th>
                     </tr>
                   </thead>
                   <tbody>
                     @for (item of currentPermissionItems(); track item.key) {
                       <tr>
                         <td class="matrix-section">{{ item.label }}</td>
-                        @for (role of roleColumns; track role) {
-                          <td>
-                            <span class="matrix-dot" [class.on]="rolePresetEnabled(role, item.key)">
-                              {{ rolePresetEnabled(role, item.key) ? "Si" : "No" }}
-                            </span>
-                          </td>
-                        }
                         <td>
-                          <label class="matrix-check">
+                          <label class="matrix-check matrix-check-editable">
                             <input
                               type="checkbox"
                               [checked]="draftPermissions[item.key]"
                               [disabled]="!canEditPermissions()"
                               (change)="togglePermission(item.key, $any($event.target).checked)"
                             />
+                            <span>{{ draftPermissions[item.key] ? "Si" : "No" }}</span>
                           </label>
                         </td>
                       </tr>

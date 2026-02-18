@@ -1,5 +1,8 @@
 export const environment = {
   production: false,
+  // URL base del backend que expone /admin/users/*
+  // Ejemplo: "https://api.tudominio.com"
+  adminApiBaseUrl: "",
   firebase:{
       apiKey: "AIzaSyBZhmiBbnywXaTW32VTaZFPPPzGNLJCXDo",
       authDomain: "base-mayorista.firebaseapp.com",
