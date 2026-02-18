@@ -1,0 +1,791 @@
+@if (order(); as current) {
+  <section class="page">
+    <header class="page-head">
+      <div>
+        <button class="link-back" type="button" (click)="backToList()">← Volver</button>
+        <p class="eyebrow">Pedido {{ current.order_id }}</p>
+        <h1>{{ customerName(current) }}</h1>
+        <p class="muted">{{ routeName(current) }}</p>
+      </div>
+      <div class="status-actions">
+        <span class="chip" [class]="statusClass(current.status)">{{ statusLabel(current.status) }}</span>
+        @if (phaseAction(current); as phase) {
+          <button
+            type="button"
+            class="btn primary"
+            [disabled]="phase.actionId === 'confirm_items' && current.items.length === 0"
+            (click)="openActionModal(current)"
+          >
+            {{ phase.label }}
+          </button>
+        }
+      </div>
+    </header>
+
+    @if (requiresPlannedPackages(current)) {
+      <div class="sticky-banner">
+        <div>
+          <p class="eyebrow">Define paquetes planificados</p>
+          <p class="muted">Necesitamos la cantidad esperada para habilitar acciones de logística.</p>
+        </div>
+        <button type="button" class="btn primary" (click)="openPlannedPackages()">Definir paquetes</button>
+      </div>
+    }
+
+    <section class="summary">
+      <div>
+        <p class="eyebrow">Items</p>
+        <strong>{{ current.items.length }}</strong>
+      </div>
+      <div>
+        <p class="eyebrow">Paquetes</p>
+        <strong>{{ current.packages.length }}</strong>
+      </div>
+      <div>
+        <p class="eyebrow">Planificados</p>
+        <strong>{{ plannedPackages(current) ?? "-" }}</strong>
+      </div>
+      <div>
+        <p class="eyebrow">Estado</p>
+        <strong>{{ statusLabel(current.status) }}</strong>
+      </div>
+      <div>
+        <p class="eyebrow">Actualizado</p>
+        <strong>{{ current.updated_at | date: "short" }}</strong>
+      </div>
+      <div>
+        <p class="eyebrow">Total público</p>
+        <strong>{{ formatCurrency(totals().totalPublic) }}</strong>
+      </div>
+      <div>
+        <p class="eyebrow">Costo proveedor</p>
+        <strong>{{ formatCurrency(totals().totalCost) }}</strong>
+      </div>
+      <div>
+        <p class="eyebrow">Margen bruto</p>
+        <strong>{{ formatCurrency(totals().margin) }}</strong>
+      </div>
+    </section>
+
+    <section class="panel" #incidentsSection>
+      <div class="panel-head">
+        <h2>Incidencias</h2>
+        <div class="panel-actions">
+          <button type="button" class="btn ghost" (click)="openIncidentModal()">Nueva incidencia</button>
+          <button type="button" class="btn link" (click)="toggleResolved()">
+            {{ showResolvedIncidents() ? "Ocultar" : "Ver" }} resueltas ({{ resolvedIncidents().length }})
+          </button>
+        </div>
+      </div>
+      <div class="incidents">
+        @if (openIncidents().length === 0) {
+          <p class="muted">Sin incidencias abiertas.</p>
+        }
+        @for (inc of openIncidents(); track inc.id) {
+          <article class="incident-card" [class.high]="inc.severity === 'high'">
+            <div>
+              <p class="eyebrow">{{ inc.title }} · {{ inc.type }} · {{ inc.severity }}</p>
+              <p>{{ inc.reason }}</p>
+              @if (inc.assigneeId) {
+                <p class="muted">Asignado a {{ inc.assigneeId }}</p>
+              }
+              <p class="muted">Creada {{ inc.createdAt | date: "short" }} · {{ inc.createdBy }}</p>
+              @if ((inc.evidenceUrls?.length || 0) > 0) {
+                <div class="evidence">
+                  @for (url of inc.evidenceUrls || []; track url) {
+                    <a [href]="url" target="_blank" rel="noreferrer">Evidencia</a>
+                  }
+                </div>
+              }
+            </div>
+            <div class="incident-actions">
+              <button type="button" class="btn ghost" (click)="openResolveModal(inc)">Resolver</button>
+              <button type="button" class="btn ghost" (click)="openAssignModal(inc)">Asignar</button>
+              <label class="btn ghost file-btn">
+                <input type="file" accept="image/*" (change)="attachEvidence(inc, $event)" />
+                {{ uploadingEvidence()[inc.id] ? "Subiendo..." : "Adjuntar foto" }}
+              </label>
+              <button type="button" class="btn link" (click)="scrollToTimeline()">Ver en timeline</button>
+            </div>
+          </article>
+        }
+      </div>
+
+      @if (showResolvedIncidents() && resolvedIncidents().length > 0) {
+        <div class="incidents resolved">
+          @for (inc of resolvedIncidents(); track inc.id) {
+            <article class="incident-card resolved">
+              <div>
+                <p class="eyebrow">{{ inc.title }} · {{ inc.type }}</p>
+                <p class="muted">Resuelta {{ inc.resolvedAt | date: "short" }} · {{ inc.resolvedBy }}</p>
+                @if (inc.resolutionNote) {
+                  <p class="muted">{{ inc.resolutionNote }}</p>
+                }
+              </div>
+            </article>
+          }
+        </div>
+      }
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Productos</h2>
+        <div class="panel-actions">
+          <button type="button" class="btn primary" (click)="openAddItemModal()" [disabled]="!canEditItems(current)">
+            Agregar producto
+          </button>
+          <p class="muted">Escanea o cambia el estado por item.</p>
+        </div>
+      </div>
+      <div class="items order-item-grid">
+        @for (item of current.items; track item.item_id) {
+          <article class="order-item-card">
+            <div class="pic">
+              <img [src]="item.image_url || 'https://via.placeholder.com/240x200?text=Prod'" [alt]="item.title" />
+            </div>
+
+            <div class="info">
+              <div class="top">
+                <div class="title">
+                  <h4>{{ item.title }}</h4>
+                  <p class="meta">Talla: {{ item.variant || "Sin talla" }} | Color: {{ item.color || "Sin color" }}</p>
+                </div>
+              </div>
+
+              <div class="chips">
+                <span class="chip">Piezas: {{ item.quantity }}</span>
+                <span
+                  class="chip chip--soft"
+                  [class.chip--catalog]="item.source === 'catalogo'"
+                  [class.chip--inventory]="item.source === 'inventario'"
+                >
+                  {{ item.source === "catalogo" ? "Catalogo" : "Inventario" }}
+                </span>
+              </div>
+
+              <div class="actions">
+                <div class="price">
+                  <span class="label">Precio</span>
+                  <span class="value">{{ formatCurrency(item.price_public ?? null) || itemPriceLabel(item) }}</span>
+                </div>
+                @if (allowedCapabilities(current, userRole()).canConfirmItems) {
+                  <button type="button" class="btn ghost" (click)="confirmItem(current, item)">Confirmar existencias</button>
+                }
+                @if (allowedCapabilities(current, userRole()).canRegisterReception) {
+                  <button type="button" class="btn ghost" (click)="receiveItem(current, item)">Registrar recepcion/QA</button>
+                }
+                @if (allowedCapabilities(current, userRole()).canPack) {
+                  <button type="button" class="btn ghost" (click)="markPacked(current, item)">Empacar</button>
+                }
+                <button
+                  type="button"
+                  class="btn btn--danger"
+                  (click)="removeItem(current, item)"
+                  [disabled]="!canEditItems(current)"
+                >
+                  Quitar
+                </button>
+              </div>
+            </div>
+          </article>
+        }
+        @if (current.items.length === 0) {
+          <p class="muted">Aún no hay productos en este pedido.</p>
+        }
+      </div>
+    </section>
+
+    @if (allowedCapabilities(current, userRole()).canCreatePackages) {
+      <section class="panel" #packagesSection>
+        <div class="panel-head">
+          <h2>Paquetes</h2>
+          <div class="panel-actions">
+            <button
+              type="button"
+              class="btn primary"
+              [disabled]="requiresPlannedPackages(current)"
+              [attr.title]="requiresPlannedPackages(current) ? 'Define paquetes planificados para continuar' : null"
+              (click)="createPackage(current)"
+            >
+              Crear paquete
+            </button>
+            @if (requiresPlannedPackages(current)) {
+              <span class="muted small">Define paquetes planificados</span>
+            }
+          </div>
+        </div>
+
+        <div class="packages">
+          @for (pkg of current.packages; track pkg.package_id) {
+            <article class="package">
+              <div class="package-top">
+                <div>
+                  <p class="eyebrow">{{ packageDisplayLabel(current, pkg) }}</p>
+                  <p class="muted">{{ pkg.item_ids.length }} items · {{ pkg.state }}</p>
+                </div>
+                <span class="chip">{{ qrPlaceholder(current, pkg) }}</span>
+              </div>
+              @if (debugMode()) {
+                <div class="qr-block">
+                  <p class="muted">QR data</p>
+                  <code>{{ packageCode(current, pkg) }}</code>
+                </div>
+              }
+              @if (allowedCapabilities(current, userRole()).canPrintLabels) {
+                <button type="button" class="btn ghost" (click)="printLabel(current, pkg)">Imprimir etiqueta</button>
+              }
+              @if (allowedCapabilities(current, userRole()).canDeliverByPackage) {
+                <button type="button" class="btn primary" (click)="deliverPackage(current, pkg)">Registrar entrega</button>
+              }
+              @if (allowedCapabilities(current, userRole()).canAssignItemsToPackages) {
+                <button type="button" class="btn ghost" (click)="closePackage(current, pkg)">Cerrar paquete</button>
+              }
+            </article>
+          }
+
+          @if (current.packages.length === 0) {
+            <p class="muted">Sin paquetes todavía. Genera uno al terminar de empacar.</p>
+          }
+        </div>
+
+        @if (allowedCapabilities(current, userRole()).canAssignItemsToPackages && current.packages.length > 0) {
+          <div class="assignment">
+            <div class="panel-actions">
+              <select class="input" [(ngModel)]="selectedPackageId">
+                <option [ngValue]="null">Selecciona un paquete</option>
+                @for (pkg of current.packages; track pkg.package_id) {
+                  <option [ngValue]="pkg.package_id">{{ packageDisplayLabel(current, pkg) }}</option>
+                }
+              </select>
+              <button type="button" class="btn ghost" (click)="autoDistribute(current)">Auto-distribuir</button>
+            </div>
+            @if (selectedPackageId()) {
+              <div class="items">
+                @for (item of current.items; track item.item_id) {
+                  <label class="assign-row">
+                    <input
+                      type="checkbox"
+                      [checked]="isItemAssigned(current, selectedPackageId(), item.item_id)"
+                      (change)="toggleItemAssignment(current, selectedPackageId()!, item, $any($event.target).checked)"
+                    />
+                    <span>{{ item.title }} · {{ item.quantity }} pza</span>
+                  </label>
+                }
+              </div>
+            }
+          </div>
+        }
+      </section>
+    } @else {
+      <section class="panel locked" #packagesSection>
+        <div class="panel-head">
+          <h2>Paquetes</h2>
+        </div>
+        <p class="muted">Los paquetes se habilitan al recibir/QA o empaque.</p>
+      </section>
+    }
+
+    <section class="panel" #timelineSection>
+      <div class="panel-head">
+        <h2>Timeline</h2>
+      </div>
+      @if (events().length > 0) {
+        <ol class="timeline">
+          @for (event of events(); track event.id) {
+            <li>
+              <p class="eyebrow">{{ event.createdAt | date: "short" }} · {{ relativeTime(event.createdAt) }}</p>
+              <p>{{ event.message }}</p>
+              <p class="muted">{{ eventActor(event) }}</p>
+            </li>
+          }
+        </ol>
+        @if (eventsHasMore()) {
+          <button type="button" class="btn ghost" (click)="loadEvents()" [disabled]="eventsLoading()">
+            {{ eventsLoading() ? "Cargando..." : "Cargar mas" }}
+          </button>
+        }
+      } @else {
+        <ol class="timeline">
+          @for (event of current.timeline; track event.id) {
+            <li>
+              <p class="eyebrow">{{ event.created_at | date: "short" }} · {{ relativeTime(event.created_at) }}</p>
+              <p>{{ event.label }}</p>
+              <p class="muted">{{ eventActor(event) }}</p>
+            </li>
+          }
+        </ol>
+      }
+    </section>
+  </section>
+
+  @if (actionModalOpen() && actionContext()) {
+    <div class="sheet-backdrop" (click)="closeActionModal()">
+      <div class="sheet" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+        <div class="sheet-handle" aria-hidden="true"></div>
+        <h2>{{ actionContext()?.label }}</h2>
+        @if (actionError()) {
+          <div class="sheet-warning">
+            <p class="eyebrow">Atención</p>
+            <p>{{ actionError() }}</p>
+          </div>
+        }
+
+        @if (actionContext()?.actionId === "confirm_items") {
+          @if (current.items.length === 0) {
+            <div class="sheet-warning">
+              <p class="eyebrow">Bloqueado</p>
+              <p>No hay items en el pedido.</p>
+            </div>
+          }
+          @if (current.items.length > 0) {
+            <div class="sheet-actions">
+              <button
+                type="button"
+                class="btn primary"
+                [disabled]="!allItemsResolved(current) || actionSaving()"
+                (click)="confirmExistences(current)"
+              >
+                {{ actionSaving() ? "Guardando..." : "Confirmar existencias" }}
+              </button>
+              @if (!allItemsResolved(current)) {
+                <p class="muted small">Faltan {{ unresolvedItemsCount(current) }} items por confirmar.</p>
+              }
+            </div>
+          }
+          @for (group of groupedItemsBySupplier(current); track group.supplierId) {
+            <div class="supplier-group">
+              <p class="eyebrow">{{ group.supplierName }}</p>
+              <div class="items">
+                @for (item of group.items; track item.item_id) {
+                  <article class="item-card compact" [class.resolved]="item.confirmation_state && item.confirmation_state !== 'pending'">
+                    <div class="item-info">
+                      <p class="item-title">{{ item.title }}</p>
+                      <p class="muted">{{ item.variant || "Variante" }} · {{ item.color || "Color" }}</p>
+                    </div>
+                    <div class="item-actions">
+                      <button
+                        type="button"
+                        class="btn ghost"
+                        [class.active]="item.confirmation_state === 'confirmed'"
+                        (click)="confirmItem(current, item)"
+                        [disabled]="current.items.length === 0"
+                      >
+                        Confirmar
+                      </button>
+                      <button
+                        type="button"
+                        class="btn ghost"
+                        [class.active]="item.confirmation_state === 'out_of_stock'"
+                        (click)="markOutOfStock(current, item)"
+                        [disabled]="current.items.length === 0"
+                      >
+                        Sin stock
+                      </button>
+                      <button
+                        type="button"
+                        class="btn ghost"
+                        [class.active]="item.confirmation_state === 'substitute'"
+                        (click)="markSubstitute(current, item)"
+                        [disabled]="current.items.length === 0"
+                      >
+                        Sustituto
+                      </button>
+                    </div>
+                  </article>
+                }
+              </div>
+            </div>
+          }
+        }
+
+        @if (actionContext()?.actionId === "pack") {
+          <div class="items">
+            @for (item of current.items; track item.item_id) {
+              <article class="item-card compact">
+                <div class="item-info">
+                  <p class="item-title">{{ item.title }}</p>
+                  <p class="muted">{{ item.variant || "Variante" }} · {{ item.color || "Color" }}</p>
+                </div>
+                <div class="item-actions">
+                  <button type="button" class="btn ghost" (click)="receiveItem(current, item)">Recibido/QA</button>
+                  <button type="button" class="btn ghost" (click)="markMissing(current, item)">Faltante</button>
+                  <button type="button" class="btn ghost" (click)="markDamaged(current, item)">Dañado</button>
+                  <button type="button" class="btn ghost" (click)="markPacked(current, item)">Empacar</button>
+                </div>
+              </article>
+            }
+          </div>
+        }
+
+        @if (actionContext()?.actionId === "dispatch") {
+          <p class="muted">Revisa precondiciones para preparar salida.</p>
+          <ul class="checklist">
+            <li [class.bad]="!canDispatch(current)">Paquetes cerrados = planificados y sin items sin asignar.</li>
+          </ul>
+          <button type="button" class="btn primary" (click)="dispatchOrder(current)">Preparar salida</button>
+        }
+
+        @if (actionContext()?.actionId === "deliver") {
+          <div class="packages">
+            @for (pkg of current.packages; track pkg.package_id) {
+              <article class="package">
+                <div class="package-top">
+                  <div>
+                    <p class="eyebrow">{{ packageDisplayLabel(current, pkg) }}</p>
+                    <p class="muted">{{ pkg.item_ids.length }} items · {{ pkg.state }}</p>
+                  </div>
+                </div>
+                <button type="button" class="btn primary" (click)="deliverPackage(current, pkg)">Registrar entrega</button>
+              </article>
+            }
+          </div>
+        }
+
+        @if (actionContext()?.actionId === "register_payment") {
+          <p class="muted">Registra el pago del pedido.</p>
+          <button type="button" class="btn primary" (click)="registerPayment(current)">Registrar pago/conciliar</button>
+        }
+
+        @if (current.status === "en_ruta" && !lateChangeApproved()) {
+          <button type="button" class="btn ghost" (click)="requestLateChange(current)">Solicitar cambio tardío</button>
+        }
+
+        <button type="button" class="btn ghost" (click)="closeActionModal()">Cerrar</button>
+      </div>
+    </div>
+  }
+
+  @if (plannedModalOpen()) {
+    <div class="sheet-backdrop" (click)="closePlannedPackages()">
+      <div class="sheet" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+        <div class="sheet-handle" aria-hidden="true"></div>
+        <h2>¿Cuántos paquetes esperas?</h2>
+        <p class="muted">Define la cantidad para habilitar logística.</p>
+        <div class="sheet-field">
+          <label>Paquetes planificados</label>
+          <input type="number" min="1" class="input" [(ngModel)]="plannedPackagesInput" />
+        </div>
+        <div class="sheet-actions">
+          <button type="button" class="btn primary" (click)="savePlannedPackages()">Guardar</button>
+          <button type="button" class="btn ghost" (click)="closePlannedPackages()">Ahora no</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (incidentModalOpen()) {
+    <div class="sheet-backdrop" (click)="closeIncidentModal()">
+      <div class="sheet" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+        <div class="sheet-handle" aria-hidden="true"></div>
+        <h2>Nueva incidencia</h2>
+        <div class="sheet-field">
+          <label>Título</label>
+          <input class="input" type="text" [(ngModel)]="incidentTitle" />
+        </div>
+        <div class="sheet-field">
+          <label>Tipo</label>
+          <input class="input" type="text" [(ngModel)]="incidentType" />
+        </div>
+        <div class="sheet-field">
+          <label>Severidad</label>
+          <select class="input" [(ngModel)]="incidentSeverity">
+            <option value="low">Baja</option>
+            <option value="medium">Media</option>
+            <option value="high">Alta</option>
+          </select>
+        </div>
+        <div class="sheet-field">
+          <label>Asignar a</label>
+          <input class="input" type="text" [(ngModel)]="incidentAssignee" list="assigneeOptions" />
+          <datalist id="assigneeOptions">
+            @for (name of assigneeOptions(); track name) {
+              <option [value]="name"></option>
+            }
+          </datalist>
+        </div>
+        <div class="sheet-field">
+          <label>Motivo</label>
+          <textarea class="input" rows="3" [(ngModel)]="incidentReason"></textarea>
+        </div>
+        <div class="sheet-actions">
+          <button type="button" class="btn primary" [disabled]="incidentSaving()" (click)="createIncident()">Guardar</button>
+          <button type="button" class="btn ghost" (click)="closeIncidentModal()">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (resolveModalOpen()) {
+    <div class="sheet-backdrop" (click)="closeResolveModal()">
+      <div class="sheet" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+        <div class="sheet-handle" aria-hidden="true"></div>
+        <h2>Resolver incidencia</h2>
+        <div class="sheet-field">
+          <label>Nota de resolución</label>
+          <textarea class="input" rows="3" [(ngModel)]="resolveNote"></textarea>
+        </div>
+        <div class="sheet-actions">
+          <button type="button" class="btn primary" (click)="confirmResolve()">Confirmar</button>
+          <button type="button" class="btn ghost" (click)="closeResolveModal()">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (addItemModalOpen()) {
+    <div class="sheet-backdrop" (click)="closeAddItemModal()">
+      <div class="sheet full" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+        <div class="sheet-header">
+          <div class="sheet-handle" aria-hidden="true"></div>
+          <h2>Agregar producto</h2>
+          <button type="button" class="btn ghost" (click)="closeAddItemModal()">Cerrar</button>
+        </div>
+        <div class="sheet-body">
+          <div class="add-item">
+          <div class="section-row">
+            <div class="pill source-toggle">
+              <label>
+                <input type="radio" name="source" value="catalogo" [(ngModel)]="newItemSource" [disabled]="!canEditItems(current)" />
+                Catálogo
+              </label>
+              <label>
+                <input type="radio" name="source" value="inventario" [(ngModel)]="newItemSource" [disabled]="!canEditItems(current)" />
+                Inventario
+              </label>
+            </div>
+          </div>
+          <div class="product-search">
+            <div class="field">
+              <label>Buscar producto</label>
+              <input
+                class="input"
+                type="text"
+                placeholder="Nombre, variante o color"
+                [(ngModel)]="newItemSearch"
+              (focus)="showProductList.set(true)"
+              (keydown.escape)="showProductList.set(false)"
+                [disabled]="!canEditItems(current)"
+              />
+            </div>
+            @if (showProductList() && (inventorySuggestions().length > 0 || catalogSuggestions().length > 0)) {
+              <div class="listbox" role="listbox">
+                @for (s of inventorySuggestions(); track s.inventory_id) {
+                  <button type="button" class="listbox-option" (mousedown)="$event.preventDefault(); beginProductPick(); pickInventory(s)" (touchstart)="$event.preventDefault(); beginProductPick(); pickInventory(s)" (click)="beginProductPick(); pickInventory(s)">
+                    @if (s.image_urls[0]) {
+                      <img class="listbox-thumb" [src]="s.image_urls[0]" alt="" />
+                    } @else {
+                      <div class="photo-placeholder photo-placeholder-sm" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M4 7h4l2-2h4l2 2h4v12H4z"></path>
+                          <circle cx="12" cy="13" r="3"></circle>
+                        </svg>
+                      </div>
+                    }
+                    <div>
+                      <div class="card-title">{{ s.title }}</div>
+                      <div class="card-meta">{{ s.variant_name || s.size_label || "Variante" }} · {{ s.color_name || "Color" }}</div>
+                    </div>
+                    <span class="card-tag inv">Inventario · {{ s.quantity_on_hand }} pzas</span>
+                  </button>
+                }
+                @for (c of catalogSuggestions(); track c.doc.normalized_id) {
+                  <button type="button" class="listbox-option" (mousedown)="$event.preventDefault(); beginProductPick(); pickCatalog(c.doc, c.variant, c.color)" (touchstart)="$event.preventDefault(); beginProductPick(); pickCatalog(c.doc, c.variant, c.color)" (click)="beginProductPick(); pickCatalog(c.doc, c.variant, c.color)">
+                    @if (c.image) {
+                      <img class="listbox-thumb" [src]="c.image" alt="" />
+                    } @else {
+                      <div class="photo-placeholder photo-placeholder-sm" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M4 7h4l2-2h4l2 2h4v12H4z"></path>
+                          <circle cx="12" cy="13" r="3"></circle>
+                        </svg>
+                      </div>
+                    }
+                    <div>
+                      <div class="card-title">{{ c.doc.listing.title }}</div>
+                      <div class="card-meta">{{ c.doc.listing.category_hint || "Sin categoría" }}</div>
+                    </div>
+                    <span class="card-tag cat">{{ c.variant.variant_name || '—' }} · {{ c.color || 'Color' }}</span>
+                  </button>
+                }
+              </div>
+            }
+          </div>
+          @if (selectedPreview(); as preview) {
+            <div class="preview">
+              @if (preview.image) {
+                <img [src]="preview.image" alt="" />
+              } @else {
+                <div class="photo-placeholder photo-placeholder-md" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 7h4l2-2h4l2 2h4v12H4z"></path>
+                    <circle cx="12" cy="13" r="3"></circle>
+                  </svg>
+                </div>
+              }
+              <div>
+                <p class="preview-title">{{ preview.title }}</p>
+                <p class="preview-meta">{{ preview.variant }} · {{ preview.color }}</p>
+                @if (!selectedPreviewHasColorImage()) {
+                  <span class="color-chip">Color: {{ preview.color }}</span>
+                }
+                <span class="preview-tag">{{ preview.source }}</span>
+              </div>
+            </div>
+          }
+          <div class="field">
+            <label>Producto</label>
+            <input
+              class="input"
+              type="text"
+              [(ngModel)]="newItemTitle"
+              [readonly]="lockItemFields()"
+              [disabled]="!selectedPreview() || !canEditItems(current)"
+            />
+          </div>
+          @if (catalogVariantOptions().length > 0) {
+            <div class="field">
+              <label>Variante / talla</label>
+              <select
+                class="input"
+                [ngModel]="newItemVariant()"
+                (ngModelChange)="onVariantChange($event)"
+                [disabled]="!selectedPreview() || !canEditItems(current)"
+              >
+                @for (v of catalogVariantOptions(); track v) {
+                  <option [value]="v">{{ v }}</option>
+                }
+              </select>
+            </div>
+          } @else {
+            <div class="field">
+              <label>Variante / talla</label>
+              <input
+                class="input"
+                type="text"
+                [(ngModel)]="newItemVariant"
+                [readonly]="lockItemFields()"
+                [disabled]="!selectedPreview() || !canEditItems(current)"
+              />
+            </div>
+          }
+          @if (catalogColorOptions().length > 0) {
+            <div class="field">
+              <label>Color</label>
+              <select
+                class="input"
+                [ngModel]="newItemColor()"
+                (ngModelChange)="onColorChange($event)"
+                [disabled]="!selectedPreview() || !canEditItems(current)"
+              >
+                @for (c of catalogColorOptions(); track c) {
+                  <option [value]="c">{{ c }}</option>
+                }
+              </select>
+            </div>
+          } @else {
+            <div class="field">
+              <label>Color</label>
+              <input
+                class="input"
+                type="text"
+                [(ngModel)]="newItemColor"
+                [readonly]="lockItemFields()"
+                [disabled]="!selectedPreview() || !canEditItems(current)"
+              />
+            </div>
+          }
+          <div class="field">
+            <label>Cantidad</label>
+            <input
+              class="input"
+              type="number"
+              min="1"
+              [(ngModel)]="newItemQty"
+              [disabled]="!selectedPreview() || !canEditItems(current)"
+            />
+          </div>
+          <div class="field">
+            <label>Precio final</label>
+            <div class="money" [class.money-invalid]="priceRuleInvalid()">
+              <span>MXN</span>
+              <input
+                class="input"
+                type="text"
+                [value]="priceDisplayValue('final')"
+                (focus)="onPriceInputFocus('final')"
+                (input)="onPriceInputChange('final', $any($event.target).value)"
+                (blur)="onPriceInputBlur('final')"
+                [disabled]="!selectedPreview() || !canEditItems(current)"
+              />
+            </div>
+          </div>
+          <div class="field">
+            <label>Precio clienta</label>
+            <div class="money money-readonly" [class.money-invalid]="priceRuleInvalid()">
+              <span>MXN</span>
+              <input
+                class="input"
+                type="text"
+                [value]="priceDisplayValue('clienta')"
+                readonly
+                disabled
+              />
+            </div>
+          </div>
+          <div class="field">
+            <label>Precio costo</label>
+            <div class="money money-readonly">
+              <span>MXN</span>
+              <input
+                class="input"
+                type="text"
+                [value]="priceDisplayValue('costo')"
+                readonly
+                disabled
+              />
+            </div>
+          </div>
+        </div>
+        </div>
+        <div class="sheet-footer">
+          <button type="button" class="btn primary" (click)="addItem(current)" [disabled]="!selectedPreview() || !canEditItems(current)">
+            Añadir al pedido
+          </button>
+          <button type="button" class="btn danger" (click)="closeAddItemModal()">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (assignModalOpen()) {
+    <div class="sheet-backdrop" (click)="closeAssignModal()">
+      <div class="sheet" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+        <div class="sheet-handle" aria-hidden="true"></div>
+        <h2>Asignar incidencia</h2>
+        <div class="sheet-field">
+          <label>Asignar a</label>
+          <input class="input" type="text" [(ngModel)]="incidentAssignee" list="assigneeOptions" />
+          <datalist id="assigneeOptions">
+            @for (name of assigneeOptions(); track name) {
+              <option [value]="name"></option>
+            }
+          </datalist>
+        </div>
+        <div class="sheet-actions">
+          <button type="button" class="btn primary" (click)="confirmAssign()">Confirmar</button>
+          <button type="button" class="btn ghost" (click)="closeAssignModal()">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  }
+} @else {
+  <section class="page">
+    <p class="muted">No encontramos este pedido.</p>
+    <button type="button" class="btn" routerLink="/main/pedidos">Volver a la lista</button>
+  </section>
+}
+
+
+
+

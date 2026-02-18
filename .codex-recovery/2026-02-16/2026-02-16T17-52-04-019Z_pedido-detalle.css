@@ -1,0 +1,75 @@
+﻿   1: :root {
+   2:   --border: #e4e9f2;
+   3:   --muted: #5b6475;
+   4:   --card: #ffffff;
+   5:   --accent: #1e293b;
+   6:   --accent-soft: #f1f5f9;
+   7:   --accent-border: #94a3b8;
+   8:   --danger: #e45b61;
+   9:   --danger-soft: #fff4f6;
+  10:   --danger-border: #efc2c9;
+  11:   --success: #1f9d63;
+  12:   --success-soft: #e6f7ef;
+  13:   --warning: #f3a83b;
+  14:   --bg-subtle: #f7f9fd;
+  15:   --focus-ring: #94a3b8;
+  16: }
+  17: 
+  18: .page {
+1662: }
+1663: 
+1664: .chip.info {
+1665:   background: #f1f5f9;
+1666:   color: #0f437a;
+1667:   border-color: #94a3b8;
+1668: }
+1669: 
+1670: .chip.accent {
+1671:   background: #f1f5f9;
+1672:   color: #1e293b;
+1673:   border-color: #cde6ff;
+1674: }
+1675: 
+1704: .btn.link {
+1705:   background: transparent;
+1706:   border: none;
+1707:   color: var(--accent);
+1708: }
+1709: 
+1710: .btn.primary {
+1711:   background: linear-gradient(120deg, #1e293b, #334155);
+1712:   color: #fff;
+1713:   border: none;
+1714:   border-radius: 999px;
+1715: }
+1716: 
+1717: .btn.ghost {
+1718:   background: #f7f9fd;
+1719: }
+1720: 
+1721: .btn.with-icon {
+1722:   display: inline-flex;
+1723:   align-items: center;
+1724:   gap: 0.4rem;
+1725: }
+1726: 
+1727: .btn-icon {
+1728:   width: 1rem;
+1729:   text-align: center;
+1730:   font-weight: 800;
+1731: }
+1732: 
+1733: .small {
+1734:   font-size: 0.85rem;
+1735: }
+1736: 
+1737: .link-back:focus-visible,
+1738: .btn:focus-visible,
+1739: .input:focus-visible,
+1740: .qty-mini:focus-visible {
+1741:   outline: 2px solid var(--focus-ring);
+1742:   outline-offset: 2px;
+1743: }
+1744: 
+1745: .sheet-backdrop {
+

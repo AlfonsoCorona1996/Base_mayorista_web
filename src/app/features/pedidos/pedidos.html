@@ -11,7 +11,7 @@
     <div class="qc-head">
       <div>
         <p class="eyebrow">Crear pedido</p>
-        <p class="muted">Escribe para buscar clienta; ruta se autollenará.</p>
+        <p class="muted">Escribe para buscar clienta; ruta se autollenar&aacute;.</p>
       </div>
       <button type="button" class="btn primary" (click)="createOrder()" [disabled]="creating() || !canCreateOrder()">
         Crear
@@ -65,7 +65,7 @@
     </select>
   </div>
 
-  <div class="intent-tabs" role="tablist" aria-label="Filtros por intención">
+  <div class="intent-tabs" role="tablist" aria-label="Filtros por intenci&oacute;n">
     @for (intent of intentOptions; track intent.id) {
       <button
         type="button"
@@ -76,12 +76,13 @@
         [attr.aria-selected]="intentFilter() === intent.id"
       >
         {{ intent.label }}
+        <span class="intent-count" [class.zero]="intentCount(intent.id) === 0">{{ intentCount(intent.id) }}</span>
       </button>
     }
   </div>
 
   @if (loading()) {
-    <p class="muted">Cargando pedidos…</p>
+    <p class="muted">Cargando pedidos...</p>
   }
 
   @if (error()) {
@@ -90,43 +91,75 @@
 
   <div class="grid">
     @for (order of filtered(); track order.order_id) {
-      <article class="order-card" (click)="open(order.order_id)">
-        <div class="order-head">
-          <div class="order-title">
-            <p class="eyebrow">Pedido {{ order.order_id }}</p>
-            <div class="title-row">
-              <h3>{{ customerName(order.customer_id) }}</h3>
-              <span class="chip" [class]="statusClass(order.status)">{{ statusLabel(order.status) }}</span>
-              @if (hasIncompletePackages(order)) {
-                <span class="chip danger tiny">INCOMPLETO</span>
-              }
-              @if (hasPaymentPending(order)) {
-                <span class="chip warning tiny">$ pendiente</span>
-              }
-              @if (hasIncidents(order)) {
-                <span class="chip tiny warning">{{ incidentsLabel(order) }}</span>
-                @if (order.has_high_incident) {
-                  <span class="chip tiny danger">CRÍTICO</span>
+      <article
+        class="order-card"
+        role="link"
+        tabindex="0"
+        [attr.aria-label]="'Abrir pedido ' + order.order_id + ' de ' + customerName(order.customer_id)"
+        (click)="open(order.order_id)"
+        (keydown.enter)="open(order.order_id)"
+        (keydown.space)="open(order.order_id); $event.preventDefault()"
+      >
+        <div class="order-main">
+          <div class="order-head">
+            <div class="order-title">
+              <div class="title-row">
+                <h3>{{ customerName(order.customer_id) }}</h3>
+                @if (order.status !== "borrador") {
+                  <span class="chip" [class]="statusClass(order.status)">{{ statusLabel(order.status) }}</span>
                 }
+                @if (primaryAlert(order); as alert) {
+                  <span class="chip tiny" [class.danger]="alert.tone === 'danger'" [class.warning]="alert.tone === 'warning'">{{ alert.label }}</span>
+                }
+                @if (hiddenAlertsCount(order) > 0) {
+                  <span class="chip tiny muted-chip">+{{ hiddenAlertsCount(order) }} alertas</span>
+                }
+              </div>
+              <p class="eyebrow order-id">Pedido {{ order.order_id }}</p>
+              @if (order.status === "borrador") {
+                <span class="draft-chip">Borrador</span>
               }
+              <p class="muted">{{ routeName(order.route_id) }}</p>
             </div>
-            <p class="muted">{{ routeName(order.route_id) }}</p>
           </div>
-        </div>
 
-        <div class="meta">
-          <span>{{ order.items.length }} items</span>
-          <span>Paquetes {{ packagesSummary(order) }}</span>
-          <span>Actualizado {{ order.updated_at | date: "shortDate" }}</span>
-        </div>
+          <div class="meta">
+            <span class="meta-item">
+              <svg class="meta-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M6.5 8.5h11l-1 9h-9l-1-9ZM9 8.5V7a3 3 0 0 1 6 0v1.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span class="meta-value">{{ order.items.length }}</span>
+              <span class="meta-label">productos</span>
+            </span>
+            <span class="meta-item">
+              <svg class="meta-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M3 7.5 12 3l9 4.5v9L12 21 3 16.5v-9ZM3 7.5 12 12l9-4.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              @if (packagesMetaLabel(order) === "Sin paquetes") {
+                <span class="meta-label">Sin paquetes</span>
+              } @else {
+                <span class="meta-value">{{ packagesMetaLabel(order) }}</span>
+                <span class="meta-label">paquetes</span>
+              }
+            </span>
+            <span class="meta-item" [attr.title]="'Actualizado ' + (order.updated_at | date: 'medium')">
+              <svg class="meta-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.6"/>
+                <path d="M12 7.8V12l2.8 1.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span class="meta-label">Actualizado</span>
+              <span class="meta-value">{{ updatedAtRelative(order.updated_at) }}</span>
+            </span>
+          </div>
 
-        <div class="pills">
-          @for (item of order.items.slice(0, 3); track item.item_id) {
-            <span class="pill">{{ item.title }}</span>
-          }
-          @if (order.items.length > 3) {
-            <span class="pill more">+{{ order.items.length - 3 }}</span>
-          }
+          <div class="pills">
+            @for (item of order.items.slice(0, 3); track item.item_id) {
+              <span class="pill" [attr.title]="item.title">{{ item.title }}</span>
+            }
+            @if (order.items.length > 3) {
+              <span class="pill more">+{{ order.items.length - 3 }}</span>
+            }
+          </div>
         </div>
 
         <div class="actions">
@@ -134,7 +167,6 @@
             type="button"
             class="btn primary"
             [disabled]="primaryAction(order).disabled"
-            [attr.title]="primaryAction(order).disabled ? primaryAction(order).disabledReason : null"
             [attr.aria-label]="primaryAction(order).label + ' para ' + customerName(order.customer_id)"
             [attr.aria-describedby]="primaryAction(order).disabled && primaryAction(order).disabledReason ? 'cta-reason-' + order.order_id : null"
             (click)="openActionSheet(order); $event.stopPropagation();"
@@ -169,9 +201,9 @@
     <div class="sheet-backdrop" (click)="closePlannedPackages()">
       <div class="sheet" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
         <div class="sheet-handle" aria-hidden="true"></div>
-        <h2>¿Cuántos paquetes esperas?</h2>
+        <h2>&iquest;Cu&aacute;ntos paquetes esperas?</h2>
         <p class="muted">
-          {{ customerName(plannedOrder()?.customer_id || "") }} · {{ routeName(plannedOrder()?.route_id || null) }}
+          {{ customerName(plannedOrder()?.customer_id || "") }} &middot; {{ routeName(plannedOrder()?.route_id || null) }}
         </p>
         <div class="sheet-field">
           <label>Paquetes planificados</label>
@@ -191,10 +223,10 @@
         <div class="sheet-handle" aria-hidden="true"></div>
         <h2>{{ sheetAction()?.label }}</h2>
         <p class="muted">
-          {{ customerName(sheetOrder()?.customer_id || "") }} · {{ routeName(sheetOrder()?.route_id || null) }}
+          {{ customerName(sheetOrder()?.customer_id || "") }} &middot; {{ routeName(sheetOrder()?.route_id || null) }}
         </p>
         <div class="sheet-summary">
-          <span>{{ sheetOrder()?.items?.length ?? 0 }} items</span>
+          <span>{{ sheetOrder()?.items?.length ?? 0 }} productos</span>
           <span>Paquetes {{ packagesSummarySafe(sheetOrder()) }}</span>
           <span>Actualizado {{ sheetOrder()?.updated_at | date: "shortDate" }}</span>
         </div>
@@ -203,7 +235,7 @@
           <ul>
             @for (row of sheetChecklist()?.items || []; track $index) {
               <li [class.ok]="row.ok" [class.bad]="!row.ok">
-                <span class="check-indicator">{{ row.ok ? "✓" : "!" }}</span>
+                <span class="check-indicator">{{ row.ok ? "OK" : "!" }}</span>
                 {{ row.text }}
               </li>
             }
@@ -211,7 +243,7 @@
         </div>
         @if (sheetChecklist()?.blocking) {
           <div class="sheet-warning">
-            <p class="eyebrow">Qué falta</p>
+            <p class="eyebrow">Qu&eacute; falta</p>
             <ul>
               @for (row of sheetChecklist()?.items || []; track $index) {
                 @if (!row.ok) {

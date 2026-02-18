@@ -1,0 +1,261 @@
+﻿@if (order(); as current) {
+  <section class="page">
+    <header class="page-head">
+      <div class="page-head-main">
+        <button class="link-back" type="button" (click)="backToList()">Ã¢â€ Â Volver</button>
+        <p class="eyebrow">Pedido {{ current.order_id }}</p>
+        <div class="title-row">
+          <h1>{{ customerName(current) }}</h1>
+          <span class="chip" [class]="statusClass(current.status)">{{ statusLabel(current.status) }}</span>
+        </div>
+        <p class="muted">{{ routeName(current) }}</p>
+      </div>
+      <div class="status-actions">
+        @if (phaseAction(current); as phase) {
+          <button
+            type="button"
+            class="btn primary"
+            [disabled]="phase.actionId === 'confirm_items' && current.items.length === 0"
+            (click)="openActionModal(current)"
+          >
+            {{ phase.label }}
+          </button>
+        }
+      </div>
+    </header>
+
+    @if (requiresPlannedPackages(current)) {
+      <div class="sticky-banner">
+        <div>
+          <p class="eyebrow">Define paquetes planificados</p>
+          <p class="muted">Necesitamos la cantidad esperada para habilitar acciones de logÃƒÂ­stica.</p>
+        </div>
+        <button type="button" class="btn primary" (click)="openPlannedPackages()">Definir paquetes</button>
+      </div>
+    }
+
+    <section class="summary" aria-label="Resumen del pedido">
+      <div class="summary-card summary-card--status">
+        <p class="eyebrow">Estado</p>
+        <strong class="summary-value">{{ statusLabel(current.status) }}</strong>
+      </div>
+      <div class="summary-card">
+        <p class="eyebrow">Actualizado</p>
+        <strong class="summary-value">{{ current.updated_at | date: "short" }}</strong>
+      </div>
+      <div class="summary-card">
+        <p class="eyebrow">Items</p>
+        <strong class="summary-value">{{ current.items.length }}</strong>
+      </div>
+      <div class="summary-card">
+        <p class="eyebrow">Paquetes</p>
+        <strong class="summary-value">{{ current.packages.length }}</strong>
+      </div>
+      <div class="summary-card">
+        <p class="eyebrow">Planificados</p>
+        <strong class="summary-value">{{ plannedPackages(current) ?? "-" }}</strong>
+      </div>
+      <div class="summary-card summary-card--financial">
+        <div>
+          <p class="eyebrow">Total clienta</p>
+          <strong class="summary-value">{{ formatCurrency(totals().totalClienta) }}</strong>
+        </div>
+        <div>
+          <p class="eyebrow">Costo proveedor</p>
+          <strong class="summary-value">{{ formatCurrency(totals().totalCost) }}</strong>
+        </div>
+        <div>
+          <p class="eyebrow">Ganancia</p>
+          <strong class="summary-value summary-value--profit">{{ formatCurrency(totals().ganancia) }}</strong>
+        </div>
+      </div>
+    </section>
+
+    <nav class="section-nav" aria-label="NavegaciÃƒÂ³n de secciones">
+      <button type="button" (click)="scrollToSection('incidencias')">Incidencias</button>
+      <button type="button" (click)="scrollToSection('productos')">Productos</button>
+      <button type="button" (click)="scrollToSection('paquetes')">Paquetes</button>
+      <button type="button" (click)="scrollToSection('bitacora')">BitÃƒÂ¡cora</button>
+    </nav>
+
+    <section class="panel" id="incidencias" #incidentsSection>
+      <div class="panel-head">
+        <h2>Incidencias</h2>
+        <div class="panel-actions">
+          <button type="button" class="btn ghost with-icon" (click)="openIncidentModal()">
+            <span class="btn-icon" aria-hidden="true">+</span>
+            Nueva incidencia
+          </button>
+          <button type="button" class="btn link" (click)="toggleResolved()">
+            {{ showResolvedIncidents() ? "Ocultar" : "Ver" }} resueltas ({{ resolvedIncidents().length }})
+          </button>
+        </div>
+      </div>
+      <div class="incidents">
+        @if (openIncidents().length === 0) {
+          <p class="muted">Sin incidencias abiertas.</p>
+        }
+        @for (inc of openIncidents(); track inc.id) {
+          <article class="incident-card" [class.high]="inc.severity === 'high'">
+            <div>
+              <p class="eyebrow">{{ inc.title }} Ã‚Â· {{ inc.type }} Ã‚Â· {{ inc.severity }}</p>
+              <p>{{ inc.reason }}</p>
+              @if (inc.assigneeId) {
+                <p class="muted">Asignado a {{ inc.assigneeId }}</p>
+              }
+              <p class="muted">Creada {{ inc.createdAt | date: "short" }} Ã‚Â· {{ inc.createdBy }}</p>
+              @if ((inc.evidenceUrls?.length || 0) > 0) {
+                <div class="evidence">
+                  @for (url of inc.evidenceUrls || []; track url) {
+                    <a [href]="url" target="_blank" rel="noreferrer">Evidencia</a>
+                  }
+                </div>
+              }
+            </div>
+            <div class="incident-actions">
+              <button type="button" class="btn ghost" (click)="openResolveModal(inc)">Resolver</button>
+              <button type="button" class="btn ghost" (click)="openAssignModal(inc)">Asignar</button>
+              <label class="btn ghost file-btn">
+                <input type="file" accept="image/*" (change)="attachEvidence(inc, $event)" />
+                {{ uploadingEvidence()[inc.id] ? "Subiendo..." : "Adjuntar foto" }}
+              </label>
+              <button type="button" class="btn link" (click)="scrollToTimeline()">Ver en bitÃƒÂ¡cora</button>
+            </div>
+          </article>
+        }
+      </div>
+
+      @if (showResolvedIncidents() && resolvedIncidents().length > 0) {
+        <div class="incidents resolved">
+          @for (inc of resolvedIncidents(); track inc.id) {
+            <article class="incident-card resolved">
+              <div>
+                <p class="eyebrow">{{ inc.title }} Ã‚Â· {{ inc.type }}</p>
+                <p class="muted">Resuelta {{ inc.resolvedAt | date: "short" }} Ã‚Â· {{ inc.resolvedBy }}</p>
+                @if (inc.resolutionNote) {
+                  <p class="muted">{{ inc.resolutionNote }}</p>
+                }
+              </div>
+            </article>
+          }
+        </div>
+      }
+    </section>
+
+    <section class="panel" id="productos">
+      <div class="panel-head">
+        <h2>Productos</h2>
+        <div class="panel-actions">
+          <button type="button" class="btn primary with-icon" (click)="openAddItemModal()" [disabled]="!canEditItems(current)">
+            <span class="btn-icon" aria-hidden="true">+</span>
+            Agregar producto
+          </button>
+          <p class="muted">Escanea o cambia el estado por producto.</p>
+        </div>
+      </div>
+      <div class="items order-item-grid">
+        @for (item of current.items; track item.item_id) {
+          <article class="order-item-card">
+            <div class="pic">
+              <img [src]="itemImage(item) || 'https://via.placeholder.com/240x200?text=Prod'" [alt]="item.title" />
+            </div>
+
+            <div class="info">
+              <div class="top">
+                <div class="title">
+                  <h4>{{ item.title }}</h4>
+                  <p class="meta">Talla: {{ item.variant || "Sin talla" }} | Color: {{ item.color || "Sin color" }}</p>
+                </div>
+              </div>
+
+              <div class="chips">
+                <span class="chip chip--pieces">Piezas: {{ item.quantity }}</span>
+                @if (item.source === "catalogo") {
+                  <a href="" class="source-link" (click)="$event.preventDefault()">CatÃƒÂ¡logo</a>
+                } @else {
+                  <span class="chip chip--soft chip--inventory">Inventario</span>
+                }
+              </div>
+
+              <div class="actions">
+                <div class="price">
+                  <span class="label">Precio clienta</span>
+                  <span class="value">{{ formatCurrency(item.price_clienta ?? item.price_public ?? null) || itemPriceLabel(item) }}</span>
+                </div>
+                @if (allowedCapabilities(current, userRole()).canConfirmItems) {
+                  <button type="button" class="btn ghost" (click)="confirmItem(current, item)">Confirmar existencias</button>
+                }
+                @if (allowedCapabilities(current, userRole()).canRegisterReception) {
+                  <button type="button" class="btn ghost" (click)="receiveItem(current, item)">Registrar recepciÃƒÂ³n/QA</button>
+                }
+                @if (allowedCapabilities(current, userRole()).canPack) {
+                  <button type="button" class="btn ghost" (click)="markPacked(current, item)">Empacar</button>
+                }
+                <button
+                  type="button"
+                  class="btn btn--danger btn--icon-delete"
+                  (click)="removeItem(current, item)"
+                  aria-label="Quitar producto"
+                  [disabled]="!canEditItems(current)"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path d="M3 6h18"></path>
+                    <path d="M8 6V4h8v2"></path>
+                    <path d="M7 6l1 14h8l1-14"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </article>
+        }
+        @if (current.items.length === 0) {
+          <p class="muted">AÃƒÂºn no hay productos en este pedido.</p>
+        }
+      </div>
+    </section>
+
+    @if (allowedCapabilities(current, userRole()).canCreatePackages) {
+      <section class="panel package-shell" id="paquetes" #packagesSection>
+        <div class="panel-head">
+          <h2>Paquetes</h2>
+          <div class="panel-actions">
+            <button
+              type="button"
+              class="btn primary with-icon"
+              [disabled]="requiresPlannedPackages(current)"
+              [attr.title]="requiresPlannedPackages(current) ? 'Define paquetes planificados para continuar' : null"
+              (click)="createPackage(current)"
+            >
+              <span class="btn-icon" aria-hidden="true">+</span>
+              Crear paquete
+            </button>
+            @if (requiresPlannedPackages(current)) {
+              <span class="muted small">Define paquetes planificados</span>
+            }
+          </div>
+        </div>
+
+        <div class="packages">
+          @for (pkg of current.packages; track pkg.package_id) {
+            <article class="package">
+              <div class="package-top">
+                <div>
+                  <p class="eyebrow">{{ packageDisplayLabel(current, pkg) }}</p>
+                  <p class="muted">{{ pkg.item_ids.length }} productos Ã‚Â· {{ pkg.state }}</p>
+                </div>
+                <span class="chip">{{ qrPlaceholder(current, pkg) }}</span>
+              </div>
+              @if (debugMode()) {
+                <div class="qr-block">
+                  <p class="muted">QR data</p>
+                  <code>{{ packageCode(current, pkg) }}</code>
+                </div>
+              }
+              @if (allowedCapabilities(current, userRole()).canPrintLabels) {
+                <button type="button" class="btn ghost" (click)="printLabel(current, pkg)">Imprimir etiqueta</button>
+              }
+              @if (allowedCapabilities(current, userRole()).canDeliverByPackage) {
+                <button type="button" class="btn primary" (click)="deliverPackage(current, pkg)">Registrar entrega</button>
+              }
+              @if (allowedCapabilities(current, userRole()).canAssignItemsToPackages) {
+

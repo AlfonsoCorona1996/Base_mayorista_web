@@ -1,0 +1,22 @@
+﻿1660:   font-weight: 600;
+1661:   font-size: 0.85rem;
+1662: }
+1663: 
+1664: .chip.info {
+1665:   background: #eef5ff;
+1666:   color: #0f437a;
+1667:   border-color: #c7dcff;
+1668: }
+1669: 
+1670: .chip.accent {
+1671:   background: #e6f4ff;
+1672:   color: #0b5ed7;
+1673:   border-color: #cde6ff;
+1674: }
+1675: 
+1676: .chip.success {
+1677:   background: #e6f7ef;
+1678:   color: var(--success);
+1679:   border-color: #b9ebd3;
+1680: }
+

@@ -32,7 +32,7 @@ export default class PedidosPage implements OnInit {
   private router = inject(Router);
 
   search = signal("");
-  intentFilter = signal<IntentFilter>("hoy");
+  intentFilter = signal<IntentFilter>("por_confirmar");
   routeFilter = signal<string>("todos");
   creating = signal(false);
   newCustomerId = signal<string>("");
@@ -51,8 +51,53 @@ export default class PedidosPage implements OnInit {
   plannedPackagesInput = signal(1);
   partialReason = signal("");
   partialReasonError = signal<string | null>(null);
+  private readonly intentsForCount: IntentFilter[] = [
+    "hoy",
+    "por_confirmar",
+    "en_transito",
+    "en_empaque",
+    "listos_ruta",
+    "en_ruta",
+    "con_incidencias",
+    "cobranza_pendiente",
+    "cerrados",
+  ];
 
   list = computed(() => this.orders.list());
+  intentCounts = computed(() => {
+    const term = this.search().trim().toLowerCase();
+    const route = this.routeFilter();
+    const counts: Record<IntentFilter, number> = {
+      hoy: 0,
+      por_confirmar: 0,
+      en_transito: 0,
+      en_empaque: 0,
+      listos_ruta: 0,
+      en_ruta: 0,
+      con_incidencias: 0,
+      cobranza_pendiente: 0,
+      cerrados: 0,
+    };
+
+    for (const order of this.list()) {
+      if (route !== "todos" && order.route_id !== route) continue;
+      if (term) {
+        const blob = [
+          order.order_id,
+          this.customerName(order.customer_id).toLowerCase(),
+          order.route_id || "",
+          order.items.map((i) => i.title).join(" ").toLowerCase(),
+        ].join(" ");
+        if (!blob.includes(term)) continue;
+      }
+
+      for (const intent of this.intentsForCount) {
+        if (this.matchesIntent(order, intent)) counts[intent] += 1;
+      }
+    }
+
+    return counts;
+  });
 
   filtered = computed(() => {
     const term = this.search().trim().toLowerCase();
@@ -130,7 +175,7 @@ export default class PedidosPage implements OnInit {
     try {
       const orderId = await this.orders.createDraft(customer.customer_id, this.inferredRouteId() || null, this.newNotes());
       this.search.set("");
-      this.intentFilter.set("hoy");
+      this.intentFilter.set("por_confirmar");
       this.routeFilter.set("todos");
       this.newNotes.set("");
       this.customerQuery.set("");
@@ -142,9 +187,8 @@ export default class PedidosPage implements OnInit {
   }
 
   intentOptions = [
-    { id: "hoy" as const, label: "Hoy" },
     { id: "por_confirmar" as const, label: "Por confirmar" },
-    { id: "en_transito" as const, label: "En tránsito/por recibir" },
+    { id: "en_transito" as const, label: "En tr\u00e1nsito/por recibir" },
     { id: "en_empaque" as const, label: "En empaque" },
     { id: "listos_ruta" as const, label: "Listos para ruta" },
     { id: "en_ruta" as const, label: "En ruta" },
@@ -155,6 +199,10 @@ export default class PedidosPage implements OnInit {
 
   setIntentFilter(id: IntentFilter) {
     this.intentFilter.set(id);
+  }
+
+  intentCount(intent: IntentFilter): number {
+    return this.intentCounts()[intent] ?? 0;
   }
 
   isToday(dateInput: string): boolean {
@@ -171,7 +219,7 @@ export default class PedidosPage implements OnInit {
       case "hoy":
         return this.isToday(order.updated_at);
       case "por_confirmar":
-        return ["confirmando_proveedor", "reservado_inventario", "solicitado_proveedor"].includes(order.status);
+        return ["borrador", "confirmando_proveedor", "reservado_inventario", "solicitado_proveedor"].includes(order.status);
       case "en_transito":
         return ["en_transito"].includes(order.status);
       case "en_empaque":
@@ -216,6 +264,13 @@ export default class PedidosPage implements OnInit {
     return this.packagesSummary(order);
   }
 
+  packagesMetaLabel(order: Order): string {
+    const summary = this.packagesSummary(order);
+    if (summary === "0/-") return "Sin paquetes";
+    if (summary.endsWith("/-")) return summary.replace("/-", "");
+    return summary;
+  }
+
   hasIncompletePackages(order: Order): boolean {
     const planned = this.plannedPackagesCount(order);
     if (planned === null) return false;
@@ -234,7 +289,30 @@ export default class PedidosPage implements OnInit {
 
   incidentsLabel(order: Order): string {
     const count = order.open_incidents_count ?? 0;
-    return count === 1 ? "⚠ 1 incidencia" : `⚠ ${count} incidencias`;
+    return count === 1 ? "\u26a0 1 incidencia" : `\u26a0 ${count} incidencias`;
+  }
+
+  primaryAlert(order: Order): { label: string; tone: "danger" | "warning" } | null {
+    const alerts = this.orderAlerts(order);
+    return alerts.length > 0 ? alerts[0] : null;
+  }
+
+  hiddenAlertsCount(order: Order): number {
+    return Math.max(0, this.orderAlerts(order).length - 1);
+  }
+
+  updatedAtRelative(dateInput: string): string {
+    const value = new Date(dateInput);
+    if (Number.isNaN(value.getTime())) return "sin fecha";
+    const diffMs = Date.now() - value.getTime();
+    const diffMin = Math.max(0, Math.floor(diffMs / 60000));
+    if (diffMin < 1) return "hace menos de 1 min";
+    if (diffMin < 60) return `hace ${diffMin} min`;
+    const diffHours = Math.floor(diffMin / 60);
+    if (diffHours < 24) return `hace ${diffHours} h`;
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays < 30) return `hace ${diffDays} d`;
+    return value.toLocaleDateString("es-MX");
   }
 
   statusRank(status: OrderStatus): number {
@@ -425,7 +503,7 @@ export default class PedidosPage implements OnInit {
     const missing = this.missingChecklistReasons();
     const reason = action.actionId === "register_delivery_payment" && this.partialReason().trim()
       ? this.partialReason().trim()
-      : (missing.length > 0 ? missing.join(" · ") : action.label);
+      : (missing.length > 0 ? missing.join(" \u00b7 ") : action.label);
     const type = this.incidentTypeFromOrder(order, action.actionId);
     const severity = this.incidentSeverityForAction(action.actionId, checklist.blocking);
     await this.orders.createIncident(order.order_id, {
@@ -448,7 +526,7 @@ export default class PedidosPage implements OnInit {
       confirmando_proveedor: "Confirmando",
       reservado_inventario: "Reservado",
       solicitado_proveedor: "Solicitado",
-      en_transito: "En transito",
+      en_transito: "En tr\u00e1nsito",
       recibido_qa: "Recibido/QA",
       empaque: "Empaque",
       en_ruta: "En ruta",
@@ -501,7 +579,23 @@ export default class PedidosPage implements OnInit {
     return getPrimaryAction(order);
   }
 
+  private orderAlerts(order: Order): Array<{ label: string; tone: "danger" | "warning" }> {
+    const alerts: Array<{ label: string; tone: "danger" | "warning" }> = [];
+    if (order.has_high_incident) alerts.push({ label: "CR\u00cdTICO", tone: "danger" });
+    if (this.hasIncompletePackages(order)) alerts.push({ label: "INCOMPLETO", tone: "danger" });
+    if (this.hasPaymentPending(order)) alerts.push({ label: "$ pendiente", tone: "warning" });
+
+    const incidents = order.open_incidents_count ?? 0;
+    if (incidents > 0 && !order.has_high_incident) {
+      alerts.push({ label: this.incidentsLabel(order), tone: "warning" });
+    } else if (incidents > 1 && order.has_high_incident) {
+      alerts.push({ label: `+${incidents - 1} incidencias`, tone: "warning" });
+    }
+    return alerts;
+  }
+
   newDraft() {
     this.createOrder();
   }
 }
+

@@ -1,5 +1,12 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+:root {
+  --color-primary: #1e293b;
+  --color-secondary: #94a3b8;
+}
+
 /* ============================================================
-   RESET GLOBAL - Elimina márgenes y padding no deseados
+   RESET GLOBAL - Elimina mÃ¡rgenes y padding no deseados
    ============================================================ */
 
 /* Reset Universal */
@@ -11,7 +18,7 @@
   box-sizing: border-box;
 }
 
-/* HTML y Body sin márgenes ni scroll horizontal */
+/* HTML y Body sin mÃ¡rgenes ni scroll horizontal */
 html {
   height: 100%;
   width: 100%;
@@ -25,13 +32,14 @@ body {
   margin: 0;
   padding: 0;
   overflow-x: hidden;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family: 'Inter', sans-serif;
+  letter-spacing: -0.01em;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: #f5f5f5;
+  background: #f4f7f9;
 }
 
-/* Router Outlet sin márgenes */
+/* Router Outlet sin mÃ¡rgenes */
 router-outlet {
   display: none;
 }
@@ -51,3 +59,4 @@ app-root {
     font-size: 16px !important;
   }
 }
+

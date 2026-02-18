@@ -1,0 +1,91 @@
+﻿  .add-item .field {
+    grid-column: span 4;
+  }
+
+  .add-item .field:nth-last-child(4),
+  .add-item .field:nth-last-child(3),
+  .add-item .field:nth-last-child(2),
+  .add-item .field:nth-last-child(1) {
+    grid-column: span 3;
+  }
+
+  .add-item .btn.primary {
+    align-self: end;
+    justify-self: start;
+    padding: 0.7rem 2.2rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .add-item {
+    padding: 0.6rem;
+  }
+
+  .card {
+    grid-template-columns: 64px 1fr;
+  }
+
+  .card img {
+    width: 64px;
+    height: 64px;
+  }
+
+  .preview {
+    grid-template-columns: 64px 1fr;
+  }
+
+  .preview img {
+    width: 64px;
+    height: 64px;
+  }
+
+  .photo-placeholder-md {
+    width: 64px;
+    height: 64px;
+  }
+
+  .item-card {
+    grid-template-columns: 56px 1fr;
+  }
+
+  .item-card img {
+    width: 56px;
+    height: 56px;
+  }
+
+  .item-top {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .item-price {
+    text-align: left;
+    min-width: 0;
+  }
+
+  .order-item-card {
+    grid-template-columns: 1fr;
+  }
+
+  .order-item-card .pic img {
+    height: 200px;
+  }
+
+  .order-item-card .top {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .order-item-card .price {
+    text-align: left;
+  }
+}
+
+.card-tag.inv {
+  background: #e6f7ef;
+  color: #1f9d63;
+}
+
+.card-tag.cat {
+  background: #f1f5f9;
+

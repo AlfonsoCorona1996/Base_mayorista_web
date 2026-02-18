@@ -1,0 +1,81 @@
+﻿
+        <div class="packages">
+          @for (pkg of current.packages; track pkg.package_id) {
+            <article class="package">
+              <div class="package-top">
+                <div>
+                  <p class="eyebrow">{{ packageDisplayLabel(current, pkg) }}</p>
+                  <p class="muted">{{ pkg.item_ids.length }} productos Ã‚Â· {{ pkg.state }}</p>
+                </div>
+                <span class="chip">{{ qrPlaceholder(current, pkg) }}</span>
+              </div>
+              @if (debugMode()) {
+                <div class="qr-block">
+                  <p class="muted">QR data</p>
+                  <code>{{ packageCode(current, pkg) }}</code>
+                </div>
+              }
+              @if (allowedCapabilities(current, userRole()).canPrintLabels) {
+                <button type="button" class="btn ghost" (click)="printLabel(current, pkg)">Imprimir etiqueta</button>
+              }
+              @if (allowedCapabilities(current, userRole()).canDeliverByPackage) {
+                <button type="button" class="btn primary" (click)="deliverPackage(current, pkg)">Registrar entrega</button>
+              }
+              @if (allowedCapabilities(current, userRole()).canAssignItemsToPackages) {
+                <button type="button" class="btn ghost" (click)="closePackage(current, pkg)">Cerrar paquete</button>
+              }
+            </article>
+          }
+
+          @if (current.packages.length === 0) {
+            <p class="muted package-empty-note">Sin paquetes todavÃƒÂ­a. Genera uno al terminar de empacar.</p>
+          }
+        </div>
+
+        @if (allowedCapabilities(current, userRole()).canAssignItemsToPackages && current.packages.length > 0) {
+          <div class="assignment">
+            <div class="panel-actions">
+              <select class="input" [(ngModel)]="selectedPackageId">
+                <option [ngValue]="null">Selecciona un paquete</option>
+                @for (pkg of current.packages; track pkg.package_id) {
+                  <option [ngValue]="pkg.package_id">{{ packageDisplayLabel(current, pkg) }}</option>
+                }
+              </select>
+              <button type="button" class="btn ghost" (click)="autoDistribute(current)">Auto-distribuir</button>
+            </div>
+            @if (selectedPackageId()) {
+              <div class="items">
+                @for (item of current.items; track item.item_id) {
+                  <label class="assign-row">
+                    <input
+                      type="checkbox"
+                      [checked]="isItemAssigned(current, selectedPackageId(), item.item_id)"
+                      (change)="toggleItemAssignment(current, selectedPackageId()!, item, $any($event.target).checked)"
+                    />
+                    <span>{{ item.title }} Ã‚Â· {{ item.quantity }} pza</span>
+                  </label>
+                }
+              </div>
+            }
+          </div>
+        }
+      </section>
+    } @else {
+      <section class="panel locked package-shell" id="paquetes" #packagesSection>
+        <div class="panel-head">
+          <h2>Paquetes</h2>
+        </div>
+        <p class="muted package-empty-note">Los paquetes se habilitan al recibir/QA o empaque.</p>
+      </section>
+    }
+
+    <section class="panel" id="bitacora" #timelineSection>
+      <div class="panel-head">
+        <h2>BitÃƒÂ¡cora</h2>
+      </div>
+      @if (events().length > 0) {
+        <ol class="timeline">
+          @for (event of events(); track event.id) {
+            <li>
+              <p class="eyebrow timeline-date">{{ event.createdAt | date: "short" }} Ã‚Â· {{ relativeTime(event.createdAt) }}</p>
+

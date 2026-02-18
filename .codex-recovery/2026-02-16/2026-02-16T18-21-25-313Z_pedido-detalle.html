@@ -1,55 +1,22 @@
-@if (order(); as current) {
+﻿@if (order(); as current) {
   <section class="page">
     <header class="page-head">
       <div class="page-head-main">
-        <div class="page-head-topline">
-          <button class="link-back link-back--icon" type="button" (click)="backToList()" aria-label="Volver">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path d="M15 18 9 12l6-6"></path>
-            </svg>
-          </button>
-          <div class="order-id-wrap">
-            <p class="eyebrow order-id-line">Pedido {{ current.order_id }}</p>
-            <button
-              type="button"
-              class="order-id-copy"
-              aria-label="Copiar ID del pedido"
-              (click)="copyOrderId(current.order_id)"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <rect x="9" y="9" width="11" height="11" rx="2"></rect>
-                <path d="M5 15V6a2 2 0 0 1 2-2h9"></path>
-              </svg>
-            </button>
-            @if (copiedOrderId()) {
-              <span class="copy-toast">!Copiado!</span>
-            }
-          </div>
-        </div>
+        <button class="link-back" type="button" (click)="backToList()">Ã¢â€ Â Volver</button>
+        <p class="eyebrow">Pedido {{ current.order_id }}</p>
         <h1>{{ customerName(current) }}</h1>
-        <p class="muted page-updated">Actualizado {{ current.updated_at | date: "short" }}</p>
-        <div class="title-row title-row--meta">
-          <span class="meta-dot-pill">{{ statusLabel(current.status) }}</span>
-          <span class="meta-dot-pill meta-dot-pill--location">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path d="M12 22s7-6 7-12a7 7 0 1 0-14 0c0 6 7 12 7 12z"></path>
-              <circle cx="12" cy="10" r="2.5"></circle>
-            </svg>
-            {{ routeName(current) }}
-          </span>
-        </div>
+        <p class="muted">{{ routeName(current) }}</p>
       </div>
       <div class="status-actions">
+        <span class="chip" [class]="statusClass(current.status)">{{ statusLabel(current.status) }}</span>
         @if (phaseAction(current); as phase) {
           <button
             type="button"
-            class="btn confirm-intelligent-btn"
-            [class.primary]="phase.actionId !== 'confirm_items' || isConfirmExistencesReady(current)"
-            [class.ghost]="phase.actionId === 'confirm_items' && !isConfirmExistencesReady(current)"
+            class="btn primary"
             [disabled]="phase.actionId === 'confirm_items' && current.items.length === 0"
             (click)="openActionModal(current)"
           >
-            {{ phase.actionId === "confirm_items" ? confirmExistencesActionLabel(current) : phase.label }}
+            {{ phase.label }}
           </button>
         }
       </div>
@@ -59,65 +26,52 @@
       <div class="sticky-banner">
         <div>
           <p class="eyebrow">Define paquetes planificados</p>
-          <p class="muted">Necesitamos la cantidad esperada para habilitar acciones de logistica.</p>
+          <p class="muted">Necesitamos la cantidad esperada para habilitar acciones de logÃƒÂ­stica.</p>
         </div>
         <button type="button" class="btn primary" (click)="openPlannedPackages()">Definir paquetes</button>
       </div>
     }
 
     <section class="summary" aria-label="Resumen del pedido">
-      <article class="summary-card summary-card--pieces">
-        <span
-          class="summary-progress-ring"
-          aria-hidden="true"
-          [style.--progress]="confirmedPiecesPercent(current)"
-        >
-          <span class="summary-progress-ring__value">
-            {{ confirmedPiecesPercent(current) }}%
-          </span>
-        </span>
-        <div>
-          <p class="eyebrow">Piezas</p>
-          <p class="summary-ratio">
-            <strong class="summary-value">{{ confirmedPieces(current) }}</strong>
-            <span>/ {{ totalPieces(current) }}</span>
-          </p>
-          <p class="summary-note" [class.summary-note--warning]="pendingPieces(current) > 0">
-            {{ pendingPieces(current) }} pieza{{ pendingPieces(current) === 1 ? "" : "s" }} pendientes
-          </p>
-        </div>
-      </article>
-
-      <article class="summary-card summary-card--money">
-        <p class="eyebrow">Total venta</p>
-        <p class="summary-money">
-          <span>MXN</span>
-          <strong class="summary-value">{{ formatCurrency(totals().totalClienta) }}</strong>
-        </p>
-      </article>
-
-      <article class="summary-card summary-card--money">
+      <div class="summary-card summary-card--status">
+        <p class="eyebrow">Estado</p>
+        <strong class="summary-value">{{ statusLabel(current.status) }}</strong>
+      </div>
+      <div class="summary-card">
+        <p class="eyebrow">Actualizado</p>
+        <strong class="summary-value">{{ current.updated_at | date: "short" }}</strong>
+      </div>
+      <div class="summary-card">
+        <p class="eyebrow">Items</p>
+        <strong class="summary-value">{{ current.items.length }}</strong>
+      </div>
+      <div class="summary-card">
+        <p class="eyebrow">Paquetes</p>
+        <strong class="summary-value">{{ current.packages.length }}</strong>
+      </div>
+      <div class="summary-card">
+        <p class="eyebrow">Planificados</p>
+        <strong class="summary-value">{{ plannedPackages(current) ?? "-" }}</strong>
+      </div>
+      <div class="summary-card summary-card--money">
         <p class="eyebrow">Total clienta</p>
-        <p class="summary-money">
-          <span>MXN</span>
-          <strong class="summary-value">{{ formatCurrency(totals().totalCost) }}</strong>
-        </p>
-      </article>
-
-      <article class="summary-card summary-card--profit">
+        <strong class="summary-value">{{ formatCurrency(totals().totalClienta) }}</strong>
+      </div>
+      <div class="summary-card">
+        <p class="eyebrow">Costo proveedor</p>
+        <strong class="summary-value">{{ formatCurrency(totals().totalCost) }}</strong>
+      </div>
+      <div class="summary-card summary-card--money">
         <p class="eyebrow">Ganancia</p>
-        <p class="summary-money summary-money--profit">
-          <span>MXN</span>
-          <strong class="summary-value summary-value--profit">{{ formatCurrency(totals().ganancia) }}</strong>
-        </p>
-      </article>
+        <strong class="summary-value">{{ formatCurrency(totals().ganancia) }}</strong>
+      </div>
     </section>
 
-    <nav class="section-nav" aria-label="Navegacion de secciones">
-      <button type="button" (click)="scrollToSection('incidencias')">Incidencias</button>
-      <button type="button" (click)="scrollToSection('productos')">Productos</button>
-      <button type="button" (click)="scrollToSection('paquetes')">Paquetes</button>
-      <button type="button" (click)="scrollToSection('bitacora')">Bitacora</button>
+    <nav class="section-nav" aria-label="NavegaciÃƒÂ³n de secciones">
+      <a href="#incidencias">Incidencias</a>
+      <a href="#productos">Productos</a>
+      <a href="#paquetes">Paquetes</a>
+      <a href="#bitacora">BitÃƒÂ¡cora</a>
     </nav>
 
     <section class="panel" id="incidencias" #incidentsSection>
@@ -138,60 +92,42 @@
           <p class="muted">Sin incidencias abiertas.</p>
         }
         @for (inc of openIncidents(); track inc.id) {
-          <article
-            class="incident-card"
-            [class.high]="inc.severity === 'high'"
-            [class.medium]="inc.severity === 'medium'"
-            [class.low]="inc.severity === 'low'"
-          >
-            <div class="incident-main">
-              <div class="incident-head">
-                <div class="incident-title-row">
-                  <p class="incident-title">{{ inc.title }}</p>
-                  <div class="incident-chips">
-                    <span class="chip incident-chip incident-chip-type">{{ inc.type }}</span>
-                    <span class="chip incident-chip incident-chip-severity">
-                      {{ inc.severity === "high" ? "Alta" : inc.severity === "medium" ? "Media" : "Baja" }}
-                    </span>
-                  </div>
-                </div>
-              </div>
-              <p class="incident-reason">{{ inc.reason }}</p>
-              <div class="incident-meta-grid">
-                <p class="incident-meta"><strong>Asignado a:</strong> {{ inc.assigneeId || "Sin asignar" }}</p>
-                <p class="incident-meta"><strong>Fecha:</strong> {{ inc.createdAt | date: "short" }}</p>
-                <p class="incident-meta"><strong>Admin:</strong> {{ inc.createdBy }}</p>
-              </div>
+          <article class="incident-card" [class.high]="inc.severity === 'high'">
+            <div>
+              <p class="eyebrow">{{ inc.title }} Ã‚Â· {{ inc.type }} Ã‚Â· {{ inc.severity }}</p>
+              <p>{{ inc.reason }}</p>
+              @if (inc.assigneeId) {
+                <p class="muted">Asignado a {{ inc.assigneeId }}</p>
+              }
+              <p class="muted">Creada {{ inc.createdAt | date: "short" }} Ã‚Â· {{ inc.createdBy }}</p>
               @if ((inc.evidenceUrls?.length || 0) > 0) {
                 <div class="evidence">
-                  <p class="evidence-count">{{ (inc.evidenceUrls?.length || 0) }} evidencia{{ (inc.evidenceUrls?.length || 0) === 1 ? "" : "s" }}</p>
                   @for (url of inc.evidenceUrls || []; track url) {
-                    <a class="evidence-thumb" [href]="url" target="_blank" rel="noreferrer">
-                      <img [src]="url" [alt]="'Evidencia de ' + inc.title" loading="lazy" />
-                    </a>
+                    <a [href]="url" target="_blank" rel="noreferrer">Evidencia</a>
                   }
                 </div>
               }
             </div>
             <div class="incident-actions">
-              <button type="button" class="btn primary" (click)="openResolveModal(inc)">Resolver</button>
+              <button type="button" class="btn ghost" (click)="openResolveModal(inc)">Resolver</button>
               <button type="button" class="btn ghost" (click)="openAssignModal(inc)">Asignar</button>
               <label class="btn ghost file-btn">
                 <input type="file" accept="image/*" (change)="attachEvidence(inc, $event)" />
                 {{ uploadingEvidence()[inc.id] ? "Subiendo..." : "Adjuntar foto" }}
               </label>
-              <button type="button" class="btn link incident-link" (click)="scrollToTimeline()">Ver en bitacora</button>
+              <button type="button" class="btn link" (click)="scrollToTimeline()">Ver en bitÃƒÂ¡cora</button>
             </div>
           </article>
         }
       </div>
+
       @if (showResolvedIncidents() && resolvedIncidents().length > 0) {
         <div class="incidents resolved">
           @for (inc of resolvedIncidents(); track inc.id) {
             <article class="incident-card resolved">
               <div>
-                <p class="eyebrow">{{ inc.title }} - {{ inc.type }}</p>
-                <p class="muted">Resuelta {{ inc.resolvedAt | date: "short" }} - {{ inc.resolvedBy }}</p>
+                <p class="eyebrow">{{ inc.title }} Ã‚Â· {{ inc.type }}</p>
+                <p class="muted">Resuelta {{ inc.resolvedAt | date: "short" }} Ã‚Â· {{ inc.resolvedBy }}</p>
                 @if (inc.resolutionNote) {
                   <p class="muted">{{ inc.resolutionNote }}</p>
                 }
@@ -213,179 +149,66 @@
           <p class="muted">Escanea o cambia el estado por producto.</p>
         </div>
       </div>
-      @if (current.items.length > 0) {
-        <div class="products-toolbar" role="tablist" aria-label="Filtro de productos por stock">
-          <button
-            type="button"
-            class="products-filter-btn"
-            [class.active]="productStockFilter() === 'all'"
-            (click)="setProductStockFilter('all')"
-          >
-            Todos ({{ totalItems(current) }})
-          </button>
-          <button
-            type="button"
-            class="products-filter-btn"
-            [class.active]="productStockFilter() === 'insufficient'"
-            [class.products-filter-btn--magnet]="shouldMagnetizeInsufficientTab(current)"
-            [disabled]="insufficientItemsCount(current) === 0"
-            (click)="setProductStockFilter('insufficient')"
-          >
-            Faltantes
-            <span class="products-filter-count" [class.products-filter-count--alert]="insufficientItemsCount(current) > 0">
-              ({{ insufficientItemsCount(current) }})
-            </span>
-          </button>
-          @if (isConfirmItemsPhase(current) && hasPendingItems(current)) {
-            <button
-              type="button"
-              class="products-batch-btn"
-              (click)="confirmarTodoDisponible()"
-              [disabled]="!canMagicConfirm(current)"
-            >
-              Marcar todo como disponible
-            </button>
-          }
-        </div>
-      }
       <div class="items order-item-grid">
-        @for (item of filteredProductItems(current); track item.item_id) {
-          <article
-            class="order-item-card card-product"
-            [id]="productCardId(item)"
-            [class.has-incident]="itemHasOpenIncident(item.item_id)"
-            [class.order-item-card--insufficient]="hasInsufficientStock(item)"
-            [class.order-item-card--confirmado]="isConfirmedConfirmation(item)"
-            [class.order-item-card--sin-stock]="isOutOfStockConfirmation(item)"
-            [class.card-product--confirmed]="isConfirmedConfirmation(item)"
-            [class.card-product--out-of-stock]="isOutOfStockConfirmation(item)"
-            [class.card-product--alert]="hasInsufficientStock(item) && !isOutOfStockConfirmation(item)"
-          >
-            <div class="product-media">
+        @for (item of current.items; track item.item_id) {
+          <article class="order-item-card">
+            <div class="pic">
               <img [src]="itemImage(item) || 'https://via.placeholder.com/240x200?text=Prod'" [alt]="item.title" />
             </div>
 
-            <div class="product-main">
-              <div class="product-title-stack">
-                <h4 class="product-name">{{ item.title }}</h4>
+            <div class="info">
+              <div class="top">
+                <div class="title">
+                  <h4>{{ item.title }}</h4>
+                  <p class="meta">Talla: {{ item.variant || "Sin talla" }} | Color: {{ item.color || "Sin color" }}</p>
+                </div>
+              </div>
+
+              <div class="chips">
+                <span class="chip">Piezas: {{ item.quantity }}</span>
                 <span
-                  class="origin-badge origin-badge--top"
-                  [class.origin-badge--almacen]="item.source === 'inventario'"
-                  [class.origin-badge--catalogo]="item.source === 'catalogo'"
+                  class="chip chip--soft"
+                  [class.chip--catalog]="item.source === 'catalogo'"
+                  [class.chip--inventory]="item.source === 'inventario'"
                 >
-                  @if (item.source === "inventario") {
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                      <path d="M3 7h18v13H3z"></path>
-                      <path d="M3 7 12 3l9 4"></path>
-                    </svg>
-                    <span>ALMAC?N</span>
-                  } @else if (item.source === "catalogo") {
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                      <path d="M4 5a2 2 0 0 1 2-2h12v17H6a2 2 0 0 0-2 2z"></path>
-                      <path d="M18 3a2 2 0 0 1 2 2v17"></path>
-                    </svg>
-                    <span>CAT?LOGO</span>
-                  } @else {
-                    <span aria-hidden="true">E</span>
-                    <span>EXTERNO</span>
-                  }
+                  {{ item.source === "catalogo" ? "CatÃƒÂ¡logo" : "Inventario" }}
                 </span>
               </div>
-              <p class="meta product-meta">Talla: {{ item.variant || "Sin talla" }} | Color: {{ item.color || "Sin color" }}</p>
 
-              <div class="chips product-chips">
-                <span class="chip chip--pieces">Piezas: {{ item.quantity }}</span>
-                @if (isOutOfStockConfirmation(item)) {
-                  <span class="chip chip--agotado">Agotado</span>
-                }
-                @if (hasPartialConfirmation(item)) {
-                  <span class="chip chip--partial">Parcial: {{ confirmedQty(item) }} de {{ item.quantity }}</span>
-                }
-              </div>
-            </div>
-
-            <div class="product-side">
-              <div class="price product-price">
-                <span class="label">Precio clienta</span>
-                <span class="value">{{ formatCurrency(item.price_clienta ?? item.price_public ?? null) || itemPriceLabel(item) }}</span>
-              </div>
-              @if (isConfirmItemsPhase(current)) {
-                <div
-                  class="product-actions"
-                  [class.product-actions--resolved]="isConfirmedConfirmation(item)"
-                  (click)="$event.stopPropagation()"
-                >
-                  @if (isConfirmedConfirmation(item)) {
-                    <span class="product-confirmed-check" aria-label="Confirmado">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                        <path d="m5 13 4 4L19 7"></path>
-                      </svg>
-                    </span>
-                  } @else {
-                    @if (hasInsufficientStock(item) && !isOutOfStockConfirmation(item)) {
-                      <div class="qty-inline card-qty-inline" [attr.aria-label]="'Cantidad confirmable para ' + item.title">
-                        <button type="button" class="qty-mini" [disabled]="isQuickConfirming(item)" (click)="decreaseCardConfirmedQty(item)">-</button>
-                        <span class="qty-mini-value">{{ getCardDraftConfirmedQty(item) }} / {{ item.quantity }}</span>
-                        <button type="button" class="qty-mini" [disabled]="isQuickConfirming(item)" (click)="increaseCardConfirmedQty(item)">+</button>
-                      </div>
-                    }
-                    <button
-                      type="button"
-                      class="btn card-action-btn card-action-btn--confirm"
-                      [disabled]="isQuickConfirming(item)"
-                      (click)="confirmarItem(item)"
-                    >
-                      Confirmar
-                    </button>
-                    @if (!isOutOfStockConfirmation(item)) {
-                      <button
-                        type="button"
-                        class="btn card-action-btn card-action-btn--out"
-                        [class.active]="isOutOfStockConfirmation(item)"
-                        [disabled]="isQuickConfirming(item)"
-                        (click)="marcarAgotado(item)"
-                      >
-                        Agotar
-                      </button>
-                    }
-                  }
+              <div class="actions">
+                <div class="price">
+                  <span class="label">Precio clienta</span>
+                  <span class="value">{{ formatCurrency(item.price_clienta ?? item.price_public ?? null) || itemPriceLabel(item) }}</span>
                 </div>
-              }
-              @if (allowedCapabilities(current, userRole()).canRegisterReception) {
-                <button type="button" class="btn ghost" (click)="receiveItem(current, item)">Registrar recepcion/QA</button>
-              }
-              @if (allowedCapabilities(current, userRole()).canPack) {
-                <button type="button" class="btn ghost" (click)="markPacked(current, item)">Empacar</button>
-              }
-              <div class="card-delete-wrap">
+                @if (allowedCapabilities(current, userRole()).canConfirmItems) {
+                  <button type="button" class="btn ghost" (click)="confirmItem(current, item)">Confirmar existencias</button>
+                }
+                @if (allowedCapabilities(current, userRole()).canRegisterReception) {
+                  <button type="button" class="btn ghost" (click)="receiveItem(current, item)">Registrar recepciÃƒÂ³n/QA</button>
+                }
+                @if (allowedCapabilities(current, userRole()).canPack) {
+                  <button type="button" class="btn ghost" (click)="markPacked(current, item)">Empacar</button>
+                }
                 <button
                   type="button"
-                  class="btn btn--danger btn--icon-delete"
+                  class="btn btn--danger"
                   (click)="removeItem(current, item)"
-                  aria-label="Quitar producto"
                   [disabled]="!canEditItems(current)"
                 >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                    <path d="M3 6h18"></path>
-                    <path d="M8 6V4h8v2"></path>
-                    <path d="M7 6l1 14h8l1-14"></path>
-                  </svg>
+                  Quitar
                 </button>
               </div>
             </div>
-            @if (hasInsufficientStock(item)) {
-              <span class="stock-warning-micro">Solo {{ availableStock(item) }} disponibles</span>
-            }
           </article>
         }
         @if (current.items.length === 0) {
-          <p class="muted">Aun no hay productos en este pedido.</p>
+          <p class="muted">AÃƒÂºn no hay productos en este pedido.</p>
         }
       </div>
     </section>
 
     @if (allowedCapabilities(current, userRole()).canCreatePackages) {
-      <section class="panel package-shell" id="paquetes" #packagesSection>
+      <section class="panel" id="paquetes" #packagesSection>
         <div class="panel-head">
           <h2>Paquetes</h2>
           <div class="panel-actions">
@@ -411,7 +234,7 @@
               <div class="package-top">
                 <div>
                   <p class="eyebrow">{{ packageDisplayLabel(current, pkg) }}</p>
-                  <p class="muted">{{ pkg.item_ids.length }} productos - {{ pkg.state }}</p>
+                  <p class="muted">{{ pkg.item_ids.length }} productos Ã‚Â· {{ pkg.state }}</p>
                 </div>
                 <span class="chip">{{ qrPlaceholder(current, pkg) }}</span>
               </div>
@@ -434,7 +257,7 @@
           }
 
           @if (current.packages.length === 0) {
-            <p class="muted package-empty-note">Sin paquetes todavia. Genera uno al terminar de empacar.</p>
+            <p class="muted">Sin paquetes todavÃƒÂ­a. Genera uno al terminar de empacar.</p>
           }
         </div>
 
@@ -458,7 +281,7 @@
                       [checked]="isItemAssigned(current, selectedPackageId(), item.item_id)"
                       (change)="toggleItemAssignment(current, selectedPackageId()!, item, $any($event.target).checked)"
                     />
-                    <span>{{ item.title }} - {{ item.quantity }} pza</span>
+                    <span>{{ item.title }} Ã‚Â· {{ item.quantity }} pza</span>
                   </label>
                 }
               </div>
@@ -467,23 +290,23 @@
         }
       </section>
     } @else {
-      <section class="panel locked package-shell" id="paquetes" #packagesSection>
+      <section class="panel locked" id="paquetes" #packagesSection>
         <div class="panel-head">
           <h2>Paquetes</h2>
         </div>
-        <p class="muted package-empty-note">Los paquetes se habilitan al recibir/QA o empaque.</p>
+        <p class="muted">Los paquetes se habilitan al recibir/QA o empaque.</p>
       </section>
     }
 
     <section class="panel" id="bitacora" #timelineSection>
       <div class="panel-head">
-        <h2>Bitacora</h2>
+        <h2>BitÃƒÂ¡cora</h2>
       </div>
       @if (events().length > 0) {
         <ol class="timeline">
           @for (event of events(); track event.id) {
-            <li class="timeline-item">
-              <p class="eyebrow timeline-date">{{ event.createdAt | date: "short" }} - {{ relativeTime(event.createdAt) }}</p>
+            <li>
+              <p class="eyebrow">{{ event.createdAt | date: "short" }} Ã‚Â· {{ relativeTime(event.createdAt) }}</p>
               <p>{{ event.message }}</p>
               <p class="muted">{{ eventActor(event) }}</p>
             </li>
@@ -491,15 +314,15 @@
         </ol>
         @if (eventsHasMore()) {
           <button type="button" class="btn ghost with-icon" (click)="loadEvents()" [disabled]="eventsLoading()">
-            <span class="btn-icon" aria-hidden="true">?</span>
-            {{ eventsLoading() ? "Cargando..." : "Cargar mas" }}
+            <span class="btn-icon" aria-hidden="true">Ã¢â€ Â»</span>
+            {{ eventsLoading() ? "Cargando..." : "Cargar mÃƒÂ¡s" }}
           </button>
         }
       } @else {
         <ol class="timeline">
           @for (event of current.timeline; track event.id) {
-            <li class="timeline-item">
-              <p class="eyebrow timeline-date">{{ event.created_at | date: "short" }} - {{ relativeTime(event.created_at) }}</p>
+            <li>
+              <p class="eyebrow">{{ event.created_at | date: "short" }} Ã‚Â· {{ relativeTime(event.created_at) }}</p>
               <p>{{ event.label }}</p>
               <p class="muted">{{ eventActor(event) }}</p>
             </li>
@@ -507,28 +330,6 @@
         </ol>
       }
     </section>
-
-    <div class="sticky-action-bar" [class.show]="showStickyFooter()">
-      <div class="sticky-action-meta">
-        <p class="sticky-name">{{ customerName(current) }}</p>
-        <p class="sticky-total">Total: {{ formatCurrency(totals().totalClienta) }}</p>
-      </div>
-      <button
-        type="button"
-        class="btn sticky-confirm-btn confirm-intelligent-btn"
-        [class.primary]="isConfirmExistencesReady(current)"
-        [class.ghost]="!isConfirmExistencesReady(current)"
-        [disabled]="!isConfirmItemsPhase(current) || current.items.length === 0"
-        (click)="openActionModal(current)"
-      >
-        {{ confirmExistencesActionLabel(current) }}
-      </button>
-    </div>
-    @if (shouldShowStockFab(current)) {
-      <button type="button" class="stock-fab" (click)="scrollToFirstInsufficientProduct(current)">
-        {{ insufficientItemsCount(current) }} errores
-      </button>
-    }
   </section>
 
   @if (actionModalOpen() && actionContext()) {
@@ -548,28 +349,23 @@
         }
         @if (actionError()) {
           <div class="sheet-warning">
-            <p class="eyebrow">Atencion</p>
+            <p class="eyebrow">AtenciÃƒÂ³n</p>
             <p>{{ actionError() }}</p>
           </div>
         }
 
         @if (actionContext()?.actionId === "confirm_items") {
           <section class="confirm-shell" id="confirm-items-description">
-            <header class="confirm-header" [class.confirm-header-resolved]="allItemsResolved(current)">
+            <header class="confirm-header">
               <div class="confirm-header-main">
                 <p class="eyebrow">Control de inventario</p>
                 <h2 id="confirm-items-title">Confirmar existencias</h2>
                 @if (!allItemsResolved(current)) {
                   <p class="muted">Valida cada pieza para poder cerrar esta etapa.</p>
+                } @else {
+                  <p class="muted">Todo estÃƒÂ¡ resuelto. Puedes confirmar existencias.</p>
                 }
               </div>
-              @if (allItemsResolved(current)) {
-                <div class="confirm-header-state" aria-label="Resuelto">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                    <path d="m5 13 4 4L19 7"></path>
-                  </svg>
-                </div>
-              }
 
             </header>
 
@@ -641,46 +437,7 @@
                         }
                       </div>
                       <div class="item-info">
-                        <div class="item-title-row">
-                          <p class="item-title">{{ item.title }}</p>
-                          @if (item.confirmation_state === "confirmed" && !hasPartialConfirmation(item)) {
-                            <span class="item-confirm-icon" aria-label="Confirmado">
-                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                                <path d="m5 13 4 4L19 7"></path>
-                              </svg>
-                            </span>
-                          }
-                        </div>
-                        <p class="muted">{{ item.variant || "Variante" }} - {{ item.color || "Color" }}</p>
-                        <span class="item-chip source" [class.catalog]="item.source === 'catalogo'" [class.inventory]="item.source === 'inventario'">
-                          {{ item.source === "catalogo" ? "Catalogo" : "Inventario" }}
-                        </span>
-                      </div>
-                      <div class="item-actions">
-                        <p class="qty-caption">Cantidad disponible</p>
-                        <div class="qty-inline" [attr.aria-label]="'Cantidad disponible para ' + item.title">
-                          <button type="button" class="qty-mini" (click)="decreaseDraftConfirmedQty(item)" [disabled]="current.items.length === 0">-</button>
-                          <span class="qty-mini-value">{{ getDraftConfirmedQty(item) }}/{{ item.quantity }}</span>
-                          <button type="button" class="qty-mini" (click)="increaseDraftConfirmedQty(item)" [disabled]="current.items.length === 0">+</button>
-                        </div>
-                        <button
-                          type="button"
-                          class="btn ghost action-confirm"
-                          [class.active]="item.confirmation_state === 'confirmed'"
-                          [attr.aria-pressed]="item.confirmation_state === 'confirmed'"
-                          (click)="confirmItem(current, item)"
-                          [disabled]="current.items.length === 0"
-                        >
-                          <svg class="action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                            <path d="m5 13 4 4L19 7"></path>
-                          </svg>
-                          Confirmar
-                        </button>
-                        <button
-                          type="button"
-                          class="btn ghost action-out"
-                          [class.active]="item.confirmation_state === 'out_of_stock'"
-                          [attr.aria-pressed]="item.confirmation_state === 'out_of_stock'"
+                 â€¦756 tokens truncatedâ€¦ut_of_stock'"
                           (click)="markOutOfStock(current, item)"
                           [disabled]="current.items.length === 0"
                         >
@@ -702,16 +459,19 @@
             <div class="confirm-footer">
               <div class="confirm-footer-text">
                 <p class="confirm-footer-title">
-                  {{ resolvedItems(current) }}/{{ totalItems(current) }} resueltos
+                  {{ resolvedItems(current) }}/{{ totalItems(current) }} productos resueltos
                 </p>
                 <p class="muted small">
-                  Confirmadas {{ confirmedPieces(current) }} - Sin stock {{ outOfStockPieces(current) }} - Pendientes {{ pendingPieces(current) }}
+                  Confirmadas: {{ confirmedPieces(current) }} Ã‚Â· Sin stock: {{ outOfStockPieces(current) }}
                 </p>
+                @if (!allItemsResolved(current)) {
+                  <p class="muted small">AÃƒÂºn pendientes: {{ pendingPieces(current) }} piezas</p>
+                }
               </div>
               <button type="button" class="btn ghost" (click)="closeActionModal()">Cancelar</button>
               <button
                 type="button"
-                class="btn primary confirm-submit-btn"
+                class="btn primary"
                 [disabled]="!allItemsResolved(current) || actionSaving()"
                 (click)="confirmExistences(current)"
               >
@@ -728,12 +488,12 @@
               <article class="item-card compact">
                 <div class="item-info">
                   <p class="item-title">{{ item.title }}</p>
-                  <p class="muted">{{ item.variant || "Variante" }} - {{ item.color || "Color" }}</p>
+                  <p class="muted">{{ item.variant || "Variante" }} Ã‚Â· {{ item.color || "Color" }}</p>
                 </div>
                 <div class="item-actions">
                   <button type="button" class="btn ghost" (click)="receiveItem(current, item)">Recibido/QA</button>
                   <button type="button" class="btn ghost" (click)="markMissing(current, item)">Faltante</button>
-                  <button type="button" class="btn ghost" (click)="markDamaged(current, item)">Danado</button>
+                  <button type="button" class="btn ghost" (click)="markDamaged(current, item)">DaÃƒÂ±ado</button>
                   <button type="button" class="btn ghost" (click)="markPacked(current, item)">Empacar</button>
                 </div>
               </article>
@@ -756,7 +516,7 @@
                 <div class="package-top">
                   <div>
                     <p class="eyebrow">{{ packageDisplayLabel(current, pkg) }}</p>
-                    <p class="muted">{{ pkg.item_ids.length }} productos - {{ pkg.state }}</p>
+                    <p class="muted">{{ pkg.item_ids.length }} productos Ã‚Â· {{ pkg.state }}</p>
                   </div>
                 </div>
                 <button type="button" class="btn primary" (click)="deliverPackage(current, pkg)">Registrar entrega</button>
@@ -771,7 +531,7 @@
         }
 
         @if (current.status === "en_ruta" && !lateChangeApproved()) {
-          <button type="button" class="btn ghost" (click)="requestLateChange(current)">Solicitar cambio tardio</button>
+          <button type="button" class="btn ghost" (click)="requestLateChange(current)">Solicitar cambio tardÃƒÂ­o</button>
         }
 
         @if (actionContext()?.actionId !== "confirm_items") {
@@ -792,8 +552,8 @@
         (click)="$event.stopPropagation()"
       >
         <div class="sheet-handle" aria-hidden="true"></div>
-        <h2 id="planned-packages-title">?Cuantos paquetes esperas?</h2>
-        <p class="muted" id="planned-packages-description">Define la cantidad para habilitar logistica.</p>
+        <h2 id="planned-packages-title">Ã‚Â¿CuÃƒÂ¡ntos paquetes esperas?</h2>
+        <p class="muted" id="planned-packages-description">Define la cantidad para habilitar logÃƒÂ­stica.</p>
         <div class="sheet-field">
           <label>Paquetes planificados</label>
           <input type="number" min="1" class="input" [(ngModel)]="plannedPackagesInput" />
@@ -812,16 +572,12 @@
         <div class="sheet-handle" aria-hidden="true"></div>
         <h2 id="incident-modal-title">Nueva incidencia</h2>
         <div class="sheet-field">
-          <label>Titulo</label>
+          <label>TÃƒÂ­tulo</label>
           <input class="input" type="text" [(ngModel)]="incidentTitle" />
         </div>
         <div class="sheet-field">
           <label>Tipo</label>
-          <select class="input" [(ngModel)]="incidentType">
-            @for (type of incidentTypeOptions; track type) {
-              <option [value]="type">{{ type }}</option>
-            }
-          </select>
+          <input class="input" type="text" [(ngModel)]="incidentType" />
         </div>
         <div class="sheet-field">
           <label>Severidad</label>
@@ -858,7 +614,7 @@
         <div class="sheet-handle" aria-hidden="true"></div>
         <h2 id="resolve-modal-title">Resolver incidencia</h2>
         <div class="sheet-field">
-          <label>Nota de resolucion</label>
+          <label>Nota de resoluciÃƒÂ³n</label>
           <textarea class="input" rows="3" [(ngModel)]="resolveNote"></textarea>
         </div>
         <div class="sheet-actions">
@@ -883,7 +639,7 @@
             <div class="pill source-toggle">
               <label>
                 <input type="radio" name="source" value="catalogo" [(ngModel)]="newItemSource" [disabled]="!canEditItems(current)" />
-                Catalogo
+                CatÃƒÂ¡logo
               </label>
               <label>
                 <input type="radio" name="source" value="inventario" [(ngModel)]="newItemSource" [disabled]="!canEditItems(current)" />
@@ -920,13 +676,13 @@
                     }
                     <div>
                       <div class="card-title">{{ s.title }}</div>
-                      <div class="card-meta">{{ s.variant_name || s.size_label || "Variante" }} - {{ s.color_name || "Color" }}</div>
+                      <div class="card-meta">{{ s.variant_name || s.size_label || "Variante" }} Ã‚Â· {{ s.color_name || "Color" }}</div>
                     </div>
-                    <span class="card-tag inv">Inventario - {{ s.quantity_on_hand }} pzas</span>
+                    <span class="card-tag inv">Inventario Ã‚Â· {{ s.quantity_on_hand }} pzas</span>
                   </button>
                 }
                 @for (c of catalogSuggestions(); track c.doc.normalized_id) {
-                  <button type="button" role="option" class="listbox-option" [attr.aria-label]="'Catalogo: ' + c.doc.listing.title" (mousedown)="$event.preventDefault(); beginProductPick(); pickCatalog(c.doc, c.variant, c.color)" (touchstart)="$event.preventDefault(); beginProductPick(); pickCatalog(c.doc, c.variant, c.color)" (click)="beginProductPick(); pickCatalog(c.doc, c.variant, c.color)">
+                  <button type="button" role="option" class="listbox-option" [attr.aria-label]="'CatÃƒÂ¡logo: ' + c.doc.listing.title" (mousedown)="$event.preventDefault(); beginProductPick(); pickCatalog(c.doc, c.variant, c.color)" (touchstart)="$event.preventDefault(); beginProductPick(); pickCatalog(c.doc, c.variant, c.color)" (click)="beginProductPick(); pickCatalog(c.doc, c.variant, c.color)">
                     @if (c.image) {
                       <img class="listbox-thumb" [src]="c.image" alt="" />
                     } @else {
@@ -939,9 +695,9 @@
                     }
                     <div>
                       <div class="card-title">{{ c.doc.listing.title }}</div>
-                      <div class="card-meta">{{ c.doc.listing.category_hint || "Sin categoria" }}</div>
+                      <div class="card-meta">{{ c.doc.listing.category_hint || "Sin categorÃƒÂ­a" }}</div>
                     </div>
-                    <span class="card-tag cat">{{ c.variant.variant_name || '-' }} - {{ c.color || 'Color' }}</span>
+                    <span class="card-tag cat">{{ c.variant.variant_name || '-' }} Ã‚Â· {{ c.color || 'Color' }}</span>
                   </button>
                 }
               </div>
@@ -961,7 +717,7 @@
               }
               <div>
                 <p class="preview-title">{{ preview.title }}</p>
-                <p class="preview-meta">{{ preview.variant }} - {{ preview.color }}</p>
+                <p class="preview-meta">{{ preview.variant }} Ã‚Â· {{ preview.color }}</p>
                 @if (!selectedPreviewHasColorImage()) {
                   <span class="color-chip">Color: {{ preview.color }}</span>
                 }
@@ -1086,7 +842,7 @@
         </div>
         <div class="sheet-footer">
           <button type="button" class="btn primary" (click)="addItem(current)" [disabled]="!selectedPreview() || !canEditItems(current)">
-            Anadir al pedido
+            AÃƒÂ±adir al pedido
           </button>
           <button type="button" class="btn danger" (click)="closeAddItemModal()">Cancelar</button>
         </div>

@@ -41,8 +41,7 @@ export default class LoginPage {
   }
 
   private normalizeReturnUrl(url: string): string {
-    // Deep links de revision se respetan; todo lo demas entra por dashboard.
-    if (url.startsWith("/main/review/")) return url;
+    if (url.startsWith("/main/")) return url;
     if (url.startsWith("/review/")) return `/main${url}`;
     return "/main/dashboard";
   }

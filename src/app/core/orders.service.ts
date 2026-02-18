@@ -39,11 +39,13 @@ export interface OrderItem {
   variant?: string | null;
   color?: string | null;
   quantity: number;
+  confirmed_qty?: number | null;
   source: "catalogo" | "inventario";
   state: OrderItemState;
   confirmation_state?: "confirmed" | "out_of_stock" | "substitute" | "pending";
   supplier_id?: string | null;
   product_id?: string | null;
+  price_clienta?: number | null;
   price_public?: number | null;
   price_cost?: number | null;
   discount_pct?: number | null;
@@ -678,6 +680,39 @@ export class OrdersService {
           ...order,
           items: order.items.map((item) =>
             item.item_id === itemId ? { ...item, confirmation_state } : item
+          ),
+          updated_at: now,
+        };
+      }),
+    );
+    const order = this.getById(orderId);
+    if (order) {
+      await updateDoc(doc(this.colRef, orderId), {
+        items: order.items,
+        updated_at: serverTimestamp(),
+      });
+    }
+  }
+
+  async updateItemConfirmation(
+    orderId: string,
+    itemId: string,
+    payload: { confirmation_state: OrderItem["confirmation_state"]; confirmed_qty?: number | null },
+  ) {
+    const now = new Date().toISOString();
+    this.rows.update((current) =>
+      current.map((order) => {
+        if (order.order_id !== orderId) return order;
+        return {
+          ...order,
+          items: order.items.map((item) =>
+            item.item_id === itemId
+              ? {
+                  ...item,
+                  confirmation_state: payload.confirmation_state,
+                  confirmed_qty: payload.confirmed_qty ?? null,
+                }
+              : item,
           ),
           updated_at: now,
         };

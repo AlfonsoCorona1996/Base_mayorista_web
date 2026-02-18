@@ -1,0 +1,131 @@
+﻿          }
+        </div>
+
+        @if (allowedCapabilities(current, userRole()).canAssignItemsToPackages && current.packages.length > 0) {
+          <div class="assignment">
+            <div class="panel-actions">
+              <select class="input" [(ngModel)]="selectedPackageId">
+                <option [ngValue]="null">Selecciona un paquete</option>
+                @for (pkg of current.packages; track pkg.package_id) {
+                  <option [ngValue]="pkg.package_id">{{ packageDisplayLabel(current, pkg) }}</option>
+                }
+              </select>
+              <button type="button" class="btn ghost" (click)="autoDistribute(current)">Auto-distribuir</button>
+            </div>
+            @if (selectedPackageId()) {
+              <div class="items">
+                @for (item of current.items; track item.item_id) {
+                  <label class="assign-row">
+                    <input
+                      type="checkbox"
+                      [checked]="isItemAssigned(current, selectedPackageId(), item.item_id)"
+                      (change)="toggleItemAssignment(current, selectedPackageId()!, item, $any($event.target).checked)"
+                    />
+                    <span>{{ item.title }} Ã‚Â· {{ item.quantity }} pza</span>
+                  </label>
+                }
+              </div>
+            }
+          </div>
+        }
+      </section>
+    } @else {
+      <section class="panel locked" id="paquetes" #packagesSection>
+        <div class="panel-head">
+          <h2>Paquetes</h2>
+        </div>
+        <p class="muted">Los paquetes se habilitan al recibir/QA o empaque.</p>
+      </section>
+    }
+
+    <section class="panel" id="bitacora" #timelineSection>
+      <div class="panel-head">
+        <h2>BitÃƒÂ¡cora</h2>
+      </div>
+      @if (events().length > 0) {
+        <ol class="timeline">
+          @for (event of events(); track event.id) {
+            <li>
+              <p class="eyebrow">{{ event.createdAt | date: "short" }} Ã‚Â· {{ relativeTime(event.createdAt) }}</p>
+              <p>{{ event.message }}</p>
+              <p class="muted">{{ eventActor(event) }}</p>
+            </li>
+          }
+        </ol>
+        @if (eventsHasMore()) {
+          <button type="button" class="btn ghost with-icon" (click)="loadEvents()" [disabled]="eventsLoading()">
+            <span class="btn-icon" aria-hidden="true">Ã¢â€ Â»</span>
+            {{ eventsLoading() ? "Cargando..." : "Cargar mÃƒÂ¡s" }}
+          </button>
+        }
+      } @else {
+        <ol class="timeline">
+          @for (event of current.timeline; track event.id) {
+            <li>
+              <p class="eyebrow">{{ event.created_at | date: "short" }} Ã‚Â· {{ relativeTime(event.created_at) }}</p>
+              <p>{{ event.label }}</p>
+              <p class="muted">{{ eventActor(event) }}</p>
+            </li>
+          }
+        </ol>
+      }
+    </section>
+  </section>
+
+  @if (actionModalOpen() && actionContext()) {
+    <div class="sheet-backdrop" (click)="closeActionModal()">
+      <div
+        class="sheet"
+        role="dialog"
+        aria-modal="true"
+        [class.sheet-confirm-items]="actionContext()?.actionId === 'confirm_items'"
+        [attr.aria-labelledby]="actionContext()?.actionId === 'confirm_items' ? 'confirm-items-title' : 'action-modal-title'"
+        [attr.aria-describedby]="actionContext()?.actionId === 'confirm_items' ? 'confirm-items-description' : null"
+        (click)="$event.stopPropagation()"
+      >
+        <div class="sheet-handle" aria-hidden="true"></div>
+        @if (actionContext()?.actionId !== "confirm_items") {
+          <h2 id="action-modal-title">{{ actionContext()?.label }}</h2>
+        }
+        @if (actionError()) {
+          <div class="sheet-warning">
+            <p class="eyebrow">AtenciÃƒÂ³n</p>
+            <p>{{ actionError() }}</p>
+          </div>
+        }
+
+        @if (actionContext()?.actionId === "confirm_items") {
+          <section class="confirm-shell" id="confirm-items-description">
+            <header class="confirm-header">
+              <div class="confirm-header-main">
+                <p class="eyebrow">Control de inventario</p>
+                <h2 id="confirm-items-title">Confirmar existencias</h2>
+                @if (!allItemsResolved(current)) {
+                  <p class="muted">Valida cada pieza para poder cerrar esta etapa.</p>
+                } @else {
+                  <p class="muted">Todo estÃƒÂ¡ resuelto. Puedes confirmar existencias.</p>
+                }
+              </div>
+
+            </header>
+
+            @if (current.items.length > 0) {
+              <div class="confirm-kpis">
+                <article class="confirm-kpi kpi-confirmed">
+                  <p class="kpi-label">Confirmadas</p>
+                  <p class="kpi-value">{{ confirmedPieces(current) }}</p>
+                </article>
+                <article class="confirm-kpi kpi-out">
+                  <p class="kpi-label">Sin stock</p>
+                  <p class="kpi-value">{{ outOfStockPieces(current) }}</p>
+                </article>
+                <article class="confirm-kpi kpi-pending">
+                  <p class="kpi-label">Pendientes</p>
+                  <p class="kpi-value">{{ pendingPieces(current) }}</p>
+                </article>
+              </div>
+            }
+
+          @if (current.items.length === 0) {
+            <div class="sheet-warning">
+
