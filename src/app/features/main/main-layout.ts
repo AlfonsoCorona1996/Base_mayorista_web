@@ -67,6 +67,22 @@ export default class MainLayoutPage {
     return this.access.can(permission);
   }
 
+  userInitials(): string {
+    const raw = this.access.displayName().trim();
+    if (!raw) return "US";
+    const parts = raw.split(/\s+/).filter(Boolean).slice(0, 2);
+    return parts.map((part) => part[0]?.toUpperCase() ?? "").join("") || "US";
+  }
+
+  roleLabel(): string {
+    const role = this.access.profile()?.role;
+    if (!role) return "Sin rol";
+    if (role === "super_admin") return "Super admin";
+    if (role === "administrativo") return "Administrativo";
+    if (role === "repartidor") return "Repartidor";
+    return "Administrador";
+  }
+
   private syncMenuForViewport() {
     if (this.isDesktopViewport() && !this.menuOpen()) {
       this.menuOpen.set(true);
@@ -83,22 +99,23 @@ export default class MainLayoutPage {
   }
 
   private loadGroupState(): Record<string, boolean> {
+    const fallback = { operaciones: true, logistica: true, catalogo: true, configuracion: true };
     if (typeof window === "undefined") {
-      return { operacion: false, catalogo: false, clientes: false, seguridad: false };
+      return fallback;
     }
 
     try {
       const raw = window.localStorage.getItem("panel.menu.groups");
-      if (!raw) return { operacion: false, catalogo: false, clientes: false, seguridad: false };
+      if (!raw) return fallback;
       const parsed = JSON.parse(raw) as Record<string, boolean>;
       return {
-        operacion: Boolean(parsed["operacion"]),
+        operaciones: Boolean(parsed["operaciones"] ?? parsed["operacion"]),
+        logistica: Boolean(parsed["logistica"] ?? parsed["clientes"]),
         catalogo: Boolean(parsed["catalogo"]),
-        clientes: Boolean(parsed["clientes"]),
-        seguridad: Boolean(parsed["seguridad"]),
+        configuracion: Boolean(parsed["configuracion"] ?? parsed["seguridad"]),
       };
     } catch {
-      return { operacion: false, catalogo: false, clientes: false, seguridad: false };
+      return fallback;
     }
   }
 

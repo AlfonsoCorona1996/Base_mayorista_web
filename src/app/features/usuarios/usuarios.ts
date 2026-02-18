@@ -60,7 +60,6 @@ export default class UsuariosPage {
   draftRole: AppRole = "administrativo";
   draftActive = true;
   draftPermissions: PermissionMap = buildPermissionsForRole("administrativo");
-  readonly roleColumns: AppRole[] = ["super_admin", "admin", "administrativo", "repartidor"];
   readonly rolePreset: Record<AppRole, PermissionMap> = {
     super_admin: buildPermissionsForRole("super_admin"),
     admin: buildPermissionsForRole("admin"),
@@ -83,7 +82,10 @@ export default class UsuariosPage {
 
   private adminApiBaseUrl(): string {
     const fromEnv = ((environment as { adminApiBaseUrl?: string }).adminApiBaseUrl || "").trim();
-    return fromEnv.endsWith("/") ? fromEnv.slice(0, -1) : fromEnv;
+    const fromStorage = (typeof window !== "undefined" ? window.localStorage.getItem("adminApiBaseUrl") : "") || "";
+    const fromWindow = (typeof window !== "undefined" ? (window as any).__ADMIN_API_BASE_URL__ : "") || "";
+    const raw = (fromStorage || fromEnv || fromWindow || "").trim();
+    return raw.endsWith("/") ? raw.slice(0, -1) : raw;
   }
 
   private buildUrl(path: string): string {
@@ -111,6 +113,7 @@ export default class UsuariosPage {
   }
 
   private async postAdmin(path: string, payload: Record<string, any>): Promise<any> {
+    const baseUrl = this.adminApiBaseUrl();
     const response = await fetch(this.buildUrl(path), {
       method: "POST",
       headers: await this.authHeaders(),
@@ -122,6 +125,9 @@ export default class UsuariosPage {
 
     if (!response.ok) {
       const code = (data?.error_code || data?.code || "") as string;
+      if (response.status === 404 && !baseUrl) {
+        throw new Error("Endpoint no encontrado (404). Configura adminApiBaseUrl con la URL del backend.");
+      }
       throw new Error(this.mapApiError(response.status, code));
     }
 
@@ -251,10 +257,6 @@ export default class UsuariosPage {
   applyRoleTemplate() {
     if (!this.canEditPermissions()) return;
     this.draftPermissions = { ...this.rolePreset[this.draftRole] };
-  }
-
-  rolePresetEnabled(role: AppRole, permission: AppPermission): boolean {
-    return Boolean(this.rolePreset[role][permission]);
   }
 
   async saveUser() {
