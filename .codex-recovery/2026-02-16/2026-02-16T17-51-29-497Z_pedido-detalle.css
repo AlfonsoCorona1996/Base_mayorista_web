@@ -1,0 +1,39 @@
+﻿1058:   background: #fbdde3;
+1059:   border-color: #dc8f9d;
+1060:   color: #8e2231;
+1061: }
+1062: 
+1063: .order-item-card .btn--danger:active:not(:disabled) {
+1064:   background: #f8d2da;
+1065:   transform: translateY(1px);
+1066: }
+1067: 
+1068: .order-item-card .btn--danger:disabled {
+1069:   opacity: 0.6;
+1070:   cursor: not-allowed;
+1071: }
+1072: 
+1073: .order-item-card button:focus-visible {
+1074:   outline: 2px solid var(--focus-ring);
+1075:   outline-offset: 2px;
+1076: }
+1077: 
+1078: .btn.ghost.active {
+1079:   background: var(--accent);
+1080:   color: #ffffff;
+1081:   border-color: var(--accent);
+1082: }
+1083: 
+1084: .btn.ghost.active:hover {
+1085:   filter: brightness(0.95);
+1086: }
+1087: 
+1088: .item-actions .btn.action-confirm.active {
+1089:   background: #e6f7ef;
+1090:   color: #14653f;
+1091:   border-color: #97d6b6;
+1092: }
+1093: 
+1094: .item-actions .btn.action-out.active {
+1095:   background: #fde9ec;
+

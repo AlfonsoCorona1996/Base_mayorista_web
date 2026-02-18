@@ -1,0 +1,121 @@
+﻿
+.package .btn.ghost {
+  align-self: flex-start;
+}
+
+.package-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.qr-block {
+  background: #f7f9fd;
+  border: 1px dashed var(--border);
+  border-radius: 0.75rem;
+  padding: 0.6rem;
+}
+
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  word-break: break-all;
+}
+
+.timeline {
+  margin: 0;
+  padding-left: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.timeline li {
+  padding: 0.35rem 0;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.timeline li:last-child {
+  border-bottom: none;
+}
+
+.timeline li p {
+  margin: 0.08rem 0;
+}
+
+.timeline-date {
+  font-family: "JetBrains Mono", "Roboto Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.75rem;
+  letter-spacing: 0.01em;
+}
+
+.chip {
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.status-badge {
+  font-size: 0.72rem;
+  padding: 0.18rem 0.55rem;
+  line-height: 1.1;
+  align-self: center;
+}
+
+.chip.info {
+  background: #f1f5f9;
+  color: #0f437a;
+  border-color: #94a3b8;
+}
+
+.chip.accent {
+  background: #f1f5f9;
+  color: #1e293b;
+  border-color: #cde6ff;
+}
+
+.chip.success {
+  background: #e6f7ef;
+  color: var(--success);
+  border-color: #b9ebd3;
+}
+
+.chip.warning {
+  background: #fff3e0;
+  color: #ad6b00;
+  border-color: #ffe0b2;
+}
+
+.chip.danger {
+  background: #fde9ec;
+  color: var(--danger);
+  border-color: #f6cdd2;
+}
+
+.btn {
+  border: 1px solid var(--border);
+  border-radius: 0.9rem;
+  padding: 0.5rem 0.9rem;
+  font-weight: 600;
+  background: #fff;
+  color: #1b1f2a;
+  cursor: pointer;
+}
+
+.btn.link {
+  background: transparent;
+  border: none;
+  color: var(--accent);
+}
+
+.btn.primary {
+  background: linear-gradient(120deg, #1e293b, #334155);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+}
+
+.btn.ghost {
+

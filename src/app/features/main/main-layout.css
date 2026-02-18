@@ -45,6 +45,12 @@
   color: #f1f6ff;
 }
 
+.brand-user {
+  margin: 4px 0 0;
+  font-size: 0.78rem;
+  color: #c8d8f0;
+}
+
 .menu {
   display: grid;
   gap: 12px;
@@ -78,8 +84,17 @@
 }
 
 .menu-section-icon {
-  font-size: 0.9rem;
+  width: 15px;
+  height: 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   opacity: 0.9;
+}
+
+.menu-section-icon svg {
+  width: 15px;
+  height: 15px;
 }
 
 .menu-section-header:hover {

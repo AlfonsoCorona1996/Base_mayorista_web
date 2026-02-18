@@ -1,0 +1,141 @@
+﻿  }
+
+  .sheet-body {
+    padding: 0.85rem 1rem 1rem;
+  }
+}
+
+.btn.danger {
+  border: 1px solid #f1b3b8;
+  color: #b4232c;
+  background: #fdecee;
+}
+
+.input.small {
+  min-width: 140px;
+}
+
+.package {
+  border: 1px solid var(--border);
+  border-radius: 0.9rem;
+  padding: 0.75rem;
+  background: #fdfefe;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.package .btn.ghost {
+  align-self: flex-start;
+}
+
+.package-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.qr-block {
+  background: #f7f9fd;
+  border: 1px dashed var(--border);
+  border-radius: 0.75rem;
+  padding: 0.6rem;
+}
+
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  word-break: break-all;
+}
+
+.timeline {
+  margin: 0;
+  padding-left: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.chip {
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.chip.info {
+  background: #f1f5f9;
+  color: #0f437a;
+  border-color: #94a3b8;
+}
+
+.chip.accent {
+  background: #f1f5f9;
+  color: #1e293b;
+  border-color: #cde6ff;
+}
+
+.chip.success {
+  background: #e6f7ef;
+  color: var(--success);
+  border-color: #b9ebd3;
+}
+
+.chip.warning {
+  background: #fff3e0;
+  color: #ad6b00;
+  border-color: #ffe0b2;
+}
+
+.chip.danger {
+  background: #fde9ec;
+  color: var(--danger);
+  border-color: #f6cdd2;
+}
+
+.btn {
+  border: 1px solid var(--border);
+  border-radius: 0.9rem;
+  padding: 0.5rem 0.9rem;
+  font-weight: 600;
+  background: #fff;
+  color: #1b1f2a;
+  cursor: pointer;
+}
+
+.btn.link {
+  background: transparent;
+  border: none;
+  color: var(--accent);
+}
+
+.btn.primary {
+  background: linear-gradient(120deg, #1e293b, #334155);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+}
+
+.btn.ghost {
+  background: #f7f9fd;
+}
+
+.btn.with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.btn-icon {
+  width: 1rem;
+  text-align: center;
+  font-weight: 800;
+}
+
+.small {
+  font-size: 0.85rem;
+}
+
+.link-back:focus-visible,
+

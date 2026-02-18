@@ -6,7 +6,7 @@ import { STORAGE } from "../../core/firebase.providers";
 import { InventoryItem, InventoryService } from "../../core/inventory.service";
 import { SuppliersService } from "../../core/suppliers.service";
 
-type StockFilter = "all" | "low" | "sold_out";
+type StockFilter = "all" | "low" | "sold_out" | "without_price";
 
 interface InventoryDraft {
   inventory_id: string;
@@ -70,6 +70,7 @@ export default class InventarioPage {
   lowStockCount = computed(() => this.rows().filter((row) => row.quantity_on_hand > 0 && row.quantity_on_hand <= 3).length);
 
   soldOutCount = computed(() => this.rows().filter((row) => row.quantity_on_hand === 0).length);
+  withoutPriceCount = computed(() => this.rows().filter((row) => !row.unit_price || row.unit_price <= 0).length);
   totalInvestment = computed(() =>
     this.rows().reduce((sum, row) => sum + (row.unit_price || 0) * row.quantity_on_hand, 0),
   );
@@ -136,6 +137,7 @@ export default class InventarioPage {
       .filter((row) => {
         if (stockFilter === "low" && (row.quantity_on_hand === 0 || row.quantity_on_hand > 3)) return false;
         if (stockFilter === "sold_out" && row.quantity_on_hand > 0) return false;
+        if (stockFilter === "without_price" && row.unit_price && row.unit_price > 0) return false;
 
         if (!term) return true;
 
@@ -342,7 +344,7 @@ export default class InventarioPage {
   }
 
   onStockFilterChange(next: string) {
-    if (next === "low" || next === "sold_out" || next === "all") {
+    if (next === "low" || next === "sold_out" || next === "without_price" || next === "all") {
       this.stockFilter.set(next);
       return;
     }
@@ -402,17 +404,11 @@ export default class InventarioPage {
         source_reason: this.draft.source_reason,
       };
 
-      const itemId = await this.inventory.save(payload);
+      await this.inventory.save(payload);
       const isEditing = Boolean(this.editingId());
-      this.success.set(isEditing ? "Item actualizado" : "Item agregado al inventario");
-      const saved = this.rows().find((row) => row.inventory_id === itemId);
-      if (isEditing) {
-        if (saved) {
-          this.startEdit(saved);
-        }
-      } else {
-        this.startCreate();
-      }
+      const message = isEditing ? "Item actualizado" : "Item agregado al inventario";
+      this.startCreate();
+      this.success.set(message);
     } catch (error: any) {
       this.error.set(error?.message || "No se pudo guardar el item");
     } finally {

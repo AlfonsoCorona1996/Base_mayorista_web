@@ -74,6 +74,23 @@
       </div>
       <strong>{{ formatCount(rows().length) }}</strong>
     </button>
+
+    <button
+      type="button"
+      class="stat-card"
+      (click)="applyQuickFilter('without_price')"
+      [class.stat-card-active]="stockFilter() === 'without_price'"
+    >
+      <div class="stat-head">
+        <p>Sin precio</p>
+        <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M12 1v22"></path>
+          <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7H14.5a3.5 3.5 0 0 1 0 7H6"></path>
+          <path d="M4 4l16 16"></path>
+        </svg>
+      </div>
+      <strong>{{ formatCount(withoutPriceCount()) }}</strong>
+    </button>
   </section>
 
   @if (error()) {
@@ -111,6 +128,7 @@
         <option value="all">Todo el inventario</option>
         <option value="low">Pocas piezas (1 a 3)</option>
         <option value="sold_out">Solo agotados</option>
+        <option value="without_price">Sin precio</option>
       </select>
 
       <button

@@ -1,0 +1,61 @@
+﻿    justify-content: center;
+  }
+
+  .kpi-nowrap {
+    font-size: 0.74rem;
+  }
+
+  .summary-card--financial {
+    grid-column: 1 / -1;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.45rem;
+  }
+
+  .sticky-action-bar {
+    width: calc(100% - 1rem);
+    bottom: 8px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .sticky-confirm-btn {
+    width: 100%;
+  }
+
+  .page {
+    padding: 0.75rem;
+    padding-bottom: 7rem;
+  }
+
+  .panel-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .panel-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .section-nav {
+    top: 0;
+    padding: 0.45rem;
+  }
+
+  .section-nav a,
+  .section-nav button {
+    font-size: 0.8rem;
+    padding: 0.3rem 0.65rem;
+  }
+
+  .item,
+  .package {
+    padding: 0.6rem;
+  }
+
+  .status-actions {
+    width: 100%;
+  }
+}
+
+

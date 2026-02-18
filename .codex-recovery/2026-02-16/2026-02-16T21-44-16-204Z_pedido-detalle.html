@@ -1,0 +1,191 @@
+﻿            Todos ({{ totalItems(current) }})
+          </button>
+          <button
+            type="button"
+            class="products-filter-btn"
+            [class.active]="productStockFilter() === 'insufficient'"
+            [class.products-filter-btn--magnet]="shouldMagnetizeInsufficientTab(current)"
+            [disabled]="insufficientItemsCount(current) === 0"
+            (click)="setProductStockFilter('insufficient')"
+          >
+            Faltantes
+            <span class="products-filter-count" [class.products-filter-count--alert]="insufficientItemsCount(current) > 0">
+              ({{ insufficientItemsCount(current) }})
+            </span>
+          </button>
+          @if (isConfirmItemsPhase(current) && hasPendingItems(current)) {
+            <button
+              type="button"
+              class="products-batch-btn"
+              (click)="confirmarTodoDisponible()"
+              [disabled]="!canMagicConfirm(current)"
+            >
+              Marcar todo como disponible
+            </button>
+          }
+        </div>
+      }
+      <div class="items order-item-grid">
+        @for (item of filteredProductItems(current); track item.item_id) {
+          <article
+            class="order-item-card card-product"
+            [id]="productCardId(item)"
+            [class.has-incident]="itemHasOpenIncident(item.item_id)"
+            [class.card-product--alert]="hasInsufficientStock(item) && estado_confirmacion(item) === 'pendiente'"
+            [class.is-confirmed]="estado_confirmacion(item) === 'confirmado'"
+            [class.is-out-of-stock]="estado_confirmacion(item) === 'sin_stock'"
+          >
+            <div class="product-media">
+              <img [src]="itemImage(item) || 'https://via.placeholder.com/240x200?text=Prod'" [alt]="item.title" />
+            </div>
+
+            <div class="product-body">
+              <div class="product-title-stack">
+                <h4 class="product-name">{{ item.title }}</h4>
+                <span class="product-origin">
+                  @if (item.source === "inventario") {
+                    <span>ðŸ“¦ ALMACÃ‰N</span>
+                  } @else if (item.source === "catalogo") {
+                    <span>ðŸ“– CATÃLOGO</span>
+                  } @else {
+                    <span>ðŸŒ EXTERNO</span>
+                  }
+                </span>
+              </div>
+              <p class="meta product-meta">Talla: {{ item.variant || "Sin talla" }} | Color: {{ item.color || "Sin color" }}</p>
+              <p class="price product-price-inline">
+                <span class="label">Precio clienta</span>
+                <span class="value">{{ formatCurrency(item.price_clienta ?? item.price_public ?? null) || itemPriceLabel(item) }}</span>
+              </p>
+
+              <div class="chips product-chips">
+                <span class="chip chip--pieces">Piezas: {{ item.quantity }}</span>
+                @if (estado_confirmacion(item) === "sin_stock") {
+                  <span class="chip chip--agotado">Agotado</span>
+                }
+                @if (hasPartialConfirmation(item)) {
+                  <span class="chip chip--partial">Parcial: {{ confirmedQty(item) }} de {{ item.quantity }}</span>
+                }
+              </div>
+              @if (hasInsufficientStock(item) && estado_confirmacion(item) === "pendiente") {
+                <span class="stock-warning-micro">âš ï¸ Solo {{ availableStock(item) }} disponibles</span>
+              }
+            </div>
+
+            <div class="product-actions" (click)="$event.stopPropagation()">
+              @if (estado_confirmacion(item); as itemState) {
+                @if (isConfirmItemsPhase(current) && itemState === "pendiente") {
+                  @if (hasInsufficientStock(item)) {
+                    <div class="qty-inline card-qty-inline" [attr.aria-label]="'Cantidad confirmable para ' + item.title">
+                      <button type="button" class="qty-mini" [disabled]="isQuickConfirming(item)" (click)="decreaseCardConfirmedQty(item)">-</button>
+                      <span class="qty-mini-value">{{ getCardDraftConfirmedQty(item) }} / {{ item.quantity }}</span>
+                      <button type="button" class="qty-mini" [disabled]="isQuickConfirming(item)" (click)="increaseCardConfirmedQty(item)">+</button>
+                    </div>
+                  }
+                  <button
+                    type="button"
+                    class="btn card-action-btn card-action-btn--confirm"
+                    [disabled]="isQuickConfirming(item)"
+                    (click)="confirmarItem(item)"
+                  >
+                    Confirmar
+                  </button>
+                  <button
+                    type="button"
+                    class="btn card-action-btn card-action-btn--out"
+                    [disabled]="isQuickConfirming(item)"
+                    (click)="marcarAgotado(item)"
+                  >
+                    Agotar
+                  </button>
+                } @else if (itemState === "confirmado") {
+                  <span class="product-state-badge" aria-label="Confirmado">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <path d="m5 13 4 4L19 7"></path>
+                    </svg>
+                    <span>Confirmado</span>
+                  </span>
+                } @else if (itemState === "sin_stock") {
+                  <span class="product-state-out">Sin Stock</span>
+                }
+              }
+              @if (!isConfirmItemsPhase(current)) {
+                @if (allowedCapabilities(current, userRole()).canRegisterReception) {
+                  <button type="button" class="btn ghost" (click)="receiveItem(current, item)">Registrar recepciÃ³n/QA</button>
+                }
+                @if (allowedCapabilities(current, userRole()).canPack) {
+                  <button type="button" class="btn ghost" (click)="markPacked(current, item)">Empacar</button>
+                }
+                <div class="card-delete-wrap">
+                  <button
+                    type="button"
+                    class="btn btn--danger btn--icon-delete"
+                    (click)="removeItem(current, item)"
+                    aria-label="Quitar producto"
+                    [disabled]="!canEditItems(current)"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <path d="M3 6h18"></path>
+                      <path d="M8 6V4h8v2"></path>
+                      <path d="M7 6l1 14h8l1-14"></path>
+                    </svg>
+                  </button>
+                </div>
+              }
+            </div>
+          </article>
+        }
+        @if (current.items.length === 0) {
+          <p class="muted">AÃºn no hay productos en este pedido.</p>
+        }
+      </div>
+    </section>
+
+    @if (allowedCapabilities(current, userRole()).canCreatePackages) {
+      <section class="panel package-shell" id="paquetes" #packagesSection>
+        <div class="panel-head">
+          <h2>Paquetes</h2>
+          <div class="panel-actions">
+            <button
+              type="button"
+              class="btn primary with-icon"
+              [disabled]="requiresPlannedPackages(current)"
+              [attr.title]="requiresPlannedPackages(current) ? 'Define paquetes planificados para continuar' : null"
+              (click)="createPackage(current)"
+            >
+              <span class="btn-icon" aria-hidden="true">+</span>
+              Crear paquete
+            </button>
+            @if (requiresPlannedPackages(current)) {
+              <span class="muted small">Define paquetes planificados</span>
+            }
+          </div>
+        </div>
+
+        <div class="packages">
+          @for (pkg of current.packages; track pkg.package_id) {
+            <article class="package">
+              <div class="package-top">
+                <div>
+                  <p class="eyebrow">{{ packageDisplayLabel(current, pkg) }}</p>
+                  <p class="muted">{{ pkg.item_ids.length }} productos Â· {{ pkg.state }}</p>
+                </div>
+                <span class="chip">{{ qrPlaceholder(current, pkg) }}</span>
+              </div>
+              @if (debugMode()) {
+                <div class="qr-block">
+                  <p class="muted">QR data</p>
+                  <code>{{ packageCode(current, pkg) }}</code>
+                </div>
+              }
+              @if (allowedCapabilities(current, userRole()).canPrintLabels) {
+                <button type="button" class="btn ghost" (click)="printLabel(current, pkg)">Imprimir etiqueta</button>
+              }
+              @if (allowedCapabilities(current, userRole()).canDeliverByPackage) {
+                <button type="button" class="btn primary" (click)="deliverPackage(current, pkg)">Registrar entrega</button>
+              }
+              @if (allowedCapabilities(current, userRole()).canAssignItemsToPackages) {
+                <button type="button" class="btn ghost" (click)="closePackage(current, pkg)">Cerrar paquete</button>
+              }
+            </article>
+

@@ -1,0 +1,221 @@
+﻿  text-align: left;
+  min-width: 120px;
+}
+
+.order-item-card .price .label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(15, 23, 42, 0.55);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.order-item-card .price .value {
+  display: block;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.order-item-card .chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.order-item-card .chip {
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  background: #ffffff;
+}
+
+.order-item-card .chip--pieces {
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+  color: #475569;
+}
+
+.order-item-card .chip--soft {
+  background: rgba(15, 23, 42, 0.04);
+  border-color: transparent;
+}
+
+.order-item-card .chip--inventory {
+  background: #e6f7ef;
+  color: #1f9d63;
+}
+
+.order-item-card .source-link {
+  color: #6b7280;
+  text-decoration: none;
+  font-size: 0.82rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.order-item-card .source-link svg {
+  width: 12px;
+  height: 12px;
+}
+
+.order-item-card .actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 8px;
+}
+
+.order-item-card .btn--danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  min-width: 92px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid #e6a8b1;
+  background: #fde9ec;
+  color: #9f2c3a;
+  font-weight: 800;
+  box-shadow: inset 0 -1px 0 rgba(159, 44, 58, 0.1);
+  margin-left: auto;
+}
+
+.order-item-card .btn--icon-delete {
+  min-width: 34px;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 999px;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease, visibility 120ms ease;
+}
+
+.order-item-card .btn--icon-delete svg {
+  width: 14px;
+  height: 14px;
+}
+
+.order-item-card:hover .btn--icon-delete,
+.order-item-card:focus-within .btn--icon-delete {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.order-item-card .btn--danger:hover:not(:disabled) {
+  background: #fbdde3;
+  border-color: #dc8f9d;
+  color: #8e2231;
+}
+
+.order-item-card .btn--danger:active:not(:disabled) {
+  background: #f8d2da;
+  transform: translateY(1px);
+}
+
+.order-item-card .btn--danger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.order-item-card button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.btn.ghost.active {
+  background: var(--accent);
+  color: #ffffff;
+  border-color: var(--accent);
+}
+
+.btn.ghost.active:hover {
+  filter: brightness(0.95);
+}
+
+.item-actions .btn.action-confirm.active {
+  background: #e6f7ef;
+  color: #14653f;
+  border-color: #97d6b6;
+}
+
+.item-actions .btn.action-out.active {
+  background: #fde9ec;
+  color: #a22a37;
+  border-color: #e6a8b1;
+}
+
+.item-actions .btn.action-confirm:not(.active) {
+  background: #f3fbf6;
+  border-color: #c8ead7;
+  color: #1e6f49;
+}
+
+.item-actions .btn.action-out:not(.active) {
+  background: #fff4f6;
+  border-color: #efc2c9;
+  color: #ab3142;
+}
+
+.supplier-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.4rem;
+  margin-bottom: 0.25rem;
+}
+
+.confirm-close .action-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.sheet-confirm-items .item-chip.source.catalog {
+  background: #f1f5f9;
+  color: #0f437a;
+  border-color: #94a3b8;
+}
+
+.sheet-confirm-items .item-chip.source.inventory {
+  background: #f1f5fb;
+  color: #3d4d63;
+  border-color: #d7deed;
+}
+
+.status-note {
+  margin: 0.2rem 0 0;
+  font-size: 0.78rem;
+  color: #5b6475;
+}
+
+.status-note-ok {
+  color: #1a6b45;
+  font-weight: 700;
+}
+
+.status-note-out {
+  color: #a12d3d;
+  font-weight: 700;
+}
+
+.status-note-partial {
+  color: #8c5a0d;
+  font-weight: 700;
+}
+
+.confirm-shell {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.confirm-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+

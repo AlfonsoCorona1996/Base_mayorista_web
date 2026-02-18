@@ -1,0 +1,31 @@
+﻿   1: :root {
+   2:   --border: #e4e9f2;
+   3:   --muted: #5b6475;
+   4:   --card: #ffffff;
+   5:   --accent: #0d6efd;
+   6:   --accent-soft: #eef5ff;
+   7:   --accent-border: #c7dcff;
+   8:   --danger: #e45b61;
+   9:   --danger-soft: #fff4f6;
+  10:   --danger-border: #efc2c9;
+  11:   --success: #1f9d63;
+  12:   --success-soft: #e6f7ef;
+  13:   --warning: #f3a83b;
+  14:   --bg-subtle: #f7f9fd;
+  15:   --focus-ring: #0d6efd;
+  16: }
+  17: 
+  18: .page {
+  19:   display: flex;
+  20:   flex-direction: column;
+  21:   gap: 1rem;
+  22:   padding: 1rem;
+  23:   overflow-x: hidden;
+  24: }
+  25: 
+  26: .page-head {
+  27:   display: flex;
+  28:   justify-content: space-between;
+  29:   align-items: flex-start;
+  30:   gap: 1rem;
+

@@ -22,7 +22,7 @@
               </svg>
             </button>
             @if (copiedOrderId()) {
-              <span class="copy-toast">!Copiado!</span>
+              <span class="copy-toast">Ã‚¡Copiado!</span>
             }
           </div>
         </div>
@@ -59,7 +59,7 @@
       <div class="sticky-banner">
         <div>
           <p class="eyebrow">Define paquetes planificados</p>
-          <p class="muted">Necesitamos la cantidad esperada para habilitar acciones de logistica.</p>
+          <p class="muted">Necesitamos la cantidad esperada para habilitar acciones de logÃƒÂ­stica.</p>
         </div>
         <button type="button" class="btn primary" (click)="openPlannedPackages()">Definir paquetes</button>
       </div>
@@ -107,17 +107,17 @@
       <article class="summary-card summary-card--profit">
         <p class="eyebrow">Ganancia</p>
         <p class="summary-money summary-money--profit">
-          <span>MXN</span>
+          <span>Ã¢â€ â€” MXN</span>
           <strong class="summary-value summary-value--profit">{{ formatCurrency(totals().ganancia) }}</strong>
         </p>
       </article>
     </section>
 
-    <nav class="section-nav" aria-label="Navegacion de secciones">
+    <nav class="section-nav" aria-label="NavegaciÃƒÂ³n de secciones">
       <button type="button" (click)="scrollToSection('incidencias')">Incidencias</button>
       <button type="button" (click)="scrollToSection('productos')">Productos</button>
       <button type="button" (click)="scrollToSection('paquetes')">Paquetes</button>
-      <button type="button" (click)="scrollToSection('bitacora')">Bitacora</button>
+      <button type="button" (click)="scrollToSection('bitacora')">BitÃƒ¡cora</button>
     </nav>
 
     <section class="panel" id="incidencias" #incidentsSection>
@@ -146,29 +146,21 @@
           >
             <div class="incident-main">
               <div class="incident-head">
-                <div class="incident-title-row">
-                  <p class="incident-title">{{ inc.title }}</p>
-                  <div class="incident-chips">
-                    <span class="chip incident-chip incident-chip-type">{{ inc.type }}</span>
-                    <span class="chip incident-chip incident-chip-severity">
-                      {{ inc.severity === "high" ? "Alta" : inc.severity === "medium" ? "Media" : "Baja" }}
-                    </span>
-                  </div>
+                <p class="incident-title">{{ inc.title }}</p>
+                <div class="incident-chips">
+                  <span class="chip incident-chip incident-chip-type">{{ inc.type }}</span>
+                  <span class="chip incident-chip incident-chip-severity">
+                    {{ inc.severity === "high" ? "Alta" : inc.severity === "medium" ? "Media" : "Baja" }}
+                  </span>
                 </div>
               </div>
               <p class="incident-reason">{{ inc.reason }}</p>
-              <div class="incident-meta-grid">
-                <p class="incident-meta"><strong>Asignado a:</strong> {{ inc.assigneeId || "Sin asignar" }}</p>
-                <p class="incident-meta"><strong>Fecha:</strong> {{ inc.createdAt | date: "short" }}</p>
-                <p class="incident-meta"><strong>Admin:</strong> {{ inc.createdBy }}</p>
-              </div>
+              <p class="incident-meta">Asignado a {{ inc.assigneeId || "Sin asignar" }}</p>
+              <p class="incident-meta">Creada {{ inc.createdAt | date: "short" }} Ã‚· {{ inc.createdBy }}</p>
               @if ((inc.evidenceUrls?.length || 0) > 0) {
                 <div class="evidence">
-                  <p class="evidence-count">{{ (inc.evidenceUrls?.length || 0) }} evidencia{{ (inc.evidenceUrls?.length || 0) === 1 ? "" : "s" }}</p>
                   @for (url of inc.evidenceUrls || []; track url) {
-                    <a class="evidence-thumb" [href]="url" target="_blank" rel="noreferrer">
-                      <img [src]="url" [alt]="'Evidencia de ' + inc.title" loading="lazy" />
-                    </a>
+                    <a [href]="url" target="_blank" rel="noreferrer">Evidencia</a>
                   }
                 </div>
               }
@@ -180,7 +172,7 @@
                 <input type="file" accept="image/*" (change)="attachEvidence(inc, $event)" />
                 {{ uploadingEvidence()[inc.id] ? "Subiendo..." : "Adjuntar foto" }}
               </label>
-              <button type="button" class="btn link incident-link" (click)="scrollToTimeline()">Ver en bitacora</button>
+              <button type="button" class="btn link incident-link" (click)="scrollToTimeline()">Ver en bitÃƒ¡cora</button>
             </div>
           </article>
         }
@@ -190,8 +182,8 @@
           @for (inc of resolvedIncidents(); track inc.id) {
             <article class="incident-card resolved">
               <div>
-                <p class="eyebrow">{{ inc.title }} - {{ inc.type }}</p>
-                <p class="muted">Resuelta {{ inc.resolvedAt | date: "short" }} - {{ inc.resolvedBy }}</p>
+                <p class="eyebrow">{{ inc.title }} · {{ inc.type }}</p>
+                <p class="muted">Resuelta {{ inc.resolvedAt | date: "short" }} · {{ inc.resolvedBy }}</p>
                 @if (inc.resolutionNote) {
                   <p class="muted">{{ inc.resolutionNote }}</p>
                 }
@@ -278,13 +270,13 @@
                       <path d="M3 7h18v13H3z"></path>
                       <path d="M3 7 12 3l9 4"></path>
                     </svg>
-                    <span>ALMAC?N</span>
+                    <span>ALMACÃ‰N</span>
                   } @else if (item.source === "catalogo") {
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                       <path d="M4 5a2 2 0 0 1 2-2h12v17H6a2 2 0 0 0-2 2z"></path>
                       <path d="M18 3a2 2 0 0 1 2 2v17"></path>
                     </svg>
-                    <span>CAT?LOGO</span>
+                    <span>CATÃLOGO</span>
                   } @else {
                     <span aria-hidden="true">E</span>
                     <span>EXTERNO</span>
@@ -352,7 +344,7 @@
                 </div>
               }
               @if (allowedCapabilities(current, userRole()).canRegisterReception) {
-                <button type="button" class="btn ghost" (click)="receiveItem(current, item)">Registrar recepcion/QA</button>
+                <button type="button" class="btn ghost" (click)="receiveItem(current, item)">Registrar recepciÃƒÂ³n/QA</button>
               }
               @if (allowedCapabilities(current, userRole()).canPack) {
                 <button type="button" class="btn ghost" (click)="markPacked(current, item)">Empacar</button>
@@ -374,12 +366,12 @@
               </div>
             </div>
             @if (hasInsufficientStock(item)) {
-              <span class="stock-warning-micro">Solo {{ availableStock(item) }} disponibles</span>
+              <span class="stock-warning-micro">Ã¢Å¡Â Ã¯Â¸Â Solo {{ availableStock(item) }} disponibles</span>
             }
           </article>
         }
         @if (current.items.length === 0) {
-          <p class="muted">Aun no hay productos en este pedido.</p>
+          <p class="muted">AÃƒÂºn no hay productos en este pedido.</p>
         }
       </div>
     </section>
@@ -411,7 +403,7 @@
               <div class="package-top">
                 <div>
                   <p class="eyebrow">{{ packageDisplayLabel(current, pkg) }}</p>
-                  <p class="muted">{{ pkg.item_ids.length }} productos - {{ pkg.state }}</p>
+                  <p class="muted">{{ pkg.item_ids.length }} productos Ã‚· {{ pkg.state }}</p>
                 </div>
                 <span class="chip">{{ qrPlaceholder(current, pkg) }}</span>
               </div>
@@ -434,7 +426,7 @@
           }
 
           @if (current.packages.length === 0) {
-            <p class="muted package-empty-note">Sin paquetes todavia. Genera uno al terminar de empacar.</p>
+            <p class="muted package-empty-note">Sin paquetes todavÃƒÂ­a. Genera uno al terminar de empacar.</p>
           }
         </div>
 
@@ -458,7 +450,7 @@
                       [checked]="isItemAssigned(current, selectedPackageId(), item.item_id)"
                       (change)="toggleItemAssignment(current, selectedPackageId()!, item, $any($event.target).checked)"
                     />
-                    <span>{{ item.title }} - {{ item.quantity }} pza</span>
+                    <span>{{ item.title }} Ã‚· {{ item.quantity }} pza</span>
                   </label>
                 }
               </div>
@@ -477,13 +469,13 @@
 
     <section class="panel" id="bitacora" #timelineSection>
       <div class="panel-head">
-        <h2>Bitacora</h2>
+        <h2>BitÃƒ¡cora</h2>
       </div>
       @if (events().length > 0) {
         <ol class="timeline">
           @for (event of events(); track event.id) {
             <li class="timeline-item">
-              <p class="eyebrow timeline-date">{{ event.createdAt | date: "short" }} - {{ relativeTime(event.createdAt) }}</p>
+              <p class="eyebrow timeline-date">{{ event.createdAt | date: "short" }} Ã‚· {{ relativeTime(event.createdAt) }}</p>
               <p>{{ event.message }}</p>
               <p class="muted">{{ eventActor(event) }}</p>
             </li>
@@ -491,15 +483,15 @@
         </ol>
         @if (eventsHasMore()) {
           <button type="button" class="btn ghost with-icon" (click)="loadEvents()" [disabled]="eventsLoading()">
-            <span class="btn-icon" aria-hidden="true">?</span>
-            {{ eventsLoading() ? "Cargando..." : "Cargar mas" }}
+            <span class="btn-icon" aria-hidden="true">Ã¢â€ Â»</span>
+            {{ eventsLoading() ? "Cargando..." : "Cargar mÃƒ¡s" }}
           </button>
         }
       } @else {
         <ol class="timeline">
           @for (event of current.timeline; track event.id) {
             <li class="timeline-item">
-              <p class="eyebrow timeline-date">{{ event.created_at | date: "short" }} - {{ relativeTime(event.created_at) }}</p>
+              <p class="eyebrow timeline-date">{{ event.created_at | date: "short" }} Ã‚· {{ relativeTime(event.created_at) }}</p>
               <p>{{ event.label }}</p>
               <p class="muted">{{ eventActor(event) }}</p>
             </li>
@@ -548,7 +540,7 @@
         }
         @if (actionError()) {
           <div class="sheet-warning">
-            <p class="eyebrow">Atencion</p>
+            <p class="eyebrow">AtenciÃƒÂ³n</p>
             <p>{{ actionError() }}</p>
           </div>
         }
@@ -651,9 +643,9 @@
                             </span>
                           }
                         </div>
-                        <p class="muted">{{ item.variant || "Variante" }} - {{ item.color || "Color" }}</p>
+                        <p class="muted">{{ item.variant || "Variante" }} Ã‚· {{ item.color || "Color" }}</p>
                         <span class="item-chip source" [class.catalog]="item.source === 'catalogo'" [class.inventory]="item.source === 'inventario'">
-                          {{ item.source === "catalogo" ? "Catalogo" : "Inventario" }}
+                          {{ item.source === "catalogo" ? "CatÃƒ¡logo" : "Inventario" }}
                         </span>
                       </div>
                       <div class="item-actions">
@@ -705,7 +697,7 @@
                   {{ resolvedItems(current) }}/{{ totalItems(current) }} resueltos
                 </p>
                 <p class="muted small">
-                  Confirmadas {{ confirmedPieces(current) }} - Sin stock {{ outOfStockPieces(current) }} - Pendientes {{ pendingPieces(current) }}
+                  Confirmadas {{ confirmedPieces(current) }} Ã‚· Sin stock {{ outOfStockPieces(current) }} Ã‚· Pendientes {{ pendingPieces(current) }}
                 </p>
               </div>
               <button type="button" class="btn ghost" (click)="closeActionModal()">Cancelar</button>
@@ -728,12 +720,12 @@
               <article class="item-card compact">
                 <div class="item-info">
                   <p class="item-title">{{ item.title }}</p>
-                  <p class="muted">{{ item.variant || "Variante" }} - {{ item.color || "Color" }}</p>
+                  <p class="muted">{{ item.variant || "Variante" }} Ã‚· {{ item.color || "Color" }}</p>
                 </div>
                 <div class="item-actions">
                   <button type="button" class="btn ghost" (click)="receiveItem(current, item)">Recibido/QA</button>
                   <button type="button" class="btn ghost" (click)="markMissing(current, item)">Faltante</button>
-                  <button type="button" class="btn ghost" (click)="markDamaged(current, item)">Danado</button>
+                  <button type="button" class="btn ghost" (click)="markDamaged(current, item)">DaÃƒÂ±ado</button>
                   <button type="button" class="btn ghost" (click)="markPacked(current, item)">Empacar</button>
                 </div>
               </article>
@@ -756,7 +748,7 @@
                 <div class="package-top">
                   <div>
                     <p class="eyebrow">{{ packageDisplayLabel(current, pkg) }}</p>
-                    <p class="muted">{{ pkg.item_ids.length }} productos - {{ pkg.state }}</p>
+                    <p class="muted">{{ pkg.item_ids.length }} productos Ã‚· {{ pkg.state }}</p>
                   </div>
                 </div>
                 <button type="button" class="btn primary" (click)="deliverPackage(current, pkg)">Registrar entrega</button>
@@ -771,7 +763,7 @@
         }
 
         @if (current.status === "en_ruta" && !lateChangeApproved()) {
-          <button type="button" class="btn ghost" (click)="requestLateChange(current)">Solicitar cambio tardio</button>
+          <button type="button" class="btn ghost" (click)="requestLateChange(current)">Solicitar cambio tardÃƒÂ­o</button>
         }
 
         @if (actionContext()?.actionId !== "confirm_items") {
@@ -792,8 +784,8 @@
         (click)="$event.stopPropagation()"
       >
         <div class="sheet-handle" aria-hidden="true"></div>
-        <h2 id="planned-packages-title">?Cuantos paquetes esperas?</h2>
-        <p class="muted" id="planned-packages-description">Define la cantidad para habilitar logistica.</p>
+        <h2 id="planned-packages-title">Ã‚¿CuÃƒ¡ntos paquetes esperas?</h2>
+        <p class="muted" id="planned-packages-description">Define la cantidad para habilitar logÃƒÂ­stica.</p>
         <div class="sheet-field">
           <label>Paquetes planificados</label>
           <input type="number" min="1" class="input" [(ngModel)]="plannedPackagesInput" />
@@ -812,16 +804,12 @@
         <div class="sheet-handle" aria-hidden="true"></div>
         <h2 id="incident-modal-title">Nueva incidencia</h2>
         <div class="sheet-field">
-          <label>Titulo</label>
+          <label>TÃƒÂ­tulo</label>
           <input class="input" type="text" [(ngModel)]="incidentTitle" />
         </div>
         <div class="sheet-field">
           <label>Tipo</label>
-          <select class="input" [(ngModel)]="incidentType">
-            @for (type of incidentTypeOptions; track type) {
-              <option [value]="type">{{ type }}</option>
-            }
-          </select>
+          <input class="input" type="text" [(ngModel)]="incidentType" />
         </div>
         <div class="sheet-field">
           <label>Severidad</label>
@@ -858,7 +846,7 @@
         <div class="sheet-handle" aria-hidden="true"></div>
         <h2 id="resolve-modal-title">Resolver incidencia</h2>
         <div class="sheet-field">
-          <label>Nota de resolucion</label>
+          <label>Nota de resoluciÃƒÂ³n</label>
           <textarea class="input" rows="3" [(ngModel)]="resolveNote"></textarea>
         </div>
         <div class="sheet-actions">
@@ -883,7 +871,7 @@
             <div class="pill source-toggle">
               <label>
                 <input type="radio" name="source" value="catalogo" [(ngModel)]="newItemSource" [disabled]="!canEditItems(current)" />
-                Catalogo
+                CatÃƒ¡logo
               </label>
               <label>
                 <input type="radio" name="source" value="inventario" [(ngModel)]="newItemSource" [disabled]="!canEditItems(current)" />
@@ -920,13 +908,13 @@
                     }
                     <div>
                       <div class="card-title">{{ s.title }}</div>
-                      <div class="card-meta">{{ s.variant_name || s.size_label || "Variante" }} - {{ s.color_name || "Color" }}</div>
+                      <div class="card-meta">{{ s.variant_name || s.size_label || "Variante" }} Ã‚· {{ s.color_name || "Color" }}</div>
                     </div>
-                    <span class="card-tag inv">Inventario - {{ s.quantity_on_hand }} pzas</span>
+                    <span class="card-tag inv">Inventario Ã‚· {{ s.quantity_on_hand }} pzas</span>
                   </button>
                 }
                 @for (c of catalogSuggestions(); track c.doc.normalized_id) {
-                  <button type="button" role="option" class="listbox-option" [attr.aria-label]="'Catalogo: ' + c.doc.listing.title" (mousedown)="$event.preventDefault(); beginProductPick(); pickCatalog(c.doc, c.variant, c.color)" (touchstart)="$event.preventDefault(); beginProductPick(); pickCatalog(c.doc, c.variant, c.color)" (click)="beginProductPick(); pickCatalog(c.doc, c.variant, c.color)">
+                  <button type="button" role="option" class="listbox-option" [attr.aria-label]="'CatÃƒ¡logo: ' + c.doc.listing.title" (mousedown)="$event.preventDefault(); beginProductPick(); pickCatalog(c.doc, c.variant, c.color)" (touchstart)="$event.preventDefault(); beginProductPick(); pickCatalog(c.doc, c.variant, c.color)" (click)="beginProductPick(); pickCatalog(c.doc, c.variant, c.color)">
                     @if (c.image) {
                       <img class="listbox-thumb" [src]="c.image" alt="" />
                     } @else {
@@ -939,9 +927,9 @@
                     }
                     <div>
                       <div class="card-title">{{ c.doc.listing.title }}</div>
-                      <div class="card-meta">{{ c.doc.listing.category_hint || "Sin categoria" }}</div>
+                      <div class="card-meta">{{ c.doc.listing.category_hint || "Sin categorÃƒÂ­a" }}</div>
                     </div>
-                    <span class="card-tag cat">{{ c.variant.variant_name || '-' }} - {{ c.color || 'Color' }}</span>
+                    <span class="card-tag cat">{{ c.variant.variant_name || '-' }} Ã‚· {{ c.color || 'Color' }}</span>
                   </button>
                 }
               </div>
@@ -961,7 +949,7 @@
               }
               <div>
                 <p class="preview-title">{{ preview.title }}</p>
-                <p class="preview-meta">{{ preview.variant }} - {{ preview.color }}</p>
+                <p class="preview-meta">{{ preview.variant }} Ã‚· {{ preview.color }}</p>
                 @if (!selectedPreviewHasColorImage()) {
                   <span class="color-chip">Color: {{ preview.color }}</span>
                 }
@@ -1086,7 +1074,7 @@
         </div>
         <div class="sheet-footer">
           <button type="button" class="btn primary" (click)="addItem(current)" [disabled]="!selectedPreview() || !canEditItems(current)">
-            Anadir al pedido
+            AÃƒÂ±adir al pedido
           </button>
           <button type="button" class="btn danger" (click)="closeAddItemModal()">Cancelar</button>
         </div>
