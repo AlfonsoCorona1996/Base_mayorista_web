@@ -1,8 +1,8 @@
 export const environment = {
   production: true,
   // URL base del backend que expone /admin/users/*
-  // Cambia a dominio HTTPS cuando lo tengas disponible.
-  adminApiBaseUrl: "http://138.68.54.142:3000",
+  // En produccion debe ser HTTPS para evitar Mixed Content en navegador.
+  adminApiBaseUrl: "https://api.base-mayorista.com",
   firebase: {
     apiKey: "AIzaSyBZhmiBbnywXaTW32VTaZFPPPzGNLJCXDo",
     authDomain: "base-mayorista.firebaseapp.com",
