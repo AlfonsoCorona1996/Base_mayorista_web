@@ -22,6 +22,10 @@ interface AdminRow {
   role: AppRole;
   active: boolean;
   permissions: PermissionMap;
+  invitedAt: string | null;
+  acceptedAt: string | null;
+  lastLoginAt: string | null;
+  invitationPending: boolean;
 }
 
 interface AuditRow {
@@ -53,6 +57,7 @@ export default class UsuariosPage {
   editingUid = signal<string | null>(null);
   resettingUid = signal<string | null>(null);
   resendingUid = signal<string | null>(null);
+  deletingUid = signal<string | null>(null);
 
   draftDisplayName = "";
   draftUsername = "";
@@ -107,6 +112,7 @@ export default class UsuariosPage {
     if (status === 401 || normalized === "UNAUTHENTICATED") return "Sesión inválida. Inicia sesión de nuevo.";
     if (status === 403 || normalized === "FORBIDDEN") return "No tienes permisos para esta acción.";
     if (status === 404 || normalized === "USER_NOT_FOUND") return "Usuario no encontrado.";
+    if (normalized === "SELF_DELETE_PROTECTED") return "No puedes borrarte a ti mismo.";
     if (status === 409 || normalized === "LAST_SUPER_ADMIN_PROTECTED") return "No puedes modificar/desactivar al último super admin activo.";
     if (status === 422 || normalized === "INVALID_ROLE_OR_PERMISSIONS") return "Rol o permisos inválidos.";
     return "Error interno del servidor.";
@@ -171,9 +177,24 @@ export default class UsuariosPage {
 
   async loadUsers() {
     const snap = await getDocs(collection(FIRESTORE, "admins"));
+    const maybeIso = (value: any): string | null => {
+      if (!value) return null;
+      if (typeof value === "string") return value;
+      if (value?.toDate) return value.toDate().toISOString();
+      return null;
+    };
     const list: AdminRow[] = snap.docs.map((docSnap) => {
       const data = docSnap.data() as Record<string, any>;
       const role = normalizeRole(data["role"]);
+      const invitedAt = maybeIso(data["invited_at"] || data["invite_sent_at"]);
+      const acceptedAt = maybeIso(data["accepted_at"] || data["invite_accepted_at"] || data["password_set_at"]);
+      const lastLoginAt = maybeIso(data["last_login_at"] || data["last_sign_in_at"]);
+      const status = String(data["status"] || "").trim().toLowerCase();
+      const invitationPending =
+        data["invite_pending"] === true ||
+        data["invitation_pending"] === true ||
+        status === "pending" ||
+        status === "invited";
       return {
         uid: docSnap.id,
         email: (data["email"] || null) as string | null,
@@ -182,6 +203,10 @@ export default class UsuariosPage {
         role,
         active: data["active"] === true,
         permissions: buildPermissionsForRole(role, data["permissions"] ?? null),
+        invitedAt,
+        acceptedAt,
+        lastLoginAt,
+        invitationPending,
       };
     });
     list.sort((a, b) => (a.displayName || a.email || "").localeCompare(b.displayName || b.email || ""));
@@ -358,6 +383,80 @@ export default class UsuariosPage {
     } finally {
       this.resettingUid.set(null);
     }
+  }
+
+  async softDelete(row: AdminRow) {
+    if (!this.canManageUsers()) {
+      this.error.set("Solo super admin puede borrar usuarios.");
+      return;
+    }
+    const myUid = this.access.profile()?.uid || null;
+    if (myUid && row.uid === myUid) {
+      this.error.set("No puedes borrarte a ti mismo.");
+      return;
+    }
+    const ok = typeof window === "undefined" ? true : window.confirm(`¿Borrar a ${row.displayName || row.email || row.uid}?`);
+    if (!ok) return;
+
+    this.deletingUid.set(row.uid);
+    this.error.set(null);
+    this.success.set(null);
+    try {
+      await this.postAdmin("/admin/users/delete", {
+        uid: row.uid,
+      });
+      this.success.set(`Usuario ${row.displayName || row.email || row.uid} eliminado.`);
+      await this.reload();
+    } catch (e: any) {
+      this.error.set(e?.message || "No se pudo borrar usuario");
+    } finally {
+      this.deletingUid.set(null);
+    }
+  }
+
+  canDeleteRow(row: AdminRow): boolean {
+    if (!this.canManageUsers()) return false;
+    const myUid = this.access.profile()?.uid || null;
+    return row.uid !== myUid;
+  }
+
+  isCurrentUser(row: AdminRow): boolean {
+    const myUid = this.access.profile()?.uid || null;
+    return Boolean(myUid && row.uid === myUid);
+  }
+
+  isInvitationPending(row: AdminRow): boolean {
+    return Boolean(row.invitationPending || (row.invitedAt && !row.acceptedAt && !row.lastLoginAt));
+  }
+
+  isUserEffectivelyActive(row: AdminRow): boolean {
+    return Boolean(row.active && !this.isInvitationPending(row));
+  }
+
+  canResendInvite(row: AdminRow): boolean {
+    if (!this.canManageUsers()) return false;
+    if (this.isCurrentUser(row)) return false;
+    if (row.role === "super_admin") return false;
+    return this.isInvitationPending(row);
+  }
+
+  canForceReset(row: AdminRow): boolean {
+    if (!this.canManageUsers()) return false;
+    if (this.isCurrentUser(row)) return false;
+    if (row.role === "super_admin") return false;
+    return this.isUserEffectivelyActive(row);
+  }
+
+  userStatusLabel(row: AdminRow): string {
+    if (this.isInvitationPending(row)) return "Invitacion pendiente";
+    if (!row.active) return "Inactivo";
+    return "Activo";
+  }
+
+  userStatusClass(row: AdminRow): string {
+    if (this.isInvitationPending(row)) return "pending";
+    if (!row.active) return "off";
+    return "on";
   }
 
   roleLabel(role: AppRole): string {
