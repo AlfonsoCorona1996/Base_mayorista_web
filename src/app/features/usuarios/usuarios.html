@@ -148,30 +148,79 @@
           <div class="user-list">
             @for (row of filteredRows(); track row.uid) {
               <article class="user-card">
-                <div>
-                  <h3>{{ row.displayName || "Sin nombre" }}</h3>
-                  <p>{{ row.email || row.uid }}</p>
-                  <p class="muted">{{ row.username || "sin-username" }} · {{ roleLabel(row.role) }}</p>
+                <div class="card-main">
+                  <div class="card-head">
+                    <h3>{{ row.displayName || "Sin nombre" }}</h3>
+                    <span
+                      class="status-tag"
+                      [class.on]="userStatusClass(row) === 'on'"
+                      [class.pending]="userStatusClass(row) === 'pending'"
+                      [class.off]="userStatusClass(row) === 'off'"
+                    >
+                      {{ userStatusLabel(row) }}
+                    </span>
+                  </div>
+                  <p class="card-email">{{ row.email || row.uid }}</p>
+                  <p class="card-meta">
+                    <span>@{{ row.username || "sin-username" }}</span>
+                    <span>·</span>
+                    <span>{{ roleLabel(row.role) }}</span>
+                  </p>
                 </div>
                 <div class="card-actions">
-                  <span class="status-tag" [class.off]="!row.active">{{ row.active ? "Activo" : "Inactivo" }}</span>
                   @if (canManageUsers()) {
-                    <button type="button" class="btn btn-outline" (click)="startEdit(row)">Editar</button>
                     <button
                       type="button"
-                      class="btn btn-secondary"
-                      [disabled]="resendingUid() === row.uid"
-                      (click)="resendInvite(row)"
+                      class="btn btn-icon-edit"
+                      (click)="startEdit(row)"
+                      aria-label="Editar usuario"
+                      title="Editar usuario"
                     >
-                      {{ resendingUid() === row.uid ? "Enviando..." : "Reenviar invitación" }}
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path
+                          d="M4 16.25V20h3.75l11-11-3.75-3.75-11 11zM20.71 7.04a1 1 0 000-1.42L18.37 3.29a1 1 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
+                          fill="currentColor"
+                        />
+                      </svg>
                     </button>
+                    @if (canResendInvite(row)) {
+                      <button
+                        type="button"
+                        class="btn btn-secondary"
+                        [disabled]="resendingUid() === row.uid"
+                        (click)="resendInvite(row)"
+                      >
+                        {{ resendingUid() === row.uid ? "Enviando..." : "Reenviar invitación" }}
+                      </button>
+                    }
+                    @if (canForceReset(row)) {
+                      <button
+                        type="button"
+                        class="btn btn-secondary"
+                        [disabled]="resettingUid() === row.uid"
+                        (click)="sendReset(row)"
+                      >
+                        {{ resettingUid() === row.uid ? "Enviando..." : "Reset password" }}
+                      </button>
+                    }
                     <button
                       type="button"
-                      class="btn btn-secondary"
-                      [disabled]="resettingUid() === row.uid"
-                      (click)="sendReset(row)"
+                      class="btn btn-icon-danger"
+                      [disabled]="deletingUid() === row.uid || !canDeleteRow(row)"
+                      (click)="softDelete(row)"
+                      aria-label="Borrar usuario"
+                      title="Borrar usuario"
                     >
-                      {{ resettingUid() === row.uid ? "Enviando..." : "Reset password" }}
+                      @if (deletingUid() === row.uid) {
+                        <span>...</span>
+                      } @else {
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M9 3h6l1 2h4v2H4V5h4l1-2zm1 6h2v8h-2V9zm4 0h2v8h-2V9zM7 9h2v8H7V9zm-1 12h12l1-13H5l1 13z"
+                            fill="currentColor"
+                          />
+                        </svg>
+                      }
                     </button>
                   }
                 </div>

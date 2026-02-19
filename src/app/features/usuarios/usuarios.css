@@ -6,6 +6,7 @@
   padding: 14px;
   display: grid;
   gap: 12px;
+  font-family: "Manrope", "Segoe UI", sans-serif;
 }
 
 .page-header {
@@ -220,28 +221,52 @@
 .user-list {
   margin-top: 10px;
   display: grid;
-  gap: 8px;
-}
-
-.user-card {
-  border: 1px solid #d9e6f3;
-  border-radius: 12px;
-  padding: 10px;
-  display: flex;
-  justify-content: space-between;
   gap: 10px;
 }
 
-.user-card h3 {
+.user-card {
+  border: 1px solid #cfe0f2;
+  border-radius: 14px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+}
+
+.card-main {
+  min-width: 0;
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.card-head h3 {
   margin: 0;
-  font-size: 0.95rem;
+  font-size: 1.06rem;
+  line-height: 1.2;
   color: #102640;
 }
 
-.user-card p {
-  margin: 2px 0 0;
-  font-size: 0.8rem;
-  color: #5a728c;
+.card-email {
+  margin: 6px 0 0;
+  font-size: 0.95rem;
+  color: #214160;
+  overflow-wrap: anywhere;
+}
+
+.card-meta {
+  margin: 4px 0 0;
+  font-size: 0.9rem;
+  color: #54718f;
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 .muted {
@@ -250,20 +275,32 @@
 
 .card-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   align-items: center;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  justify-content: flex-start;
+  padding-top: 8px;
+  border-top: 1px solid #e5edf7;
 }
 
 .status-tag {
   border-radius: 999px;
-  padding: 3px 8px;
-  font-size: 0.7rem;
+  padding: 4px 10px;
+  font-size: 0.75rem;
   font-weight: 700;
+  white-space: nowrap;
+}
+
+.status-tag.on {
   color: #0a5c45;
   border: 1px solid #9cd8c1;
   background: #e8fff4;
+}
+
+.status-tag.pending {
+  color: #8a4b00;
+  border: 1px solid #f8cc84;
+  background: #fff7e8;
 }
 
 .status-tag.off {
@@ -331,6 +368,54 @@
   color: #1f3a56;
 }
 
+.btn-danger {
+  background: #fff1f2;
+  border-color: #fecdd3;
+  color: #be123c;
+}
+
+.btn-sm {
+  min-height: 34px;
+  padding: 6px 10px;
+  font-size: 0.8rem;
+}
+
+.btn-icon-danger {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid #fecdd3;
+  background: #fff1f2;
+  color: #be123c;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.btn-icon-danger svg {
+  width: 16px;
+  height: 16px;
+}
+
+.btn-icon-edit {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid #c8d9ec;
+  background: #ffffff;
+  color: #1f3a56;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.btn-icon-edit svg {
+  width: 16px;
+  height: 16px;
+}
+
 @media (min-width: 1100px) {
   .content-grid {
     grid-template-columns: 1.1fr 1fr;
@@ -342,6 +427,11 @@
 }
 
 @media (max-width: 640px) {
+  .list-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
   .permissions {
     padding: 8px;
   }
@@ -373,6 +463,20 @@
 
   .matrix-check-editable span {
     font-size: 0.72rem;
+  }
+
+  .card-actions {
+    width: 100%;
+  }
+
+  .card-actions .btn {
+    flex: 1 1 calc(50% - 8px);
+    min-width: 140px;
+  }
+
+  .card-actions .btn-icon-danger {
+    flex: 0 0 auto;
+    min-width: 34px;
   }
 }
 
