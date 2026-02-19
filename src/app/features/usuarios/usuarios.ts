@@ -25,7 +25,7 @@ interface AdminRow {
   invitedAt: string | null;
   acceptedAt: string | null;
   lastLoginAt: string | null;
-  invitationPending: boolean;
+  invitePending: boolean;
 }
 
 interface AuditRow {
@@ -168,6 +168,9 @@ export default class UsuariosPage {
         return;
       }
       await Promise.all([this.loadUsers(), this.loadAuditLogs()]);
+      if (this.canManageUsers()) {
+        await this.syncInviteStatuses();
+      }
     } catch (e: any) {
       this.error.set(e?.message || "No se pudieron cargar usuarios");
     } finally {
@@ -186,15 +189,10 @@ export default class UsuariosPage {
     const list: AdminRow[] = snap.docs.map((docSnap) => {
       const data = docSnap.data() as Record<string, any>;
       const role = normalizeRole(data["role"]);
-      const invitedAt = maybeIso(data["invited_at"] || data["invite_sent_at"]);
-      const acceptedAt = maybeIso(data["accepted_at"] || data["invite_accepted_at"] || data["password_set_at"]);
+      const invitedAt = maybeIso(data["invited_at"]);
+      const acceptedAt = maybeIso(data["accepted_at"]);
       const lastLoginAt = maybeIso(data["last_login_at"] || data["last_sign_in_at"]);
-      const status = String(data["status"] || "").trim().toLowerCase();
-      const invitationPending =
-        data["invite_pending"] === true ||
-        data["invitation_pending"] === true ||
-        status === "pending" ||
-        status === "invited";
+      const invitePending = data["invite_pending"] === true;
       return {
         uid: docSnap.id,
         email: (data["email"] || null) as string | null,
@@ -206,11 +204,28 @@ export default class UsuariosPage {
         invitedAt,
         acceptedAt,
         lastLoginAt,
-        invitationPending,
+        invitePending,
       };
     });
     list.sort((a, b) => (a.displayName || a.email || "").localeCompare(b.displayName || b.email || ""));
     this.rows.set(list);
+  }
+
+  private async syncInviteStatuses() {
+    const pending = this.rows().filter((row) => this.isInvitationPending(row));
+    if (pending.length === 0) return;
+
+    const calls = pending.map((row) =>
+      this.postAdmin("/admin/users/sync-invite-status", {
+        uid: row.uid,
+      })
+    );
+
+    const results = await Promise.allSettled(calls);
+    const anySuccess = results.some((r) => r.status === "fulfilled");
+    if (anySuccess) {
+      await this.loadUsers();
+    }
   }
 
   async loadAuditLogs() {
@@ -416,8 +431,14 @@ export default class UsuariosPage {
 
   canDeleteRow(row: AdminRow): boolean {
     if (!this.canManageUsers()) return false;
+    if (row.role === "super_admin") return false;
     const myUid = this.access.profile()?.uid || null;
     return row.uid !== myUid;
+  }
+
+  canEditRow(row: AdminRow): boolean {
+    if (!this.canManageUsers()) return false;
+    return row.role !== "super_admin";
   }
 
   isCurrentUser(row: AdminRow): boolean {
@@ -426,7 +447,8 @@ export default class UsuariosPage {
   }
 
   isInvitationPending(row: AdminRow): boolean {
-    return Boolean(row.invitationPending || (row.invitedAt && !row.acceptedAt && !row.lastLoginAt));
+    if (row.role === "super_admin") return false;
+    return Boolean(row.invitePending || (row.invitedAt && !row.acceptedAt && !row.lastLoginAt));
   }
 
   isUserEffectivelyActive(row: AdminRow): boolean {
@@ -444,17 +466,17 @@ export default class UsuariosPage {
     if (!this.canManageUsers()) return false;
     if (this.isCurrentUser(row)) return false;
     if (row.role === "super_admin") return false;
-    return this.isUserEffectivelyActive(row);
+    return !this.isInvitationPending(row);
   }
 
   userStatusLabel(row: AdminRow): string {
-    if (this.isInvitationPending(row)) return "Invitacion pendiente";
+    if (this.isInvitationPending(row)) return "Inactivo";
     if (!row.active) return "Inactivo";
     return "Activo";
   }
 
   userStatusClass(row: AdminRow): string {
-    if (this.isInvitationPending(row)) return "pending";
+    if (this.isInvitationPending(row)) return "off";
     if (!row.active) return "off";
     return "on";
   }
