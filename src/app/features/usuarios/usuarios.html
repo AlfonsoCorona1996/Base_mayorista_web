@@ -169,20 +169,22 @@
                 </div>
                 <div class="card-actions">
                   @if (canManageUsers()) {
-                    <button
-                      type="button"
-                      class="btn btn-icon-edit"
-                      (click)="startEdit(row)"
-                      aria-label="Editar usuario"
-                      title="Editar usuario"
-                    >
-                      <svg viewBox="0 0 24 24" aria-hidden="true">
-                        <path
-                          d="M4 16.25V20h3.75l11-11-3.75-3.75-11 11zM20.71 7.04a1 1 0 000-1.42L18.37 3.29a1 1 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
-                          fill="currentColor"
-                        />
-                      </svg>
-                    </button>
+                    @if (canEditRow(row)) {
+                      <button
+                        type="button"
+                        class="btn btn-icon-edit"
+                        (click)="startEdit(row)"
+                        aria-label="Editar usuario"
+                        title="Editar usuario"
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M4 16.25V20h3.75l11-11-3.75-3.75-11 11zM20.71 7.04a1 1 0 000-1.42L18.37 3.29a1 1 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
+                            fill="currentColor"
+                          />
+                        </svg>
+                      </button>
+                    }
                     @if (canResendInvite(row)) {
                       <button
                         type="button"
@@ -203,25 +205,27 @@
                         {{ resettingUid() === row.uid ? "Enviando..." : "Reset password" }}
                       </button>
                     }
-                    <button
-                      type="button"
-                      class="btn btn-icon-danger"
-                      [disabled]="deletingUid() === row.uid || !canDeleteRow(row)"
-                      (click)="softDelete(row)"
-                      aria-label="Borrar usuario"
-                      title="Borrar usuario"
-                    >
-                      @if (deletingUid() === row.uid) {
-                        <span>...</span>
-                      } @else {
-                        <svg viewBox="0 0 24 24" aria-hidden="true">
-                          <path
-                            d="M9 3h6l1 2h4v2H4V5h4l1-2zm1 6h2v8h-2V9zm4 0h2v8h-2V9zM7 9h2v8H7V9zm-1 12h12l1-13H5l1 13z"
-                            fill="currentColor"
-                          />
-                        </svg>
-                      }
-                    </button>
+                    @if (canDeleteRow(row)) {
+                      <button
+                        type="button"
+                        class="btn btn-icon-danger"
+                        [disabled]="deletingUid() === row.uid"
+                        (click)="softDelete(row)"
+                        aria-label="Borrar usuario"
+                        title="Borrar usuario"
+                      >
+                        @if (deletingUid() === row.uid) {
+                          <span>...</span>
+                        } @else {
+                          <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path
+                              d="M9 3h6l1 2h4v2H4V5h4l1-2zm1 6h2v8h-2V9zm4 0h2v8h-2V9zM7 9h2v8H7V9zm-1 12h12l1-13H5l1 13z"
+                              fill="currentColor"
+                            />
+                          </svg>
+                        }
+                      </button>
+                    }
                   }
                 </div>
               </article>
