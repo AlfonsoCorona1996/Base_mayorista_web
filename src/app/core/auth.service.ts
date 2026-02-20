@@ -1,11 +1,12 @@
-﻿import { Injectable, signal, computed, inject } from "@angular/core";
+import { Injectable, signal, computed, inject } from "@angular/core";
 import { FIREBASE_AUTH, FIRESTORE } from "./firebase.providers";
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged, User } from "firebase/auth";
-import { collection, doc, getDoc, getDocs, limit, query, serverTimestamp, setDoc, where } from "firebase/firestore";
-import { AccessService, buildPermissionsForRole, normalizeRole } from "./access.service";
+import { doc, getDoc } from "firebase/firestore";
+import { AccessService } from "./access.service";
 import { AuditService } from "./audit.service";
+import { environment } from "../../environments/environment";
 
-const SUPER_ADMIN_EMAIL_ALLOWLIST = new Set(["alfonso.corona1996@gmail.com"]);
+export type SessionBootstrapStatus = "OK" | "INVITE_PENDING" | "NO_ACCESS";
 
 @Injectable({ providedIn: "root" })
 export class AuthService {
@@ -37,6 +38,55 @@ export class AuthService {
     this.access.profile.set(null);
   }
 
+  private adminApiBaseUrl(): string {
+    const fromEnv = ((environment as { adminApiBaseUrl?: string }).adminApiBaseUrl || "").trim();
+    const fromStorage = (typeof window !== "undefined" ? window.localStorage.getItem("adminApiBaseUrl") : "") || "";
+    const fromWindow = (typeof window !== "undefined" ? (window as any).__ADMIN_API_BASE_URL__ : "") || "";
+    const raw = (fromStorage || fromEnv || fromWindow || "").trim();
+    return raw.endsWith("/") ? raw.slice(0, -1) : raw;
+  }
+
+  private buildAdminUrl(path: string): string {
+    return `${this.adminApiBaseUrl()}${path}`;
+  }
+
+  async bootstrapSession(): Promise<SessionBootstrapStatus> {
+    const u = FIREBASE_AUTH.currentUser ?? this.user();
+    if (!u) return "NO_ACCESS";
+
+    const token = await u.getIdToken(true);
+    const response = await fetch(this.buildAdminUrl("/admin/users/session/bootstrap"), {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const raw = await response.text();
+    let data: Record<string, any> = {};
+    try {
+      data = raw ? JSON.parse(raw) : {};
+    } catch {
+      data = {};
+    }
+
+    const status = String(data["status"] || "").trim().toUpperCase();
+
+    if (response.ok) {
+      await this.access.refreshProfile().catch(() => null);
+      if (status === "OK" || status === "INVITE_PENDING" || status === "NO_ACCESS") {
+        return status as SessionBootstrapStatus;
+      }
+      const profile = this.access.profile();
+      if (profile?.active) return "OK";
+      return "INVITE_PENDING";
+    }
+
+    if (status === "INVITE_PENDING") return "INVITE_PENDING";
+    if (response.status === 401 || response.status === 403 || status === "NO_ACCESS") return "NO_ACCESS";
+    return "NO_ACCESS";
+  }
+
   async isAdmin(): Promise<boolean> {
     let u = FIREBASE_AUTH.currentUser ?? this.user();
     if (!u) {
@@ -45,97 +95,9 @@ export class AuthService {
     }
     if (!u) return false;
 
-    const normalizedEmail = (u.email || "").trim().toLowerCase();
-
-    // Bootstrap explícito por allowlist de email (owner principal del sistema).
-    if (normalizedEmail && SUPER_ADMIN_EMAIL_ALLOWLIST.has(normalizedEmail)) {
-      await setDoc(
-        doc(FIRESTORE, "admins", u.uid),
-        {
-          uid: u.uid,
-          email: normalizedEmail,
-          active: true,
-          role: "super_admin",
-          username: normalizedEmail.split("@")[0],
-          display_name: u.displayName || normalizedEmail.split("@")[0],
-          permissions: buildPermissionsForRole("super_admin"),
-          updated_at: serverTimestamp(),
-        },
-        { merge: true },
-      );
-      await this.audit.log("SUPER_ADMIN_ALLOWLIST_BOOTSTRAP", { uid: u.uid, email: normalizedEmail }).catch(() => null);
-      return true;
-    }
-
     const direct = await getDoc(doc(FIRESTORE, "admins", u.uid));
-    if (direct.exists()) {
-      const data = direct.data();
-      return data?.["active"] === true;
-    }
-
-    if (normalizedEmail) {
-      const byEmail = await getDocs(query(collection(FIRESTORE, "admins"), where("email", "==", normalizedEmail), limit(1)));
-      if (!byEmail.empty) {
-        const source = byEmail.docs[0].data() as Record<string, any>;
-        const role = normalizeRole(source["role"]);
-        await setDoc(
-          doc(FIRESTORE, "admins", u.uid),
-          {
-            uid: u.uid,
-            email: normalizedEmail,
-            active: source["active"] !== false,
-            role,
-            username: source["username"] || normalizedEmail.split("@")[0],
-            display_name: source["display_name"] || source["name"] || u.displayName || normalizedEmail.split("@")[0],
-            permissions: buildPermissionsForRole(role, source["permissions"] ?? null),
-            created_at: source["created_at"] || serverTimestamp(),
-            updated_at: serverTimestamp(),
-          },
-          { merge: true },
-        );
-        return source["active"] !== false;
-      }
-    }
-
-    const anyAdmin = await getDocs(query(collection(FIRESTORE, "admins"), limit(1)));
-    if (anyAdmin.empty) {
-      await setDoc(doc(FIRESTORE, "admins", u.uid), {
-        uid: u.uid,
-        email: normalizedEmail || u.email || null,
-        active: true,
-        role: "super_admin",
-        username: normalizedEmail ? normalizedEmail.split("@")[0] : u.uid,
-        display_name: u.displayName || (normalizedEmail ? normalizedEmail.split("@")[0] : "Super Admin"),
-        permissions: buildPermissionsForRole("super_admin"),
-        created_at: serverTimestamp(),
-        updated_at: serverTimestamp(),
-      });
-      await this.audit.log("SUPER_ADMIN_BOOTSTRAP", { uid: u.uid, email: normalizedEmail || null }).catch(() => null);
-      return true;
-    }
-
-    const existingSuperAdmin = await getDocs(
-      query(collection(FIRESTORE, "admins"), where("role", "==", "super_admin"), where("active", "==", true), limit(1)),
-    );
-    if (existingSuperAdmin.empty) {
-      await setDoc(
-        doc(FIRESTORE, "admins", u.uid),
-        {
-          uid: u.uid,
-          email: normalizedEmail || u.email || null,
-          active: true,
-          role: "super_admin",
-          username: normalizedEmail ? normalizedEmail.split("@")[0] : u.uid,
-          display_name: u.displayName || (normalizedEmail ? normalizedEmail.split("@")[0] : "Super Admin"),
-          permissions: buildPermissionsForRole("super_admin"),
-          updated_at: serverTimestamp(),
-        },
-        { merge: true },
-      );
-      await this.audit.log("SUPER_ADMIN_RECOVERY", { uid: u.uid, email: normalizedEmail || null }).catch(() => null);
-      return true;
-    }
-
-    return false;
+    if (!direct.exists()) return false;
+    const data = direct.data();
+    return data?.["active"] === true;
   }
 }

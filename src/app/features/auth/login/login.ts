@@ -51,9 +51,12 @@ export default class LoginPage {
     this.loading.set(true);
     try {
       await this.auth.login(this.email.trim(), this.password);
-      const ok = await this.auth.isAdmin();
-      if (!ok) {
+      const status = await this.auth.bootstrapSession();
+      if (status !== "OK") {
         await this.auth.logout();
+        if (status === "INVITE_PENDING") {
+          throw new Error("Cuenta pendiente de activacion. Acepta la invitacion desde tu correo para continuar.");
+        }
         throw new Error("No autorizado (no es admin).");
       }
 
