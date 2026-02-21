@@ -1,88 +1,129 @@
-<div class="login-container">
-  <!-- Background decoration -->
-  <div class="login-background"></div>
+<div class="login-shell">
+  <div class="login-ambient" aria-hidden="true"></div>
 
-  <!-- Login card -->
-  <div class="login-card">
-    <!-- Header -->
-    <div class="login-header">
-      <div class="login-icon">🛍️</div>
+  <main class="login-card" aria-label="Inicio de sesion de administracion">
+    <header class="login-header">
+      <div class="brand-logo-wrap">
+        <img class="brand-logo" src="/BaseMayoristaLogo.JPG" alt="Logo Base Mayorista" />
+      </div>
+      <p class="login-kicker">Acceso seguro</p>
       <h1 class="login-title">Base Mayorista</h1>
-      <p class="login-subtitle">Panel de Administración</p>
-      
-      <!-- Deep link message -->
+      <p class="login-subtitle">Panel de administracion</p>
+
       @if (returnUrl() !== '/main/dashboard') {
-        <div class="deep-link-message">
-          🔗 Inicia sesión para continuar con la revisión
+        <div class="deep-link-message" role="status" aria-live="polite">
+          <span class="deep-link-icon" aria-hidden="true">↗</span>
+          Inicia sesion para continuar con la revision solicitada.
         </div>
       }
-    </div>
+    </header>
 
-    <!-- Form -->
-    <form class="login-form" (submit)="onLogin(); $event.preventDefault()">
-      <!-- Email -->
+    <form class="login-form" (submit)="onLogin(); $event.preventDefault()" novalidate>
       <div class="form-group">
-        <label class="form-label">
-          <span class="label-icon">📧</span>
-          Email
-        </label>
-        <input 
-          type="email" 
-          class="form-input"
-          [(ngModel)]="email"
-          name="email"
-          placeholder="admin@ejemplo.com"
-          [disabled]="loading()"
-          required
-          autocomplete="email"
-        />
+        <label class="form-label" for="email">Correo</label>
+        <div class="input-wrap">
+          <span class="field-icon" aria-hidden="true">@</span>
+          <input
+            id="email"
+            type="email"
+            class="form-input"
+            [class.form-input-invalid]="hasEmailError()"
+            [class.form-input-valid]="hasEmailValid()"
+            [attr.aria-invalid]="hasEmailError()"
+            [(ngModel)]="email"
+            name="email"
+            placeholder="admin@basemayorista.com"
+            [disabled]="loading()"
+            required
+            autocomplete="email"
+            inputmode="email"
+            (blur)="markEmailTouched()"
+          />
+        </div>
+        @if (hasEmailError()) {
+          <p class="field-error">{{ getEmailError() }}</p>
+        }
       </div>
 
-      <!-- Password -->
       <div class="form-group">
-        <label class="form-label">
-          <span class="label-icon">🔒</span>
-          Contraseña
-        </label>
-        <input 
-          type="password" 
-          class="form-input"
-          [(ngModel)]="password"
-          name="password"
-          placeholder="••••••••"
-          [disabled]="loading()"
-          required
-          autocomplete="current-password"
-        />
+        <label class="form-label" for="password">Contrasena</label>
+        <div class="input-wrap">
+          <span class="field-icon" aria-hidden="true">*</span>
+          <input
+            id="password"
+            [type]="showPassword ? 'text' : 'password'"
+            class="form-input password-input"
+            [class.form-input-invalid]="hasPasswordError()"
+            [class.form-input-valid]="hasPasswordValid()"
+            [attr.aria-invalid]="hasPasswordError()"
+            [(ngModel)]="password"
+            name="password"
+            placeholder="Ingresa tu contrasena"
+            [disabled]="loading()"
+            required
+            autocomplete="current-password"
+            (blur)="markPasswordTouched()"
+          />
+          <button
+            type="button"
+            class="password-toggle"
+            [disabled]="loading()"
+            (click)="togglePasswordVisibility()"
+            [attr.aria-label]="showPassword ? 'Ocultar contrasena' : 'Mostrar contrasena'"
+            [attr.aria-pressed]="showPassword"
+          >
+            @if (!showPassword) {
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M12 5c5.5 0 9.8 4.2 11 6.9-1.2 2.8-5.5 7.1-11 7.1S2.2 14.7 1 11.9C2.2 9.2 6.5 5 12 5zm0 2C8 7 4.7 10 3.3 11.9 4.7 13.9 8 17 12 17s7.3-3.1 8.7-5.1C19.3 10 16 7 12 7zm0 2.2A2.8 2.8 0 1 1 12 15a2.8 2.8 0 0 1 0-5.8z"></path>
+              </svg>
+            } @else {
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="m3.3 2 18.7 18.6-1.4 1.4-3.2-3.2A12.3 12.3 0 0 1 12 20c-5.5 0-9.8-4.3-11-7.1.7-1.7 2.4-3.9 4.8-5.5L2 3.4 3.3 2zm5.4 7.1 1.6 1.6a2.8 2.8 0 0 0 3.1 3.1l1.6 1.6a4.8 4.8 0 0 1-6.3-6.3zm7.9 7.9-1.5-1.5c2.6-.8 4.7-2.7 5.7-4.6-1.1-1.7-4-4.9-8.8-4.9-1.5 0-2.8.3-4 .8L6.4 5.1A13 13 0 0 1 12 4c5.5 0 9.8 4.3 11 7-1.2 2.8-5.5 7.2-11 7.2-.4 0-.9 0-1.3-.1l1.9-1.9c.2 0 .5.1.7.1 1.1 0 2.2-.3 3.2-.8z"></path>
+              </svg>
+            }
+          </button>
+        </div>
+        @if (hasPasswordError()) {
+          <p class="field-error">{{ getPasswordError() }}</p>
+        }
       </div>
 
-      <!-- Error message -->
+      <label class="remember-row" for="rememberEmail">
+        <input
+          id="rememberEmail"
+          class="remember-checkbox"
+          type="checkbox"
+          [(ngModel)]="rememberEmail"
+          name="rememberEmail"
+          [disabled]="loading()"
+        />
+        <span>Recordar correo en este dispositivo</span>
+      </label>
+
       @if (error()) {
-        <div class="error-message">
-          <span class="error-icon">⚠️</span>
+        <div class="error-message" role="alert">
+          <span class="error-icon" aria-hidden="true">!</span>
           <span>{{ error() }}</span>
         </div>
       }
 
-      <!-- Submit button -->
-      <button 
+      <button
         type="submit"
         class="login-button"
         [disabled]="loading()"
       >
         @if (loading()) {
-          <span class="button-spinner"></span>
-          <span>Iniciando sesión...</span>
+          <span class="button-spinner" aria-hidden="true"></span>
+          <span>Iniciando sesion...</span>
         } @else {
-          <span>Iniciar Sesión</span>
-          <span class="button-arrow">→</span>
+          <span>Iniciar sesion</span>
+          <span class="button-arrow" aria-hidden="true">→</span>
         }
       </button>
     </form>
 
-    <!-- Footer -->
-    <div class="login-footer">
-      <p>Sistema de gestión de productos mayoristas</p>
-    </div>
-  </div>
+    <footer class="login-footer">
+      <p>Sistema de gestion de productos mayoristas</p>
+    </footer>
+  </main>
 </div>

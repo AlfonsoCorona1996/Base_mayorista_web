@@ -1,5 +1,5 @@
 ﻿import { Component, ElementRef, HostListener, OnInit, ViewChild, computed, inject, signal } from "@angular/core";
-import { DatePipe } from "@angular/common";
+import { DatePipe, UpperCasePipe } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { ActivatedRoute, Router, RouterLink } from "@angular/router";
 import { collection, getDocs } from "firebase/firestore";
@@ -16,7 +16,7 @@ type EstadoConfirmacion = "pendiente" | "confirmado" | "sin_stock";
 @Component({
   standalone: true,
   selector: "app-pedido-detalle",
-  imports: [FormsModule, RouterLink, DatePipe],
+  imports: [FormsModule, RouterLink, DatePipe, UpperCasePipe],
   templateUrl: "./pedido-detalle.html",
   styleUrls: ["./pedido-detalle.css"],
 })
@@ -48,9 +48,11 @@ export default class PedidoDetallePage implements OnInit {
   userRole = signal("admin");
   copiedOrderId = signal(false);
   showStickyFooter = signal(false);
-  productStockFilter = signal<"all" | "insufficient">("all");
+  productStockFilter = signal<"all" | "out_of_stock" | "confirmed" | "pending">("all");
   showStockFab = signal(false);
   quickConfirming = signal<Record<string, boolean>>({});
+  imagePreviewUrl = signal<string | null>(null);
+  imagePreviewLoading = signal(false);
 
   incidentModalOpen = signal(false);
   incidentType = signal("GENERAL");
@@ -87,19 +89,23 @@ export default class PedidoDetallePage implements OnInit {
   pendingItems = computed(() => (this.order()?.items || []).filter((item) => item.state !== "entregado" && item.state !== "pagado"));
   totals = computed(() => {
     const items = this.order()?.items || [];
+    let totalVenta = 0;
     let totalClienta = 0;
-    let totalCost = 0;
+    let totalCosto = 0;
     for (const item of items) {
-      const qty = item.quantity || 0;
+      const qty = item.confirmation_state === "confirmed" ? this.confirmedQty(item) : 0;
+      const priceVenta = item.price_public ?? item.price_clienta ?? 0;
       const priceClienta = item.price_clienta ?? item.price_public ?? 0;
-      const priceCost = item.price_cost ?? 0;
+      const priceCosto = item.price_cost ?? 0;
+      totalVenta += priceVenta * qty;
       totalClienta += priceClienta * qty;
-      totalCost += priceCost * qty;
+      totalCosto += priceCosto * qty;
     }
-    const ganancia = totalClienta - totalCost;
+    const ganancia = totalCosto;
     return {
+      totalVenta,
       totalClienta,
-      totalCost,
+      totalCosto,
       ganancia,
     };
   });
@@ -554,6 +560,12 @@ export default class PedidoDetallePage implements OnInit {
     return this.suppliers.getById(supplierId)?.display_name || supplierId;
   }
 
+  groupDisplayName(group: { supplierName: string; items: OrderItem[] }): string {
+    const items = group.items || [];
+    if (items.length > 0 && items.every((item) => item.source === "inventario")) return "Inventario";
+    return group.supplierName;
+  }
+
   itemImage(item: OrderItem): string | null {
     if (item.image_url) return item.image_url;
 
@@ -612,26 +624,43 @@ export default class PedidoDetallePage implements OnInit {
     return this.insufficientItems(order).length;
   }
 
+  outOfStockItemsCount(order: Order): number {
+    return (order.items || []).filter((item) => item.confirmation_state === "out_of_stock").length;
+  }
+
+  confirmedItemsCount(order: Order): number {
+    return (order.items || []).filter((item) => item.confirmation_state === "confirmed").length;
+  }
+
+  pendingConfirmationItemsCount(order: Order): number {
+    return (order.items || []).filter((item) => !item.confirmation_state || item.confirmation_state === "pending").length;
+  }
+
   readyItemsCount(order: Order): number {
     return (order.items || []).filter((item) => !this.hasInsufficientStock(item)).length;
   }
 
   filteredProductItems(order: Order): OrderItem[] {
-    if (this.productStockFilter() === "insufficient") {
-      const insufficient = this.insufficientItems(order);
-      if (insufficient.length === 0) return order.items || [];
-      return insufficient;
+    const items = order.items || [];
+    switch (this.productStockFilter()) {
+      case "out_of_stock":
+        return items.filter((item) => item.confirmation_state === "out_of_stock");
+      case "confirmed":
+        return items.filter((item) => item.confirmation_state === "confirmed");
+      case "pending":
+        return items.filter((item) => !item.confirmation_state || item.confirmation_state === "pending");
+      default:
+        return items;
     }
-    return order.items || [];
   }
 
-  setProductStockFilter(filter: "all" | "insufficient") {
+  setProductStockFilter(filter: "all" | "out_of_stock" | "confirmed" | "pending") {
     this.productStockFilter.set(filter);
   }
 
   estado_confirmacion(item: OrderItem): EstadoConfirmacion {
     if (item.confirmation_state === "confirmed") return "confirmado";
-    if (item.confirmation_state === "out_of_stock") return "sin_stock";
+    if (item.confirmation_state === "out_of_stock" || (item.confirmation_state as unknown) === "sin_stock") return "sin_stock";
     return "pendiente";
   }
 
@@ -652,7 +681,7 @@ export default class PedidoDetallePage implements OnInit {
   }
 
   confirmExistencesActionLabel(order: Order): string {
-    return `Confirmar existencias · ${this.confirmedReadyItems(order)}/${this.totalItems(order)}`;
+    return `Confirmar existencias · ${this.confirmedPieces(order)}/${this.totalPieces(order)}`;
   }
 
   isConfirmExistencesReady(order: Order): boolean {
@@ -722,7 +751,12 @@ export default class PedidoDetallePage implements OnInit {
   getCardDraftConfirmedQty(item: OrderItem): number {
     const max = this.maxConfirmableQty(item);
     const draft = this.confirmQtyDraft()[item.item_id];
-    if (typeof draft === "number") return this.normalizeConfirmedQty(draft, max);
+    if (typeof draft === "number") {
+      // If the item was marked out_of_stock, draft is usually 0.
+      // Allow switching back to confirmed using the max confirmable qty.
+      if (this.isOutOfStockConfirmation(item) && draft <= 0 && max > 0) return max;
+      return this.normalizeConfirmedQty(draft, max);
+    }
     if (this.isConfirmedConfirmation(item)) return this.normalizeConfirmedQty(this.confirmedQty(item), max);
     return max;
   }
@@ -762,6 +796,30 @@ export default class PedidoDetallePage implements OnInit {
     }
   }
 
+  async decreaseConfirmedCounter(item: OrderItem) {
+    const max = this.maxConfirmableQty(item);
+    if (max <= 0 || this.isQuickConfirming(item)) return;
+    const current = this.getCardDraftConfirmedQty(item);
+    const next = Math.max(0, current - 1);
+    if (next === current) return;
+    this.setCardDraftConfirmedQty(item, next);
+    if (next <= 0) {
+      await this.marcarAgotado(item);
+      return;
+    }
+    await this.confirmarItem(item);
+  }
+
+  async increaseConfirmedCounter(item: OrderItem) {
+    const max = this.maxConfirmableQty(item);
+    if (max <= 0 || this.isQuickConfirming(item)) return;
+    const current = this.getCardDraftConfirmedQty(item);
+    const next = Math.min(max, current + 1);
+    if (next === current) return;
+    this.setCardDraftConfirmedQty(item, next);
+    await this.confirmarItem(item);
+  }
+
   async marcarAgotado(item: OrderItem) {
     const order = this.order();
     if (!order || !this.isConfirmItemsPhase(order)) return;
@@ -781,7 +839,9 @@ export default class PedidoDetallePage implements OnInit {
   }
 
   canMagicConfirm(order: Order): boolean {
-    return (order.items || []).some((item) => !this.isConfirmedConfirmation(item) && this.hasStockForSmartConfirm(item));
+    return (order.items || []).some(
+      (item) => !this.isConfirmedConfirmation(item) && (item.source === "inventario" || this.hasStockForSmartConfirm(item)),
+    );
   }
 
   async magicConfirmAvailable(order: Order) {
@@ -789,7 +849,7 @@ export default class PedidoDetallePage implements OnInit {
     if (targets.length === 0) return;
     await Promise.all(
       targets.map(async (item) => {
-        const qty = this.maxConfirmableQty(item);
+        const qty = item.source === "inventario" ? this.itemQuantity(item) : this.maxConfirmableQty(item);
         if (qty <= 0) {
           await this.markOutOfStock(order, item);
           return;
@@ -834,6 +894,17 @@ export default class PedidoDetallePage implements OnInit {
     return Math.max(0, Math.min(100, Math.round(pct)));
   }
 
+  resolvedPieces(order: Order): number {
+    return this.confirmedPieces(order) + this.outOfStockPieces(order);
+  }
+
+  resolvedPiecesPercent(order: Order): number {
+    const total = this.totalPieces(order);
+    if (total <= 0) return 0;
+    const pct = (this.resolvedPieces(order) * 100) / total;
+    return Math.max(0, Math.min(100, Math.round(pct)));
+  }
+
   totalItems(order: Order): number {
     return (order.items || []).length;
   }
@@ -850,7 +921,7 @@ export default class PedidoDetallePage implements OnInit {
 
   outOfStockPieces(order: Order): number {
     return (order.items || [])
-      .filter((item) => item.confirmation_state === "out_of_stock")
+      .filter((item) => item.confirmation_state === "out_of_stock" || (item.confirmation_state as unknown) === "sin_stock")
       .reduce((sum, item) => sum + this.itemQuantity(item), 0);
   }
 
@@ -929,6 +1000,18 @@ export default class PedidoDetallePage implements OnInit {
   }
 
   groupUnresolvedCount(items: OrderItem[]): number {
+    return items.filter((item) => !item.confirmation_state || item.confirmation_state === "pending").length;
+  }
+
+  groupConfirmedCount(items: OrderItem[]): number {
+    return items.filter((item) => item.confirmation_state === "confirmed").length;
+  }
+
+  groupOutOfStockCount(items: OrderItem[]): number {
+    return items.filter((item) => item.confirmation_state === "out_of_stock").length;
+  }
+
+  groupPendingCount(items: OrderItem[]): number {
     return items.filter((item) => !item.confirmation_state || item.confirmation_state === "pending").length;
   }
 
@@ -1414,6 +1497,33 @@ export default class PedidoDetallePage implements OnInit {
     } finally {
       this.actionSaving.set(false);
     }
+  }
+
+  openImagePreview(url: string) {
+    this.imagePreviewUrl.set(url);
+    this.imagePreviewLoading.set(true);
+  }
+
+  closeImagePreview() {
+    this.imagePreviewUrl.set(null);
+    this.imagePreviewLoading.set(false);
+  }
+
+  onPreviewImageLoaded() {
+    this.imagePreviewLoading.set(false);
+  }
+
+  onPreviewImageError() {
+    this.imagePreviewLoading.set(false);
+  }
+
+  onConfirmExistencesClick(order: Order) {
+    const pending = this.pendingPieces(order);
+    if (pending > 0) {
+      this.actionError.set(`Tienes que solucionar las piezas pendientes (${pending}).`);
+      return;
+    }
+    void this.confirmExistences(order);
   }
 
   openIncidentModal() {

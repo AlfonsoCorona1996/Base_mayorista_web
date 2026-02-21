@@ -12,6 +12,7 @@ import {
   buildPermissionsForRole,
   normalizeRole,
 } from "../../core/access.service";
+import { AuditService } from "../../core/audit.service";
 import { FIREBASE_AUTH, FIRESTORE } from "../../core/firebase.providers";
 
 interface AdminRow {
@@ -45,6 +46,7 @@ interface AuditRow {
 })
 export default class UsuariosPage {
   private access = inject(AccessService);
+  private audit = inject(AuditService);
 
   loading = signal(false);
   saving = signal(false);
@@ -236,8 +238,7 @@ export default class UsuariosPage {
       if (val.toDate) return val.toDate().toISOString();
       return String(val);
     };
-    this.auditRows.set(
-      snap.docs.map((docSnap) => {
+    const rows = snap.docs.map((docSnap) => {
         const data = docSnap.data() as Record<string, any>;
         return {
           id: docSnap.id,
@@ -246,8 +247,8 @@ export default class UsuariosPage {
           created_at: toIso(data["created_at"]),
           meta: (data["meta"] || {}) as Record<string, any>,
         };
-      })
-    );
+      });
+    this.auditRows.set(rows.filter((row) => this.isUserAuditAction(row.action)));
   }
 
   startCreate() {
@@ -325,12 +326,26 @@ export default class UsuariosPage {
       if (isEdit) {
         const uid = this.editingUid();
         if (!uid) throw new Error("UID inválido");
+        const current = this.rows().find((row) => row.uid === uid) || null;
+        const permissionDiff = this.permissionChanges(current?.permissions || null, permissions);
+        const changedFields: string[] = [];
+        if (current && current.role !== role) changedFields.push("role");
+        if (current && current.active !== this.draftActive) changedFields.push("active");
+        if (permissionDiff.length > 0) changedFields.push("permissions");
 
         await this.postAdmin("/admin/users/update-access", {
           uid,
           role,
           active: this.draftActive,
           permissions,
+        });
+        await this.auditUserAction("USER_UPDATED", {
+          target_uid: uid,
+          target_email: email,
+          role,
+          active: this.draftActive,
+          changed_fields: changedFields,
+          permission_changes: permissionDiff,
         });
 
         this.success.set("Acceso de usuario actualizado");
@@ -341,6 +356,11 @@ export default class UsuariosPage {
           username,
           role,
           permissions,
+        });
+        await this.auditUserAction("USER_CREATED", {
+          target_email: email,
+          username,
+          role,
         });
 
         this.success.set("Usuario invitado. Se envió correo de acceso.");
@@ -369,6 +389,10 @@ export default class UsuariosPage {
         uid: row.uid,
         email: row.email || undefined,
       });
+      await this.auditUserAction("USER_INVITE_RESENT", {
+        target_uid: row.uid,
+        target_email: row.email,
+      });
       this.success.set(`Invitación reenviada a ${row.email || row.uid}`);
       await this.loadAuditLogs();
     } catch (e: any) {
@@ -390,6 +414,10 @@ export default class UsuariosPage {
     try {
       await this.postAdmin("/admin/users/force-reset-password", {
         uid: row.uid,
+      });
+      await this.auditUserAction("USER_PASSWORD_RESET_FORCED", {
+        target_uid: row.uid,
+        target_email: row.email,
       });
       this.success.set(`Reset de contrasena enviado a ${row.email || row.uid}`);
       await this.loadAuditLogs();
@@ -419,6 +447,10 @@ export default class UsuariosPage {
     try {
       await this.postAdmin("/admin/users/delete", {
         uid: row.uid,
+      });
+      await this.auditUserAction("USER_DELETED", {
+        target_uid: row.uid,
+        target_email: row.email,
       });
       this.success.set(`Usuario ${row.displayName || row.email || row.uid} eliminado.`);
       await this.reload();
@@ -507,5 +539,116 @@ export default class UsuariosPage {
       usuarios: "Usuarios",
     };
     return labels[permission];
+  }
+
+  auditActionLabel(action: string): string {
+    const normalized = (action || "").toUpperCase();
+    const labels: Record<string, string> = {
+      USER_CREATED: "Usuario creado",
+      USER_UPDATED: "Usuario editado",
+      USER_DELETED: "Usuario eliminado",
+      USER_INVITE_RESENT: "Invitacion reenviada",
+      USER_PASSWORD_RESET_FORCED: "Reset de contrasena enviado",
+    };
+    return labels[normalized] || normalized || "Evento";
+  }
+
+  auditDetail(row: AuditRow): string | null {
+    const action = (row.action || "").toUpperCase();
+    const meta = row.meta || {};
+    if (action === "USER_CREATED") {
+      const role = this.roleFromMeta(meta);
+      const username = typeof meta["username"] === "string" ? meta["username"] : null;
+      const parts = [role ? `Rol: ${role}` : "", username ? `Username: @${username}` : ""].filter(Boolean);
+      return parts.length ? parts.join(" · ") : null;
+    }
+    if (action === "USER_UPDATED") {
+      const changed = Array.isArray(meta["changed_fields"]) ? (meta["changed_fields"] as string[]) : [];
+      const parts: string[] = [];
+      if (changed.includes("role")) {
+        const role = this.roleFromMeta(meta);
+        if (role) parts.push(`Rol: ${role}`);
+      }
+      if (changed.includes("active") && typeof meta["active"] === "boolean") {
+        parts.push(`Estado: ${meta["active"] ? "Activo" : "Inactivo"}`);
+      }
+      if (changed.includes("permissions")) {
+        const changes = Array.isArray(meta["permission_changes"]) ? (meta["permission_changes"] as string[]) : [];
+        const labels = this.permissionChangeLabels(changes);
+        if (labels.length) {
+          parts.push(`Permisos: ${labels.join(", ")}`);
+        } else {
+          parts.push(`Permisos: ${changes.length} cambio(s)`);
+        }
+      }
+      if (!parts.length && changed.length) {
+        parts.push(`Campos: ${changed.join(", ")}`);
+      }
+      return parts.length ? parts.join(" · ") : "Se actualizaron datos de acceso";
+    }
+    return null;
+  }
+
+  auditTarget(meta: Record<string, any>): string | null {
+    return (
+      meta?.["target_email"] ||
+      meta?.["email"] ||
+      meta?.["user_email"] ||
+      meta?.["target_uid"] ||
+      meta?.["uid"] ||
+      meta?.["user_uid"] ||
+      null
+    );
+  }
+
+  private isUserAuditAction(action: string): boolean {
+    const normalized = (action || "").toUpperCase().trim();
+    if (!normalized || normalized === "VIEW_ROUTE") return false;
+    if (normalized.startsWith("USER_")) return true;
+    return (
+      normalized.includes("INVITE") ||
+      normalized.includes("PASSWORD") ||
+      normalized.includes("ACCESS") ||
+      normalized.includes("PERMISSION") ||
+      normalized.includes("ROLE")
+    );
+  }
+
+  private async auditUserAction(action: string, meta: Record<string, any>) {
+    await this.audit.log(action, meta).catch(() => null);
+  }
+
+  private permissionChanges(previous: PermissionMap | null, next: PermissionMap): string[] {
+    const prev = previous || ({} as PermissionMap);
+    const changes: string[] = [];
+    for (const key of ALL_PERMISSIONS) {
+      const before = Boolean(prev[key]);
+      const after = Boolean(next[key]);
+      if (before !== after) {
+        changes.push(`${key}:${before ? "on" : "off"}->${after ? "on" : "off"}`);
+      }
+    }
+    return changes;
+  }
+
+  private roleFromMeta(meta: Record<string, any>): string | null {
+    const raw = meta?.["role"];
+    if (typeof raw !== "string") return null;
+    return this.roleLabel(normalizeRole(raw as AppRole));
+  }
+
+  private permissionChangeLabels(changes: string[]): string[] {
+    const labels: string[] = [];
+    for (const item of changes) {
+      const [key, transition] = String(item || "").split(":");
+      if (!key || !transition) continue;
+      const permission = key.trim() as AppPermission;
+      if (!ALL_PERMISSIONS.includes(permission)) continue;
+      const [fromRaw, toRaw] = transition.split("->");
+      const from = fromRaw === "on" ? "Si" : "No";
+      const to = toRaw === "on" ? "Si" : "No";
+      labels.push(`${this.permissionLabel(permission)}: ${from} -> ${to}`);
+    }
+    return labels;
   }
 }

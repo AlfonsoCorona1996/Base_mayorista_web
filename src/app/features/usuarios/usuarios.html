@@ -237,15 +237,24 @@
 
     <section class="panel audit-panel">
       <div class="list-header">
-        <h2>Bitacora reciente</h2>
+        <h2>Bitacora de usuarios</h2>
       </div>
       @if (auditRows().length === 0) {
-        <p class="empty">Sin eventos.</p>
+        <p class="empty">Sin eventos de usuarios.</p>
       } @else {
         <ul class="audit-list">
           @for (row of auditRows(); track row.id) {
             <li>
-              <p><strong>{{ row.action }}</strong> · {{ row.actor_email || "sistema" }}</p>
+              <p>
+                <strong>{{ auditActionLabel(row.action) }}</strong>
+                @if (auditTarget(row.meta); as target) {
+                  <span> · {{ target }}</span>
+                }
+              </p>
+              @if (auditDetail(row); as detail) {
+                <p class="muted">{{ detail }}</p>
+              }
+              <p class="muted">Por {{ row.actor_email || "sistema" }}</p>
               <p class="muted">{{ row.created_at | date: "short" }}</p>
             </li>
           }

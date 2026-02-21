@@ -92,7 +92,7 @@
         <p class="eyebrow">Total venta</p>
         <p class="summary-money">
           <span>MXN</span>
-          <strong class="summary-value">{{ formatCurrency(totals().totalClienta) }}</strong>
+          <strong class="summary-value">{{ formatCurrency(totals().totalVenta) }}</strong>
         </p>
       </article>
 
@@ -100,7 +100,7 @@
         <p class="eyebrow">Total clienta</p>
         <p class="summary-money">
           <span>MXN</span>
-          <strong class="summary-value">{{ formatCurrency(totals().totalCost) }}</strong>
+          <strong class="summary-value">{{ formatCurrency(totals().totalClienta) }}</strong>
         </p>
       </article>
 
@@ -108,7 +108,7 @@
         <p class="eyebrow">Ganancia</p>
         <p class="summary-money summary-money--profit">
           <span>MXN</span>
-          <strong class="summary-value summary-value--profit">{{ formatCurrency(totals().ganancia) }}</strong>
+          <strong class="summary-value summary-value--profit">{{ formatCurrency(totals().totalCosto) }}</strong>
         </p>
       </article>
     </section>
@@ -221,20 +221,34 @@
             [class.active]="productStockFilter() === 'all'"
             (click)="setProductStockFilter('all')"
           >
-            Todos ({{ totalItems(current) }})
+            Todo ({{ totalItems(current) }})
           </button>
           <button
             type="button"
             class="products-filter-btn"
-            [class.active]="productStockFilter() === 'insufficient'"
-            [class.products-filter-btn--magnet]="shouldMagnetizeInsufficientTab(current)"
-            [disabled]="insufficientItemsCount(current) === 0"
-            (click)="setProductStockFilter('insufficient')"
+            [class.active]="productStockFilter() === 'out_of_stock'"
+            [disabled]="outOfStockItemsCount(current) === 0"
+            (click)="setProductStockFilter('out_of_stock')"
           >
-            Faltantes
-            <span class="products-filter-count" [class.products-filter-count--alert]="insufficientItemsCount(current) > 0">
-              ({{ insufficientItemsCount(current) }})
-            </span>
+            Sin stock ({{ outOfStockItemsCount(current) }})
+          </button>
+          <button
+            type="button"
+            class="products-filter-btn"
+            [class.active]="productStockFilter() === 'confirmed'"
+            [disabled]="confirmedItemsCount(current) === 0"
+            (click)="setProductStockFilter('confirmed')"
+          >
+            Confirmados ({{ confirmedItemsCount(current) }})
+          </button>
+          <button
+            type="button"
+            class="products-filter-btn"
+            [class.active]="productStockFilter() === 'pending'"
+            [disabled]="pendingConfirmationItemsCount(current) === 0"
+            (click)="setProductStockFilter('pending')"
+          >
+            Pendientes ({{ pendingConfirmationItemsCount(current) }})
           </button>
           @if (isConfirmItemsPhase(current) && hasPendingItems(current)) {
             <button
@@ -251,135 +265,122 @@
       <div class="items order-item-grid">
         @for (item of filteredProductItems(current); track item.item_id) {
           <article
-            class="order-item-card card-product"
+            class="product-card"
             [id]="productCardId(item)"
-            [class.has-incident]="itemHasOpenIncident(item.item_id)"
-            [class.order-item-card--insufficient]="hasInsufficientStock(item)"
-            [class.order-item-card--confirmado]="isConfirmedConfirmation(item)"
-            [class.order-item-card--sin-stock]="isOutOfStockConfirmation(item)"
-            [class.card-product--confirmed]="isConfirmedConfirmation(item)"
-            [class.card-product--out-of-stock]="isOutOfStockConfirmation(item)"
-            [class.card-product--alert]="hasInsufficientStock(item) && !isOutOfStockConfirmation(item)"
+            [class.status--confirmed]="isConfirmedConfirmation(item)"
+            [class.status--out]="isOutOfStockConfirmation(item)"
+            [class.status--alert]="hasInsufficientStock(item) && !isOutOfStockConfirmation(item)"
           >
-            <div class="product-media">
-              <img [src]="itemImage(item) || 'https://via.placeholder.com/240x200?text=Prod'" [alt]="item.title" />
-            </div>
+            <button type="button" class="btn-close" (click)="removeItem(current, item)" [disabled]="!canEditItems(current)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 6h18"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8 6V4h8v2"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M7 6l1 14h8l1-14"></path>
+              </svg>
+            </button>
 
-            <div class="product-main">
-              <div class="product-title-stack">
-                <h4 class="product-name">{{ item.title }}</h4>
-                <span
-                  class="origin-badge origin-badge--top"
-                  [class.origin-badge--almacen]="item.source === 'inventario'"
-                  [class.origin-badge--catalogo]="item.source === 'catalogo'"
-                >
-                  @if (item.source === "inventario") {
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                      <path d="M3 7h18v13H3z"></path>
-                      <path d="M3 7 12 3l9 4"></path>
-                    </svg>
-                    <span>ALMAC?N</span>
-                  } @else if (item.source === "catalogo") {
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                      <path d="M4 5a2 2 0 0 1 2-2h12v17H6a2 2 0 0 0-2 2z"></path>
-                      <path d="M18 3a2 2 0 0 1 2 2v17"></path>
-                    </svg>
-                    <span>CAT?LOGO</span>
-                  } @else {
-                    <span aria-hidden="true">E</span>
-                    <span>EXTERNO</span>
-                  }
-                </span>
-              </div>
-              <p class="meta product-meta">Talla: {{ item.variant || "Sin talla" }} | Color: {{ item.color || "Sin color" }}</p>
-
-              <div class="chips product-chips">
-                <span class="chip chip--pieces">Piezas: {{ item.quantity }}</span>
-                @if (isOutOfStockConfirmation(item)) {
-                  <span class="chip chip--agotado">Agotado</span>
-                }
-                @if (hasPartialConfirmation(item)) {
-                  <span class="chip chip--partial">Parcial: {{ confirmedQty(item) }} de {{ item.quantity }}</span>
-                }
-              </div>
-            </div>
-
-            <div class="product-side">
-              <div class="price product-price">
-                <span class="label">Precio clienta</span>
-                <span class="value">{{ formatCurrency(item.price_clienta ?? item.price_public ?? null) || itemPriceLabel(item) }}</span>
-              </div>
-              @if (isConfirmItemsPhase(current)) {
-                <div
-                  class="product-actions"
-                  [class.product-actions--resolved]="isConfirmedConfirmation(item)"
-                  (click)="$event.stopPropagation()"
-                >
+            <div class="card-body">
+              <div class="main-info">
+                <button type="button" class="image-container" (click)="openImagePreview(itemImage(item) || 'https://via.placeholder.com/800?text=Producto')">
+                  <img [src]="itemImage(item) || 'https://via.placeholder.com/100'" [alt]="item.title" />
                   @if (isConfirmedConfirmation(item)) {
-                    <span class="product-confirmed-check" aria-label="Confirmado">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                        <path d="m5 13 4 4L19 7"></path>
+                    <span class="pieces-state pieces-state--ok">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="m5 13 4 4L19 7"></path>
                       </svg>
                     </span>
-                  } @else {
-                    @if (hasInsufficientStock(item) && !isOutOfStockConfirmation(item)) {
-                      <div class="qty-inline card-qty-inline" [attr.aria-label]="'Cantidad confirmable para ' + item.title">
-                        <button type="button" class="qty-mini" [disabled]="isQuickConfirming(item)" (click)="decreaseCardConfirmedQty(item)">-</button>
-                        <span class="qty-mini-value">{{ getCardDraftConfirmedQty(item) }} / {{ item.quantity }}</span>
-                        <button type="button" class="qty-mini" [disabled]="isQuickConfirming(item)" (click)="increaseCardConfirmedQty(item)">+</button>
+                  } @else if (isOutOfStockConfirmation(item)) {
+                    <span class="pieces-state pieces-state--out">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M18 6L6 18M6 6l12 12"></path>
+                      </svg>
+                    </span>
+                  }
+                </button>
+
+                <div class="text-content">
+                  <div class="title-row">
+                    <h4 class="product-name">{{ item.title }}</h4>
+                    <span class="source-tag" [class.source--catalogo]="item.source === 'catalogo'">
+                      {{ item.source | uppercase }}
+                    </span>
+                  </div>
+
+                  <div class="specs-grid">
+                    <div class="spec-item">
+                      <svg class="icon-tiny" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M7 7h10v10H7zM7 12h10M12 7v10"/></svg>
+                      <span>{{ item.variant || "Unica" }}</span>
+                    </div>
+                    <div class="spec-item">
+                      <svg class="icon-tiny" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
+                      <span>{{ item.color || "N/A" }}</span>
+                    </div>
+                    <div class="spec-status-row">
+                      <div class="spec-item spec-item--pieces">
+                        @if (isOutOfStockConfirmation(item)) {
+                          <span>Piezas: <strong>{{ item.quantity }}</strong></span>
+                        } @else if (item.quantity > 1) {
+                          <span>Piezas: <strong>{{ confirmedQty(item) }}</strong> de <strong>{{ item.quantity }}</strong></span>
+                        } @else {
+                          <span>Piezas: <strong>{{ item.quantity }}</strong></span>
+                        }
                       </div>
-                    }
-                    <button
-                      type="button"
-                      class="btn card-action-btn card-action-btn--confirm"
-                      [disabled]="isQuickConfirming(item)"
-                      (click)="confirmarItem(item)"
-                    >
-                      Confirmar
-                    </button>
-                    @if (!isOutOfStockConfirmation(item)) {
-                      <button
-                        type="button"
-                        class="btn card-action-btn card-action-btn--out"
-                        [class.active]="isOutOfStockConfirmation(item)"
-                        [disabled]="isQuickConfirming(item)"
-                        (click)="marcarAgotado(item)"
-                      >
-                        Agotar
-                      </button>
-                    }
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="footer-row">
+                <div class="price-stack">
+                  <span class="price-label">Precio Clienta</span>
+                  <span class="price-value">{{ formatCurrency(item.price_clienta ?? item.price_public ?? 0) }}</span>
+                </div>
+
+                <div class="action-stack">
+                  @if (isConfirmItemsPhase(current)) {
+                    <div class="button-group">
+                      @if (isConfirmedConfirmation(item) && item.quantity > 1) {
+                        <div class="confirmed-counter" [attr.aria-label]="'Confirmados para ' + item.title">
+                          <button
+                            type="button"
+                            class="confirmed-counter__btn"
+                            [disabled]="isQuickConfirming(item)"
+                            (click)="decreaseConfirmedCounter(item)"
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                              <path stroke-linecap="round" stroke-linejoin="round" d="M6 12h12"></path>
+                            </svg>
+                          </button>
+                          <span class="confirmed-counter__value">{{ getCardDraftConfirmedQty(item) }} / {{ item.quantity }}</span>
+                          <button
+                            type="button"
+                            class="confirmed-counter__btn"
+                            [disabled]="isQuickConfirming(item)"
+                            (click)="increaseConfirmedCounter(item)"
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                              <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12M6 12h12"></path>
+                            </svg>
+                          </button>
+                        </div>
+                      } @else if (!isConfirmedConfirmation(item)) {
+                        <button class="btn-main btn-confirm" (click)="confirmarItem(item)">Marcar <span class="btn-confirm-word">Disponible</span></button>
+                      }
+                      @if (!isOutOfStockConfirmation(item)) {
+                        <button class="btn-sub btn-out" (click)="marcarAgotado(item)">Marcar <span class="btn-out-word">Agotado</span></button>
+                      }
+                    </div>
                   }
                 </div>
-              }
-              @if (allowedCapabilities(current, userRole()).canRegisterReception) {
-                <button type="button" class="btn ghost" (click)="receiveItem(current, item)">Registrar recepcion/QA</button>
-              }
-              @if (allowedCapabilities(current, userRole()).canPack) {
-                <button type="button" class="btn ghost" (click)="markPacked(current, item)">Empacar</button>
-              }
-              <div class="card-delete-wrap">
-                <button
-                  type="button"
-                  class="btn btn--danger btn--icon-delete"
-                  (click)="removeItem(current, item)"
-                  aria-label="Quitar producto"
-                  [disabled]="!canEditItems(current)"
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                    <path d="M3 6h18"></path>
-                    <path d="M8 6V4h8v2"></path>
-                    <path d="M7 6l1 14h8l1-14"></path>
-                  </svg>
-                </button>
               </div>
             </div>
-            @if (hasInsufficientStock(item)) {
-              <span class="stock-warning-micro">Solo {{ availableStock(item) }} disponibles</span>
-            }
           </article>
         }
+
         @if (current.items.length === 0) {
-          <p class="muted">Aun no hay productos en este pedido.</p>
+          <div class="empty-state">
+            <p>Aun no hay productos en este pedido.</p>
+          </div>
         }
       </div>
     </section>
@@ -590,12 +591,6 @@
               </div>
             }
 
-          @if (current.items.length === 0) {
-            <div class="sheet-warning">
-              <p class="eyebrow">Bloqueado</p>
-              <p>No hay productos en el pedido.</p>
-            </div>
-          }
           @if (current.items.length > 0) {
             <div class="confirm-summary">
               <div class="confirm-progress" role="progressbar" [attr.aria-valuenow]="resolvedItems(current)" aria-valuemin="0" [attr.aria-valuemax]="totalItems(current)">
@@ -603,117 +598,43 @@
               </div>
             </div>
           }
-          <div class="confirm-items-list">
-            @for (group of groupedItemsBySupplier(current); track group.supplierId) {
-              <div class="supplier-group">
-                <div class="supplier-head" [class.resolved]="groupUnresolvedCount(group.items) === 0">
+          @if (current.items.length > 0) {
+            <div class="confirm-items-list">
+              @for (group of groupedItemsBySupplier(current); track group.supplierId) {
+                <div class="supplier-head" [class.resolved]="groupPendingCount(group.items) === 0">
                   <div class="supplier-meta">
-                    <p class="supplier-title">{{ group.supplierName }}</p>
+                    <p class="supplier-title">{{ groupDisplayName(group) }}</p>
                     <div class="supplier-stats">
-                      @if (groupUnresolvedCount(group.items) === 0) {
-                        <span class="stat-chip success">Resuelto</span>
-                      } @else {
-                        <span class="stat-chip pending">Pendientes {{ groupUnresolvedCount(group.items) }}</span>
+                      @if (groupOutOfStockCount(group.items) > 0) {
+                        <span class="stat-chip danger">Sin Stock {{ groupOutOfStockCount(group.items) }}</span>
                       }
-                      <span class="stat-chip">Items {{ group.items.length }}</span>
+                      @if (groupConfirmedCount(group.items) > 0) {
+                        <span class="stat-chip success">Confirmados {{ groupConfirmedCount(group.items) }}</span>
+                      }
+                      @if (groupPendingCount(group.items) > 0) {
+                        <span class="stat-chip pending">Pendientes {{ groupPendingCount(group.items) }}</span>
+                      }
                     </div>
                   </div>
                 </div>
-                <div class="items">
-                  @for (item of group.items; track item.item_id) {
-                    <article
-                      class="item-card compact"
-                      [class.resolved]="item.confirmation_state && item.confirmation_state !== 'pending'"
-                      [class.state-confirmed]="item.confirmation_state === 'confirmed'"
-                      [class.state-partial]="hasPartialConfirmation(item)"
-                      [class.state-out]="item.confirmation_state === 'out_of_stock'"
-                    >
-                      <div class="item-thumb">
-                        @if (itemImage(item); as imageUrl) {
-                          <img [src]="imageUrl" [alt]="item.title" />
-                        } @else {
-                          <div class="photo-placeholder photo-placeholder-sm" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                              <path d="M4 7h4l2-2h4l2 2h4v12H4z"></path>
-                              <circle cx="12" cy="13" r="3"></circle>
-                            </svg>
-                          </div>
-                        }
-                      </div>
-                      <div class="item-info">
-                        <div class="item-title-row">
-                          <p class="item-title">{{ item.title }}</p>
-                          @if (item.confirmation_state === "confirmed" && !hasPartialConfirmation(item)) {
-                            <span class="item-confirm-icon" aria-label="Confirmado">
-                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                                <path d="m5 13 4 4L19 7"></path>
-                              </svg>
-                            </span>
-                          }
-                        </div>
-                        <p class="muted">{{ item.variant || "Variante" }} - {{ item.color || "Color" }}</p>
-                        <span class="item-chip source" [class.catalog]="item.source === 'catalogo'" [class.inventory]="item.source === 'inventario'">
-                          {{ item.source === "catalogo" ? "Catalogo" : "Inventario" }}
-                        </span>
-                      </div>
-                      <div class="item-actions">
-                        <p class="qty-caption">Cantidad disponible</p>
-                        <div class="qty-inline" [attr.aria-label]="'Cantidad disponible para ' + item.title">
-                          <button type="button" class="qty-mini" (click)="decreaseDraftConfirmedQty(item)" [disabled]="current.items.length === 0">-</button>
-                          <span class="qty-mini-value">{{ getDraftConfirmedQty(item) }}/{{ item.quantity }}</span>
-                          <button type="button" class="qty-mini" (click)="increaseDraftConfirmedQty(item)" [disabled]="current.items.length === 0">+</button>
-                        </div>
-                        <button
-                          type="button"
-                          class="btn ghost action-confirm"
-                          [class.active]="item.confirmation_state === 'confirmed'"
-                          [attr.aria-pressed]="item.confirmation_state === 'confirmed'"
-                          (click)="confirmItem(current, item)"
-                          [disabled]="current.items.length === 0"
-                        >
-                          <svg class="action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                            <path d="m5 13 4 4L19 7"></path>
-                          </svg>
-                          Confirmar
-                        </button>
-                        <button
-                          type="button"
-                          class="btn ghost action-out"
-                          [class.active]="item.confirmation_state === 'out_of_stock'"
-                          [attr.aria-pressed]="item.confirmation_state === 'out_of_stock'"
-                          (click)="markOutOfStock(current, item)"
-                          [disabled]="current.items.length === 0"
-                        >
-                          <svg class="action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                            <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-                            <path d="M12 9v4"></path>
-                            <path d="M12 17h.01"></path>
-                          </svg>
-                          Sin stock
-                        </button>
-                      </div>
-                    </article>
-                  }
-                </div>
-              </div>
-            }
-          </div>
+              }
+            </div>
+          }
           @if (current.items.length > 0) {
             <div class="confirm-footer">
               <div class="confirm-footer-text">
                 <p class="confirm-footer-title">
-                  {{ resolvedItems(current) }}/{{ totalItems(current) }} resueltos
-                </p>
-                <p class="muted small">
-                  Confirmadas {{ confirmedPieces(current) }} - Sin stock {{ outOfStockPieces(current) }} - Pendientes {{ pendingPieces(current) }}
+                  {{ confirmedPieces(current) + outOfStockPieces(current) }}/{{ totalPieces(current) }} piezas resueltas
                 </p>
               </div>
               <button type="button" class="btn ghost" (click)="closeActionModal()">Cancelar</button>
               <button
                 type="button"
                 class="btn primary confirm-submit-btn"
-                [disabled]="!allItemsResolved(current) || actionSaving()"
-                (click)="confirmExistences(current)"
+                [class.confirm-submit-btn--blocked]="pendingPieces(current) > 0 && !actionSaving()"
+                [attr.aria-disabled]="pendingPieces(current) > 0 ? 'true' : null"
+                [disabled]="actionSaving()"
+                (click)="onConfirmExistencesClick(current)"
               >
                 {{ actionSaving() ? "Guardando..." : "Confirmar existencias" }}
               </button>
@@ -802,6 +723,23 @@
           <button type="button" class="btn primary" (click)="savePlannedPackages()">Guardar</button>
           <button type="button" class="btn ghost" (click)="closePlannedPackages()">Ahora no</button>
         </div>
+      </div>
+    </div>
+  }
+
+  @if (imagePreviewUrl(); as previewUrl) {
+    <div class="image-lightbox" (click)="closeImagePreview()">
+      <div class="image-lightbox-dialog" role="dialog" aria-modal="true" aria-label="Vista previa de imagen" (click)="$event.stopPropagation()">
+        @if (imagePreviewLoading()) {
+          <div class="image-lightbox-loader" aria-label="Cargando imagen"></div>
+        }
+        <img
+          [src]="previewUrl"
+          alt="Vista previa del producto"
+          [class.is-loading]="imagePreviewLoading()"
+          (load)="onPreviewImageLoaded()"
+          (error)="onPreviewImageError()"
+        />
       </div>
     </div>
   }
@@ -1121,5 +1059,3 @@
     <button type="button" class="btn" routerLink="/main/pedidos">Volver a la lista</button>
   </section>
 }
-
-
