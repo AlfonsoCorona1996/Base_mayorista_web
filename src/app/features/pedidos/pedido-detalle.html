@@ -108,7 +108,7 @@
         <p class="eyebrow">Ganancia</p>
         <p class="summary-money summary-money--profit">
           <span>MXN</span>
-          <strong class="summary-value summary-value--profit">{{ formatCurrency(totals().totalCosto) }}</strong>
+          <strong class="summary-value summary-value--profit">{{ formatCurrency(totals().ganancia) }}</strong>
         </p>
       </article>
     </section>
@@ -268,6 +268,7 @@
             class="product-card"
             [id]="productCardId(item)"
             [class.status--confirmed]="isConfirmedConfirmation(item)"
+            [class.status--partial]="isConfirmedConfirmation(item) && hasPartialConfirmation(item)"
             [class.status--out]="isOutOfStockConfirmation(item)"
             [class.status--alert]="hasInsufficientStock(item) && !isOutOfStockConfirmation(item)"
           >
@@ -283,8 +284,11 @@
               <div class="main-info">
                 <button type="button" class="image-container" (click)="openImagePreview(itemImage(item) || 'https://via.placeholder.com/800?text=Producto')">
                   <img [src]="itemImage(item) || 'https://via.placeholder.com/100'" [alt]="item.title" />
+                  <span class="source-tag source-text--overlay" [class.source--catalogo]="item.source === 'catalogo'">
+                    {{ item.source | uppercase }}
+                  </span>
                   @if (isConfirmedConfirmation(item)) {
-                    <span class="pieces-state pieces-state--ok">
+                    <span class="pieces-state" [class.pieces-state--partial]="hasPartialConfirmation(item)" [class.pieces-state--ok]="!hasPartialConfirmation(item)">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" d="m5 13 4 4L19 7"></path>
                       </svg>
@@ -301,9 +305,6 @@
                 <div class="text-content">
                   <div class="title-row">
                     <h4 class="product-name">{{ item.title }}</h4>
-                    <span class="source-tag" [class.source--catalogo]="item.source === 'catalogo'">
-                      {{ item.source | uppercase }}
-                    </span>
                   </div>
 
                   <div class="specs-grid">
@@ -593,8 +594,8 @@
 
           @if (current.items.length > 0) {
             <div class="confirm-summary">
-              <div class="confirm-progress" role="progressbar" [attr.aria-valuenow]="resolvedItems(current)" aria-valuemin="0" [attr.aria-valuemax]="totalItems(current)">
-                <span class="confirm-progress-bar" [style.width.%]="totalItems(current) > 0 ? (resolvedItems(current) * 100) / totalItems(current) : 0"></span>
+              <div class="confirm-progress" role="progressbar" [attr.aria-valuenow]="resolvedPieces(current)" aria-valuemin="0" [attr.aria-valuemax]="totalPieces(current)">
+                <span class="confirm-progress-bar" [style.width.%]="totalPieces(current) > 0 ? (resolvedPieces(current) * 100) / totalPieces(current) : 0"></span>
               </div>
             </div>
           }
@@ -833,6 +834,7 @@
             <div class="field">
               <label>Buscar producto</label>
               <input
+                #productSearchInput
                 class="input"
                 type="text"
                 placeholder="Nombre, variante o color"

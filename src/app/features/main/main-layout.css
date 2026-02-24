@@ -9,6 +9,7 @@
   position: relative;
   min-height: 100vh;
   background: #f3f6fb;
+  min-width: 0;
 }
 
 .sidebar {
@@ -213,6 +214,8 @@
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  width: 100%;
 }
 
 .topbar {
@@ -250,6 +253,8 @@
 .content {
   flex: 1;
   min-height: 0;
+  min-width: 0;
+  width: 100%;
 }
 
 .backdrop {

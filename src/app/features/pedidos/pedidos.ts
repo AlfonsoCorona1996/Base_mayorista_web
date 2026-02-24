@@ -65,7 +65,7 @@ export default class PedidosPage implements OnInit {
 
   list = computed(() => this.orders.list());
   intentCounts = computed(() => {
-    const term = this.search().trim().toLowerCase();
+    const term = this.normalizeSearchTerm(this.search());
     const route = this.routeFilter();
     const counts: Record<IntentFilter, number> = {
       hoy: 0,
@@ -81,15 +81,7 @@ export default class PedidosPage implements OnInit {
 
     for (const order of this.list()) {
       if (route !== "todos" && order.route_id !== route) continue;
-      if (term) {
-        const blob = [
-          order.order_id,
-          this.customerName(order.customer_id).toLowerCase(),
-          order.route_id || "",
-          order.items.map((i) => i.title).join(" ").toLowerCase(),
-        ].join(" ");
-        if (!blob.includes(term)) continue;
-      }
+      if (!this.matchesSearchTerm(order, term)) continue;
 
       for (const intent of this.intentsForCount) {
         if (this.matchesIntent(order, intent)) counts[intent] += 1;
@@ -100,7 +92,7 @@ export default class PedidosPage implements OnInit {
   });
 
   filtered = computed(() => {
-    const term = this.search().trim().toLowerCase();
+    const term = this.normalizeSearchTerm(this.search());
     const intent = this.intentFilter();
     const route = this.routeFilter();
 
@@ -108,14 +100,7 @@ export default class PedidosPage implements OnInit {
       .filter((order) => {
         if (!this.matchesIntent(order, intent)) return false;
         if (route !== "todos" && order.route_id !== route) return false;
-        if (!term) return true;
-        const blob = [
-          order.order_id,
-          this.customerName(order.customer_id).toLowerCase(),
-          order.route_id || "",
-          order.items.map((i) => i.title).join(" ").toLowerCase(),
-        ].join(" ");
-        return blob.includes(term);
+        return this.matchesSearchTerm(order, term);
       })
       .sort((a, b) => (a.updated_at > b.updated_at ? -1 : 1));
   });
@@ -290,6 +275,32 @@ export default class PedidosPage implements OnInit {
   incidentsLabel(order: Order): string {
     const count = order.open_incidents_count ?? 0;
     return count === 1 ? "\u26a0 1 incidencia" : `\u26a0 ${count} incidencias`;
+  }
+
+  private normalizeSearchTerm(value: string): string {
+    return (value || "").trim().toLowerCase();
+  }
+
+  private compactSearchValue(value: string): string {
+    return this.normalizeSearchTerm(value).replace(/[^a-z0-9]/g, "");
+  }
+
+  private matchesSearchTerm(order: Order, term: string): boolean {
+    if (!term) return true;
+    const searchableParts = [
+      order.order_id,
+      this.customerName(order.customer_id),
+      order.route_id || "",
+      order.items.map((i) => i.title).join(" "),
+    ];
+    const blob = this.normalizeSearchTerm(searchableParts.join(" "));
+    if (blob.includes(term)) return true;
+
+    // Also match IDs even when users type without separators (e.g. P2401 vs P-2401).
+    const compactTerm = this.compactSearchValue(term);
+    if (!compactTerm) return false;
+    const compactBlob = this.compactSearchValue(searchableParts.join(" "));
+    return compactBlob.includes(compactTerm);
   }
 
   primaryAlert(order: Order): { label: string; tone: "danger" | "warning" } | null {

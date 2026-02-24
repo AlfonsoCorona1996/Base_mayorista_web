@@ -10,12 +10,27 @@
   --warning: #f3a83b;
 }
 
+:host,
+:host *,
+:host *::before,
+:host *::after {
+  box-sizing: border-box;
+}
+
 .page {
   display: flex;
   flex-direction: column;
   gap: 1rem;
   padding: 1rem;
   background: #f4f7fb;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.page > * {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .page-head {
@@ -24,6 +39,7 @@
   justify-content: space-between;
   gap: 1rem;
   flex-wrap: wrap;
+  min-width: 0;
 }
 
 .quick-create {
@@ -35,6 +51,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  min-width: 0;
 }
 
 .quick-create .input {
@@ -51,8 +68,12 @@
 
 .qc-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.5rem;
+}
+
+.qc-grid > * {
+  min-width: 0;
 }
 
 .autocomplete {
@@ -136,13 +157,18 @@ h1 {
 
 .filters {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.5rem;
   background: #ffffff;
   padding: 0.8rem;
   border: 1px solid #d7deed;
   border-radius: 1rem;
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+  min-width: 0;
+}
+
+.filters > * {
+  min-width: 0;
 }
 
 .intent-tabs {
@@ -153,6 +179,8 @@ h1 {
   scroll-snap-type: x mandatory;
   background: #f1f5f9;
   border-radius: 12px;
+  width: 100%;
+  max-width: 100%;
 }
 
 .intent-chip {
@@ -228,7 +256,7 @@ h1 {
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
   align-items: stretch;
 }
@@ -274,6 +302,7 @@ h1 {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+  min-width: 0;
 }
 
 .title-row {
@@ -288,6 +317,7 @@ h3 {
   font-size: 1.1rem;
   font-weight: 700;
   color: #1a202c;
+  overflow-wrap: anywhere;
 }
 
 .order-card .order-id {
@@ -328,6 +358,7 @@ h3 {
   align-items: center;
   gap: 0.28rem;
   color: inherit;
+  min-width: 0;
 }
 
 .meta-item + .meta-item::before {
@@ -355,6 +386,7 @@ h3 {
 .meta-value {
   color: #1e293b;
   font-weight: 500;
+  overflow-wrap: anywhere;
 }
 
 .pills {
@@ -385,7 +417,7 @@ h3 {
 
 .actions {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   grid-template-areas:
     "primary primary"
     "reason detail";
@@ -720,4 +752,51 @@ h3 {
   }
 }
 
+@media (min-width: 993px) and (max-width: 1200px) {
+  .page {
+    padding: 0.85rem;
+  }
 
+  .qc-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .filters {
+    grid-template-columns: 1fr;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 992px) {
+  .qc-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .filters {
+    grid-template-columns: 1fr;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .intent-tabs {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+}
+
+@media (min-width: 1201px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .qc-grid {
+    grid-template-columns: 1fr;
+  }
+}

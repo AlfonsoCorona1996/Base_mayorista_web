@@ -2,7 +2,7 @@
 import { DatePipe, UpperCasePipe } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { ActivatedRoute, Router, RouterLink } from "@angular/router";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs, limit, orderBy, query } from "firebase/firestore";
 import { CustomersService } from "../../core/customers.service";
 import { SuppliersService } from "../../core/suppliers.service";
 import { OrdersService, Order, OrderEvent, OrderItem, OrderItemState, OrderStatus, PackageRecord, Incident, IncidentSeverity } from "../../core/orders.service";
@@ -33,9 +33,11 @@ export default class PedidoDetallePage implements OnInit {
   @ViewChild("incidentsSection") incidentsSection?: ElementRef<HTMLElement>;
   @ViewChild("packagesSection") packagesSection?: ElementRef<HTMLElement>;
   @ViewChild("timelineSection") timelineSection?: ElementRef<HTMLElement>;
+  @ViewChild("productSearchInput") productSearchInput?: ElementRef<HTMLInputElement>;
 
   orderId = signal<string>("");
   error = signal<string | null>(null);
+  private lastInventoryBlockedAlertAt = 0;
 
   order = computed<Order | null>(() => this.orders.getById(this.orderId()));
   incidents = signal<Incident[]>([]);
@@ -101,7 +103,7 @@ export default class PedidoDetallePage implements OnInit {
       totalClienta += priceClienta * qty;
       totalCosto += priceCosto * qty;
     }
-    const ganancia = totalCosto;
+    const ganancia = totalClienta - totalCosto;
     return {
       totalVenta,
       totalClienta,
@@ -718,6 +720,11 @@ export default class PedidoDetallePage implements OnInit {
     return Math.max(0, Math.min(qty, Math.trunc(available)));
   }
 
+  private cardMaxConfirmableQty(item: OrderItem): number {
+    if (item.source === "inventario") return this.itemQuantity(item);
+    return this.maxConfirmableQty(item);
+  }
+
   hasStockForSmartConfirm(item: OrderItem): boolean {
     return this.maxConfirmableQty(item) > 0;
   }
@@ -749,7 +756,7 @@ export default class PedidoDetallePage implements OnInit {
   }
 
   getCardDraftConfirmedQty(item: OrderItem): number {
-    const max = this.maxConfirmableQty(item);
+    const max = this.cardMaxConfirmableQty(item);
     const draft = this.confirmQtyDraft()[item.item_id];
     if (typeof draft === "number") {
       // If the item was marked out_of_stock, draft is usually 0.
@@ -762,7 +769,7 @@ export default class PedidoDetallePage implements OnInit {
   }
 
   setCardDraftConfirmedQty(item: OrderItem, value: unknown) {
-    const max = this.maxConfirmableQty(item);
+    const max = this.cardMaxConfirmableQty(item);
     const next = this.normalizeConfirmedQty(value, max);
     this.confirmQtyDraft.update((current) => ({ ...current, [item.item_id]: next }));
   }
@@ -797,7 +804,7 @@ export default class PedidoDetallePage implements OnInit {
   }
 
   async decreaseConfirmedCounter(item: OrderItem) {
-    const max = this.maxConfirmableQty(item);
+    const max = this.cardMaxConfirmableQty(item);
     if (max <= 0 || this.isQuickConfirming(item)) return;
     const current = this.getCardDraftConfirmedQty(item);
     const next = Math.max(0, current - 1);
@@ -811,7 +818,7 @@ export default class PedidoDetallePage implements OnInit {
   }
 
   async increaseConfirmedCounter(item: OrderItem) {
-    const max = this.maxConfirmableQty(item);
+    const max = this.cardMaxConfirmableQty(item);
     if (max <= 0 || this.isQuickConfirming(item)) return;
     const current = this.getCardDraftConfirmedQty(item);
     const next = Math.min(max, current + 1);
@@ -914,21 +921,15 @@ export default class PedidoDetallePage implements OnInit {
   }
 
   confirmedPieces(order: Order): number {
-    return (order.items || [])
-      .filter((item) => item.confirmation_state === "confirmed")
-      .reduce((sum, item) => sum + this.confirmedQty(item), 0);
+    return (order.items || []).reduce((sum, item) => sum + this.itemConfirmedPieces(item), 0);
   }
 
   outOfStockPieces(order: Order): number {
-    return (order.items || [])
-      .filter((item) => item.confirmation_state === "out_of_stock" || (item.confirmation_state as unknown) === "sin_stock")
-      .reduce((sum, item) => sum + this.itemQuantity(item), 0);
+    return (order.items || []).reduce((sum, item) => sum + this.itemOutOfStockPieces(item), 0);
   }
 
   pendingPieces(order: Order): number {
-    return (order.items || [])
-      .filter((item) => !item.confirmation_state || item.confirmation_state === "pending")
-      .reduce((sum, item) => sum + this.itemQuantity(item), 0);
+    return (order.items || []).reduce((sum, item) => sum + this.itemPendingPieces(item), 0);
   }
 
   allItemsResolved(order: Order): boolean {
@@ -1004,15 +1005,15 @@ export default class PedidoDetallePage implements OnInit {
   }
 
   groupConfirmedCount(items: OrderItem[]): number {
-    return items.filter((item) => item.confirmation_state === "confirmed").length;
+    return items.reduce((sum, item) => sum + this.itemConfirmedPieces(item), 0);
   }
 
   groupOutOfStockCount(items: OrderItem[]): number {
-    return items.filter((item) => item.confirmation_state === "out_of_stock").length;
+    return items.reduce((sum, item) => sum + this.itemOutOfStockPieces(item), 0);
   }
 
   groupPendingCount(items: OrderItem[]): number {
-    return items.filter((item) => !item.confirmation_state || item.confirmation_state === "pending").length;
+    return items.reduce((sum, item) => sum + this.itemPendingPieces(item), 0);
   }
 
   async confirmGroup(order: Order, items: OrderItem[]) {
@@ -1055,8 +1056,10 @@ export default class PedidoDetallePage implements OnInit {
     if (typeof item.confirmed_qty === "number") {
       return this.normalizeConfirmedQty(item.confirmed_qty, item.quantity);
     }
-    if (item.confirmation_state === "out_of_stock") return 0;
-    return this.normalizeConfirmedQty(item.quantity, item.quantity);
+    if (item.confirmation_state === "confirmed") {
+      return this.normalizeConfirmedQty(item.quantity, item.quantity);
+    }
+    return 0;
   }
 
   getDraftConfirmedQty(item: OrderItem): number {
@@ -1080,6 +1083,23 @@ export default class PedidoDetallePage implements OnInit {
 
   hasPartialConfirmation(item: OrderItem): boolean {
     return item.confirmation_state === "confirmed" && this.confirmedQty(item) < item.quantity;
+  }
+
+  private itemOutOfStockPieces(item: OrderItem): number {
+    if (item.confirmation_state === "out_of_stock" || (item.confirmation_state as unknown) === "sin_stock") {
+      return this.itemQuantity(item);
+    }
+    if (item.confirmation_state !== "confirmed") return 0;
+    return Math.max(0, this.itemQuantity(item) - this.confirmedQty(item));
+  }
+
+  private itemConfirmedPieces(item: OrderItem): number {
+    return this.confirmedQty(item);
+  }
+
+  private itemPendingPieces(item: OrderItem): number {
+    if (item.confirmation_state && item.confirmation_state !== "pending") return 0;
+    return Math.max(0, this.itemQuantity(item) - this.confirmedQty(item));
   }
 
   private itemQuantity(item: OrderItem): number {
@@ -1684,7 +1704,7 @@ export default class PedidoDetallePage implements OnInit {
     this.router.navigate(["/main/pedidos"]);
   }
 
-  addItem(order: Order | null) {
+  async addItem(order: Order | null) {
     if (!order) return;
     const caps = this.allowedCapabilities(order, this.userRole());
     const canLateChange = order.status === "en_ruta" && this.lateChangeApproved();
@@ -1699,6 +1719,14 @@ export default class PedidoDetallePage implements OnInit {
       return;
     }
     const qty = Math.max(1, this.newItemQty());
+    if (this.newItemSource() === "inventario" && this.newItemInventoryId()) {
+      const inv = this.inventoryById().get(this.newItemInventoryId()!);
+      if (inv && inv.quantity_on_hand <= 0) {
+        await this.showInventoryBlockedAlert(inv);
+        this.selectedPreview.set(null);
+        return;
+      }
+    }
     if (this.isClientaBelowCosto()) {
       alert("Precio clienta no puede ser menor a precio costo.");
       return;
@@ -1721,10 +1749,31 @@ export default class PedidoDetallePage implements OnInit {
       inventory_id: this.newItemInventoryId(),
       image_url: this.selectedPreview()?.image || null,
     };
-    this.orders.addItem(order.order_id, item);
-    this.orders.logEvent(order.order_id, "ITEM_ADDED", `Item agregado: ${item.title}`, {
-      itemId: item.item_id,
-    });
+    const existingMatch = (order.items || []).find((row) => this.isSamePendingProduct(row, item));
+    if (existingMatch) {
+      const nextItems = order.items.map((row) => {
+        if (row.item_id !== existingMatch.item_id) return row;
+        const nextQty = this.itemQuantity(row) + qty;
+        const shouldMoveToPending = !!row.confirmation_state && row.confirmation_state !== "pending";
+        const preservedConfirmedQty = row.confirmation_state === "confirmed" ? this.confirmedQty(row) : 0;
+        return {
+          ...row,
+          quantity: nextQty,
+          confirmation_state: shouldMoveToPending ? "pending" : row.confirmation_state,
+          confirmed_qty: shouldMoveToPending ? (preservedConfirmedQty > 0 ? preservedConfirmedQty : null) : row.confirmed_qty ?? null,
+        };
+      });
+      await this.orders.updateItems(order.order_id, nextItems);
+      await this.orders.logEvent(order.order_id, "ITEM_MERGED_PENDING", `Cantidad actualizada: ${item.title}`, {
+        itemId: existingMatch.item_id,
+        addedQty: qty,
+      });
+    } else {
+      this.orders.addItem(order.order_id, item);
+      this.orders.logEvent(order.order_id, "ITEM_ADDED", `Item agregado: ${item.title}`, {
+        itemId: item.item_id,
+      });
+    }
     if (item.source === "inventario" && item.inventory_id) {
       this.inventory.adjustQuantity(item.inventory_id, -qty).catch(() => null);
     }
@@ -1750,6 +1799,40 @@ export default class PedidoDetallePage implements OnInit {
     this.selectedCatalogDoc.set(null);
   }
 
+  private isSamePendingProduct(existing: OrderItem, incoming: OrderItem): boolean {
+    // Merge with an existing row of the same product regardless of confirmation state.
+    // If the row was already resolved (e.g. confirmed/out_of_stock), addItem() will move it to pending.
+    if (existing.state === "cancelado" || existing.state === "devuelto") return false;
+    if (existing.inventory_id && incoming.inventory_id) {
+      return existing.inventory_id === incoming.inventory_id;
+    }
+
+    const sameVariant = this.isCompatibleVariant(existing.variant, incoming.variant);
+    const sameColor = this.isCompatibleVariant(existing.color, incoming.color);
+
+    if (existing.product_id && incoming.product_id && existing.product_id === incoming.product_id) {
+      return sameVariant && sameColor;
+    }
+
+    return this.normalizeText(existing.title) === this.normalizeText(incoming.title)
+      && sameVariant
+      && sameColor;
+  }
+
+  private normalizeText(value: string | null | undefined): string {
+    return (value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+      .toLowerCase();
+  }
+
+  private isCompatibleVariant(left: string | null | undefined, right: string | null | undefined): boolean {
+    const a = this.normalizeText(left);
+    const b = this.normalizeText(right);
+    return a === b || !a || !b;
+  }
+
   async removeItem(order: Order | null, item: OrderItem) {
     if (!order) return;
     const caps = this.allowedCapabilities(order, this.userRole());
@@ -1769,7 +1852,16 @@ export default class PedidoDetallePage implements OnInit {
     });
   }
 
-  pickInventory(item: InventoryItem) {
+  async pickInventory(item: InventoryItem) {
+    if (item.quantity_on_hand <= 0) {
+      await this.showInventoryBlockedAlert(item);
+      this.selectedPreview.set(null);
+      this.newItemInventoryId.set(null);
+      this.lockItemFields.set(false);
+      this.showProductList.set(true);
+      this.focusProductSearchInput();
+      return;
+    }
     const image = item.image_urls?.[0] || null;
     const costo = item.unit_price || null;
     const final = costo !== null ? Number((costo * 2).toFixed(2)) : null;
@@ -2044,6 +2136,86 @@ export default class PedidoDetallePage implements OnInit {
   formatCurrency(value: number | null): string {
     if (value === null || value === undefined || Number.isNaN(value)) return "";
     return new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(value);
+  }
+
+  private async buildInventoryBlockedAlert(item: InventoryItem): Promise<{
+    itemTitle: string;
+    reservedBy: string;
+    customerName: string;
+    orderId: string;
+  }> {
+    const holder = this.findOrderHoldingInventory(item.inventory_id);
+    const nameFromEvents = holder?.orderId ? await this.findReservedByFromEvents(holder.orderId) : null;
+    return {
+      itemTitle: item.title || "este articulo",
+      reservedBy: this.toFirstName(nameFromEvents || holder?.reservedBy || "Admin"),
+      customerName: holder?.customerName || "otra clienta",
+      orderId: holder?.orderId || "otro pedido",
+    };
+  }
+
+  private async showInventoryBlockedAlert(item: InventoryItem) {
+    const now = Date.now();
+    if (now - this.lastInventoryBlockedAlertAt < 600) return;
+    this.lastInventoryBlockedAlertAt = now;
+    const blocked = await this.buildInventoryBlockedAlert(item);
+    alert(
+      `No puedes anadir ${blocked.itemTitle} a este pedido ya que ${blocked.reservedBy} lo aparto para ${blocked.customerName} en el pedido ${blocked.orderId}.`,
+    );
+    if (blocked.orderId && blocked.orderId !== "otro pedido") {
+      await navigator.clipboard.writeText(blocked.orderId).catch(() => null);
+    }
+  }
+
+  private focusProductSearchInput() {
+    setTimeout(() => this.productSearchInput?.nativeElement.focus(), 0);
+  }
+
+  private findOrderHoldingInventory(inventoryId: string): { orderId: string; customerName: string; reservedBy: string } | null {
+    const rows = this.orders.list();
+    const closedStatuses: OrderStatus[] = ["entregado", "pagado", "cancelado", "devuelto"];
+    const active = rows.find((order) => {
+      if (closedStatuses.includes(order.status)) return false;
+      return (order.items || []).some((it) =>
+        it.source === "inventario" &&
+        it.inventory_id === inventoryId &&
+        it.state !== "cancelado" &&
+        it.state !== "devuelto",
+      );
+    });
+    const fallback = rows.find((order) =>
+      (order.items || []).some((it) => it.source === "inventario" && it.inventory_id === inventoryId),
+    );
+    const picked = active || fallback;
+    if (!picked) return null;
+    const actor = [...(picked.timeline || [])].reverse().find((entry) => !!entry.actor)?.actor || null;
+    return {
+      orderId: picked.order_id,
+      customerName: this.customerName(picked),
+      reservedBy: String(actor || "Admin"),
+    };
+  }
+
+  private async findReservedByFromEvents(orderId: string): Promise<string | null> {
+    try {
+      const snap = await getDocs(
+        query(collection(FIRESTORE, "orders", orderId, "events"), orderBy("createdAt", "desc"), limit(20)),
+      );
+      for (const docSnap of snap.docs) {
+        const data = docSnap.data() as any;
+        const actorName = String(data?.actor?.name || data?.createdBy || "").trim();
+        if (actorName && actorName.toLowerCase() !== "sistema") return actorName;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  private toFirstName(fullName: string): string {
+    const clean = String(fullName || "").trim();
+    if (!clean) return "Admin";
+    return clean.split(/\s+/)[0] || "Admin";
   }
 
   itemPriceLabel(item: OrderItem): string {
