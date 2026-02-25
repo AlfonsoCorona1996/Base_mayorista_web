@@ -2,13 +2,14 @@
 import { DatePipe, UpperCasePipe } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { ActivatedRoute, Router, RouterLink } from "@angular/router";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs, limit, orderBy, query } from "firebase/firestore";
 import { CustomersService } from "../../core/customers.service";
 import { SuppliersService } from "../../core/suppliers.service";
 import { OrdersService, Order, OrderEvent, OrderItem, OrderItemState, OrderStatus, PackageRecord, Incident, IncidentSeverity } from "../../core/orders.service";
 import { RoutesService } from "../../core/routes.service";
 import { InventoryService, InventoryItem } from "../../core/inventory.service";
 import { NormalizedListingsService, NormalizedListingDoc } from "../../core/normalized-listings.service";
+import { SupplierOperationsService } from "../../core/supplier-operations.service";
 import { FIRESTORE } from "../../core/firebase.providers";
 
 type EstadoConfirmacion = "pendiente" | "confirmado" | "sin_stock";
@@ -29,13 +30,16 @@ export default class PedidoDetallePage implements OnInit {
   private rutas = inject(RoutesService);
   private inventory = inject(InventoryService);
   private catalog = inject(NormalizedListingsService);
+  private supplierOperations = inject(SupplierOperationsService);
 
   @ViewChild("incidentsSection") incidentsSection?: ElementRef<HTMLElement>;
   @ViewChild("packagesSection") packagesSection?: ElementRef<HTMLElement>;
   @ViewChild("timelineSection") timelineSection?: ElementRef<HTMLElement>;
+  @ViewChild("productSearchInput") productSearchInput?: ElementRef<HTMLInputElement>;
 
   orderId = signal<string>("");
   error = signal<string | null>(null);
+  private lastInventoryBlockedAlertAt = 0;
 
   order = computed<Order | null>(() => this.orders.getById(this.orderId()));
   incidents = signal<Incident[]>([]);
@@ -47,10 +51,12 @@ export default class PedidoDetallePage implements OnInit {
   debugMode = signal(false);
   userRole = signal("admin");
   copiedOrderId = signal(false);
+  actionToast = signal<string | null>(null);
   showStickyFooter = signal(false);
   productStockFilter = signal<"all" | "out_of_stock" | "confirmed" | "pending">("all");
   showStockFab = signal(false);
   quickConfirming = signal<Record<string, boolean>>({});
+  itemActionLoading = signal<Record<string, boolean>>({});
   imagePreviewUrl = signal<string | null>(null);
   imagePreviewLoading = signal(false);
 
@@ -101,7 +107,7 @@ export default class PedidoDetallePage implements OnInit {
       totalClienta += priceClienta * qty;
       totalCosto += priceCosto * qty;
     }
-    const ganancia = totalCosto;
+    const ganancia = totalClienta - totalCosto;
     return {
       totalVenta,
       totalClienta,
@@ -134,6 +140,7 @@ export default class PedidoDetallePage implements OnInit {
   inventoryLoaded = signal(false);
   catalogLoaded = signal(false);
   showProductList = signal(false);
+  private actionToastTimer: ReturnType<typeof setTimeout> | null = null;
   suppressProductBlur = signal(false);
   lockItemFields = signal(false);
   catalogVariantOptions = signal<string[]>([]);
@@ -193,6 +200,7 @@ export default class PedidoDetallePage implements OnInit {
       this.suppliers.loadFromFirestore().catch(() => null),
       this.rutas.loadFromFirestore().catch(() => null),
       this.inventory.loadFromFirestore().catch(() => null),
+      this.supplierOperations.loadFromFirestore().catch(() => null),
       this.loadAssigneeOptions().catch(() => null),
       this.catalog.listValidated(120).then((page) => {
         this.catalogRows = page.docs;
@@ -299,6 +307,8 @@ export default class PedidoDetallePage implements OnInit {
       confirmando_proveedor: "Confirmando",
       reservado_inventario: "Reservado",
       solicitado_proveedor: "Solicitado",
+      supplier_processing: "Proveedor",
+      inbound_in_transit: "En camino proveedor",
       en_transito: "En tránsito",
       recibido_qa: "Recibido/QA",
       empaque: "Empaque",
@@ -325,6 +335,7 @@ export default class PedidoDetallePage implements OnInit {
       case "empaque":
       case "en_ruta":
       case "en_transito":
+      case "inbound_in_transit":
         return "chip accent";
       default:
         return "chip info";
@@ -405,6 +416,8 @@ export default class PedidoDetallePage implements OnInit {
       case "confirmando_proveedor":
       case "reservado_inventario":
       case "solicitado_proveedor":
+      case "supplier_processing":
+      case "inbound_in_transit":
       case "en_transito":
         return {
           canEditItems: true,
@@ -495,8 +508,12 @@ export default class PedidoDetallePage implements OnInit {
       case "confirmando_proveedor":
       case "reservado_inventario":
       case "solicitado_proveedor":
-      case "en_transito":
         return { actionId: "confirm_items", label: "Confirmar existencias" };
+      case "supplier_processing":
+        return { actionId: "supplier_followup", label: "Marcar en transito proveedor" };
+      case "inbound_in_transit":
+      case "en_transito":
+        return { actionId: "pack", label: "Empacar" };
       case "recibido_qa":
         return { actionId: "pack", label: "Empacar" };
       case "empaque":
@@ -718,6 +735,11 @@ export default class PedidoDetallePage implements OnInit {
     return Math.max(0, Math.min(qty, Math.trunc(available)));
   }
 
+  private cardMaxConfirmableQty(item: OrderItem): number {
+    if (item.source === "inventario") return this.itemQuantity(item);
+    return this.maxConfirmableQty(item);
+  }
+
   hasStockForSmartConfirm(item: OrderItem): boolean {
     return this.maxConfirmableQty(item) > 0;
   }
@@ -749,7 +771,7 @@ export default class PedidoDetallePage implements OnInit {
   }
 
   getCardDraftConfirmedQty(item: OrderItem): number {
-    const max = this.maxConfirmableQty(item);
+    const max = this.cardMaxConfirmableQty(item);
     const draft = this.confirmQtyDraft()[item.item_id];
     if (typeof draft === "number") {
       // If the item was marked out_of_stock, draft is usually 0.
@@ -762,7 +784,7 @@ export default class PedidoDetallePage implements OnInit {
   }
 
   setCardDraftConfirmedQty(item: OrderItem, value: unknown) {
-    const max = this.maxConfirmableQty(item);
+    const max = this.cardMaxConfirmableQty(item);
     const next = this.normalizeConfirmedQty(value, max);
     this.confirmQtyDraft.update((current) => ({ ...current, [item.item_id]: next }));
   }
@@ -797,7 +819,7 @@ export default class PedidoDetallePage implements OnInit {
   }
 
   async decreaseConfirmedCounter(item: OrderItem) {
-    const max = this.maxConfirmableQty(item);
+    const max = this.cardMaxConfirmableQty(item);
     if (max <= 0 || this.isQuickConfirming(item)) return;
     const current = this.getCardDraftConfirmedQty(item);
     const next = Math.max(0, current - 1);
@@ -811,7 +833,7 @@ export default class PedidoDetallePage implements OnInit {
   }
 
   async increaseConfirmedCounter(item: OrderItem) {
-    const max = this.maxConfirmableQty(item);
+    const max = this.cardMaxConfirmableQty(item);
     if (max <= 0 || this.isQuickConfirming(item)) return;
     const current = this.getCardDraftConfirmedQty(item);
     const next = Math.min(max, current + 1);
@@ -914,21 +936,15 @@ export default class PedidoDetallePage implements OnInit {
   }
 
   confirmedPieces(order: Order): number {
-    return (order.items || [])
-      .filter((item) => item.confirmation_state === "confirmed")
-      .reduce((sum, item) => sum + this.confirmedQty(item), 0);
+    return (order.items || []).reduce((sum, item) => sum + this.itemConfirmedPieces(item), 0);
   }
 
   outOfStockPieces(order: Order): number {
-    return (order.items || [])
-      .filter((item) => item.confirmation_state === "out_of_stock" || (item.confirmation_state as unknown) === "sin_stock")
-      .reduce((sum, item) => sum + this.itemQuantity(item), 0);
+    return (order.items || []).reduce((sum, item) => sum + this.itemOutOfStockPieces(item), 0);
   }
 
   pendingPieces(order: Order): number {
-    return (order.items || [])
-      .filter((item) => !item.confirmation_state || item.confirmation_state === "pending")
-      .reduce((sum, item) => sum + this.itemQuantity(item), 0);
+    return (order.items || []).reduce((sum, item) => sum + this.itemPendingPieces(item), 0);
   }
 
   allItemsResolved(order: Order): boolean {
@@ -940,7 +956,7 @@ export default class PedidoDetallePage implements OnInit {
   }
 
   missingSupplierCount(order: Order): number {
-    return this.confirmedItems(order).filter((item) => !item.supplier_id).length;
+    return this.confirmedItems(order).filter((item) => item.source !== "inventario" && !item.supplier_id).length;
   }
 
   canEditItems(order: Order | null): boolean {
@@ -956,6 +972,8 @@ export default class PedidoDetallePage implements OnInit {
       "confirmando_proveedor",
       "reservado_inventario",
       "solicitado_proveedor",
+      "supplier_processing",
+      "inbound_in_transit",
       "en_transito",
       "recibido_qa",
       "empaque",
@@ -1004,15 +1022,15 @@ export default class PedidoDetallePage implements OnInit {
   }
 
   groupConfirmedCount(items: OrderItem[]): number {
-    return items.filter((item) => item.confirmation_state === "confirmed").length;
+    return items.reduce((sum, item) => sum + this.itemConfirmedPieces(item), 0);
   }
 
   groupOutOfStockCount(items: OrderItem[]): number {
-    return items.filter((item) => item.confirmation_state === "out_of_stock").length;
+    return items.reduce((sum, item) => sum + this.itemOutOfStockPieces(item), 0);
   }
 
   groupPendingCount(items: OrderItem[]): number {
-    return items.filter((item) => !item.confirmation_state || item.confirmation_state === "pending").length;
+    return items.reduce((sum, item) => sum + this.itemPendingPieces(item), 0);
   }
 
   async confirmGroup(order: Order, items: OrderItem[]) {
@@ -1055,8 +1073,10 @@ export default class PedidoDetallePage implements OnInit {
     if (typeof item.confirmed_qty === "number") {
       return this.normalizeConfirmedQty(item.confirmed_qty, item.quantity);
     }
-    if (item.confirmation_state === "out_of_stock") return 0;
-    return this.normalizeConfirmedQty(item.quantity, item.quantity);
+    if (item.confirmation_state === "confirmed") {
+      return this.normalizeConfirmedQty(item.quantity, item.quantity);
+    }
+    return 0;
   }
 
   getDraftConfirmedQty(item: OrderItem): number {
@@ -1082,6 +1102,23 @@ export default class PedidoDetallePage implements OnInit {
     return item.confirmation_state === "confirmed" && this.confirmedQty(item) < item.quantity;
   }
 
+  private itemOutOfStockPieces(item: OrderItem): number {
+    if (item.confirmation_state === "out_of_stock" || (item.confirmation_state as unknown) === "sin_stock") {
+      return this.itemQuantity(item);
+    }
+    if (item.confirmation_state !== "confirmed") return 0;
+    return Math.max(0, this.itemQuantity(item) - this.confirmedQty(item));
+  }
+
+  private itemConfirmedPieces(item: OrderItem): number {
+    return this.confirmedQty(item);
+  }
+
+  private itemPendingPieces(item: OrderItem): number {
+    if (item.confirmation_state && item.confirmation_state !== "pending") return 0;
+    return Math.max(0, this.itemQuantity(item) - this.confirmedQty(item));
+  }
+
   private itemQuantity(item: OrderItem): number {
     const qty = Number(item.quantity);
     if (!Number.isFinite(qty)) return 0;
@@ -1099,17 +1136,116 @@ export default class PedidoDetallePage implements OnInit {
   }
 
   async receiveItem(order: Order, item: OrderItem) {
-    await this.orders.updateItemState(order.order_id, item.item_id, "recibido_qa");
-    await this.orders.logEvent(order.order_id, "ITEM_RECEIVED_QA", `Recibido/QA: ${item.title}`, {
-      itemId: item.item_id,
-    });
+    if (this.isItemActionLoading(item)) return;
+    this.setItemActionLoading(item, true);
+    try {
+      if (this.isSupplierManagedItem(item)) {
+        await this.receiveSupplierItem(order, item);
+        return;
+      }
+      await this.orders.updateItemState(order.order_id, item.item_id, "recibido_qa");
+      await this.orders.logEvent(order.order_id, "ITEM_RECEIVED_QA", `Recibido/QA: ${item.title}`, {
+        itemId: item.item_id,
+      });
+      this.showActionToast(`"${item.title}" recibido.`);
+    } finally {
+      this.setItemActionLoading(item, false);
+    }
   }
 
   async markPacked(order: Order, item: OrderItem) {
-    await this.orders.updateItemState(order.order_id, item.item_id, "empaque");
-    await this.orders.logEvent(order.order_id, "ITEM_PACKED", `Empaque: ${item.title}`, {
-      itemId: item.item_id,
-    });
+    if (this.isItemActionLoading(item)) return;
+    if (!this.isItemReadyForPack(order, item)) {
+      this.actionError.set(`No puedes empacar "${item.title}" porque sigue pendiente de recepción de proveedor.`);
+      return;
+    }
+    this.setItemActionLoading(item, true);
+    try {
+      await this.orders.updateItemState(order.order_id, item.item_id, "empaque");
+      await this.orders.logEvent(order.order_id, "ITEM_PACKED", `Empaque: ${item.title}`, {
+        itemId: item.item_id,
+      });
+      this.actionError.set(null);
+      this.showActionToast(`"${item.title}" en empaque.`);
+    } finally {
+      this.setItemActionLoading(item, false);
+    }
+  }
+
+  isSupplierManagedItem(item: OrderItem): boolean {
+    return item.source !== "inventario" && !!(item.supplier_id || "").trim();
+  }
+
+  private supplierOpId(order: Order, item: OrderItem): string {
+    return `op-${order.order_id}-${item.item_id}`;
+  }
+
+  supplierOperationForItem(order: Order, item: OrderItem) {
+    return this.supplierOperations.rows().find((row) => row.order_id === order.order_id && row.order_item_id === item.item_id) || null;
+  }
+
+  isSupplierItemReceived(order: Order, item: OrderItem): boolean {
+    if (!this.isSupplierManagedItem(item)) return true;
+    const op = this.supplierOperationForItem(order, item);
+    if (!op) return false;
+    return op.status === "recibido" || op.received_to_inventory === true;
+  }
+
+  isItemReadyForPack(order: Order, item: OrderItem): boolean {
+    if (item.confirmation_state !== "confirmed") return false;
+    if (["cancelado", "devuelto"].includes(item.state)) return false;
+    if (["empaque", "en_ruta", "entregado", "pagado"].includes(item.state)) return true;
+    if (item.source === "inventario") return true;
+    return this.isSupplierItemReceived(order, item);
+  }
+
+  packBlockedItems(order: Order): OrderItem[] {
+    return (order.items || []).filter((item) => item.confirmation_state === "confirmed" && !this.isItemReadyForPack(order, item));
+  }
+
+  packBlockedCount(order: Order): number {
+    return this.packBlockedItems(order).length;
+  }
+
+  canStartPacking(order: Order): boolean {
+    return this.packBlockedCount(order) === 0;
+  }
+
+  private async receiveSupplierItem(order: Order, item: OrderItem) {
+    if (!this.isSupplierManagedItem(item)) return;
+    const opId = this.supplierOpId(order, item);
+    try {
+      await this.supplierOperations.upsertFromConfirmedOrder(order, this.customerName(order));
+      await this.supplierOperations.updateStatus(opId, "recibido");
+      await this.orders.updateItemState(order.order_id, item.item_id, "recibido_qa");
+      await this.orders.syncDerivedStatus(order.order_id);
+      await this.orders.logEvent(order.order_id, "ITEM_RECEIVED_QA", `Recibido desde proveedor: ${item.title}`, {
+        itemId: item.item_id,
+        supplierOpId: opId,
+      });
+      this.actionError.set(null);
+      this.showActionToast(`"${item.title}" recibido de proveedor.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Error al recibir item de proveedor.";
+      this.actionError.set(`No se pudo recibir "${item.title}": ${message}`);
+    }
+  }
+
+  isItemActionLoading(item: OrderItem): boolean {
+    return !!this.itemActionLoading()[item.item_id];
+  }
+
+  private setItemActionLoading(item: OrderItem, loading: boolean) {
+    this.itemActionLoading.update((current) => ({ ...current, [item.item_id]: loading }));
+  }
+
+  private showActionToast(message: string) {
+    if (this.actionToastTimer) clearTimeout(this.actionToastTimer);
+    this.actionToast.set(message);
+    this.actionToastTimer = setTimeout(() => {
+      this.actionToast.set(null);
+      this.actionToastTimer = null;
+    }, 1800);
   }
 
   async markMissing(order: Order, item: OrderItem) {
@@ -1226,6 +1362,8 @@ export default class PedidoDetallePage implements OnInit {
       "confirmando_proveedor",
       "reservado_inventario",
       "solicitado_proveedor",
+      "supplier_processing",
+      "inbound_in_transit",
       "en_transito",
       "recibido_qa",
       "empaque",
@@ -1468,7 +1606,7 @@ export default class PedidoDetallePage implements OnInit {
     if (this.actionSaving()) return;
     this.actionSaving.set(true);
     try {
-      await this.orders.updateStatus(order.order_id, "en_transito");
+      await this.orders.updateStatus(order.order_id, "inbound_in_transit");
       await this.orders.logEvent(order.order_id, "MARKED_INBOUND", "Pedido marcado en tránsito", { eta });
       await this.refreshEvents();
       this.actionError.set(null);
@@ -1483,17 +1621,36 @@ export default class PedidoDetallePage implements OnInit {
       this.actionError.set("Aún hay items sin resolver.");
       return;
     }
+    const missingSupplier = this.missingSupplierCount(order);
+    if (missingSupplier > 0) {
+      this.actionError.set(`Falta proveedor en catálogo para ${missingSupplier} items confirmados.`);
+      return;
+    }
     if (this.actionSaving()) return;
     this.actionSaving.set(true);
     try {
-      await this.orders.updateStatus(order.order_id, "recibido_qa");
+      const hasConfirmedSupplierItems = this.confirmedItems(order).some(
+        (item) => item.source !== "inventario" && !!(item.supplier_id || "").trim(),
+      );
+      const createdOps = await this.supplierOperations.upsertFromConfirmedOrder(order, this.customerName(order));
+      let nextStatus = await this.orders.syncDerivedStatus(order.order_id);
+      const refreshed = this.orders.getById(order.order_id);
+      const stillConfirmPhase = this.phaseAction(refreshed || order)?.actionId === "confirm_items";
+      if (stillConfirmPhase && !hasConfirmedSupplierItems) {
+        nextStatus = "recibido_qa";
+        await this.orders.updateStatus(order.order_id, nextStatus);
+      }
       await this.orders.logEvent(order.order_id, "EXISTENCES_CONFIRMED", "Existencias confirmadas", {
         items: order.items.length,
-        nextStatus: "recibido_qa",
+        supplierOperations: createdOps,
+        nextStatus: nextStatus || "recibido_qa",
       });
       await this.refreshEvents();
       this.actionError.set(null);
       this.closeActionModal();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Error desconocido al confirmar existencias.";
+      this.actionError.set(`No se pudo confirmar existencias: ${message}`);
     } finally {
       this.actionSaving.set(false);
     }
@@ -1684,7 +1841,7 @@ export default class PedidoDetallePage implements OnInit {
     this.router.navigate(["/main/pedidos"]);
   }
 
-  addItem(order: Order | null) {
+  async addItem(order: Order | null) {
     if (!order) return;
     const caps = this.allowedCapabilities(order, this.userRole());
     const canLateChange = order.status === "en_ruta" && this.lateChangeApproved();
@@ -1699,12 +1856,20 @@ export default class PedidoDetallePage implements OnInit {
       return;
     }
     const qty = Math.max(1, this.newItemQty());
+    if (this.newItemSource() === "inventario" && this.newItemInventoryId()) {
+      const inv = this.inventoryById().get(this.newItemInventoryId()!);
+      if (inv && inv.quantity_on_hand <= 0) {
+        await this.showInventoryBlockedAlert(inv);
+        this.selectedPreview.set(null);
+        return;
+      }
+    }
     if (this.isClientaBelowCosto()) {
       alert("Precio clienta no puede ser menor a precio costo.");
       return;
     }
     const item: OrderItem = {
-      item_id: "",
+      item_id: `item-${Date.now()}`,
       title,
       variant: this.newItemVariant().trim() || null,
       color: this.newItemColor().trim() || null,
@@ -1721,12 +1886,60 @@ export default class PedidoDetallePage implements OnInit {
       inventory_id: this.newItemInventoryId(),
       image_url: this.selectedPreview()?.image || null,
     };
-    this.orders.addItem(order.order_id, item);
-    this.orders.logEvent(order.order_id, "ITEM_ADDED", `Item agregado: ${item.title}`, {
-      itemId: item.item_id,
-    });
-    if (item.source === "inventario" && item.inventory_id) {
-      this.inventory.adjustQuantity(item.inventory_id, -qty).catch(() => null);
+    const existingMatch = (order.items || []).find((row) => this.isSamePendingProduct(row, item));
+    if (existingMatch) {
+      const nextItems = order.items.map((row) => {
+        if (row.item_id !== existingMatch.item_id) return row;
+        const nextQty = this.itemQuantity(row) + qty;
+        const shouldMoveToPending = !!row.confirmation_state && row.confirmation_state !== "pending";
+        const preservedConfirmedQty = row.confirmation_state === "confirmed" ? this.confirmedQty(row) : 0;
+        return {
+          ...row,
+          quantity: nextQty,
+          confirmation_state: shouldMoveToPending ? "pending" : row.confirmation_state,
+          confirmed_qty: shouldMoveToPending ? (preservedConfirmedQty > 0 ? preservedConfirmedQty : null) : row.confirmed_qty ?? null,
+        };
+      });
+      await this.orders.updateItems(order.order_id, nextItems);
+      await this.orders.logEvent(order.order_id, "ITEM_MERGED_PENDING", `Cantidad actualizada: ${item.title}`, {
+        itemId: existingMatch.item_id,
+        addedQty: qty,
+      });
+      if (item.source === "inventario" && item.inventory_id) {
+        const reserveKey = this.buildInventoryMutationKey("reserve", order.order_id, existingMatch.item_id, item.inventory_id, qty);
+        await this.inventory.reserveStock({
+          sku: item.inventory_id,
+          qty,
+          orderId: order.order_id,
+          orderItemId: existingMatch.item_id,
+          idempotencyKey: reserveKey,
+        });
+        await this.orders.logEvent(order.order_id, "INVENTORY_RESERVED", `Reserva inventario: ${item.title}`, {
+          inventoryId: item.inventory_id,
+          qty,
+          idempotencyKey: reserveKey,
+        });
+      }
+    } else {
+      await this.orders.addItem(order.order_id, item);
+      await this.orders.logEvent(order.order_id, "ITEM_ADDED", `Item agregado: ${item.title}`, {
+        itemId: item.item_id,
+      });
+      if (item.source === "inventario" && item.inventory_id) {
+        const reserveKey = this.buildInventoryMutationKey("reserve", order.order_id, item.item_id, item.inventory_id, qty);
+        await this.inventory.reserveStock({
+          sku: item.inventory_id,
+          qty,
+          orderId: order.order_id,
+          orderItemId: item.item_id,
+          idempotencyKey: reserveKey,
+        });
+        await this.orders.logEvent(order.order_id, "INVENTORY_RESERVED", `Reserva inventario: ${item.title}`, {
+          inventoryId: item.inventory_id,
+          qty,
+          idempotencyKey: reserveKey,
+        });
+      }
     }
     this.newItemTitle.set("");
     this.newItemVariant.set("");
@@ -1750,6 +1963,40 @@ export default class PedidoDetallePage implements OnInit {
     this.selectedCatalogDoc.set(null);
   }
 
+  private isSamePendingProduct(existing: OrderItem, incoming: OrderItem): boolean {
+    // Merge with an existing row of the same product regardless of confirmation state.
+    // If the row was already resolved (e.g. confirmed/out_of_stock), addItem() will move it to pending.
+    if (existing.state === "cancelado" || existing.state === "devuelto") return false;
+    if (existing.inventory_id && incoming.inventory_id) {
+      return existing.inventory_id === incoming.inventory_id;
+    }
+
+    const sameVariant = this.isCompatibleVariant(existing.variant, incoming.variant);
+    const sameColor = this.isCompatibleVariant(existing.color, incoming.color);
+
+    if (existing.product_id && incoming.product_id && existing.product_id === incoming.product_id) {
+      return sameVariant && sameColor;
+    }
+
+    return this.normalizeText(existing.title) === this.normalizeText(incoming.title)
+      && sameVariant
+      && sameColor;
+  }
+
+  private normalizeText(value: string | null | undefined): string {
+    return (value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+      .toLowerCase();
+  }
+
+  private isCompatibleVariant(left: string | null | undefined, right: string | null | undefined): boolean {
+    const a = this.normalizeText(left);
+    const b = this.normalizeText(right);
+    return a === b || !a || !b;
+  }
+
   async removeItem(order: Order | null, item: OrderItem) {
     if (!order) return;
     const caps = this.allowedCapabilities(order, this.userRole());
@@ -1759,7 +2006,19 @@ export default class PedidoDetallePage implements OnInit {
     if (!ok) return;
 
     if (item.source === "inventario" && item.inventory_id) {
-      await this.inventory.adjustQuantity(item.inventory_id, item.quantity).catch(() => null);
+      const releaseKey = this.buildInventoryMutationKey("release", order.order_id, item.item_id, item.inventory_id, item.quantity);
+      await this.inventory.releaseReservation({
+        sku: item.inventory_id,
+        qty: item.quantity,
+        orderId: order.order_id,
+        orderItemId: item.item_id,
+        idempotencyKey: releaseKey,
+      });
+      await this.orders.logEvent(order.order_id, "INVENTORY_RESERVATION_RELEASED", `Liberación inventario: ${item.title}`, {
+        inventoryId: item.inventory_id,
+        qty: item.quantity,
+        idempotencyKey: releaseKey,
+      });
     }
 
     const nextItems = order.items.filter((row) => row.item_id !== item.item_id);
@@ -1769,7 +2028,16 @@ export default class PedidoDetallePage implements OnInit {
     });
   }
 
-  pickInventory(item: InventoryItem) {
+  async pickInventory(item: InventoryItem) {
+    if (item.quantity_on_hand <= 0) {
+      await this.showInventoryBlockedAlert(item);
+      this.selectedPreview.set(null);
+      this.newItemInventoryId.set(null);
+      this.lockItemFields.set(false);
+      this.showProductList.set(true);
+      this.focusProductSearchInput();
+      return;
+    }
     const image = item.image_urls?.[0] || null;
     const costo = item.unit_price || null;
     const final = costo !== null ? Number((costo * 2).toFixed(2)) : null;
@@ -2046,10 +2314,100 @@ export default class PedidoDetallePage implements OnInit {
     return new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(value);
   }
 
+  private async buildInventoryBlockedAlert(item: InventoryItem): Promise<{
+    itemTitle: string;
+    reservedBy: string;
+    customerName: string;
+    orderId: string;
+  }> {
+    const holder = this.findOrderHoldingInventory(item.inventory_id);
+    const nameFromEvents = holder?.orderId ? await this.findReservedByFromEvents(holder.orderId) : null;
+    return {
+      itemTitle: item.title || "este articulo",
+      reservedBy: this.toFirstName(nameFromEvents || holder?.reservedBy || "Admin"),
+      customerName: holder?.customerName || "otra clienta",
+      orderId: holder?.orderId || "otro pedido",
+    };
+  }
+
+  private async showInventoryBlockedAlert(item: InventoryItem) {
+    const now = Date.now();
+    if (now - this.lastInventoryBlockedAlertAt < 600) return;
+    this.lastInventoryBlockedAlertAt = now;
+    const blocked = await this.buildInventoryBlockedAlert(item);
+    alert(
+      `No puedes anadir ${blocked.itemTitle} a este pedido ya que ${blocked.reservedBy} lo aparto para ${blocked.customerName} en el pedido ${blocked.orderId}.`,
+    );
+    if (blocked.orderId && blocked.orderId !== "otro pedido") {
+      await navigator.clipboard.writeText(blocked.orderId).catch(() => null);
+    }
+  }
+
+  private focusProductSearchInput() {
+    setTimeout(() => this.productSearchInput?.nativeElement.focus(), 0);
+  }
+
+  private findOrderHoldingInventory(inventoryId: string): { orderId: string; customerName: string; reservedBy: string } | null {
+    const rows = this.orders.list();
+    const closedStatuses: OrderStatus[] = ["entregado", "pagado", "cancelado", "devuelto"];
+    const active = rows.find((order) => {
+      if (closedStatuses.includes(order.status)) return false;
+      return (order.items || []).some((it) =>
+        it.source === "inventario" &&
+        it.inventory_id === inventoryId &&
+        it.state !== "cancelado" &&
+        it.state !== "devuelto",
+      );
+    });
+    const fallback = rows.find((order) =>
+      (order.items || []).some((it) => it.source === "inventario" && it.inventory_id === inventoryId),
+    );
+    const picked = active || fallback;
+    if (!picked) return null;
+    const actor = [...(picked.timeline || [])].reverse().find((entry) => !!entry.actor)?.actor || null;
+    return {
+      orderId: picked.order_id,
+      customerName: this.customerName(picked),
+      reservedBy: String(actor || "Admin"),
+    };
+  }
+
+  private async findReservedByFromEvents(orderId: string): Promise<string | null> {
+    try {
+      const snap = await getDocs(
+        query(collection(FIRESTORE, "orders", orderId, "events"), orderBy("createdAt", "desc"), limit(20)),
+      );
+      for (const docSnap of snap.docs) {
+        const data = docSnap.data() as any;
+        const actorName = String(data?.actor?.name || data?.createdBy || "").trim();
+        if (actorName && actorName.toLowerCase() !== "sistema") return actorName;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  private toFirstName(fullName: string): string {
+    const clean = String(fullName || "").trim();
+    if (!clean) return "Admin";
+    return clean.split(/\s+/)[0] || "Admin";
+  }
+
   itemPriceLabel(item: OrderItem): string {
     const value = item.price_clienta ?? item.price_public ?? item.price_cost ?? null;
     if (value === null || value === undefined || Number.isNaN(value)) return "Sin precio";
     return this.formatCurrency(value);
+  }
+
+  private buildInventoryMutationKey(
+    action: "reserve" | "release",
+    orderId: string,
+    orderItemId: string,
+    inventoryId: string,
+    qty: number,
+  ): string {
+    return `${action}_${orderId}_${orderItemId}_${inventoryId}_${Math.max(0, Math.trunc(qty))}`;
   }
 }
 

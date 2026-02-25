@@ -65,7 +65,7 @@ export default class PedidosPage implements OnInit {
 
   list = computed(() => this.orders.list());
   intentCounts = computed(() => {
-    const term = this.search().trim().toLowerCase();
+    const term = this.normalizeSearchTerm(this.search());
     const route = this.routeFilter();
     const counts: Record<IntentFilter, number> = {
       hoy: 0,
@@ -81,15 +81,7 @@ export default class PedidosPage implements OnInit {
 
     for (const order of this.list()) {
       if (route !== "todos" && order.route_id !== route) continue;
-      if (term) {
-        const blob = [
-          order.order_id,
-          this.customerName(order.customer_id).toLowerCase(),
-          order.route_id || "",
-          order.items.map((i) => i.title).join(" ").toLowerCase(),
-        ].join(" ");
-        if (!blob.includes(term)) continue;
-      }
+      if (!this.matchesSearchTerm(order, term)) continue;
 
       for (const intent of this.intentsForCount) {
         if (this.matchesIntent(order, intent)) counts[intent] += 1;
@@ -100,7 +92,7 @@ export default class PedidosPage implements OnInit {
   });
 
   filtered = computed(() => {
-    const term = this.search().trim().toLowerCase();
+    const term = this.normalizeSearchTerm(this.search());
     const intent = this.intentFilter();
     const route = this.routeFilter();
 
@@ -108,14 +100,7 @@ export default class PedidosPage implements OnInit {
       .filter((order) => {
         if (!this.matchesIntent(order, intent)) return false;
         if (route !== "todos" && order.route_id !== route) return false;
-        if (!term) return true;
-        const blob = [
-          order.order_id,
-          this.customerName(order.customer_id).toLowerCase(),
-          order.route_id || "",
-          order.items.map((i) => i.title).join(" ").toLowerCase(),
-        ].join(" ");
-        return blob.includes(term);
+        return this.matchesSearchTerm(order, term);
       })
       .sort((a, b) => (a.updated_at > b.updated_at ? -1 : 1));
   });
@@ -219,9 +204,9 @@ export default class PedidosPage implements OnInit {
       case "hoy":
         return this.isToday(order.updated_at);
       case "por_confirmar":
-        return ["borrador", "confirmando_proveedor", "reservado_inventario", "solicitado_proveedor"].includes(order.status);
+        return ["borrador", "confirmando_proveedor", "reservado_inventario", "solicitado_proveedor", "supplier_processing"].includes(order.status);
       case "en_transito":
-        return ["en_transito"].includes(order.status);
+        return ["en_transito", "inbound_in_transit"].includes(order.status);
       case "en_empaque":
         return order.status === "empaque";
       case "listos_ruta":
@@ -292,6 +277,32 @@ export default class PedidosPage implements OnInit {
     return count === 1 ? "\u26a0 1 incidencia" : `\u26a0 ${count} incidencias`;
   }
 
+  private normalizeSearchTerm(value: string): string {
+    return (value || "").trim().toLowerCase();
+  }
+
+  private compactSearchValue(value: string): string {
+    return this.normalizeSearchTerm(value).replace(/[^a-z0-9]/g, "");
+  }
+
+  private matchesSearchTerm(order: Order, term: string): boolean {
+    if (!term) return true;
+    const searchableParts = [
+      order.order_id,
+      this.customerName(order.customer_id),
+      order.route_id || "",
+      order.items.map((i) => i.title).join(" "),
+    ];
+    const blob = this.normalizeSearchTerm(searchableParts.join(" "));
+    if (blob.includes(term)) return true;
+
+    // Also match IDs even when users type without separators (e.g. P2401 vs P-2401).
+    const compactTerm = this.compactSearchValue(term);
+    if (!compactTerm) return false;
+    const compactBlob = this.compactSearchValue(searchableParts.join(" "));
+    return compactBlob.includes(compactTerm);
+  }
+
   primaryAlert(order: Order): { label: string; tone: "danger" | "warning" } | null {
     const alerts = this.orderAlerts(order);
     return alerts.length > 0 ? alerts[0] : null;
@@ -321,6 +332,8 @@ export default class PedidosPage implements OnInit {
       "confirmando_proveedor",
       "reservado_inventario",
       "solicitado_proveedor",
+      "supplier_processing",
+      "inbound_in_transit",
       "en_transito",
       "recibido_qa",
       "empaque",
@@ -526,6 +539,8 @@ export default class PedidosPage implements OnInit {
       confirmando_proveedor: "Confirmando",
       reservado_inventario: "Reservado",
       solicitado_proveedor: "Solicitado",
+      supplier_processing: "Proveedor",
+      inbound_in_transit: "En camino proveedor",
       en_transito: "En tr\u00e1nsito",
       recibido_qa: "Recibido/QA",
       empaque: "Empaque",
@@ -548,6 +563,7 @@ export default class PedidosPage implements OnInit {
         return "chip info";
       case "empaque":
       case "en_transito":
+      case "inbound_in_transit":
       case "en_ruta":
         return "chip accent";
       case "entregado":

@@ -1,4 +1,4 @@
-import { Injectable, computed, signal } from "@angular/core";
+import { Injectable, computed, inject, signal } from "@angular/core";
 import { FIRESTORE } from "./firebase.providers";
 import {
   arrayUnion,
@@ -12,15 +12,19 @@ import {
   setDoc,
   startAfter,
   updateDoc,
+  where,
 } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { FIREBASE_AUTH, STORAGE } from "./firebase.providers";
+import { SupplierOperationsService } from "./supplier-operations.service";
 
 export type OrderStatus =
   | "borrador"
   | "confirmando_proveedor"
   | "reservado_inventario"
   | "solicitado_proveedor"
+  | "supplier_processing"
+  | "inbound_in_transit"
   | "en_transito"
   | "recibido_qa"
   | "empaque"
@@ -142,10 +146,28 @@ export interface SupplierOrder {
   items: SupplierOrderItem[];
 }
 
+type SupplierOpStatusLite = "por_levantar" | "levantado" | "en_camino" | "recibido";
+
+export function computeOrderStatus(
+  order: Pick<Order, "status">,
+  items: OrderItem[],
+  supplierOps: Array<{ status: SupplierOpStatusLite }>,
+): OrderStatus {
+  const terminalStatuses: OrderStatus[] = ["recibido_qa", "empaque", "en_ruta", "entregado", "pago_pendiente", "pagado", "cancelado", "devuelto"];
+  const allItemsResolved = items.length > 0 && items.every((item) => !!item.confirmation_state && item.confirmation_state !== "pending");
+  if (terminalStatuses.includes(order.status)) return order.status;
+  if (items.length === 0) return "borrador";
+  if (supplierOps.length === 0) return allItemsResolved ? "recibido_qa" : order.status;
+  if (supplierOps.every((op) => op.status === "recibido")) return "recibido_qa";
+  if (supplierOps.some((op) => op.status === "en_camino")) return "inbound_in_transit";
+  return "supplier_processing";
+}
+
 @Injectable({ providedIn: "root" })
 export class OrdersService {
   private colRef = collection(FIRESTORE, "orders");
   private rows = signal<Order[]>([]);
+  private supplierOperations = inject(SupplierOperationsService);
   loading = signal(false);
 
   list = computed(() => this.rows());
@@ -351,6 +373,9 @@ export class OrdersService {
       timeline: this.getById(orderId)?.timeline || [],
       notes: note ?? this.getById(orderId)?.notes ?? "",
     });
+    if (status === "entregado") {
+      await this.supplierOperations.removeByOrder(orderId).catch(() => null);
+    }
   }
 
   async updatePlannedPackages(orderId: string, plannedPackages: number) {
@@ -369,6 +394,22 @@ export class OrdersService {
       planned_packages: plannedPackages,
       updated_at: serverTimestamp(),
     });
+  }
+
+  async syncDerivedStatus(orderId: string): Promise<OrderStatus | null> {
+    const order = this.getById(orderId);
+    if (!order) return null;
+    const supplierOpsSnap = await getDocs(query(collection(FIRESTORE, "supplier_operations"), where("order_id", "==", orderId)));
+    const supplierOps = supplierOpsSnap.docs.map((entry) => {
+      const raw = (entry.data() as any)["status"];
+      const status: SupplierOpStatusLite = raw === "recibido" || raw === "en_camino" || raw === "levantado" ? raw : "por_levantar";
+      return { status };
+    });
+    const nextStatus = computeOrderStatus(order, order.items || [], supplierOps);
+    if (nextStatus !== order.status) {
+      await this.updateStatus(orderId, nextStatus);
+    }
+    return nextStatus;
   }
 
   private updateIncidentSummary(orderId: string, deltaOpen: number, setHigh: boolean | null, lastIncidentAt?: string | null) {

@@ -55,6 +55,10 @@
       </div>
     </header>
 
+    @if (actionToast()) {
+      <div class="action-toast" role="status" aria-live="polite">{{ actionToast() }}</div>
+    }
+
     @if (requiresPlannedPackages(current)) {
       <div class="sticky-banner">
         <div>
@@ -108,7 +112,7 @@
         <p class="eyebrow">Ganancia</p>
         <p class="summary-money summary-money--profit">
           <span>MXN</span>
-          <strong class="summary-value summary-value--profit">{{ formatCurrency(totals().totalCosto) }}</strong>
+          <strong class="summary-value summary-value--profit">{{ formatCurrency(totals().ganancia) }}</strong>
         </p>
       </article>
     </section>
@@ -268,6 +272,7 @@
             class="product-card"
             [id]="productCardId(item)"
             [class.status--confirmed]="isConfirmedConfirmation(item)"
+            [class.status--partial]="isConfirmedConfirmation(item) && hasPartialConfirmation(item)"
             [class.status--out]="isOutOfStockConfirmation(item)"
             [class.status--alert]="hasInsufficientStock(item) && !isOutOfStockConfirmation(item)"
           >
@@ -283,8 +288,11 @@
               <div class="main-info">
                 <button type="button" class="image-container" (click)="openImagePreview(itemImage(item) || 'https://via.placeholder.com/800?text=Producto')">
                   <img [src]="itemImage(item) || 'https://via.placeholder.com/100'" [alt]="item.title" />
+                  <span class="source-tag source-text--overlay" [class.source--catalogo]="item.source === 'catalogo'">
+                    {{ item.source | uppercase }}
+                  </span>
                   @if (isConfirmedConfirmation(item)) {
-                    <span class="pieces-state pieces-state--ok">
+                    <span class="pieces-state" [class.pieces-state--partial]="hasPartialConfirmation(item)" [class.pieces-state--ok]="!hasPartialConfirmation(item)">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" d="m5 13 4 4L19 7"></path>
                       </svg>
@@ -301,9 +309,6 @@
                 <div class="text-content">
                   <div class="title-row">
                     <h4 class="product-name">{{ item.title }}</h4>
-                    <span class="source-tag" [class.source--catalogo]="item.source === 'catalogo'">
-                      {{ item.source | uppercase }}
-                    </span>
                   </div>
 
                   <div class="specs-grid">
@@ -370,6 +375,15 @@
                         <button class="btn-sub btn-out" (click)="marcarAgotado(item)">Marcar <span class="btn-out-word">Agotado</span></button>
                       }
                     </div>
+                  } @else if (isSupplierManagedItem(item) && !isSupplierItemReceived(current, item) && isConfirmedConfirmation(item)) {
+                    <button type="button" class="btn card-receive-btn" [disabled]="isItemActionLoading(item)" (click)="receiveItem(current, item)">
+                      @if (isItemActionLoading(item)) {
+                        <span class="btn-spinner" aria-hidden="true"></span>
+                        Procesando...
+                      } @else {
+                        Recibir proveedor
+                      }
+                    </button>
                   }
                 </div>
               </div>
@@ -593,8 +607,8 @@
 
           @if (current.items.length > 0) {
             <div class="confirm-summary">
-              <div class="confirm-progress" role="progressbar" [attr.aria-valuenow]="resolvedItems(current)" aria-valuemin="0" [attr.aria-valuemax]="totalItems(current)">
-                <span class="confirm-progress-bar" [style.width.%]="totalItems(current) > 0 ? (resolvedItems(current) * 100) / totalItems(current) : 0"></span>
+              <div class="confirm-progress" role="progressbar" [attr.aria-valuenow]="resolvedPieces(current)" aria-valuemin="0" [attr.aria-valuemax]="totalPieces(current)">
+                <span class="confirm-progress-bar" [style.width.%]="totalPieces(current) > 0 ? (resolvedPieces(current) * 100) / totalPieces(current) : 0"></span>
               </div>
             </div>
           }
@@ -644,6 +658,12 @@
         }
 
         @if (actionContext()?.actionId === "pack") {
+          @if (!canStartPacking(current)) {
+            <div class="sheet-warning">
+              <p class="eyebrow">Bloqueo operativo</p>
+              <p>Faltan {{ packBlockedCount(current) }} item(s) por recibir de proveedor antes de empacar.</p>
+            </div>
+          }
           <div class="items">
             @for (item of current.items; track item.item_id) {
               <article class="item-card compact">
@@ -652,14 +672,35 @@
                   <p class="muted">{{ item.variant || "Variante" }} - {{ item.color || "Color" }}</p>
                 </div>
                 <div class="item-actions">
-                  <button type="button" class="btn ghost" (click)="receiveItem(current, item)">Recibido/QA</button>
+                  <button type="button" class="btn ghost" [disabled]="isItemActionLoading(item)" (click)="receiveItem(current, item)">
+                    @if (isItemActionLoading(item)) {
+                      <span class="btn-spinner" aria-hidden="true"></span>
+                      Procesando...
+                    } @else {
+                      {{ isSupplierManagedItem(item) ? "Recibir proveedor" : "Recibido/QA" }}
+                    }
+                  </button>
                   <button type="button" class="btn ghost" (click)="markMissing(current, item)">Faltante</button>
                   <button type="button" class="btn ghost" (click)="markDamaged(current, item)">Danado</button>
-                  <button type="button" class="btn ghost" (click)="markPacked(current, item)">Empacar</button>
+                  <button type="button" class="btn ghost" [disabled]="!isItemReadyForPack(current, item) || isItemActionLoading(item)" (click)="markPacked(current, item)">
+                    @if (isItemActionLoading(item)) {
+                      <span class="btn-spinner" aria-hidden="true"></span>
+                      Empacando...
+                    } @else {
+                      Empacar
+                    }
+                  </button>
                 </div>
               </article>
             }
           </div>
+        }
+
+        @if (actionContext()?.actionId === "supplier_followup") {
+          <p class="muted">Todas las existencias ya fueron confirmadas. Marca cuando el proveedor pase a tránsito.</p>
+          <button type="button" class="btn primary" [disabled]="actionSaving()" (click)="markInTransit(current)">
+            {{ actionSaving() ? "Guardando..." : "Marcar en transito proveedor" }}
+          </button>
         }
 
         @if (actionContext()?.actionId === "dispatch") {
@@ -833,6 +874,7 @@
             <div class="field">
               <label>Buscar producto</label>
               <input
+                #productSearchInput
                 class="input"
                 type="text"
                 placeholder="Nombre, variante o color"

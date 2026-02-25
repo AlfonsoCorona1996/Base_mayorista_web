@@ -385,9 +385,19 @@
                   <h3>{{ item.title }}</h3>
                 </div>
                 <span class="stock-tag" [class]="'stock-tag ' + stockClass(item.quantity_on_hand)">
-                  {{ stockTag(item.quantity_on_hand) }}
+                  {{ isFullyReserved(item) ? "Todo reservado" : stockTag(availableQty(item)) }}
                 </span>
               </header>
+
+              <div class="meta-grid">
+                <p><strong>On hand:</strong> {{ onHandQty(item) }}</p>
+                <p><strong>Reservado:</strong> {{ reservedQty(item) }}</p>
+                <p><strong>Disponible:</strong> {{ availableQty(item) }}</p>
+              </div>
+
+              @if (hasReservations(item)) {
+                <div class="status-chip chip-pending">Reservado</div>
+              }
 
               @if (primaryImage(item); as imageUrl) {
                 <div class="card-image-wrap">
@@ -417,6 +427,20 @@
                 <p><strong>Precio:</strong> {{ item.unit_price ? ('$' + item.unit_price) : "Sin precio" }}</p>
               </div>
 
+              @if (reservationEntries(item).length > 0) {
+                <div class="meta-grid">
+                  <p><strong>Reservas activas:</strong></p>
+                </div>
+                <div class="meta-grid">
+                  @for (reservation of reservationEntries(item); track reservation.orderId) {
+                    <p>
+                      <a [routerLink]="['/main/pedidos', reservation.orderId]">N-Pedido {{ reservation.orderNumber }}</a>
+                      · {{ reservation.qty }} pza(s)
+                    </p>
+                  }
+                </div>
+              }
+
               @if (item.notes) {
                 <p class="notes">{{ item.notes }}</p>
               }
@@ -435,12 +459,12 @@
                       <path d="M5 12h14"></path>
                     </svg>
                   </button>
-                  <span class="qty-value">{{ item.quantity_on_hand }}</span>
+                  <span class="qty-value">{{ availableQty(item) }}</span>
                   <button
                     type="button"
                     class="qty-btn"
                     (click)="adjustQty(item, 1)"
-                    [disabled]="isBusy(item.inventory_id)"
+                    [disabled]="isBusy(item.inventory_id) || isFullyReserved(item)"
                     [attr.aria-label]="'Aumentar cantidad de ' + item.title"
                   >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -450,6 +474,9 @@
                   </button>
                 </div>
               </div>
+              @if (isFullyReserved(item)) {
+                <p class="notes">Todo reservado</p>
+              }
 
               <div class="card-actions">
                 <button type="button" class="btn btn-outline" (click)="startEdit(item)">
