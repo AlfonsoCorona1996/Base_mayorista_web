@@ -95,6 +95,13 @@ export const routes: Routes = [
         loadComponent: () => import("./features/pedidos/pedido-detalle").then((m) => m.default),
       },
       {
+        path: "proveedores-operaciones",
+        canActivate: [permissionGuard],
+        data: { permission: "pedidos" },
+        loadComponent: () =>
+          import("./features/proveedores-operaciones/proveedores-operaciones").then((m) => m.default),
+      },
+      {
         path: "usuarios",
         canActivate: [permissionGuard],
         data: { permission: "usuarios" },

@@ -52,6 +52,20 @@ export function getPrimaryAction(order: OrderSummary): PrimaryAction {
       disabled: itemsCount === 0,
       disabledReason: itemsCount === 0 ? DISABLED_ITEMS_REASON : undefined,
     },
+    supplier_processing: {
+      label: "Seguimiento proveedor",
+      actionId: "confirm_stock",
+      route,
+      disabled: itemsCount === 0,
+      disabledReason: itemsCount === 0 ? DISABLED_ITEMS_REASON : undefined,
+    },
+    inbound_in_transit: {
+      label: "Seguimiento inbound",
+      actionId: "confirm_stock",
+      route,
+      disabled: itemsCount === 0,
+      disabledReason: itemsCount === 0 ? DISABLED_ITEMS_REASON : undefined,
+    },
     en_transito: {
       label: "Confirmar existencias",
       actionId: "confirm_stock",

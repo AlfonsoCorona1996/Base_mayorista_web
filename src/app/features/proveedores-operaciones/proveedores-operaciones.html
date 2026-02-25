@@ -1,0 +1,277 @@
+﻿<section class="supplier-ops-page">
+  <header class="page-header">
+    <div>
+      <h1>Proveedores (Operaciones)</h1>
+      <p>Gestiona por proveedor y producto los avances operativos de cada pedido.</p>
+    </div>
+    <button type="button" class="btn btn-secondary" (click)="reload()" [disabled]="loading()">
+      {{ loading() ? "Actualizando..." : "Actualizar" }}
+    </button>
+  </header>
+
+  <section class="status-filters" aria-label="Filtro por estado">
+    @for (option of statusOptions; track option.id) {
+      <button
+        type="button"
+        class="filter-chip"
+        [class.filter-chip-active]="statusFilter() === option.id"
+        (click)="statusFilter.set(option.id)"
+      >
+        {{ option.label }}
+      </button>
+    }
+  </section>
+
+  @if (error()) {
+    <div class="alert alert-error">{{ error() }}</div>
+  }
+
+  @if (success()) {
+    <div class="alert alert-success">{{ success() }}</div>
+  }
+
+  @if (loading()) {
+    <p class="empty">Cargando operaciones...</p>
+  } @else if (supplierSections().length === 0) {
+    <p class="empty">No hay operaciones de proveedor para mostrar.</p>
+  } @else {
+    <section class="supplier-sections">
+      @for (section of supplierSections(); track trackSupplier($index, section)) {
+        <article class="panel supplier-section">
+          <header class="supplier-header">
+            <button
+              type="button"
+              class="supplier-toggle"
+              (click)="toggleSupplier(section.supplierId)"
+              [attr.aria-expanded]="isSupplierExpanded(section.supplierId)"
+            >
+              <div>
+                <h2>{{ section.supplierName }}</h2>
+                <div class="status-counts">
+                  <span class="status-pill">Pendientes: {{ section.counts.por_levantar }}</span>
+                  <span class="status-pill">Levantados: {{ section.counts.levantado }}</span>
+                  <span class="status-pill">En camino: {{ section.counts.en_camino }}</span>
+                  <span class="status-pill">Recibidos: {{ section.counts.recibido }}</span>
+                </div>
+              </div>
+              <span class="chevron" [class.chevron-open]="isSupplierExpanded(section.supplierId)">⌄</span>
+            </button>
+
+            <button
+              type="button"
+              class="btn btn-copy"
+              (click)="copyPendingToClipboard(section.supplierId)"
+              [disabled]="loading()"
+            >
+              Copiar pendientes
+            </button>
+          </header>
+
+          @if (isSupplierExpanded(section.supplierId)) {
+            <div class="group-list">
+              @for (group of section.groups; track trackGroup($index, group)) {
+                <article class="group-card">
+                  <div class="group-main">
+                    @if (group.imageUrl; as image) {
+                      <img class="product-thumb" [src]="image" alt="Producto" />
+                    } @else {
+                      <div class="product-thumb-fallback">Sin foto</div>
+                    }
+
+                    <div class="group-content">
+                      <div class="group-headline">
+                        <p class="product-title">{{ group.productName }}</p>
+                      </div>
+
+                      <div class="meta-chips">
+                        <span class="meta-chip">Color: {{ group.color }}</span>
+                        @if (group.variant || group.size) {
+                          <span class="meta-chip">Variante: {{ group.variant || group.size }}</span>
+                        }
+                      </div>
+
+                      <div class="group-status-bar" aria-label="Avance del grupo">
+                        <p class="status-total">Total: {{ getTotalQty(group) }}</p>
+                        <div class="status-progress-track">
+                          @for (segment of getStatusSegments(group); track $index) {
+                            <span [class]="progressSegmentClass(segment)"></span>
+                          }
+                        </div>
+                        <p class="status-progress-caption">{{ getDoneQty(group) }} / {{ getTotalQty(group) }} avanzados</p>
+                      </div>
+                    </div>
+
+                    <div class="qty-grid qty-grid-four qty-grid-full">
+                      <div
+                        class="qty-block qty-status-pending qty-block-action"
+                        role="button"
+                        tabindex="0"
+                        [attr.aria-disabled]="!canShowAction(group, 'levantar')"
+                        (click)="canShowAction(group, 'levantar') ? openPartialProcessModal('levantar', group) : null"
+                        (keydown.enter)="canShowAction(group, 'levantar') ? openPartialProcessModal('levantar', group) : null"
+                        (keydown.space)="canShowAction(group, 'levantar') ? openPartialProcessModal('levantar', group) : null"
+                      >
+                        <span class="qty-status-chip">
+                          <span class="qty-status-icon qty-status-icon-clock" aria-hidden="true"></span>
+                          <span class="qty-status-count">{{ group.countsByStatus.por_levantar }}</span>
+                          <span class="qty-status-text">Por levantar</span>
+                        </span>
+                      </div>
+                      <div
+                        class="qty-block qty-status-lifted qty-block-action"
+                        role="button"
+                        tabindex="0"
+                        [attr.aria-disabled]="!canShowAction(group, 'enviar')"
+                        (click)="canShowAction(group, 'enviar') ? openPartialProcessModal('enviar', group) : null"
+                        (keydown.enter)="canShowAction(group, 'enviar') ? openPartialProcessModal('enviar', group) : null"
+                        (keydown.space)="canShowAction(group, 'enviar') ? openPartialProcessModal('enviar', group) : null"
+                      >
+                        <span class="qty-status-chip">
+                          <span class="qty-status-icon qty-status-icon-check" aria-hidden="true"></span>
+                          <span class="qty-status-count">{{ group.countsByStatus.levantado }}</span>
+                          <span class="qty-status-text">Levantado</span>
+                        </span>
+                      </div>
+                      <div
+                        class="qty-block qty-status-transit qty-block-action"
+                        role="button"
+                        tabindex="0"
+                        [attr.aria-disabled]="!canShowAction(group, 'recibir')"
+                        (click)="canShowAction(group, 'recibir') ? openPartialProcessModal('recibir', group) : null"
+                        (keydown.enter)="canShowAction(group, 'recibir') ? openPartialProcessModal('recibir', group) : null"
+                        (keydown.space)="canShowAction(group, 'recibir') ? openPartialProcessModal('recibir', group) : null"
+                      >
+                        <span class="qty-status-chip">
+                          <span class="qty-status-icon qty-status-icon-transit" aria-hidden="true"></span>
+                          <span class="qty-status-count">{{ group.countsByStatus.en_camino }}</span>
+                          <span class="qty-status-text">En transito</span>
+                        </span>
+                      </div>
+                      <div class="qty-block qty-status-received">
+                        <span class="qty-status-chip">
+                          <span class="qty-status-icon qty-status-icon-check-green" aria-hidden="true"></span>
+                          <span class="qty-status-count">{{ group.countsByStatus.recibido }}</span>
+                          <span class="qty-status-text">Recibido</span>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="orders-toggle-row">
+                    <button
+                      type="button"
+                      class="orders-toggle-btn"
+                      (click)="onTotalQtyBlockClick(group.key)"
+                      [attr.aria-expanded]="isGroupExpanded(group.key)"
+                    >
+                      <span class="orders-toggle-icon" [class.orders-toggle-icon-open]="isGroupExpanded(group.key)" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false">
+                          <path d="M6 9l6 6 6-6"></path>
+                        </svg>
+                      </span>
+                      <span class="orders-toggle-label">Ver pedidos</span>
+                      <span class="orders-toggle-spacer" aria-hidden="true"></span>
+                    </button>
+                  </div>
+
+                  @if (isGroupExpanded(group.key)) {
+                    <section class="orders-list">
+                      @for (status of orderListStatuses(); track status) {
+                        @if (hasLinesForStatus(group, status)) {
+                          <div class="orders-status-group">
+                            <p class="orders-group-title">
+                              {{ orderSectionTitle(status) }} ({{ linesForStatus(group, status).length }})
+                            </p>
+                            <ul class="orders-group-items">
+                              @for (line of linesForStatus(group, status); track trackLine($index, line)) {
+                                <li class="order-line">
+                                  <button type="button" class="order-line-main" (click)="onOrderChipClick(line.order_id)">
+                                    <span
+                                      class="order-line-icon"
+                                      [class.order-line-icon-pending]="line.status === 'por_levantar'"
+                                      [class.order-line-icon-lifted]="line.status === 'levantado'"
+                                      [class.order-line-icon-transit]="line.status === 'en_camino'"
+                                      [class.order-line-icon-received]="line.status === 'recibido'"
+                                    ></span>
+                                    <span class="order-line-id">{{ orderChipText(line.order_id) }}</span>
+                                    <span class="order-line-sep">-</span>
+                                    <span class="line-qty">{{ qtyLabel(line.quantity) }}</span>
+                                  </button>
+                                  <span class="order-status-badge" [class]="statusClass(line.status)">{{ statusLabel(line.status) }}</span>
+                                </li>
+                              }
+                            </ul>
+                          </div>
+                        }
+                      }
+                    </section>
+                  }
+                </article>
+              }
+            </div>
+          }
+        </article>
+      }
+    </section>
+  }
+
+  @if (partialModal(); as modal) {
+    <div class="modal-backdrop" (click)="closePartialProcessModal()"></div>
+    <section
+      class="partial-sheet"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Procesar parcialmente"
+      tabindex="-1"
+      (keydown.escape)="closePartialProcessModal()"
+    >
+      <header class="sheet-header">
+        <h3>{{ modalTitle() }}: {{ modal.productName }}</h3>
+        <button type="button" class="btn btn-ghost" (click)="closePartialProcessModal()" [disabled]="modal.saving">
+          Cerrar
+        </button>
+      </header>
+
+      <div class="sheet-meta">
+        <span class="meta-chip">Color: {{ modal.color }}</span>
+        @if (modal.variant || modal.size) {
+          <span class="meta-chip">Variante: {{ modal.variant || modal.size }}</span>
+        }
+      </div>
+
+      <p class="sheet-available">Disponible para este paso: <strong>{{ modal.availableQty }}</strong> unidades</p>
+
+      <p class="sheet-selected">Seleccionado: {{ modal.selectedQty }} / {{ modal.availableQty }}</p>
+
+      <div class="sheet-list" role="list">
+        @for (candidate of modal.candidates; track trackCandidate($index, candidate)) {
+          <label class="candidate-row" [class.candidate-disabled]="isCandidateDisabled(candidate.lineId)">
+            <input
+              type="checkbox"
+              [checked]="isCandidateChecked(candidate.lineId)"
+              (change)="toggleSelection(candidate.lineId)"
+              [disabled]="isCandidateDisabled(candidate.lineId)"
+            />
+            <span class="candidate-order">{{ orderChipText(candidate.orderId) }}</span>
+            <span class="candidate-qty">Qty: {{ candidate.qty }}</span>
+            <a class="candidate-link" [href]="orderDetailHref(candidate.orderId)" target="_blank" rel="noopener">Ver</a>
+          </label>
+        }
+      </div>
+
+      <footer class="sheet-actions">
+        <button type="button" class="btn btn-link" (click)="closePartialProcessModal()" [disabled]="modal.saving">
+          Cancelar
+        </button>
+        <button
+          type="button"
+          class="btn btn-secondary"
+          (click)="confirmPartialProcess()"
+          [disabled]="!canConfirm()"
+        >
+          {{ modal.saving ? "Guardando..." : modalConfirmText() }}
+        </button>
+      </footer>
+    </section>
+  }
+</section>

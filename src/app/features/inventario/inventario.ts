@@ -1,9 +1,10 @@
 import { Component, HostListener, computed, inject, signal } from "@angular/core";
 import { FormsModule } from "@angular/forms";
+import { RouterLink } from "@angular/router";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { CategoriesService, Category } from "../../core/categories.service";
 import { STORAGE } from "../../core/firebase.providers";
-import { InventoryItem, InventoryService } from "../../core/inventory.service";
+import { InventoryItem, InventoryReservation, InventoryService } from "../../core/inventory.service";
 import { SuppliersService } from "../../core/suppliers.service";
 
 type StockFilter = "all" | "low" | "sold_out" | "without_price";
@@ -26,7 +27,7 @@ interface InventoryDraft {
 @Component({
   standalone: true,
   selector: "app-inventario",
-  imports: [FormsModule],
+  imports: [FormsModule, RouterLink],
   templateUrl: "./inventario.html",
   styleUrl: "./inventario.css",
 })
@@ -506,6 +507,39 @@ export default class InventarioPage {
 
   primaryImage(item: InventoryItem): string | null {
     return item.image_urls?.[0] || null;
+  }
+
+  onHandQty(item: InventoryItem): number {
+    return Number(item.on_hand_qty ?? 0);
+  }
+
+  reservedQty(item: InventoryItem): number {
+    return Number(item.reserved_qty ?? 0);
+  }
+
+  availableQty(item: InventoryItem): number {
+    return Number(item.available_qty ?? item.quantity_on_hand ?? 0);
+  }
+
+  hasReservations(item: InventoryItem): boolean {
+    return this.reservedQty(item) > 0;
+  }
+
+  reservationEntries(item: InventoryItem): Array<{ orderId: string; qty: number; orderNumber: string; status: string }> {
+    const reservations = item.reservations || {};
+    return Object.entries(reservations)
+      .map(([orderId, reservation]) => ({
+        orderId,
+        qty: Number((reservation as InventoryReservation)?.qty || 0),
+        orderNumber: (reservation as InventoryReservation)?.order_number || orderId,
+        status: (reservation as InventoryReservation)?.status || "reserved",
+      }))
+      .filter((entry) => entry.qty > 0)
+      .sort((a, b) => a.orderNumber.localeCompare(b.orderNumber, "es", { sensitivity: "base" }));
+  }
+
+  isFullyReserved(item: InventoryItem): boolean {
+    return this.availableQty(item) === 0 && this.onHandQty(item) > 0 && this.reservedQty(item) > 0;
   }
 
   @HostListener("document:keydown.escape")

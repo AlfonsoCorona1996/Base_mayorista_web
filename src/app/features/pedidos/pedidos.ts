@@ -204,9 +204,9 @@ export default class PedidosPage implements OnInit {
       case "hoy":
         return this.isToday(order.updated_at);
       case "por_confirmar":
-        return ["borrador", "confirmando_proveedor", "reservado_inventario", "solicitado_proveedor"].includes(order.status);
+        return ["borrador", "confirmando_proveedor", "reservado_inventario", "solicitado_proveedor", "supplier_processing"].includes(order.status);
       case "en_transito":
-        return ["en_transito"].includes(order.status);
+        return ["en_transito", "inbound_in_transit"].includes(order.status);
       case "en_empaque":
         return order.status === "empaque";
       case "listos_ruta":
@@ -332,6 +332,8 @@ export default class PedidosPage implements OnInit {
       "confirmando_proveedor",
       "reservado_inventario",
       "solicitado_proveedor",
+      "supplier_processing",
+      "inbound_in_transit",
       "en_transito",
       "recibido_qa",
       "empaque",
@@ -537,6 +539,8 @@ export default class PedidosPage implements OnInit {
       confirmando_proveedor: "Confirmando",
       reservado_inventario: "Reservado",
       solicitado_proveedor: "Solicitado",
+      supplier_processing: "Proveedor",
+      inbound_in_transit: "En camino proveedor",
       en_transito: "En tr\u00e1nsito",
       recibido_qa: "Recibido/QA",
       empaque: "Empaque",
@@ -559,6 +563,7 @@ export default class PedidosPage implements OnInit {
         return "chip info";
       case "empaque":
       case "en_transito":
+      case "inbound_in_transit":
       case "en_ruta":
         return "chip accent";
       case "entregado":

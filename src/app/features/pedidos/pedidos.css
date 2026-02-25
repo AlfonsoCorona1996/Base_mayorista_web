@@ -724,6 +724,10 @@ h3 {
     line-height: 1.2;
   }
 
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
   .order-card {
     padding: 0.8rem;
   }

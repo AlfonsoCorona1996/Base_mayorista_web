@@ -2598,6 +2598,20 @@ code {
   box-shadow: 0 4px 10px rgba(15, 23, 42, 0.08);
 }
 
+.action-toast {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 60;
+  background: linear-gradient(120deg, #065f46, #047857);
+  color: #ffffff;
+  border-radius: 0.75rem;
+  padding: 0.55rem 0.8rem;
+  font-size: 0.84rem;
+  font-weight: 700;
+  box-shadow: 0 14px 32px rgba(6, 95, 70, 0.28);
+}
+
 .sticky-action-bar {
   position: fixed;
   left: 50%;
@@ -2700,6 +2714,23 @@ code {
 
 .btn.ghost {
   background: #f7f9fd;
+}
+
+.btn-spinner {
+  width: 0.9rem;
+  height: 0.9rem;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 999px;
+  display: inline-block;
+  margin-right: 0.35rem;
+  animation: btn-spin 0.8s linear infinite;
+}
+
+@keyframes btn-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .btn.with-icon {
@@ -3396,6 +3427,25 @@ code {
   justify-content: center;
   margin-left: auto;
   min-width: 0;
+}
+
+.card-receive-btn {
+  min-width: 162px;
+  border: none;
+  border-radius: 999px;
+  padding: 0.52rem 0.9rem;
+  background: linear-gradient(120deg, #0f766e, #0ea5a3);
+  color: #ffffff;
+  box-shadow: 0 10px 24px rgba(15, 118, 110, 0.24);
+}
+
+.card-receive-btn:hover:not(:disabled) {
+  filter: brightness(1.04);
+}
+
+.card-receive-btn:disabled {
+  opacity: 0.78;
+  cursor: not-allowed;
 }
 
 @media (max-width: 900px) {

@@ -55,6 +55,10 @@
       </div>
     </header>
 
+    @if (actionToast()) {
+      <div class="action-toast" role="status" aria-live="polite">{{ actionToast() }}</div>
+    }
+
     @if (requiresPlannedPackages(current)) {
       <div class="sticky-banner">
         <div>
@@ -371,6 +375,15 @@
                         <button class="btn-sub btn-out" (click)="marcarAgotado(item)">Marcar <span class="btn-out-word">Agotado</span></button>
                       }
                     </div>
+                  } @else if (isSupplierManagedItem(item) && !isSupplierItemReceived(current, item) && isConfirmedConfirmation(item)) {
+                    <button type="button" class="btn card-receive-btn" [disabled]="isItemActionLoading(item)" (click)="receiveItem(current, item)">
+                      @if (isItemActionLoading(item)) {
+                        <span class="btn-spinner" aria-hidden="true"></span>
+                        Procesando...
+                      } @else {
+                        Recibir proveedor
+                      }
+                    </button>
                   }
                 </div>
               </div>
@@ -645,6 +658,12 @@
         }
 
         @if (actionContext()?.actionId === "pack") {
+          @if (!canStartPacking(current)) {
+            <div class="sheet-warning">
+              <p class="eyebrow">Bloqueo operativo</p>
+              <p>Faltan {{ packBlockedCount(current) }} item(s) por recibir de proveedor antes de empacar.</p>
+            </div>
+          }
           <div class="items">
             @for (item of current.items; track item.item_id) {
               <article class="item-card compact">
@@ -653,14 +672,35 @@
                   <p class="muted">{{ item.variant || "Variante" }} - {{ item.color || "Color" }}</p>
                 </div>
                 <div class="item-actions">
-                  <button type="button" class="btn ghost" (click)="receiveItem(current, item)">Recibido/QA</button>
+                  <button type="button" class="btn ghost" [disabled]="isItemActionLoading(item)" (click)="receiveItem(current, item)">
+                    @if (isItemActionLoading(item)) {
+                      <span class="btn-spinner" aria-hidden="true"></span>
+                      Procesando...
+                    } @else {
+                      {{ isSupplierManagedItem(item) ? "Recibir proveedor" : "Recibido/QA" }}
+                    }
+                  </button>
                   <button type="button" class="btn ghost" (click)="markMissing(current, item)">Faltante</button>
                   <button type="button" class="btn ghost" (click)="markDamaged(current, item)">Danado</button>
-                  <button type="button" class="btn ghost" (click)="markPacked(current, item)">Empacar</button>
+                  <button type="button" class="btn ghost" [disabled]="!isItemReadyForPack(current, item) || isItemActionLoading(item)" (click)="markPacked(current, item)">
+                    @if (isItemActionLoading(item)) {
+                      <span class="btn-spinner" aria-hidden="true"></span>
+                      Empacando...
+                    } @else {
+                      Empacar
+                    }
+                  </button>
                 </div>
               </article>
             }
           </div>
+        }
+
+        @if (actionContext()?.actionId === "supplier_followup") {
+          <p class="muted">Todas las existencias ya fueron confirmadas. Marca cuando el proveedor pase a tránsito.</p>
+          <button type="button" class="btn primary" [disabled]="actionSaving()" (click)="markInTransit(current)">
+            {{ actionSaving() ? "Guardando..." : "Marcar en transito proveedor" }}
+          </button>
         }
 
         @if (actionContext()?.actionId === "dispatch") {
