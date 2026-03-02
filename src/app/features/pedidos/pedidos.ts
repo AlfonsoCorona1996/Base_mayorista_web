@@ -1,7 +1,7 @@
-import { Component, OnInit, computed, inject, signal } from "@angular/core";
+import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, QueryList, ViewChildren, computed, inject, signal } from "@angular/core";
 import { DatePipe } from "@angular/common";
 import { FormsModule } from "@angular/forms";
-import { Router, RouterLink } from "@angular/router";
+import { Router } from "@angular/router";
 import { CustomersService } from "../../core/customers.service";
 import { OrdersService, Order, OrderStatus, IncidentSeverity } from "../../core/orders.service";
 import { RoutesService } from "../../core/routes.service";
@@ -21,11 +21,11 @@ type IntentFilter =
 @Component({
   standalone: true,
   selector: "app-pedidos",
-  imports: [FormsModule, DatePipe, RouterLink],
+  imports: [FormsModule, DatePipe],
   templateUrl: "./pedidos.html",
   styleUrl: "./pedidos.css",
 })
-export default class PedidosPage implements OnInit {
+export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   private orders = inject(OrdersService);
   private customers = inject(CustomersService);
   private routes = inject(RoutesService);
@@ -51,6 +51,10 @@ export default class PedidosPage implements OnInit {
   plannedPackagesInput = signal(1);
   partialReason = signal("");
   partialReasonError = signal<string | null>(null);
+  private visiblePillsByOrder = signal<Record<string, number>>({});
+  private pillsResizeObserver: ResizeObserver | null = null;
+  private pillMeasureEl: HTMLSpanElement | null = null;
+  @ViewChildren("pillsRow", { read: ElementRef }) pillsRows!: QueryList<ElementRef<HTMLElement>>;
   private readonly intentsForCount: IntentFilter[] = [
     "hoy",
     "por_confirmar",
@@ -139,6 +143,31 @@ export default class PedidosPage implements OnInit {
     }
   }
 
+  ngAfterViewInit(): void {
+    this.pillsResizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const row = entry.target as HTMLElement;
+        const orderId = row.dataset["orderId"];
+        if (!orderId) continue;
+        this.recomputePillsForRow(row, orderId);
+      }
+    });
+
+    this.pillsRows.changes.subscribe(() => this.observePillRows());
+    this.observePillRows();
+
+    queueMicrotask(() => this.recomputeAllPills());
+  }
+
+  ngOnDestroy(): void {
+    this.pillsResizeObserver?.disconnect();
+    this.pillsResizeObserver = null;
+    if (this.pillMeasureEl) {
+      this.pillMeasureEl.remove();
+      this.pillMeasureEl = null;
+    }
+  }
+
   pickCustomer(id: string) {
     this.newCustomerId.set(id);
     this.customerQuery.set(this.customerName(id));
@@ -204,21 +233,21 @@ export default class PedidosPage implements OnInit {
       case "hoy":
         return this.isToday(order.updated_at);
       case "por_confirmar":
-        return ["borrador", "confirmando_proveedor", "reservado_inventario", "solicitado_proveedor", "supplier_processing"].includes(order.status);
+        return ["borrador", "confirmando_proveedor", "reservado_inventario", "solicitado_proveedor"].includes(order.status);
       case "en_transito":
-        return ["en_transito", "inbound_in_transit"].includes(order.status);
+        return ["supplier_processing", "inbound_in_transit", "en_transito"].includes(order.status);
       case "en_empaque":
-        return order.status === "empaque";
+        return this.isPackingStage(order);
       case "listos_ruta":
-        return order.status === "recibido_qa";
+        return this.isReadyForRoute(order);
       case "en_ruta":
         return order.status === "en_ruta";
       case "con_incidencias":
-        return ["cancelado", "devuelto"].includes(order.status);
+        return this.hasIncidents(order);
       case "cobranza_pendiente":
         return order.status === "pago_pendiente";
       case "cerrados":
-        return ["pagado", "entregado"].includes(order.status);
+        return ["pagado", "entregado", "cancelado", "devuelto"].includes(order.status);
       default:
         return true;
     }
@@ -231,7 +260,7 @@ export default class PedidosPage implements OnInit {
   }
 
   closedPackagesCount(order: Order): number {
-    return (order.packages || []).filter((pkg) => ["armado", "en_ruta", "entregado"].includes(pkg.state)).length;
+    return (order.packages || []).filter((pkg) => this.isClosedPackage(pkg)).length;
   }
 
   deliveredPackagesCount(order: Order): number {
@@ -256,6 +285,16 @@ export default class PedidosPage implements OnInit {
     return summary;
   }
 
+  visibleItems(order: Order) {
+    const visible = this.visiblePillsByOrder()[order.order_id];
+    const count = typeof visible === "number" ? visible : Math.min(3, order.items.length);
+    return order.items.slice(0, Math.max(0, count));
+  }
+
+  hiddenItemsCount(order: Order): number {
+    return Math.max(0, order.items.length - this.visibleItems(order).length);
+  }
+
   hasIncompletePackages(order: Order): boolean {
     const planned = this.plannedPackagesCount(order);
     if (planned === null) return false;
@@ -270,6 +309,28 @@ export default class PedidosPage implements OnInit {
 
   hasIncidents(order: Order): boolean {
     return (order.open_incidents_count ?? 0) > 0;
+  }
+
+  private isClosedPackage(pkg: Order["packages"][number]): boolean {
+    const status = String((pkg as any).status || "").toLowerCase();
+    const state = String(pkg.state || "").toLowerCase();
+    if (status === "closed") return true;
+    if ((pkg as any).closed_at) return true;
+    return ["armado", "closed", "en_ruta", "entregado"].includes(state);
+  }
+
+  private isReadyForRoute(order: Order): boolean {
+    if (order.status !== "empaque") return false;
+    const planned = this.plannedPackagesCount(order);
+    if (planned === null) return false;
+    if (this.closedPackagesCount(order) < planned) return false;
+    return this.unassignedConfirmedItems(order) === 0;
+  }
+
+  private isPackingStage(order: Order): boolean {
+    if (order.status === "recibido_qa") return true;
+    if (order.status !== "empaque") return false;
+    return !this.isReadyForRoute(order);
   }
 
   incidentsLabel(order: Order): string {
@@ -597,21 +658,87 @@ export default class PedidosPage implements OnInit {
 
   private orderAlerts(order: Order): Array<{ label: string; tone: "danger" | "warning" }> {
     const alerts: Array<{ label: string; tone: "danger" | "warning" }> = [];
-    if (order.has_high_incident) alerts.push({ label: "CR\u00cdTICO", tone: "danger" });
-    if (this.hasIncompletePackages(order)) alerts.push({ label: "INCOMPLETO", tone: "danger" });
     if (this.hasPaymentPending(order)) alerts.push({ label: "$ pendiente", tone: "warning" });
 
     const incidents = order.open_incidents_count ?? 0;
-    if (incidents > 0 && !order.has_high_incident) {
+    if (incidents > 0) {
       alerts.push({ label: this.incidentsLabel(order), tone: "warning" });
-    } else if (incidents > 1 && order.has_high_incident) {
-      alerts.push({ label: `+${incidents - 1} incidencias`, tone: "warning" });
     }
     return alerts;
   }
 
   newDraft() {
     this.createOrder();
+  }
+
+  private observePillRows() {
+    if (!this.pillsResizeObserver) return;
+    this.pillsResizeObserver.disconnect();
+    for (const rowRef of this.pillsRows.toArray()) {
+      const row = rowRef.nativeElement;
+      const orderId = row.dataset["orderId"];
+      if (!orderId) continue;
+      this.pillsResizeObserver.observe(row);
+      this.recomputePillsForRow(row, orderId);
+    }
+  }
+
+  private recomputeAllPills() {
+    for (const rowRef of this.pillsRows?.toArray() || []) {
+      const row = rowRef.nativeElement;
+      const orderId = row.dataset["orderId"];
+      if (!orderId) continue;
+      this.recomputePillsForRow(row, orderId);
+    }
+  }
+
+  private recomputePillsForRow(row: HTMLElement, orderId: string) {
+    const order = this.filtered().find((entry) => entry.order_id === orderId);
+    if (!order) return;
+
+    const available = row.clientWidth;
+    if (!available || order.items.length === 0) {
+      this.visiblePillsByOrder.update((map) => ({ ...map, [orderId]: 0 }));
+      return;
+    }
+
+    const styles = getComputedStyle(row);
+    const gap = Number.parseFloat(styles.columnGap || styles.gap || "5") || 5;
+    const maxChipWidth = Math.max(90, Math.floor(available * 0.58));
+
+    let visible = 0;
+    let used = 0;
+    for (let i = 0; i < order.items.length; i += 1) {
+      const itemWidth = Math.min(this.measurePillWidth(order.items[i].title, false), maxChipWidth);
+      const nextUsed = used + (visible > 0 ? gap : 0) + itemWidth;
+      const remaining = order.items.length - (i + 1);
+      let reserveForMore = 0;
+      if (remaining > 0) {
+        const moreWidth = this.measurePillWidth(`+${remaining}`, true);
+        reserveForMore = (visible + 1 > 0 ? gap : 0) + moreWidth;
+      }
+      if (nextUsed + reserveForMore <= available) {
+        used = nextUsed;
+        visible += 1;
+      } else {
+        break;
+      }
+    }
+
+    if (visible === 0) visible = 1;
+    this.visiblePillsByOrder.update((map) => ({ ...map, [orderId]: visible }));
+  }
+
+  private measurePillWidth(text: string, isMore: boolean): number {
+    if (!this.pillMeasureEl) {
+      const node = document.createElement("span");
+      node.className = "pill pill-measure";
+      document.body.appendChild(node);
+      this.pillMeasureEl = node;
+    }
+    this.pillMeasureEl.className = isMore ? "pill more pill-measure" : "pill pill-measure";
+    this.pillMeasureEl.textContent = text;
+    return Math.ceil(this.pillMeasureEl.getBoundingClientRect().width);
   }
 }
 

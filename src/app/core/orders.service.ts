@@ -17,6 +17,7 @@ import {
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { FIREBASE_AUTH, STORAGE } from "./firebase.providers";
 import { SupplierOperationsService } from "./supplier-operations.service";
+import { ulid } from "ulid";
 
 export type OrderStatus =
   | "borrador"
@@ -62,9 +63,21 @@ export interface PackageRecord {
   label: string;
   sequence: number;
   total_packages: number;
-  state: "armado" | "en_ruta" | "entregado" | "devuelto";
+  state: "armado" | "en_ruta" | "entregado" | "devuelto" | "open" | "closed";
+  status?: "open" | "closed";
   amount_due: number | null;
   item_ids: string[];
+  items?: Array<{
+    orderItemId: string;
+    name: string;
+    qty: number;
+    variant?: string | null;
+    size?: string | null;
+    color?: string | null;
+    imageUrl?: string | null;
+  }>;
+  closed_at?: string | null;
+  label_qr?: string | null;
   created_at: string;
 }
 
@@ -163,6 +176,15 @@ export function computeOrderStatus(
   return "supplier_processing";
 }
 
+export function makeOrderId(): string {
+  const d = new Date();
+  const yy = String(d.getFullYear()).slice(-2);
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const u = ulid().slice(-10);
+  return `P-${yy}${mm}${dd}-${u}`;
+}
+
 @Injectable({ providedIn: "root" })
 export class OrdersService {
   private colRef = collection(FIRESTORE, "orders");
@@ -183,7 +205,7 @@ export class OrdersService {
 
   async createDraft(customerId: string, routeId: string | null, notes?: string): Promise<string> {
     const now = new Date().toISOString();
-    const orderId = `P-${Date.now()}`;
+    const orderId = makeOrderId();
     const draft: Order = {
       order_id: orderId,
       customer_id: customerId,
@@ -339,7 +361,7 @@ export class OrdersService {
   }
 
   add(order: Order): string {
-    const id = order.order_id || `P-${Date.now()}`;
+    const id = order.order_id || makeOrderId();
     const next: Order = { ...order, order_id: id };
     this.rows.set([next, ...this.rows()]);
     return id;
