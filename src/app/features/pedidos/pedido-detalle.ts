@@ -1,4 +1,4 @@
-﻿import { Component, ElementRef, HostListener, OnInit, ViewChild, computed, inject, signal } from "@angular/core";
+﻿import { Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild, computed, inject, signal } from "@angular/core";
 import { DatePipe, UpperCasePipe } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { ActivatedRoute, Router, RouterLink } from "@angular/router";
@@ -11,17 +11,18 @@ import { InventoryService, InventoryItem } from "../../core/inventory.service";
 import { NormalizedListingsService, NormalizedListingDoc } from "../../core/normalized-listings.service";
 import { SupplierOperationsService } from "../../core/supplier-operations.service";
 import { FIRESTORE } from "../../core/firebase.providers";
+import { ActivityLogComponent } from "../../shared/components/activity-log/activity-log.component";
 
 type EstadoConfirmacion = "pendiente" | "confirmado" | "sin_stock";
 
 @Component({
   standalone: true,
   selector: "app-pedido-detalle",
-  imports: [FormsModule, RouterLink, DatePipe, UpperCasePipe],
+  imports: [FormsModule, RouterLink, DatePipe, UpperCasePipe, ActivityLogComponent],
   templateUrl: "./pedido-detalle.html",
   styleUrls: ["./pedido-detalle.css"],
 })
-export default class PedidoDetallePage implements OnInit {
+export default class PedidoDetallePage implements OnInit, OnDestroy {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private orders = inject(OrdersService);
@@ -36,9 +37,21 @@ export default class PedidoDetallePage implements OnInit {
   @ViewChild("packagesSection") packagesSection?: ElementRef<HTMLElement>;
   @ViewChild("timelineSection") timelineSection?: ElementRef<HTMLElement>;
   @ViewChild("productSearchInput") productSearchInput?: ElementRef<HTMLInputElement>;
+  @ViewChild("pageHead") pageHead?: ElementRef<HTMLElement>;
+  private readonly onAnyScroll = () => {
+    const scrollingEl = document.scrollingElement as HTMLElement | null;
+    const scrollTop = Math.max(
+      window.scrollY || 0,
+      scrollingEl?.scrollTop || 0,
+      document.documentElement.scrollTop || 0,
+      document.body.scrollTop || 0,
+    );
+    this.updateStickyByScroll(scrollTop);
+  };
 
   orderId = signal<string>("");
   error = signal<string | null>(null);
+  initialHydration = signal(true);
   private lastInventoryBlockedAlertAt = 0;
 
   order = computed<Order | null>(() => this.orders.getById(this.orderId()));
@@ -53,6 +66,7 @@ export default class PedidoDetallePage implements OnInit {
   copiedOrderId = signal(false);
   actionToast = signal<string | null>(null);
   showStickyFooter = signal(false);
+  showStickyHeader = signal(false);
   productStockFilter = signal<"all" | "out_of_stock" | "confirmed" | "pending">("all");
   showStockFab = signal(false);
   quickConfirming = signal<Record<string, boolean>>({});
@@ -84,8 +98,26 @@ export default class PedidoDetallePage implements OnInit {
   actionContext = signal<{ actionId: string; label: string } | null>(null);
   actionError = signal<string | null>(null);
   actionSaving = signal(false);
+  transitConfirmOpen = signal(false);
   lateChangeApproved = signal(false);
-  selectedPackageId = signal<string | null>(null);
+  packingBusy = signal(false);
+  activeOpenBoxId = signal<string | null>(null);
+  openBoxMenuId = signal<string | null>(null);
+  moveModeBoxId = signal<string | null>(null);
+  deletePackageConfirmOpen = signal(false);
+  deletePackageTargetId = signal<string | null>(null);
+  createBoxConfirmOpen = signal(false);
+  pendingAddItemId = signal<string | null>(null);
+  qtyPickerOpen = signal(false);
+  qtyPickerItemId = signal<string | null>(null);
+  qtyPickerItemTitle = signal("");
+  qtyPickerMax = signal(1);
+  qtyPickerValue = signal(1);
+  moveSheetOpen = signal(false);
+  moveSheetPackageId = signal<string | null>(null);
+  moveSheetItemId = signal<string | null>(null);
+  moveSheetQty = signal(1);
+  expandedClosedBoxes = signal<Record<string, boolean>>({});
   supplierEta = signal("");
   addItemModalOpen = signal(false);
   newItemSupplierId = signal<string | null>(null);
@@ -194,7 +226,8 @@ export default class PedidoDetallePage implements OnInit {
 
   ngOnInit() {
     this.orderId.set(this.route.snapshot.paramMap.get("id") || "");
-    Promise.all([
+    this.initialHydration.set(true);
+    void Promise.all([
       this.orders.loadFromFirestore(),
       this.customers.loadFromFirestore().catch(() => null),
       this.suppliers.loadFromFirestore().catch(() => null),
@@ -214,6 +247,10 @@ export default class PedidoDetallePage implements OnInit {
       }
       this.loadIncidents();
       this.refreshEvents();
+    }).catch(() => {
+      this.error.set("No se pudo cargar la informacion del pedido.");
+    }).finally(() => {
+      this.initialHydration.set(false);
     });
 
     this.route.queryParamMap.subscribe((params) => {
@@ -222,6 +259,15 @@ export default class PedidoDetallePage implements OnInit {
       if (!focus) return;
       setTimeout(() => this.applyFocus(focus), 60);
     });
+
+    // Capture scroll from window/body and nested scroll containers.
+    window.addEventListener("scroll", this.onAnyScroll, true);
+    // Sync sticky controls with current scroll position on initial render.
+    setTimeout(() => this.onAnyScroll(), 0);
+  }
+
+  ngOnDestroy() {
+    window.removeEventListener("scroll", this.onAnyScroll, true);
   }
 
   async loadIncidents() {
@@ -513,11 +559,17 @@ export default class PedidoDetallePage implements OnInit {
         return { actionId: "supplier_followup", label: "Marcar en transito proveedor" };
       case "inbound_in_transit":
       case "en_transito":
-        return { actionId: "pack", label: "Empacar" };
+        if (this.canFinishPacking(order)) {
+          return { actionId: "dispatch", label: "Terminar empaquetado" };
+        }
+        return { actionId: "pack", label: this.canStartPacking(order) ? "Terminar empaquetado" : "Empacar" };
       case "recibido_qa":
-        return { actionId: "pack", label: "Empacar" };
+        if (this.canFinishPacking(order)) {
+          return { actionId: "dispatch", label: "Terminar empaquetado" };
+        }
+        return { actionId: "pack", label: this.canStartPacking(order) ? "Terminar empaquetado" : "Empacar" };
       case "empaque":
-        return { actionId: "dispatch", label: "Preparar salida" };
+        return { actionId: "dispatch", label: "Terminar empaquetado" };
       case "en_ruta":
         return { actionId: "deliver", label: "Registrar entrega" };
       case "pago_pendiente":
@@ -546,7 +598,7 @@ export default class PedidoDetallePage implements OnInit {
   }
 
   closedPackagesCount(order: Order): number {
-    return (order.packages || []).filter((pkg) => ["armado", "en_ruta", "entregado"].includes(pkg.state)).length;
+    return this.closedPackingBoxes(order).length;
   }
 
   deliveredPackagesCount(order: Order): number {
@@ -554,21 +606,23 @@ export default class PedidoDetallePage implements OnInit {
   }
 
   unassignedConfirmedItems(order: Order): number {
-    const assigned = new Set<string>();
-    for (const pkg of order.packages || []) {
-      for (const id of pkg.item_ids || []) assigned.add(id);
-    }
-    return (order.items || []).filter((item) => {
-      const isConfirmed = !["entregado", "pagado", "cancelado", "devuelto"].includes(item.state);
-      return isConfirmed && !assigned.has(item.item_id);
-    }).length;
+    return this.unpackedCount(order);
   }
 
   canDispatch(order: Order): boolean {
-    const planned = this.plannedPackages(order);
-    if (planned === null) return false;
-    if (this.closedPackagesCount(order) < planned) return false;
-    if (this.unassignedConfirmedItems(order) > 0) return false;
+    return this.canFinishPacking(order);
+  }
+
+  hasEmptyPackages(order: Order | null): boolean {
+    if (!order) return false;
+    return (order.packages || []).some((pkg) => !this.packageHasItems(pkg));
+  }
+
+  canFinishPacking(order: Order): boolean {
+    if (this.closedPackagesCount(order) <= 0) return false;
+    if (this.openPackingBoxes(order).length > 0) return false;
+    if (this.hasEmptyPackages(order)) return false;
+    if (this.unpackedCount(order) > 0) return false;
     return true;
   }
 
@@ -809,10 +863,7 @@ export default class PedidoDetallePage implements OnInit {
         return;
       }
       this.confirmQtyDraft.update((current) => ({ ...current, [item.item_id]: qty }));
-      await this.orders.updateItemConfirmation(order.order_id, item.item_id, {
-        confirmation_state: "confirmed",
-        confirmed_qty: qty,
-      });
+      await this.confirmItem(order, item);
     } finally {
       this.quickConfirming.update((current) => ({ ...current, [item.item_id]: false }));
     }
@@ -877,10 +928,7 @@ export default class PedidoDetallePage implements OnInit {
           return;
         }
         this.confirmQtyDraft.update((current) => ({ ...current, [item.item_id]: qty }));
-        await this.orders.updateItemConfirmation(order.order_id, item.item_id, {
-          confirmation_state: "confirmed",
-          confirmed_qty: qty,
-        });
+        await this.confirmItem(order, item);
       }),
     );
   }
@@ -1007,6 +1055,7 @@ export default class PedidoDetallePage implements OnInit {
       confirmation_state: "confirmed",
       confirmed_qty: qty,
     });
+    await this.logItemConfirmationEvent(order, item, "confirmed", qty);
   }
 
   async markOutOfStock(order: Order, item: OrderItem) {
@@ -1015,6 +1064,7 @@ export default class PedidoDetallePage implements OnInit {
       confirmation_state: "out_of_stock",
       confirmed_qty: 0,
     });
+    await this.logItemConfirmationEvent(order, item, "out_of_stock", 0);
   }
 
   groupUnresolvedCount(items: OrderItem[]): number {
@@ -1049,6 +1099,10 @@ export default class PedidoDetallePage implements OnInit {
         }),
       ),
     );
+    await this.orders.logEvent(order.order_id, "existence_confirmed", "Confirmación masiva de existencias", {
+      items: pending.map((item) => item.item_id),
+      qty: pending.length,
+    });
   }
 
   async outOfStockGroup(order: Order, items: OrderItem[]) {
@@ -1067,6 +1121,33 @@ export default class PedidoDetallePage implements OnInit {
         }),
       ),
     );
+    await this.orders.logEvent(order.order_id, "out_of_stock_marked", "Marcado masivo de items agotados", {
+      items: pending.map((item) => item.item_id),
+      qty: pending.length,
+    });
+  }
+
+  private async logItemConfirmationEvent(
+    order: Order,
+    item: OrderItem,
+    state: "confirmed" | "out_of_stock",
+    confirmedQty: number,
+  ) {
+    if (state === "confirmed") {
+      await this.orders.logEvent(order.order_id, "existence_confirmed", "Item marcado disponible", {
+        itemId: item.item_id,
+        itemTitle: item.title,
+        confirmed_qty: confirmedQty,
+      });
+      await this.refreshEvents();
+      return;
+    }
+    await this.orders.logEvent(order.order_id, "out_of_stock_marked", "Item marcado agotado", {
+      itemId: item.item_id,
+      itemTitle: item.title,
+      confirmed_qty: 0,
+    });
+    await this.refreshEvents();
   }
 
   confirmedQty(item: OrderItem): number {
@@ -1211,6 +1292,18 @@ export default class PedidoDetallePage implements OnInit {
     return this.packBlockedCount(order) === 0;
   }
 
+  packedCount(order: Order): number {
+    const totalConfirmed = this.confirmedPieces(order);
+    return Math.max(0, totalConfirmed - this.unpackedCount(order));
+  }
+
+  packingProgressPercent(order: Order): number {
+    const totalConfirmed = this.confirmedPieces(order);
+    if (totalConfirmed <= 0) return 0;
+    const pct = (this.packedCount(order) * 100) / totalConfirmed;
+    return Math.max(0, Math.min(100, Math.round(pct)));
+  }
+
   private async receiveSupplierItem(order: Order, item: OrderItem) {
     if (!this.isSupplierManagedItem(item)) return;
     const opId = this.supplierOpId(order, item);
@@ -1286,74 +1379,703 @@ export default class PedidoDetallePage implements OnInit {
     });
   }
 
-  createPackage(order: Order | null) {
-    if (!order) return;
-    if (this.requiresPlannedPackages(order)) return;
-    const seq = order.packages.length + 1;
-    const planned = order.planned_packages ?? seq;
-    const pkg: PackageRecord = {
-      package_id: `pack-${Date.now()}`,
-      label: `Paquete ${seq}/${planned}`,
-      sequence: seq,
-      total_packages: planned,
-      state: "armado",
-      amount_due: null,
-      item_ids: order.items.map((i) => i.item_id),
-      created_at: new Date().toISOString(),
+  private packageStatus(pkg: PackageRecord): "open" | "closed" {
+    const status = String((pkg as any).status || "").toLowerCase();
+    if (status === "open" || status === "closed") return status;
+    const state = String((pkg as any).state || "").toLowerCase();
+    if (state === "open") return "open";
+    if (state === "closed" || state === "en_ruta" || state === "entregado") return "closed";
+    if ((pkg as any).closed_at) return "closed";
+    return "closed";
+  }
+
+  private packageItems(pkg: PackageRecord): Array<{
+    orderItemId: string;
+    name: string;
+    qty: number;
+    variant?: string | null;
+    size?: string | null;
+    color?: string | null;
+    imageUrl?: string | null;
+  }> {
+    const raw = (pkg as any).items;
+    if (Array.isArray(raw) && raw.length > 0) {
+      return raw
+        .map((entry: any) => ({
+          orderItemId: String(entry.orderItemId || entry.order_item_id || ""),
+          name: String(entry.name || ""),
+          qty: Math.max(0, Number(entry.qty || 0)),
+          variant: entry.variant ?? null,
+          size: entry.size ?? null,
+          color: entry.color ?? null,
+          imageUrl: entry.imageUrl ?? entry.image_url ?? null,
+        }))
+        .filter((entry: any) => entry.orderItemId && entry.qty > 0);
+    }
+    return Array.isArray(pkg.item_ids)
+      ? pkg.item_ids.map((itemId) => ({ orderItemId: itemId, name: "", qty: 1 }))
+      : [];
+  }
+
+  private buildPackageItem(order: Order, item: OrderItem, qty: number) {
+    return {
+      orderItemId: item.item_id,
+      name: item.title,
+      qty,
+      variant: item.variant ?? null,
+      size: null,
+      color: item.color ?? null,
+      imageUrl: this.itemImage(item),
     };
-    this.orders.addPackage(order.order_id, pkg);
-    this.orders.logEvent(order.order_id, "PACKAGE_CREATED", `Paquete ${seq}/${planned} creado`, {
-      packageId: pkg.package_id,
+  }
+
+  private packageHasItems(pkg: PackageRecord): boolean {
+    return this.packageItems(pkg).some((entry) => entry.qty > 0);
+  }
+
+  private patchPackage(pkg: PackageRecord, patch: Partial<PackageRecord> & Record<string, any>): PackageRecord {
+    const merged = { ...pkg, ...patch } as PackageRecord;
+    const items = this.packageItems(merged);
+    return {
+      ...merged,
+      item_ids: items.filter((entry) => entry.qty > 0).map((entry) => entry.orderItemId),
+      items,
+    } as PackageRecord;
+  }
+
+  openPackingBoxes(order: Order | null): PackageRecord[] {
+    if (!order) return [];
+    return (order.packages || [])
+      .filter((pkg) => this.packageStatus(pkg) === "open")
+      .sort((a, b) => {
+        const aDate = new Date(a.created_at).getTime();
+        const bDate = new Date(b.created_at).getTime();
+        return aDate - bDate;
+      });
+  }
+
+  private packingBoxesOrdered(order: Order | null): PackageRecord[] {
+    if (!order) return [];
+    return [...(order.packages || [])].sort((a, b) => {
+      const aDate = new Date(a.created_at).getTime();
+      const bDate = new Date(b.created_at).getTime();
+      return aDate - bDate;
     });
+  }
+
+  packingBoxNumber(order: Order | null, pkg: PackageRecord | null): number | null {
+    if (!order || !pkg) return null;
+    const ordered = this.packingBoxesOrdered(order);
+    const idx = ordered.findIndex((row) => row.package_id === pkg.package_id);
+    return idx >= 0 ? idx + 1 : null;
+  }
+
+  private totalPackingBoxes(order: Order | null): number {
+    return this.packingBoxesOrdered(order).length;
+  }
+
+  openPackingBox(order: Order | null): PackageRecord | null {
+    const boxes = this.openPackingBoxes(order);
+    return boxes.length ? boxes[0] : null;
+  }
+
+  activeOpenBox(order: Order | null): PackageRecord | null {
+    const boxes = this.openPackingBoxes(order);
+    if (!boxes.length) return null;
+    const selectedId = this.activeOpenBoxId();
+    const selected = selectedId ? boxes.find((pkg) => pkg.package_id === selectedId) || null : null;
+    if (selected) return selected;
+    return boxes[0];
+  }
+
+  activeOpenBoxNumber(order: Order | null): number | null {
+    const active = this.activeOpenBox(order);
+    if (!active) return null;
+    return this.packingBoxNumber(order, active);
+  }
+
+  setActiveOpenBox(packageId: string) {
+    this.activeOpenBoxId.set(packageId);
+  }
+
+  closePackingMenus() {
+    this.openBoxMenuId.set(null);
+  }
+
+  toggleOpenBoxMenu(packageId: string) {
+    this.openBoxMenuId.update((current) => (current === packageId ? null : packageId));
+  }
+
+  toggleMoveMode(packageId: string) {
+    this.moveModeBoxId.update((current) => (current === packageId ? null : packageId));
+    this.closePackingMenus();
+  }
+
+  isMoveMode(packageId: string): boolean {
+    return this.moveModeBoxId() === packageId;
+  }
+
+  closedPackingBoxes(order: Order | null): PackageRecord[] {
+    if (!order) return [];
+    return (order.packages || [])
+      .filter((pkg) => this.packageStatus(pkg) === "closed")
+      .sort((a, b) => {
+        const aDate = new Date((a as any).closed_at || a.created_at).getTime();
+        const bDate = new Date((b as any).closed_at || b.created_at).getTime();
+        return aDate - bDate;
+      });
+  }
+
+  packingItemsInBox(order: Order, pkg: PackageRecord): Array<{ item: OrderItem; qty: number }> {
+    const byItemId = new Map((order.items || []).map((item) => [item.item_id, item]));
+    return this.packageItems(pkg)
+      .map((entry) => ({ entry, item: byItemId.get(entry.orderItemId) || null }))
+      .filter((row) => !!row.item && row.entry.qty > 0)
+      .map((row) => ({ item: row.item as OrderItem, qty: row.entry.qty }));
+  }
+
+  private packedQtyByItem(order: Order): Map<string, number> {
+    const map = new Map<string, number>();
+    for (const pkg of order.packages || []) {
+      for (const entry of this.packageItems(pkg)) {
+        map.set(entry.orderItemId, (map.get(entry.orderItemId) || 0) + entry.qty);
+      }
+    }
+    return map;
+  }
+
+  unpackedItems(order: Order | null): Array<{ item: OrderItem; qty: number }> {
+    if (!order) return [];
+    const packedMap = this.packedQtyByItem(order);
+    return this.confirmedItems(order)
+      .filter((item) => this.isItemReadyForPack(order, item))
+      .map((item) => {
+        const confirmed = Math.max(0, this.confirmedQty(item));
+        const packed = packedMap.get(item.item_id) || 0;
+        return { item, qty: Math.max(0, confirmed - packed) };
+      })
+      .filter((row) => row.qty > 0);
+  }
+
+  unpackedCount(order: Order | null): number {
+    return this.unpackedItems(order).reduce((sum, row) => sum + row.qty, 0);
+  }
+
+  canCreateNewBox(order: Order): boolean {
+    return this.unpackedCount(order) > 0;
+  }
+
+  async createPackage(order: Order | null) {
+    if (!order || this.packingBusy()) return;
+    this.packingBusy.set(true);
+    try {
+      const pkg: PackageRecord = {
+        package_id: `pack-${Date.now()}`,
+        label: "Caja abierta",
+        sequence: 0,
+        total_packages: 0,
+        state: "open" as any,
+        amount_due: null,
+        item_ids: [],
+        created_at: new Date().toISOString(),
+        status: "open",
+        items: [],
+      } as PackageRecord;
+      await this.orders.addPackage(order.order_id, pkg);
+      this.activeOpenBoxId.set(pkg.package_id);
+      this.postPackingEvent(order.order_id, "package_created", "Nueva caja abierta", {
+        packageId: pkg.package_id,
+      });
+      this.showActionToast("Nueva caja creada.");
+    } finally {
+      this.packingBusy.set(false);
+    }
+  }
+
+  private async updatePackageItemQty(order: Order, packageId: string, item: OrderItem, qtyDelta: number) {
+    const packages = (order.packages || []).map((pkg) => {
+      if (pkg.package_id !== packageId) return pkg;
+      const items = [...this.packageItems(pkg)];
+      const matchingIdx = items
+        .map((entry, idx) => ({ entry, idx }))
+        .filter((row) => row.entry.orderItemId === item.item_id)
+        .map((row) => row.idx);
+      const totalCurrent = matchingIdx.reduce((sum, idx) => sum + (items[idx].qty || 0), 0);
+      const nextTotal = totalCurrent + qtyDelta;
+
+      if (matchingIdx.length > 0) {
+        for (let i = matchingIdx.length - 1; i >= 0; i--) items.splice(matchingIdx[i], 1);
+      }
+
+      if (nextTotal > 0) {
+        items.push(this.buildPackageItem(order, item, nextTotal));
+      }
+      return this.patchPackage(pkg, { items });
+    });
+    await this.orders.updatePackages(order.order_id, packages);
+  }
+
+  private buildPackagesAfterMove(
+    order: Order,
+    fromPackageId: string,
+    orderItemId: string,
+    qty: number,
+    toPackageId: string | null,
+  ): PackageRecord[] {
+    const sourcePkg = (order.packages || []).find((pkg) => pkg.package_id === fromPackageId) || null;
+    const sourceEntry = sourcePkg
+      ? this.packageItems(sourcePkg).find((entry) => entry.orderItemId === orderItemId) || null
+      : null;
+    const sourceItem = (order.items || []).find((row) => row.item_id === orderItemId) || null;
+    const buildMovedEntry = (nextQty: number) => ({
+      orderItemId,
+      name: sourceEntry?.name || sourceItem?.title || "Producto",
+      qty: nextQty,
+      variant: sourceEntry?.variant ?? sourceItem?.variant ?? null,
+      size: sourceEntry?.size ?? null,
+      color: sourceEntry?.color ?? sourceItem?.color ?? null,
+      imageUrl: sourceEntry?.imageUrl ?? sourceItem?.image_url ?? (sourceItem ? this.itemImage(sourceItem) : null) ?? null,
+    });
+
+    const updated = (order.packages || []).map((pkg) => {
+      if (pkg.package_id !== fromPackageId && pkg.package_id !== toPackageId) return pkg;
+      const items = [...this.packageItems(pkg)];
+      const matchingIdx = items
+        .map((entry, idx) => ({ entry, idx }))
+        .filter((row) => row.entry.orderItemId === orderItemId)
+        .map((row) => row.idx);
+      const totalCurrent = matchingIdx.reduce((sum, idx) => sum + (items[idx].qty || 0), 0);
+
+      if (matchingIdx.length > 0) {
+        for (let i = matchingIdx.length - 1; i >= 0; i--) items.splice(matchingIdx[i], 1);
+      }
+
+      if (pkg.package_id === fromPackageId) {
+        const nextQty = totalCurrent - qty;
+        if (nextQty > 0) {
+          items.push(buildMovedEntry(nextQty));
+        }
+      }
+
+      if (toPackageId && pkg.package_id === toPackageId) {
+        const nextQty = totalCurrent + qty;
+        if (nextQty > 0) items.push(buildMovedEntry(nextQty));
+      }
+
+      return this.patchPackage(pkg, { items });
+    });
+    return updated.filter((pkg) => !(this.packageStatus(pkg) === "open" && !this.packageHasItems(pkg)));
+  }
+
+  private patchPackageItemByDelta(
+    order: Order,
+    pkg: PackageRecord,
+    orderItemId: string,
+    qtyDelta: number,
+    seed?: { name?: string | null; variant?: string | null; size?: string | null; color?: string | null; imageUrl?: string | null } | null,
+  ): PackageRecord {
+    const entries = [...this.packageItems(pkg)];
+    const matching = entries.filter((entry) => entry.orderItemId === orderItemId);
+    const currentTotal = matching.reduce((sum, entry) => sum + (entry.qty || 0), 0);
+    const nextTotal = currentTotal + qtyDelta;
+    const base = matching[0] || null;
+    const orderItem = (order.items || []).find((it) => it.item_id === orderItemId) || null;
+    const next = entries.filter((entry) => entry.orderItemId !== orderItemId);
+    if (nextTotal > 0) {
+      next.push({
+        orderItemId,
+        name: seed?.name || base?.name || orderItem?.title || "Producto",
+        qty: nextTotal,
+        variant: seed?.variant ?? base?.variant ?? orderItem?.variant ?? null,
+        size: seed?.size ?? base?.size ?? null,
+        color: seed?.color ?? base?.color ?? orderItem?.color ?? null,
+        imageUrl: seed?.imageUrl ?? base?.imageUrl ?? orderItem?.image_url ?? (orderItem ? this.itemImage(orderItem) : null) ?? null,
+      });
+    }
+    return this.patchPackage(pkg, { items: next });
+  }
+
+  private syncActiveOpenBoxAfterPackages(packages: PackageRecord[], preferredId?: string | null) {
+    const open = packages
+      .filter((pkg) => this.packageStatus(pkg) === "open")
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    if (!open.length) {
+      this.activeOpenBoxId.set(null);
+      return;
+    }
+    if (preferredId && open.some((pkg) => pkg.package_id === preferredId)) {
+      this.activeOpenBoxId.set(preferredId);
+      return;
+    }
+    const current = this.activeOpenBoxId();
+    if (current && open.some((pkg) => pkg.package_id === current)) return;
+    this.activeOpenBoxId.set(open[0].package_id);
+  }
+
+  async addItemToOpenBox(order: Order, row: { item: OrderItem; qty: number }, selectedQty?: number) {
+    if (this.packingBusy()) return;
+    let activeOrder = order;
+    let open = this.activeOpenBox(activeOrder);
+    if (!open) {
+      this.pendingAddItemId.set(row.item.item_id);
+      this.createBoxConfirmOpen.set(true);
+      return;
+    }
+    if (selectedQty === undefined && row.qty > 1) {
+      this.qtyPickerItemId.set(row.item.item_id);
+      this.qtyPickerItemTitle.set(row.item.title);
+      this.qtyPickerMax.set(Math.max(1, Math.floor(row.qty)));
+      this.qtyPickerValue.set(Math.max(1, Math.floor(row.qty)));
+      this.qtyPickerOpen.set(true);
+      return;
+    }
+    const qty = Math.max(1, Math.min(row.qty, Math.floor(selectedQty ?? 1)));
+    if (qty <= 0) return;
+    this.packingBusy.set(true);
+    try {
+      await this.updatePackageItemQty(activeOrder, open.package_id, row.item, qty);
+      this.postPackingEvent(activeOrder.order_id, "package_item_added", "Producto agregado a caja", {
+        packageId: open.package_id,
+        orderItemId: row.item.item_id,
+        qty,
+      });
+      this.showActionToast("Agregado a caja.");
+    } finally {
+      this.packingBusy.set(false);
+    }
+  }
+
+  closeQtyPicker() {
+    this.qtyPickerOpen.set(false);
+    this.qtyPickerItemId.set(null);
+    this.qtyPickerItemTitle.set("");
+    this.qtyPickerMax.set(1);
+    this.qtyPickerValue.set(1);
+  }
+
+  onQtyPickerChange(raw: string | number) {
+    const numeric = typeof raw === "number" ? raw : Number(raw ?? "");
+    if (!Number.isFinite(numeric)) {
+      this.qtyPickerValue.set(1);
+      return;
+    }
+    const max = Math.max(1, Math.floor(this.qtyPickerMax()));
+    this.qtyPickerValue.set(Math.max(1, Math.min(max, Math.floor(numeric))));
+  }
+
+  async confirmQtyPicker(order: Order) {
+    const targetId = this.qtyPickerItemId();
+    const qty = this.qtyPickerValue();
+    this.closeQtyPicker();
+    if (!targetId) return;
+    const current = this.order();
+    if (!current || current.order_id !== order.order_id) return;
+    const row = this.unpackedItems(current).find((entry) => entry.item.item_id === targetId);
+    if (!row) return;
+    await this.addItemToOpenBox(current, row, qty);
+  }
+
+  closeCreateBoxConfirm() {
+    this.createBoxConfirmOpen.set(false);
+    this.pendingAddItemId.set(null);
+  }
+
+  async confirmCreateBoxAndAdd(order: Order) {
+    const pendingItemId = this.pendingAddItemId();
+    this.closeCreateBoxConfirm();
+    if (!pendingItemId) return;
+    if (this.packingBusy()) return;
+    await this.createPackage(order);
+    const current = this.order();
+    if (!current) return;
+    const pendingRow = this.unpackedItems(current).find((row) => row.item.item_id === pendingItemId);
+    if (!pendingRow) return;
+    await this.addItemToOpenBox(current, pendingRow);
+  }
+
+  openMoveSheet(pkg: PackageRecord, item: OrderItem, qty?: number) {
+    this.moveSheetPackageId.set(pkg.package_id);
+    this.moveSheetItemId.set(item.item_id);
+    const normalizedQty = Number.isFinite(Number(qty)) ? Math.max(1, Math.floor(Number(qty))) : 1;
+    this.moveSheetQty.set(normalizedQty);
+    this.moveSheetOpen.set(true);
+  }
+
+  closeMoveSheet() {
+    this.moveSheetOpen.set(false);
+    this.moveSheetPackageId.set(null);
+    this.moveSheetItemId.set(null);
+    this.moveSheetQty.set(1);
+  }
+
+  moveSheetItem(order: Order | null): { pkg: PackageRecord; item: OrderItem; qty: number } | null {
+    const selection = this.moveSheetSelection(order);
+    if (!selection) return null;
+    const { pkg, itemId, qty } = selection;
+    const baseItem = selection.item;
+    const baseEntry = selection.entry;
+    const item = baseItem || ({
+      item_id: itemId,
+      title: baseEntry?.name || "Producto",
+      quantity: qty,
+      source: "catalogo",
+      state: "empaque",
+      variant: baseEntry?.variant ?? null,
+      color: baseEntry?.color ?? null,
+      image_url: baseEntry?.imageUrl ?? null,
+    } as OrderItem);
+    return { pkg, item, qty };
+  }
+
+  private moveSheetSelection(
+    order: Order | null,
+  ): { pkg: PackageRecord; itemId: string; qty: number; entry: any | null; item: OrderItem | null } | null {
+    if (!order) return null;
+    const pkgId = this.moveSheetPackageId();
+    const itemId = this.moveSheetItemId();
+    if (!pkgId || !itemId) return null;
+    const pkg = (order.packages || []).find((row) => row.package_id === pkgId) || null;
+    if (!pkg) return null;
+    const entry = this.packageItems(pkg).find((row) => row.orderItemId === itemId) || null;
+    if (!entry || entry.qty <= 0) return null;
+    const item = (order.items || []).find((row) => row.item_id === itemId) || null;
+    return { pkg, itemId, qty: entry.qty, entry, item };
+  }
+
+  setMoveSheetQty(raw: string | number, maxQty: number) {
+    const numeric = typeof raw === "number" ? raw : Number(raw ?? "");
+    if (!Number.isFinite(numeric)) {
+      this.moveSheetQty.set(1);
+      return;
+    }
+    const max = Math.max(1, Math.floor(maxQty));
+    this.moveSheetQty.set(Math.max(1, Math.min(max, Math.floor(numeric))));
+  }
+
+  moveSheetTargetBoxes(order: Order | null): PackageRecord[] {
+    if (!order) return [];
+    const sourceId = this.moveSheetPackageId();
+    return this.openPackingBoxes(order).filter((pkg) => pkg.package_id !== sourceId);
+  }
+
+  async moveItemToUnpacked(order: Order) {
+    const currentOrder = this.order();
+    if (!currentOrder || currentOrder.order_id !== order.order_id) return;
+    const selection = this.moveSheetSelection(currentOrder);
+    if (!selection || this.packingBusy()) return;
+    const qty = Math.max(1, Math.min(selection.qty, Math.floor(this.moveSheetQty())));
+    if (qty <= 0) return;
+    const sourceEntries = this.packageItems(selection.pkg);
+    const willEmptySource = qty >= selection.qty && sourceEntries.length === 1;
+    if (willEmptySource) {
+      this.closeMoveSheet();
+      await this.deleteOpenPackage(currentOrder, selection.pkg);
+      return;
+    }
+    this.packingBusy.set(true);
+    try {
+      const packages = this.buildPackagesAfterMove(currentOrder, selection.pkg.package_id, selection.itemId, qty, null);
+      await this.orders.updatePackages(currentOrder.order_id, packages);
+      this.syncActiveOpenBoxAfterPackages(packages, this.activeOpenBoxId());
+      this.postPackingEvent(currentOrder.order_id, "package_item_removed", "Producto sacado de caja", {
+        packageId: selection.pkg.package_id,
+        orderItemId: selection.itemId,
+        qty,
+      });
+      this.showActionToast("Producto devuelto a sin empacar.");
+      this.closeMoveSheet();
+    } finally {
+      this.packingBusy.set(false);
+    }
+  }
+
+  async moveItemToOpenBox(order: Order, targetPackageId: string) {
+    const currentOrder = this.order();
+    if (!currentOrder || currentOrder.order_id !== order.order_id) return;
+    const selection = this.moveSheetSelection(currentOrder);
+    if (!selection || this.packingBusy()) return;
+    if (selection.pkg.package_id === targetPackageId) return;
+    const target = this.openPackingBoxes(currentOrder).find((pkg) => pkg.package_id === targetPackageId) || null;
+    if (!target) return;
+    const qty = Math.max(1, Math.min(selection.qty, Math.floor(this.moveSheetQty())));
+    if (qty <= 0) return;
+    const sourceEntries = this.packageItems(selection.pkg);
+    const willEmptySource = qty >= selection.qty && sourceEntries.length === 1;
+    this.packingBusy.set(true);
+    try {
+      let packages: PackageRecord[];
+      if (willEmptySource) {
+        const seed = selection.entry
+          ? {
+              name: selection.entry.name,
+              variant: selection.entry.variant ?? null,
+              size: selection.entry.size ?? null,
+              color: selection.entry.color ?? null,
+              imageUrl: selection.entry.imageUrl ?? null,
+            }
+          : null;
+        packages = (currentOrder.packages || [])
+          .filter((pkg) => pkg.package_id !== selection.pkg.package_id)
+          .map((pkg) =>
+            pkg.package_id === target.package_id
+              ? this.patchPackageItemByDelta(currentOrder, pkg, selection.itemId, qty, seed)
+              : pkg,
+          );
+      } else {
+        packages = this.buildPackagesAfterMove(currentOrder, selection.pkg.package_id, selection.itemId, qty, target.package_id);
+      }
+      await this.orders.updatePackages(currentOrder.order_id, packages);
+      this.syncActiveOpenBoxAfterPackages(packages, target.package_id);
+      this.postPackingEvent(currentOrder.order_id, "package_item_moved", "Producto movido entre cajas", {
+        fromPackageId: selection.pkg.package_id,
+        toPackageId: target.package_id,
+        orderItemId: selection.itemId,
+        qty,
+      });
+      this.showActionToast("Producto movido de caja.");
+      this.closeMoveSheet();
+    } finally {
+      this.packingBusy.set(false);
+    }
+  }
+
+  requestMoveFromPackage(order: Order, pkg: PackageRecord) {
+    if (this.packingItemsInBox(order, pkg).length === 0) return;
+    this.toggleMoveMode(pkg.package_id);
   }
 
   async closePackage(order: Order, pkg: PackageRecord) {
-    await this.orders.setPackageState(order.order_id, pkg.package_id, "armado");
-    await this.orders.logEvent(order.order_id, "PACKAGE_CLOSED", `Paquete cerrado ${pkg.label}`, {
-      packageId: pkg.package_id,
-    });
+    if (this.packingBusy()) return;
+    if (!this.packageHasItems(pkg)) {
+      this.actionError.set("No puedes cerrar una caja vacia.");
+      return;
+    }
+    this.packingBusy.set(true);
+    try {
+      const closedAt = new Date().toISOString();
+      const qr = `QR:${order.order_id}:${pkg.package_id}:${Date.now()}`;
+      const packages = (order.packages || []).map((row) =>
+        row.package_id === pkg.package_id
+          ? this.patchPackage(row, {
+              status: "closed",
+              state: "closed",
+              closed_at: closedAt,
+              label_qr: qr,
+            })
+          : row,
+      );
+      await this.orders.updatePackages(order.order_id, packages);
+      this.postPackingEvent(order.order_id, "package_closed", "Caja cerrada", {
+        packageId: pkg.package_id,
+      });
+      if (this.activeOpenBoxId() === pkg.package_id) this.activeOpenBoxId.set(null);
+      this.showActionToast("Caja cerrada.");
+    } finally {
+      this.packingBusy.set(false);
+    }
   }
 
-  async toggleItemAssignment(order: Order, pkgId: string, item: OrderItem, checked: boolean) {
-    const packages = order.packages.map((pkg) => {
-      if (pkg.package_id !== pkgId) return pkg;
-      const ids = new Set(pkg.item_ids || []);
-      if (checked) ids.add(item.item_id);
-      else ids.delete(item.item_id);
-      return { ...pkg, item_ids: Array.from(ids) };
-    });
-    await this.orders.updatePackages(order.order_id, packages);
-    await this.orders.logEvent(order.order_id, "PACKAGE_ASSIGNMENT", `Asignación en paquete ${pkgId}`, {
-      packageId: pkgId,
-      itemId: item.item_id,
-      assigned: checked,
-    });
+  async reopenPackage(order: Order, pkg: PackageRecord) {
+    if (this.packingBusy()) return;
+    this.packingBusy.set(true);
+    try {
+      const packages = (order.packages || []).map((row) =>
+        row.package_id === pkg.package_id
+          ? this.patchPackage(row, {
+              status: "open",
+              state: "open",
+              closed_at: null,
+            })
+          : row,
+      );
+      await this.orders.updatePackages(order.order_id, packages);
+      this.activeOpenBoxId.set(pkg.package_id);
+      this.postPackingEvent(order.order_id, "package_reopened", "Caja reabierta", {
+        packageId: pkg.package_id,
+      });
+      this.showActionToast("Caja reabierta.");
+    } finally {
+      this.packingBusy.set(false);
+    }
   }
 
-  async autoDistribute(order: Order) {
-    const packages = order.packages.slice();
-    if (packages.length === 0) return;
-    const items = order.items.map((i) => i.item_id);
-    const next = packages.map((pkg, idx) => ({
-      ...pkg,
-      item_ids: items.filter((_, i) => i % packages.length === idx),
+  async deleteOpenPackage(order: Order, pkg: PackageRecord) {
+    if (this.packingBusy()) return;
+    if (this.packageStatus(pkg) !== "open") return;
+    const hasItems = this.packageHasItems(pkg);
+    this.packingBusy.set(true);
+    try {
+      const packages = (order.packages || []).filter((row) => row.package_id !== pkg.package_id);
+      await this.orders.updatePackages(order.order_id, packages);
+      if (this.activeOpenBoxId() === pkg.package_id) this.activeOpenBoxId.set(null);
+      this.postPackingEvent(order.order_id, "package_deleted", "Caja abierta eliminada", {
+        packageId: pkg.package_id,
+        hadItems: hasItems,
+      });
+      this.actionError.set(null);
+      this.showActionToast(hasItems ? "Caja eliminada. Productos devueltos a sin empacar." : "Caja eliminada.");
+    } finally {
+      this.packingBusy.set(false);
+    }
+  }
+
+  private postPackingEvent(orderId: string, type: string, message: string, meta?: any) {
+    void (async () => {
+      try {
+        await this.orders.logEvent(orderId, type, message, meta);
+        await this.refreshEvents();
+      } catch (error) {
+        console.warn("[pedido-detalle] No se pudo registrar/refrescar evento de empaque", { orderId, type, error });
+      }
+    })();
+  }
+
+  requestDeleteOpenPackage(order: Order, pkg: PackageRecord) {
+    if (this.packingBusy()) return;
+    if (this.packageStatus(pkg) !== "open") return;
+    if (!this.packageHasItems(pkg)) {
+      void this.deleteOpenPackage(order, pkg);
+      return;
+    }
+    this.deletePackageTargetId.set(pkg.package_id);
+    this.deletePackageConfirmOpen.set(true);
+  }
+
+  closeDeletePackageConfirm() {
+    this.deletePackageConfirmOpen.set(false);
+    this.deletePackageTargetId.set(null);
+  }
+
+  async confirmDeletePackageWithItems(order: Order) {
+    const packageId = this.deletePackageTargetId();
+    if (!packageId) return;
+    const pkg = (order.packages || []).find((row) => row.package_id === packageId) || null;
+    this.closeDeletePackageConfirm();
+    if (!pkg) return;
+    await this.deleteOpenPackage(order, pkg);
+  }
+
+  closedBoxLabel(order: Order, pkg: PackageRecord): string {
+    const boxNumber = this.packingBoxNumber(order, pkg);
+    const total = this.totalPackingBoxes(order);
+    if (!boxNumber || total <= 0) return "1/1";
+    return `${boxNumber}/${total}`;
+  }
+
+  closedBoxTitle(order: Order, pkg: PackageRecord): string {
+    const boxNumber = this.packingBoxNumber(order, pkg);
+    return `Caja ${boxNumber ?? 1}`;
+  }
+
+  isClosedBoxExpanded(pkg: PackageRecord): boolean {
+    return !!this.expandedClosedBoxes()[pkg.package_id];
+  }
+
+  toggleClosedBox(pkg: PackageRecord) {
+    this.expandedClosedBoxes.update((current) => ({
+      ...current,
+      [pkg.package_id]: !current[pkg.package_id],
     }));
-    await this.orders.updatePackages(order.order_id, next);
-    await this.orders.logEvent(order.order_id, "PACKAGE_AUTO_DISTRIBUTE", "Auto distribución de items", {});
-  }
-
-  isItemAssigned(order: Order, pkgId: string | null, itemId: string): boolean {
-    if (!pkgId) return false;
-    const pkg = order.packages.find((p) => p.package_id === pkgId);
-    if (!pkg) return false;
-    return (pkg.item_ids || []).includes(itemId);
-  }
-
-  plannedPackages(order: Order | null): number | null {
-    if (!order) return null;
-    const planned = order.planned_packages;
-    if (planned === null || planned === undefined) return null;
-    return Math.max(1, Number(planned));
   }
 
   statusRank(status: OrderStatus): number {
@@ -1378,6 +2100,13 @@ export default class PedidoDetallePage implements OnInit {
     return idx === -1 ? 0 : idx;
   }
 
+  plannedPackages(order: Order | null): number | null {
+    if (!order) return null;
+    const planned = order.planned_packages;
+    if (planned === null || planned === undefined) return null;
+    return Math.max(1, Number(planned));
+  }
+
   requiresPlannedPackages(order: Order | null): boolean {
     if (!order) return false;
     if (["cancelado", "devuelto"].includes(order.status)) return false;
@@ -1389,16 +2118,32 @@ export default class PedidoDetallePage implements OnInit {
   openPlannedPackages() {
     const order = this.order();
     if (!order) return;
-    this.plannedPackagesInput.set(1);
+    const max = this.maxAllowedPlannedPackages(order);
+    const current = this.plannedPackages(order) ?? 1;
+    this.plannedPackagesInput.set(Math.max(1, Math.min(max, current)));
     this.plannedModalOpen.set(true);
   }
 
   async savePlannedPackages() {
     const order = this.order();
     if (!order) return;
-    const planned = Math.max(1, Number(this.plannedPackagesInput() || 1));
+    const max = this.maxAllowedPlannedPackages(order);
+    const planned = Math.max(1, Math.min(max, Number(this.plannedPackagesInput() || 1)));
+    this.plannedPackagesInput.set(planned);
     await this.orders.updatePlannedPackages(order.order_id, planned);
     this.plannedModalOpen.set(false);
+  }
+
+  maxAllowedPlannedPackages(order: Order | null): number {
+    if (!order) return 1;
+    return Math.max(1, (order.items || []).length);
+  }
+
+  normalizePlannedPackagesInput(rawValue: number | string | null | undefined, order: Order | null) {
+    const max = this.maxAllowedPlannedPackages(order);
+    const numeric = Number(rawValue);
+    const safe = Number.isFinite(numeric) ? numeric : 1;
+    this.plannedPackagesInput.set(Math.max(1, Math.min(max, Math.trunc(safe))));
   }
 
   closePlannedPackages() {
@@ -1440,18 +2185,17 @@ export default class PedidoDetallePage implements OnInit {
   }
 
   packageDisplayLabel(order: Order, pkg: PackageRecord): string {
-    const seq = pkg.sequence || 1;
-    const total = pkg.total_packages || this.plannedPackages(order) || seq;
-    return `Paquete ${seq}/${total}`;
+    if (this.packageStatus(pkg) === "closed") return this.closedBoxTitle(order, pkg);
+    return "Caja abierta";
   }
 
-  printLabel(order: Order, pkg: PackageRecord) {
-    const seq = pkg.sequence || 1;
-    const total = pkg.total_packages || this.plannedPackages(order) || seq;
+  async printLabel(order: Order, pkg: PackageRecord) {
     const customer = this.customerName(order);
     const route = this.routeName(order);
-    const items = order.items.map((i) => `${i.title} x${i.quantity}`).join(", ") || "Sin items";
+    const items = this.packingItemsInBox(order, pkg).map((row) => `${row.item.title} x${row.qty}`).join(", ") || "Sin items";
     const amount = pkg.amount_due !== null ? this.formatCurrency(pkg.amount_due) : "Por cobrar";
+    const label = this.packageStatus(pkg) === "closed" ? this.closedBoxLabel(order, pkg) : "abierta";
+    const qr = this.qrPlaceholder(order, pkg);
     const html = `
       <html>
         <head>
@@ -1469,10 +2213,10 @@ export default class PedidoDetallePage implements OnInit {
           <div class="row"><span class="label">Cliente:</span> ${customer}</div>
           <div class="row"><span class="label">Ruta:</span> ${route}</div>
           <div class="row"><span class="label">Pedido:</span> ${order.order_id}</div>
-          <div class="row"><span class="label">Paquete:</span> ${seq}/${total}</div>
+          <div class="row"><span class="label">Caja:</span> ${label}</div>
           <div class="row"><span class="label">Items:</span> ${items}</div>
           <div class="row"><span class="label">Cobranza:</span> ${amount}</div>
-          <div class="qr"><span class="label">QR:</span> ${pkg.package_id}</div>
+          <div class="qr"><span class="label">QR:</span> ${qr}</div>
         </body>
       </html>
     `;
@@ -1482,6 +2226,11 @@ export default class PedidoDetallePage implements OnInit {
     win.document.close();
     win.focus();
     win.print();
+    await this.orders.logEvent(order.order_id, "label_printed", "Etiqueta enviada a impresion", {
+      packageId: pkg.package_id,
+    });
+    this.showActionToast("Etiqueta enviada a impresion.");
+    await this.refreshEvents();
   }
 
   async deliverPackage(order: Order, pkg: PackageRecord) {
@@ -1489,21 +2238,6 @@ export default class PedidoDetallePage implements OnInit {
     await this.orders.logEvent(order.order_id, "PACKAGE_DELIVERED", `Paquete entregado ${pkg.label}`, {
       packageId: pkg.package_id,
     });
-    const planned = this.plannedPackages(order);
-    if (planned !== null && this.deliveredPackagesCount(order) < planned) {
-      const reason = prompt("Motivo entrega parcial:") || "";
-      await this.orders.createIncident(order.order_id, {
-        orderId: order.order_id,
-        packageId: pkg.package_id,
-        itemId: null,
-        type: "PARTIAL_DELIVERY",
-        title: "Entrega parcial",
-        severity: "high",
-        reason: reason || "Entrega parcial registrada.",
-        evidenceUrls: [],
-        createdBy: "admin",
-      });
-    }
   }
 
   async registerPayment(order: Order) {
@@ -1519,12 +2253,12 @@ export default class PedidoDetallePage implements OnInit {
         type: "DISPATCH_BLOCKED",
         title: "Bloqueo de salida",
         severity: "high",
-        reason: "Paquetes incompletos o items sin asignar.",
+        reason: "Existen cajas abiertas, cajas vacias o productos sin empacar.",
         evidenceUrls: [],
         createdBy: "admin",
       });
       await this.orders.logEvent(order.order_id, "DISPATCH_BLOCKED", "Salida bloqueada por precondiciones", {});
-      this.actionError.set("No se puede preparar salida: faltan paquetes cerrados o items asignados.");
+      this.actionError.set("No se puede terminar empaque/preparar salida: hay cajas abiertas, cajas vacias o productos sin empacar.");
       return;
     }
     await this.orders.logEvent(order.order_id, "DISPATCH_READY", "Salida preparada", {});
@@ -1606,14 +2340,56 @@ export default class PedidoDetallePage implements OnInit {
     if (this.actionSaving()) return;
     this.actionSaving.set(true);
     try {
+      await this.supplierOperations.upsertFromConfirmedOrder(order, this.customerName(order));
+      const pendingOps = this.supplierOperations
+        .rows()
+        .filter((row) => row.order_id === order.order_id && (row.status === "por_levantar" || row.status === "levantado"));
+
+      if (pendingOps.length === 0) {
+        this.actionError.set("No hay lineas pendientes para marcar en transito.");
+        return;
+      }
+
+      await Promise.all(
+        pendingOps.map((row) =>
+          this.supplierOperations.updateLineState(row.op_id, "en_camino", undefined, { reload: false }),
+        ),
+      );
+      await this.supplierOperations.loadFromFirestore();
       await this.orders.updateStatus(order.order_id, "inbound_in_transit");
-      await this.orders.logEvent(order.order_id, "MARKED_INBOUND", "Pedido marcado en tránsito", { eta });
+      await this.orders.logEvent(order.order_id, "MARKED_INBOUND", "Pedido marcado en tránsito", {
+        eta,
+        updatedSupplierOps: pendingOps.length,
+      });
       await this.refreshEvents();
       this.actionError.set(null);
       this.closeActionModal();
     } finally {
       this.actionSaving.set(false);
     }
+  }
+
+  openTransitConfirm() {
+    this.transitConfirmOpen.set(true);
+  }
+
+  closeTransitConfirm() {
+    this.transitConfirmOpen.set(false);
+  }
+
+  supplierTransitCandidatesCount(order: Order): number {
+    return this.confirmedItems(order).filter((item) => {
+      if (item.source === "inventario" || !(item.supplier_id || "").trim()) return false;
+      const op = this.supplierOperationForItem(order, item);
+      if (!op) return true;
+      return op.status === "por_levantar" || op.status === "levantado";
+    }).length;
+  }
+
+  async confirmMarkInTransit(order: Order) {
+    if (this.actionSaving()) return;
+    this.transitConfirmOpen.set(false);
+    await this.markInTransit(order);
   }
 
   async confirmExistences(order: Order) {
@@ -1790,8 +2566,27 @@ export default class PedidoDetallePage implements OnInit {
 
   @HostListener("window:scroll")
   onWindowScroll() {
-    this.showStickyFooter.set(window.scrollY > 260);
-    this.showStockFab.set(window.innerWidth <= 640 && window.scrollY > 360);
+    const scrollTop =
+      window.scrollY ||
+      document.documentElement.scrollTop ||
+      document.body.scrollTop ||
+      0;
+    this.updateStickyByScroll(scrollTop);
+  }
+
+  onPageScroll(event: Event) {
+    const target = event.target as HTMLElement | null;
+    const scrollTop = target?.scrollTop || 0;
+    this.updateStickyByScroll(scrollTop);
+  }
+
+  private updateStickyByScroll(scrollTop: number) {
+    this.showStickyFooter.set(scrollTop > 260);
+    const headBottom = this.pageHead?.nativeElement?.getBoundingClientRect().bottom ?? Number.POSITIVE_INFINITY;
+    const topbarBottom = document.querySelector(".topbar")?.getBoundingClientRect().bottom ?? 0;
+    const shouldShowTopHeader = headBottom <= (topbarBottom + 8);
+    this.showStickyHeader.set(shouldShowTopHeader);
+    this.showStockFab.set(window.innerWidth <= 640 && scrollTop > 360);
   }
 
   async copyOrderId(orderId: string) {
@@ -1820,12 +2615,14 @@ export default class PedidoDetallePage implements OnInit {
   }
 
   packageCode(order: Order, pkg: PackageRecord): string {
+    const qr = this.qrPlaceholder(order, pkg);
     return JSON.stringify(
       {
         orderId: order.order_id,
         packageId: pkg.package_id,
-        seq: pkg.sequence,
-        total: pkg.total_packages,
+        status: this.packageStatus(pkg),
+        label: this.packageDisplayLabel(order, pkg),
+        qr,
         amountDue: pkg.amount_due,
       },
       null,
@@ -1834,7 +2631,16 @@ export default class PedidoDetallePage implements OnInit {
   }
 
   qrPlaceholder(order: Order, pkg: PackageRecord): string {
-    return `QR:${order.order_id}:${pkg.package_id}:${pkg.sequence}/${pkg.total_packages}`;
+    const existing = String((pkg as any).label_qr || "").trim();
+    if (existing) return existing;
+    return `QR:${order.order_id}:${pkg.package_id}`;
+  }
+
+  async copyQr(value: string) {
+    const text = (value || "").trim();
+    if (!text) return;
+    await navigator.clipboard.writeText(text).catch(() => null);
+    this.showActionToast("Copiado.");
   }
 
   backToList() {
@@ -1961,6 +2767,7 @@ export default class PedidoDetallePage implements OnInit {
     this.catalogColorOptions.set([]);
     this.selectedPreview.set(null);
     this.selectedCatalogDoc.set(null);
+    await this.refreshEvents();
   }
 
   private isSamePendingProduct(existing: OrderItem, incoming: OrderItem): boolean {
@@ -2049,6 +2856,7 @@ export default class PedidoDetallePage implements OnInit {
     this.newItemPriceCost.set(costo);
     this.updatePriceDraftFromSignals();
     this.newItemSource.set("inventario");
+    this.newItemSearch.set("");
     this.newItemInventoryId.set(item.inventory_id);
     this.newItemSupplierId.set(item.supplier_id || null);
     this.newItemProductId.set(item.inventory_id || null);
@@ -2085,6 +2893,7 @@ export default class PedidoDetallePage implements OnInit {
     this.newItemPriceCost.set(prices.costo);
     this.updatePriceDraftFromSignals();
     this.newItemSource.set("catalogo");
+    this.newItemSearch.set("");
     this.newItemInventoryId.set(null);
     this.newItemSupplierId.set(doc.supplier_id || null);
     this.newItemProductId.set(doc.normalized_id || null);
@@ -2410,6 +3219,17 @@ export default class PedidoDetallePage implements OnInit {
     return `${action}_${orderId}_${orderItemId}_${inventoryId}_${Math.max(0, Math.trunc(qty))}`;
   }
 }
+
+
+
+
+
+
+
+
+
+
+
 
 
 

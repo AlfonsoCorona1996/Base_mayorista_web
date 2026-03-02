@@ -1,0 +1,80 @@
+﻿<div class="activity-log">
+  <div class="activity-log__header">
+    <h2>Bitacora</h2>
+
+    <div class="activity-log__tools" role="search">
+      <input
+        class="activity-log__search"
+        type="search"
+        placeholder="Buscar por producto, pedido o usuario"
+        [value]="searchQuery()"
+        (input)="onSearchChange($any($event.target).value)"
+      />
+      <div class="activity-log__filters" role="tablist" aria-label="Filtros de bitacora">
+        @for (filter of filters; track filter.id) {
+          <button
+            type="button"
+            class="activity-log__chip"
+            [class.is-active]="selectedCategory() === filter.id"
+            (click)="setCategory(filter.id)"
+          >
+            {{ filter.label }}
+          </button>
+        }
+      </div>
+    </div>
+  </div>
+
+  @if (groupedVisibleEvents().length === 0) {
+    <div class="activity-log__empty">Sin eventos para mostrar.</div>
+  } @else {
+    @for (group of groupedVisibleEvents(); track group.label) {
+      <h3 class="activity-log__day">{{ group.label }}</h3>
+      <ol class="activity-log__list">
+        @for (event of group.items; track event.id; let isLast = $last) {
+          <li class="activity-log__row" [class.is-last]="isLast">
+            <div class="activity-log__rail" [class.is-last]="isLast">
+              <span class="activity-log__bubble" [class]="'tone-' + event.tone" aria-hidden="true">{{ event.icon }}</span>
+              <span class="activity-log__line" aria-hidden="true"></span>
+            </div>
+            <article class="activity-log__content">
+              <div class="activity-log__top">
+                <p class="activity-log__relative">{{ event.relativeTime }}</p>
+                @if (event.badge) {
+                  <span class="activity-log__badge" [class]="'tone-' + event.tone">{{ event.badge }}</span>
+                }
+              </div>
+              <p class="activity-log__absolute">{{ event.absoluteTime }}</p>
+              <p class="activity-log__title">{{ event.title }}</p>
+              <p class="activity-log__summary">{{ event.summary }}</p>
+              <p class="activity-log__actor">{{ event.userLabel }}</p>
+
+              @if (hasMetaDetails(event)) {
+                <button type="button" class="activity-log__details-toggle" (click)="toggleDetails(event.id)">
+                  {{ isExpanded(event.id) ? "Ocultar detalles" : "Ver detalles" }}
+                </button>
+                @if (isExpanded(event.id)) {
+                  <div class="activity-log__meta-box">
+                    @for (entry of detailEntries(event); track entry.key) {
+                      <div class="activity-log__meta-row">
+                        <span class="activity-log__meta-key">{{ entry.key }}</span>
+                        <span class="activity-log__meta-value">{{ entry.value }}</span>
+                      </div>
+                    }
+                  </div>
+                }
+              }
+            </article>
+          </li>
+        }
+      </ol>
+    }
+  }
+
+  @if (canShowMoreLocal() || canRequestMoreRemote() || loading()) {
+    <button type="button" class="activity-log__load-more" [disabled]="loading()" (click)="onLoadMore()">
+      {{ loading() ? "Cargando..." : "Mostrar más" }}
+    </button>
+  }
+</div>
+

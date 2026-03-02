@@ -46,7 +46,6 @@
       <div class="pill route-pill">
         Ruta: <strong>{{ inferredRouteName() }}</strong>
       </div>
-      <input class="input" type="text" placeholder="Notas (opcional)" [(ngModel)]="newNotes" />
     </div>
   </section>
 
@@ -105,9 +104,6 @@
             <div class="order-title">
               <div class="title-row">
                 <h3>{{ customerName(order.customer_id) }}</h3>
-                @if (order.status !== "borrador") {
-                  <span class="chip" [class]="statusClass(order.status)">{{ statusLabel(order.status) }}</span>
-                }
                 @if (primaryAlert(order); as alert) {
                   <span class="chip tiny" [class.danger]="alert.tone === 'danger'" [class.warning]="alert.tone === 'warning'">{{ alert.label }}</span>
                 }
@@ -116,10 +112,12 @@
                 }
               </div>
               <p class="eyebrow order-id">Pedido {{ order.order_id }}</p>
-              @if (order.status === "borrador") {
-                <span class="draft-chip">Borrador</span>
-              }
-              <p class="muted">{{ routeName(order.route_id) }}</p>
+              <span class="route-mini-chip" [attr.title]="'Ruta: ' + routeName(order.route_id)">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M12 3.6c-3.47 0-6.28 2.78-6.28 6.21 0 4.79 5.48 9.97 5.72 10.18a.82.82 0 0 0 1.12 0c.24-.21 5.72-5.39 5.72-10.18 0-3.43-2.81-6.21-6.28-6.21Zm0 8.63a2.42 2.42 0 1 1 0-4.84 2.42 2.42 0 0 1 0 4.84Z" fill="currentColor"/>
+                </svg>
+                <span>{{ routeName(order.route_id) }}</span>
+              </span>
             </div>
           </div>
 
@@ -151,40 +149,14 @@
               <span class="meta-value">{{ updatedAtRelative(order.updated_at) }}</span>
             </span>
           </div>
-
-          <div class="pills">
-            @for (item of order.items.slice(0, 3); track item.item_id) {
+          <div class="pills" #pillsRow [attr.data-order-id]="order.order_id">
+            @for (item of visibleItems(order); track item.item_id) {
               <span class="pill" [attr.title]="item.title">{{ item.title }}</span>
             }
-            @if (order.items.length > 3) {
-              <span class="pill more">+{{ order.items.length - 3 }}</span>
+            @if (hiddenItemsCount(order) > 0) {
+              <span class="pill more">+{{ hiddenItemsCount(order) }}</span>
             }
           </div>
-        </div>
-
-        <div class="actions">
-          <button
-            type="button"
-            class="btn primary"
-            [disabled]="primaryAction(order).disabled"
-            [attr.aria-label]="primaryAction(order).label + ' para ' + customerName(order.customer_id)"
-            [attr.aria-describedby]="primaryAction(order).disabled && primaryAction(order).disabledReason ? 'cta-reason-' + order.order_id : null"
-            (click)="openActionSheet(order); $event.stopPropagation();"
-          >
-            {{ primaryAction(order).label }}
-          </button>
-          @if (primaryAction(order).disabled && primaryAction(order).disabledReason) {
-            <p class="action-reason" [attr.id]="'cta-reason-' + order.order_id">
-              {{ primaryAction(order).disabledReason }}
-            </p>
-          }
-          <a
-            class="btn link secondary-link"
-            [routerLink]="['/main/pedidos', order.order_id]"
-            (click)="$event.stopPropagation();"
-          >
-            Ver detalle
-          </a>
         </div>
       </article>
     }

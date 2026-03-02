@@ -81,7 +81,7 @@ export function getPrimaryAction(order: OrderSummary): PrimaryAction {
       disabledReason: itemsCount === 0 ? DISABLED_ITEMS_REASON : undefined,
     },
     empaque: {
-      label: "Empacar",
+      label: "Terminar empaquetado",
       actionId: "pack_order",
       route,
       disabled: itemsCount === 0,
