@@ -1,13 +1,22 @@
-﻿<section class="users-page">
-  <header class="page-header">
+<section class="users-page">
+  <header class="page-head">
     <div>
-      <h1>Usuarios y permisos</h1>
-      <p>Roles: super admin, admin, administrativo y repartidor.</p>
+      <h1>Usuarios</h1>
+      <p>Gestiona accesos por rol, usuarios y permisos personalizados.</p>
     </div>
-    <button type="button" class="btn btn-secondary" (click)="reload()" [disabled]="loading()">
+    <button type="button" class="btn btn-secondary" [disabled]="loading()" (click)="reload()">
       {{ loading() ? "Actualizando..." : "Actualizar" }}
     </button>
   </header>
+
+  <div class="tabs">
+    <button type="button" class="tab-btn" [class.active]="tab() === 'users'" (click)="setTab('users')">Usuarios</button>
+    <button type="button" class="tab-btn" [class.active]="tab() === 'roles'" (click)="setTab('roles')">Roles y permisos</button>
+  </div>
+
+  @if (isImpersonating()) {
+    <div class="alert alert-warning">Vista en modo usuario. Sal de esta vista desde el topbar para administrar.</div>
+  }
 
   @if (error()) {
     <div class="alert alert-error">{{ error() }}</div>
@@ -17,249 +26,334 @@
     <div class="alert alert-success">{{ success() }}</div>
   }
 
-  @if (!canViewUsers()) {
-    <section class="panel">
-      <p class="empty">No tienes permiso para ver esta seccion.</p>
-    </section>
-  } @else {
-    @if (!canManageUsers()) {
-      <section class="panel notice-panel">
-        <p class="empty">Modo lectura: solo super admin puede crear, editar, reenviar invitación y forzar reset.</p>
-      </section>
-    }
-
-    <section class="content-grid" [class.readonly-grid]="!canManageUsers()">
-      @if (canManageUsers()) {
-        <article class="panel form-panel">
-          <div class="form-header">
-            <h2>{{ editingUid() ? "Editar usuario" : "Nuevo usuario" }}</h2>
-            <button type="button" class="btn btn-outline" (click)="startCreate()">Limpiar</button>
-          </div>
-
-          <form class="form-grid" (submit)="saveUser(); $event.preventDefault()">
-            <label class="field">
-              <span>Nombre visible *</span>
-              <input class="input" type="text" [(ngModel)]="draftDisplayName" name="displayName" required />
-            </label>
-
-            <div class="form-columns">
-              <label class="field">
-                <span>Username *</span>
-                <input class="input" type="text" [(ngModel)]="draftUsername" name="username" required />
+  @if (tab() === "users") {
+    @if (!canViewUsers()) {
+      <article class="card empty-card">
+        <p>Sin acceso.</p>
+      </article>
+    } @else {
+      <article class="card">
+        @if (canManageUsers()) {
+          <section class="create-card">
+            <h3>Crear usuario</h3>
+            <div class="create-grid">
+              <label>
+                Nombre
+                <input class="input" [ngModel]="newDisplayName()" (ngModelChange)="newDisplayName.set($event)" />
               </label>
-              <label class="field">
-                <span>Email *</span>
-                <input class="input" type="email" [(ngModel)]="draftEmail" name="email" required />
+              <label>
+                Usuario
+                <input class="input" [ngModel]="newUsername()" (ngModelChange)="newUsername.set($event)" />
               </label>
-            </div>
-
-            <div class="form-columns">
-              <label class="field">
-                <span>Rol</span>
-                <select class="input" [ngModel]="draftRole" (ngModelChange)="onRoleChange($event)" name="role">
-                  <option value="super_admin">Super admin</option>
-                  <option value="admin">Admin</option>
-                  <option value="administrativo">Administrativo</option>
-                  <option value="repartidor">Repartidor</option>
+              <label>
+                Tipo de acceso
+                <select class="input" [ngModel]="newLoginType()" (ngModelChange)="newLoginType.set($event)">
+                  <option value="email">Correo + usuario</option>
+                  <option value="username">Solo usuario</option>
                 </select>
               </label>
-              <label class="field">
-                <span>Estado</span>
-                <select class="input" [(ngModel)]="draftActive" name="active">
-                  <option [ngValue]="true">Activo</option>
-                  <option [ngValue]="false">Inactivo</option>
+              @if (newLoginType() === "email") {
+                <label>
+                  Correo
+                  <input class="input" [ngModel]="newEmail()" (ngModelChange)="newEmail.set($event)" />
+                </label>
+              }
+              <label>
+                Rol
+                <select class="input" [ngModel]="newRoleId()" (ngModelChange)="newRoleId.set($event)">
+                  @for (roleId of roleIds; track roleId) {
+                    <option [value]="roleId">{{ roleName(roleId) }}</option>
+                  }
                 </select>
               </label>
+              @if (newLoginType() === "email") {
+                <label class="toggle-line">
+                  <input
+                    type="checkbox"
+                    [ngModel]="newSendActivationEmail()"
+                    (ngModelChange)="newSendActivationEmail.set($event)"
+                  />
+                  Enviar correo de activacion
+                </label>
+              }
             </div>
-
-            <div class="permissions">
-              <div class="permissions-head">
-                <p>Matriz de permisos (rol × seccion)</p>
-                <div class="permissions-actions">
-                  <button type="button" class="btn btn-outline" (click)="setAllPermissions(true)" [disabled]="!canEditPermissions()">
-                    Marcar todo
-                  </button>
-                  <button type="button" class="btn btn-outline" (click)="setAllPermissions(false)" [disabled]="!canEditPermissions()">
-                    Limpiar
-                  </button>
-                  <button type="button" class="btn btn-secondary" (click)="applyRoleTemplate()" [disabled]="!canEditPermissions()">
-                    Plantilla de {{ roleLabel(draftRole) }}
-                  </button>
-                </div>
-              </div>
-
-              <div class="permissions-matrix-wrap">
-                <table class="permissions-matrix">
-                  <thead>
-                    <tr>
-                      <th>Seccion</th>
-                      <th>Permitir</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    @for (item of currentPermissionItems(); track item.key) {
-                      <tr>
-                        <td class="matrix-section">{{ item.label }}</td>
-                        <td>
-                          <label class="matrix-check matrix-check-editable">
-                            <input
-                              type="checkbox"
-                              [checked]="draftPermissions[item.key]"
-                              [disabled]="!canEditPermissions()"
-                              (change)="togglePermission(item.key, $any($event.target).checked)"
-                            />
-                            <span>{{ draftPermissions[item.key] ? "Si" : "No" }}</span>
-                          </label>
-                        </td>
-                      </tr>
-                    }
-                  </tbody>
-                </table>
-              </div>
+            <div class="actions">
+              <button type="button" class="btn btn-primary" [disabled]="saving()" (click)="createUser()">
+                {{ saving() ? "Creando..." : "Crear usuario" }}
+              </button>
             </div>
-
-            <button type="submit" class="btn btn-primary" [disabled]="saving()">
-              {{ saving() ? "Guardando..." : editingUid() ? "Guardar cambios" : "Invitar usuario" }}
-            </button>
-            @if (!editingUid()) {
-              <small>Se enviará automáticamente correo de invitación para definir contraseña.</small>
-            } @else {
-              <small>Si cambias rol/permisos, el usuario debe cerrar sesión y volver a entrar para refrescar claims.</small>
+            @if (tempPasswordOut()) {
+              <div class="temp-password">
+                <strong>Contrasena temporal:</strong>
+                <code>{{ tempPasswordOut()?.password }}</code>
+              </div>
             }
-          </form>
-        </article>
-      }
+          </section>
+        }
 
-      <article class="panel list-panel">
-        <div class="list-header">
-          <h2>Usuarios</h2>
+        <div class="list-head">
           <input
-            type="text"
             class="input"
+            type="search"
             [ngModel]="search()"
             (ngModelChange)="search.set($event)"
-            placeholder="Buscar por nombre, email o username"
+            placeholder="Buscar por nombre, usuario, correo o uid"
           />
         </div>
 
-        @if (filteredRows().length === 0) {
+        @if (loading()) {
+          <p class="empty">Cargando usuarios...</p>
+        } @else if (filteredUsers().length === 0) {
           <p class="empty">Sin usuarios.</p>
         } @else {
           <div class="user-list">
-            @for (row of filteredRows(); track row.uid) {
+            @for (row of filteredUsers(); track row.uid) {
               <article class="user-card">
-                <div class="card-main">
-                  <div class="card-head">
-                    <h3>{{ row.displayName || "Sin nombre" }}</h3>
-                    <span
-                      class="status-tag"
-                      [class.on]="userStatusClass(row) === 'on'"
-                      [class.pending]="userStatusClass(row) === 'pending'"
-                      [class.off]="userStatusClass(row) === 'off'"
-                    >
-                      {{ userStatusLabel(row) }}
-                    </span>
-                  </div>
-                  <p class="card-email">{{ row.email || row.uid }}</p>
-                  <p class="card-meta">
-                    <span>@{{ row.username || "sin-username" }}</span>
-                    <span>·</span>
-                    <span>{{ roleLabel(row.role) }}</span>
+                <div class="user-meta">
+                  <h3>{{ row.displayName }}</h3>
+                  <p>
+                    {{ row.loginType === "email" ? row.email : row.username }}
+                    <span class="muted-detail">({{ userLoginLabel(row) }})</span>
                   </p>
-                </div>
-                <div class="card-actions">
-                  @if (canManageUsers()) {
-                    @if (canEditRow(row)) {
-                      <button
-                        type="button"
-                        class="btn btn-icon-edit"
-                        (click)="startEdit(row)"
-                        aria-label="Editar usuario"
-                        title="Editar usuario"
-                      >
-                        <svg viewBox="0 0 24 24" aria-hidden="true">
-                          <path
-                            d="M4 16.25V20h3.75l11-11-3.75-3.75-11 11zM20.71 7.04a1 1 0 000-1.42L18.37 3.29a1 1 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
-                            fill="currentColor"
-                          />
-                        </svg>
-                      </button>
-                    }
-                    @if (canResendInvite(row)) {
-                      <button
-                        type="button"
-                        class="btn btn-secondary"
-                        [disabled]="resendingUid() === row.uid"
-                        (click)="resendInvite(row)"
-                      >
-                        {{ resendingUid() === row.uid ? "Enviando..." : "Reenviar invitación" }}
-                      </button>
-                    }
-                    @if (canForceReset(row)) {
-                      <button
-                        type="button"
-                        class="btn btn-secondary"
-                        [disabled]="resettingUid() === row.uid"
-                        (click)="sendReset(row)"
-                      >
-                        {{ resettingUid() === row.uid ? "Enviando..." : "Reset password" }}
-                      </button>
-                    }
-                    @if (canDeleteRow(row)) {
-                      <button
-                        type="button"
-                        class="btn btn-icon-danger"
-                        [disabled]="deletingUid() === row.uid"
-                        (click)="softDelete(row)"
-                        aria-label="Borrar usuario"
-                        title="Borrar usuario"
-                      >
-                        @if (deletingUid() === row.uid) {
-                          <span>...</span>
-                        } @else {
-                          <svg viewBox="0 0 24 24" aria-hidden="true">
-                            <path
-                              d="M9 3h6l1 2h4v2H4V5h4l1-2zm1 6h2v8h-2V9zm4 0h2v8h-2V9zM7 9h2v8H7V9zm-1 12h12l1-13H5l1 13z"
-                              fill="currentColor"
-                            />
-                          </svg>
-                        }
-                      </button>
-                    }
+                  @if (row.loginType === "username" && row.email) {
+                    <p class="muted-detail">Contacto: {{ row.email }}</p>
                   }
+                  <p class="muted-detail">Usuario: {{ row.username }}</p>
+                  <div class="chips">
+                    <span class="role-pill">{{ roleName(row.roleId) }}</span>
+                    <span class="state-pill" [class.off]="!row.isActive">{{ row.isActive ? "Activo" : "Inactivo" }}</span>
+                    <span class="state-pill neutral">{{ row.mustChangePassword ? "Pendiente de activacion" : "Activado" }}</span>
+                  </div>
                 </div>
+
+                @if (getTempPasswordForRow(row)) {
+                  <div class="temp-password">
+                    <strong>Contrasena temporal:</strong>
+                    <code>{{ getTempPasswordForRow(row) }}</code>
+                  </div>
+                }
+
+                @if (isEditingRow(row)) {
+                  <div class="editor-grid">
+                    <label>
+                      Nombre
+                      <input
+                        class="input"
+                        [ngModel]="editDraft()?.displayName"
+                        (ngModelChange)="updateEditDisplayName($event)"
+                      />
+                    </label>
+                    <label>
+                      Usuario
+                      <input class="input" [ngModel]="editDraft()?.username" (ngModelChange)="updateEditUsername($event)" />
+                    </label>
+                    <label>
+                      Tipo de acceso
+                      <select class="input" [ngModel]="editDraft()?.loginType" (ngModelChange)="updateEditLoginType($event)">
+                        <option value="email">Correo + usuario</option>
+                        <option value="username">Solo usuario</option>
+                      </select>
+                    </label>
+                    @if (editDraft()?.loginType === "email") {
+                      <label>
+                        Correo
+                        <input class="input" [ngModel]="editDraft()?.email" (ngModelChange)="updateEditEmail($event)" />
+                      </label>
+                    }
+                    <label>
+                      Rol
+                      <select class="input" [ngModel]="editDraft()?.roleId" (ngModelChange)="updateEditRoleId($event)">
+                        @for (roleId of roleOptionsForRow(row); track roleId) {
+                          <option [value]="roleId">{{ roleName(roleId) }}</option>
+                        }
+                      </select>
+                    </label>
+                    <label class="toggle-line">
+                      <input
+                        type="checkbox"
+                        [ngModel]="editDraft()?.isActive"
+                        (ngModelChange)="updateEditIsActive($event)"
+                      />
+                      Activo
+                    </label>
+                    <label class="toggle-line">
+                      <input
+                        type="checkbox"
+                        [ngModel]="editDraft()?.mustChangePassword"
+                        (ngModelChange)="updateEditMustChangePassword($event)"
+                      />
+                      Requerir cambio de contrasena
+                    </label>
+                  </div>
+
+                  <section class="matrix-card compact">
+                    <div class="matrix-head">
+                      <h4>Permisos personalizados por usuario</h4>
+                      <button type="button" class="btn btn-secondary btn-small" (click)="clearUserOverrides()">
+                        Limpiar personalizados
+                      </button>
+                    </div>
+
+                    <h5>Secciones</h5>
+                    <div class="matrix-grid">
+                      @for (key of sectionKeys; track key) {
+                        <label class="matrix-row">
+                          <span>{{ sectionLabel(key) }}</span>
+                          <input type="checkbox" [checked]="userSectionValue(key)" (change)="setUserSectionValue(key, $any($event.target).checked)" />
+                        </label>
+                      }
+                    </div>
+
+                    <h5>Capabilities</h5>
+                    <div class="cap-groups">
+                      @for (group of capGroups; track group.title) {
+                        <article class="cap-group">
+                          <h6>{{ group.title }}</h6>
+                          <div class="matrix-grid">
+                            @for (key of group.keys; track key) {
+                              <label class="matrix-row">
+                                <span>{{ capabilityLabel(key) }}</span>
+                                <input type="checkbox" [checked]="userCapValue(key)" (change)="setUserCapValue(key, $any($event.target).checked)" />
+                              </label>
+                            }
+                          </div>
+                        </article>
+                      }
+                    </div>
+                  </section>
+
+                  <div class="actions">
+                    <button type="button" class="btn btn-primary" [disabled]="saving()" (click)="saveUser(row)">
+                      {{ saving() ? "Guardando..." : "Guardar" }}
+                    </button>
+                    <button type="button" class="btn btn-secondary" [disabled]="saving()" (click)="cancelUserEdit()">Cancelar</button>
+                  </div>
+                } @else {
+                  <div class="actions">
+                    <button type="button" class="btn btn-secondary" [disabled]="!canEditUser(row) || saving()" (click)="startEditUser(row)">
+                      Editar
+                    </button>
+                    <button type="button" class="btn btn-danger" [disabled]="!canDisableUser(row) || saving()" (click)="disableUser(row)">
+                      Desactivar
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-secondary"
+                      [disabled]="!canResendActivation(row) || activeRowActionUid() === row.uid"
+                      (click)="resendActivation(row)"
+                    >
+                      {{ activeRowActionUid() === row.uid ? "Enviando..." : "Reenviar activacion" }}
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-secondary"
+                      [disabled]="!canRegenerateTemporaryPassword(row) || activeRowActionUid() === row.uid"
+                      (click)="regenerateTemporaryPassword(row)"
+                    >
+                      {{
+                        activeRowActionUid() === row.uid
+                          ? "Enviando..."
+                          : row.loginType === "username"
+                            ? "Regenerar temporal"
+                            : "Enviar reset password"
+                      }}
+                    </button>
+                  </div>
+
+                  @if (canImpersonateRow(row)) {
+                    <label class="impersonation-line">
+                      <input
+                        type="checkbox"
+                        [checked]="isImpersonatingRow(row)"
+                        (change)="toggleImpersonation(row, $any($event.target).checked)"
+                      />
+                      Vista desde este usuario
+                    </label>
+                  }
+                }
               </article>
             }
           </div>
         }
       </article>
-    </section>
+    }
+  }
 
-    <section class="panel audit-panel">
-      <div class="list-header">
-        <h2>Bitacora de usuarios</h2>
-      </div>
-      @if (auditRows().length === 0) {
-        <p class="empty">Sin eventos de usuarios.</p>
-      } @else {
-        <ul class="audit-list">
-          @for (row of auditRows(); track row.id) {
-            <li>
-              <p>
-                <strong>{{ auditActionLabel(row.action) }}</strong>
-                @if (auditTarget(row.meta); as target) {
-                  <span> · {{ target }}</span>
-                }
-              </p>
-              @if (auditDetail(row); as detail) {
-                <p class="muted">{{ detail }}</p>
+  @if (tab() === "roles") {
+    @if (!canViewRoles()) {
+      <article class="card empty-card">
+        <p>Sin acceso.</p>
+      </article>
+    } @else {
+      <article class="card">
+        <div class="roles-head">
+          <label>
+            Rol
+            <select class="input" [ngModel]="selectedRoleId()" (ngModelChange)="selectRole($event)">
+              @for (row of roles(); track row.roleId) {
+                <option [value]="row.roleId">{{ roleName(row.roleId) }}</option>
               }
-              <p class="muted">Por {{ row.actor_email || "sistema" }}</p>
-              <p class="muted">{{ row.created_at | date: "short" }}</p>
-            </li>
-          }
-        </ul>
-      }
-    </section>
+            </select>
+          </label>
+
+          <div class="roles-actions">
+            <button type="button" class="btn btn-secondary" [disabled]="!canEditRoles() || isRoleDraftSuperAdmin()" (click)="markAllRole()">
+              Marcar todo
+            </button>
+            <button type="button" class="btn btn-secondary" [disabled]="!canEditRoles() || isRoleDraftSuperAdmin()" (click)="clearRole()">
+              Limpiar
+            </button>
+            <button type="button" class="btn btn-primary" [disabled]="saving() || !canEditRoles()" (click)="saveRoleDraft()">
+              {{ saving() ? "Guardando..." : "Guardar cambios" }}
+            </button>
+          </div>
+        </div>
+
+        @if (isRoleDraftSuperAdmin()) {
+          <div class="notice">Super admin siempre tiene todo.</div>
+        }
+
+        <section class="matrix-card">
+          <h3>Secciones</h3>
+          <div class="matrix-grid">
+            @for (key of sectionKeys; track key) {
+              <label class="matrix-row">
+                <span>{{ sectionLabel(key) }}</span>
+                <input
+                  type="checkbox"
+                  [checked]="roleDraft().sections[key]"
+                  [disabled]="isRoleDraftSuperAdmin() || !canEditRoles()"
+                  (change)="setSectionValue(key, $any($event.target).checked)"
+                />
+              </label>
+            }
+          </div>
+        </section>
+
+        <section class="matrix-card">
+          <h3>Capabilities</h3>
+          <div class="cap-groups">
+            @for (group of capGroups; track group.title) {
+              <article class="cap-group">
+                <h4>{{ group.title }}</h4>
+                <div class="matrix-grid">
+                  @for (key of group.keys; track key) {
+                    <label class="matrix-row">
+                      <span>{{ capabilityLabel(key) }}</span>
+                      <input
+                        type="checkbox"
+                        [checked]="roleDraft().capabilities[key]"
+                        [disabled]="isRoleDraftSuperAdmin() || !canEditRoles()"
+                        (change)="setCapValue(key, $any($event.target).checked)"
+                      />
+                    </label>
+                  }
+                </div>
+              </article>
+            }
+          </div>
+        </section>
+      </article>
+    }
   }
 </section>

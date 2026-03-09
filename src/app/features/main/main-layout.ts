@@ -1,9 +1,11 @@
-﻿import { Component, HostListener, inject, signal } from "@angular/core";
+import { Component, HostListener, computed, inject, signal } from "@angular/core";
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from "@angular/router";
 import { filter } from "rxjs";
 import { AuthService } from "../../core/auth.service";
 import { AccessService, AppPermission } from "../../core/access.service";
 import { AuditService } from "../../core/audit.service";
+import { ImpersonationService } from "../../core/impersonation.service";
+import { AuthzService } from "../../core/authz.service";
 
 @Component({
   standalone: true,
@@ -20,6 +22,11 @@ export default class MainLayoutPage {
   private router = inject(Router);
   access = inject(AccessService);
   private audit = inject(AuditService);
+  private authz = inject(AuthzService);
+  private impersonation = inject(ImpersonationService);
+
+  isImpersonating = computed(() => this.authz.isRealSuperAdmin() && this.impersonation.snapshotSig() !== null);
+  impersonatedName = computed(() => this.impersonation.snapshotSig()?.displayName || "Usuario");
 
   ngOnInit() {
     this.syncMenuForViewport();
@@ -59,8 +66,13 @@ export default class MainLayoutPage {
 
   async logout() {
     await this.auth.logout();
+    this.impersonation.stop();
     this.menuOpen.set(false);
     await this.router.navigateByUrl("/login");
+  }
+
+  exitImpersonation() {
+    this.impersonation.stop();
   }
 
   can(permission: AppPermission): boolean {
@@ -78,7 +90,7 @@ export default class MainLayoutPage {
     const role = this.access.profile()?.role;
     if (!role) return "Sin rol";
     if (role === "super_admin") return "Super admin";
-    if (role === "administrativo") return "Administrativo";
+    if (role === "operativo" || role === "administrativo") return "Operativo";
     if (role === "repartidor") return "Repartidor";
     return "Administrador";
   }
@@ -124,4 +136,3 @@ export default class MainLayoutPage {
     window.localStorage.setItem("panel.menu.groups", JSON.stringify(this.openGroups()));
   }
 }
-

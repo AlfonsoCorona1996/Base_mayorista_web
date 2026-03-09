@@ -320,6 +320,8 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private isReadyForRoute(order: Order): boolean {
+    if (order.status === "ready_for_route") return true;
+    if (order.status === "assigned_to_run") return false;
     if (order.status !== "empaque") return false;
     const planned = this.plannedPackagesCount(order);
     if (planned === null) return false;
@@ -328,7 +330,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private isPackingStage(order: Order): boolean {
-    if (order.status === "recibido_qa") return true;
+    if (order.status === "recibido_qa" || order.status === "packing") return true;
     if (order.status !== "empaque") return false;
     return !this.isReadyForRoute(order);
   }
@@ -603,10 +605,17 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
       supplier_processing: "Proveedor",
       inbound_in_transit: "En camino proveedor",
       en_transito: "En tr\u00e1nsito",
+      packing: "Empacando",
       recibido_qa: "Recibido/QA",
       empaque: "Empaque",
+      ready_for_route: "Listo para ruta",
+      assigned_to_run: "Asignado a salida",
+      in_transit: "En transito",
       en_ruta: "En ruta",
+      delivered: "Entregado",
+      delivered_partial: "Entrega parcial",
       entregado: "Entregado",
+      closed: "Cerrado",
       pago_pendiente: "Pago pendiente",
       pagado: "Pagado",
       cancelado: "Cancelado",
@@ -622,11 +631,17 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
       case "reservado_inventario":
       case "confirmando_proveedor":
         return "chip info";
+      case "packing":
       case "empaque":
+      case "ready_for_route":
+      case "assigned_to_run":
+      case "in_transit":
       case "en_transito":
       case "inbound_in_transit":
       case "en_ruta":
         return "chip accent";
+      case "delivered":
+      case "closed":
       case "entregado":
       case "pagado":
         return "chip success";

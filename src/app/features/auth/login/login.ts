@@ -1,10 +1,11 @@
-import { Component, signal, inject } from "@angular/core";
+import { Component, inject, signal } from "@angular/core";
 import { FormsModule } from "@angular/forms";
-import { Router, ActivatedRoute } from "@angular/router";
+import { ActivatedRoute, Router } from "@angular/router";
 import { AuthService } from "../../../core/auth.service";
+import { AccessService } from "../../../core/access.service";
 
-const REMEMBER_EMAIL_KEY = "bm_login_saved_email";
-const REMEMBER_ENABLED_KEY = "bm_login_remember_email";
+const REMEMBER_IDENTIFIER_KEY = "bm_login_saved_identifier";
+const REMEMBER_ENABLED_KEY = "bm_login_remember_identifier";
 
 @Component({
   selector: "app-login",
@@ -13,37 +14,41 @@ const REMEMBER_ENABLED_KEY = "bm_login_remember_email";
   styleUrl: "./login.css",
 })
 export default class LoginPage {
-  email = "";
+  identifier = "";
   password = "";
   showPassword = false;
   submitAttempted = false;
-  emailTouched = false;
+  identifierTouched = false;
   passwordTouched = false;
-  rememberEmail = false;
+  rememberIdentifier = false;
   loading = signal(false);
   error = signal<string | null>(null);
-  returnUrl = signal<string>("/main/dashboard");
+  returnUrl = signal<string>("");
 
   private auth = inject(AuthService);
+  private access = inject(AccessService);
   private router = inject(Router);
   private route = inject(ActivatedRoute);
 
   ngOnInit() {
-    this.restoreRememberedEmail();
+    this.restoreRememberedIdentifier();
 
     const returnUrlParam = this.route.snapshot.queryParams["returnUrl"];
+    const reasonParam = this.route.snapshot.queryParams["reason"];
+    const permissionParam = this.route.snapshot.queryParams["permission"];
+    const sectionParam = this.route.snapshot.queryParams["section"];
+    const capabilityParam = this.route.snapshot.queryParams["capability"];
 
-    if (!returnUrlParam) return;
-
-    if (this.isExternalUrl(returnUrlParam)) {
-      console.warn("URL externa bloqueada:", returnUrlParam);
-      this.returnUrl.set("/main/dashboard");
-      return;
+    if (reasonParam) {
+      this.error.set(this.mapGuardReasonToMessage(reasonParam, { permissionParam, sectionParam, capabilityParam }));
     }
 
-    const normalizedReturnUrl = this.normalizeReturnUrl(returnUrlParam);
-    console.log("returnUrl capturado:", normalizedReturnUrl);
-    this.returnUrl.set(normalizedReturnUrl);
+    if (!returnUrlParam) return;
+    if (this.isExternalUrl(returnUrlParam)) {
+      this.returnUrl.set("");
+      return;
+    }
+    this.returnUrl.set(this.normalizeReturnUrl(returnUrlParam));
   }
 
   private isExternalUrl(url: string): boolean {
@@ -51,10 +56,9 @@ export default class LoginPage {
   }
 
   private normalizeReturnUrl(url: string): string {
-    // Deep links de revision se respetan; todo lo demas entra por dashboard.
     if (url.startsWith("/main/review/")) return url;
     if (url.startsWith("/review/")) return `/main${url}`;
-    return "/main/dashboard";
+    return "";
   }
 
   private getStorage(): Storage | null {
@@ -65,31 +69,31 @@ export default class LoginPage {
     }
   }
 
-  private restoreRememberedEmail() {
+  private restoreRememberedIdentifier() {
     const storage = this.getStorage();
     if (!storage) return;
 
     const rememberEnabled = storage.getItem(REMEMBER_ENABLED_KEY) === "1";
-    const savedEmail = storage.getItem(REMEMBER_EMAIL_KEY) ?? "";
+    const savedIdentifier = storage.getItem(REMEMBER_IDENTIFIER_KEY) ?? "";
 
-    this.rememberEmail = rememberEnabled;
-    if (rememberEnabled && savedEmail) {
-      this.email = savedEmail;
+    this.rememberIdentifier = rememberEnabled;
+    if (rememberEnabled && savedIdentifier) {
+      this.identifier = savedIdentifier;
     }
   }
 
-  private persistRememberedEmail(email: string) {
+  private persistRememberedIdentifier(identifier: string) {
     const storage = this.getStorage();
     if (!storage) return;
 
-    if (this.rememberEmail && email) {
+    if (this.rememberIdentifier && identifier) {
       storage.setItem(REMEMBER_ENABLED_KEY, "1");
-      storage.setItem(REMEMBER_EMAIL_KEY, email);
+      storage.setItem(REMEMBER_IDENTIFIER_KEY, identifier);
       return;
     }
 
     storage.setItem(REMEMBER_ENABLED_KEY, "0");
-    storage.removeItem(REMEMBER_EMAIL_KEY);
+    storage.removeItem(REMEMBER_IDENTIFIER_KEY);
   }
 
   togglePasswordVisibility() {
@@ -100,8 +104,8 @@ export default class LoginPage {
     this.submitAttempted = true;
   }
 
-  markEmailTouched() {
-    this.emailTouched = true;
+  markIdentifierTouched() {
+    this.identifierTouched = true;
   }
 
   markPasswordTouched() {
@@ -109,14 +113,18 @@ export default class LoginPage {
   }
 
   private isEmailValid(value: string): boolean {
-    // Validation deliberately strict enough for auth input, while avoiding very complex RFC regex.
     return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(value);
   }
 
-  getEmailError(): string | null {
-    const value = this.email.trim();
-    if (!value) return "El correo es obligatorio.";
-    if (!this.isEmailValid(value)) return "Ingresa un correo valido.";
+  private isUsernameValid(value: string): boolean {
+    return /^[a-z0-9._-]{3,40}$/i.test(value);
+  }
+
+  getIdentifierError(): string | null {
+    const value = this.identifier.trim();
+    if (!value) return "El correo o usuario es obligatorio.";
+    if (value.includes("@") && !this.isEmailValid(value)) return "Ingresa un correo valido.";
+    if (!value.includes("@") && !this.isUsernameValid(value)) return "Usuario invalido (3-40, letras, numeros, . _ -).";
     return null;
   }
 
@@ -125,17 +133,17 @@ export default class LoginPage {
     return null;
   }
 
-  hasEmailError(): boolean {
-    return (this.submitAttempted || this.emailTouched) && !!this.getEmailError();
+  hasIdentifierError(): boolean {
+    return (this.submitAttempted || this.identifierTouched) && !!this.getIdentifierError();
   }
 
   hasPasswordError(): boolean {
     return (this.submitAttempted || this.passwordTouched) && !!this.getPasswordError();
   }
 
-  hasEmailValid(): boolean {
-    const shouldValidate = this.submitAttempted || this.emailTouched;
-    return shouldValidate && !this.getEmailError();
+  hasIdentifierValid(): boolean {
+    const shouldValidate = this.submitAttempted || this.identifierTouched;
+    return shouldValidate && !this.getIdentifierError();
   }
 
   hasPasswordValid(): boolean {
@@ -147,33 +155,86 @@ export default class LoginPage {
     this.markSubmitAttempt();
     this.error.set(null);
 
-    const normalizedEmail = this.email.trim();
-    const emailError = this.getEmailError();
+    const normalizedIdentifier = this.identifier.trim().toLowerCase();
+    const identifierError = this.getIdentifierError();
     const passwordError = this.getPasswordError();
 
-    if (emailError || passwordError) {
-      return;
-    }
+    if (identifierError || passwordError) return;
 
     this.loading.set(true);
 
     try {
-      await this.auth.login(normalizedEmail, this.password);
-      const ok = await this.auth.isAdmin();
-      if (!ok) {
-        await this.auth.logout();
-        throw new Error("No autorizado (no es admin).");
+      console.info("[LOGIN] Attempting Firebase auth", { identifier: normalizedIdentifier });
+      await this.auth.login(normalizedIdentifier, this.password);
+      const status = await this.auth.getAccessStatus();
+      console.info("[LOGIN] Access status", status);
+
+      if (status.mustChangePassword) {
+        const moved = await this.router.navigateByUrl("/activate-account");
+        if (!moved) {
+          this.error.set("No se pudo navegar a la pantalla de activacion.");
+        }
+        return;
       }
 
-      this.persistRememberedEmail(normalizedEmail);
+      if (!status.isActive) {
+        await this.auth.logout();
+        throw new Error("Usuario pendiente de activacion.");
+      }
 
-      const destination = this.returnUrl();
-      console.log("Login exitoso, redirigiendo a:", destination);
-      await this.router.navigateByUrl(destination);
+      this.persistRememberedIdentifier(normalizedIdentifier);
+      const profile = await this.access.refreshProfile();
+      const firstAllowed = this.access.firstAllowedRoute();
+      const preferred = this.returnUrl() || firstAllowed;
+      console.info("[LOGIN] Route resolution", {
+        preferred,
+        firstAllowed,
+        role: profile?.role,
+        active: profile?.active,
+        permissions: profile?.permissions,
+      });
+
+      if (firstAllowed === "/login") {
+        const granted = Object.entries(profile?.permissions || {})
+          .filter((entry) => entry[1] === true)
+          .map((entry) => entry[0]);
+        throw new Error(
+          `Sesion iniciada, pero sin rutas permitidas. Rol: ${profile?.role || "desconocido"}, permisos activos: ${
+            granted.length ? granted.join(", ") : "ninguno"
+          }.`,
+        );
+      }
+
+      const moved = await this.router.navigateByUrl(preferred);
+      if (!moved) {
+        const fallbackMoved = preferred === firstAllowed ? false : await this.router.navigateByUrl(firstAllowed);
+        if (!fallbackMoved) {
+          this.error.set("Sesion iniciada, pero no fue posible entrar al sistema.");
+        }
+      }
     } catch (e: any) {
+      console.error("[LOGIN] Failed", e);
       this.error.set(e?.message || "Error al iniciar sesion");
     } finally {
       this.loading.set(false);
     }
+  }
+
+  private mapGuardReasonToMessage(
+    reason: string,
+    ctx: { permissionParam?: string; sectionParam?: string; capabilityParam?: string },
+  ): string {
+    if (reason === "UNAUTHENTICATED") return "Debes iniciar sesion para continuar.";
+    if (reason === "INACTIVE_USER") return "Tu usuario esta inactivo o pendiente de activacion.";
+    if (reason === "NO_ROUTE_PERMISSION") {
+      return `No tienes permiso para la ruta solicitada${ctx.permissionParam ? ` (${ctx.permissionParam})` : ""}.`;
+    }
+    if (reason === "NO_SECTION_PERMISSION") {
+      return `No tienes acceso a la seccion solicitada${ctx.sectionParam ? ` (${ctx.sectionParam})` : ""}.`;
+    }
+    if (reason === "NO_CAPABILITY_PERMISSION") {
+      return `No tienes capability para esta accion${ctx.capabilityParam ? ` (${ctx.capabilityParam})` : ""}.`;
+    }
+    return `Acceso bloqueado (${reason}).`;
   }
 }

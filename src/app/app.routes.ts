@@ -1,10 +1,15 @@
 import { Routes } from '@angular/router';
 import { adminGuard } from "./core/admin.guard";
 import { permissionGuard } from "./core/permission.guard";
+import { authzGuard } from "./core/authz.guard";
 export const routes: Routes = [
   {
     path: "login",
     loadComponent: () => import("./features/auth/login/login").then((m) => m.default),
+  },
+  {
+    path: "activate-account",
+    loadComponent: () => import("./features/auth/activate-account/activate-account").then((m) => m.default),
   },
   {
     path: "main",
@@ -95,6 +100,18 @@ export const routes: Routes = [
         loadComponent: () => import("./features/pedidos/pedido-detalle").then((m) => m.default),
       },
       {
+        path: "salidas",
+        canActivate: [authzGuard],
+        data: { section: "sections.salidas" },
+        loadComponent: () => import("./features/salidas/salidas.page").then((m) => m.default),
+      },
+      {
+        path: "salidas/:runId",
+        canActivate: [authzGuard],
+        data: { section: "sections.salidas" },
+        loadComponent: () => import("./features/salidas/salida-detalle.page").then((m) => m.default),
+      },
+      {
         path: "proveedores-operaciones",
         canActivate: [permissionGuard],
         data: { permission: "pedidos" },
@@ -103,8 +120,8 @@ export const routes: Routes = [
       },
       {
         path: "usuarios",
-        canActivate: [permissionGuard],
-        data: { permission: "usuarios" },
+        canActivate: [authzGuard],
+        data: { section: "sections.usuarios" },
         loadComponent: () => import("./features/usuarios/usuarios").then((m) => m.default),
       },
       {

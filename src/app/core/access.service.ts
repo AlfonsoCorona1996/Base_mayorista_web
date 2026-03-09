@@ -1,6 +1,5 @@
-﻿import { Injectable, computed, signal } from "@angular/core";
-import { doc, getDoc } from "firebase/firestore";
-import { FIREBASE_AUTH, FIRESTORE } from "./firebase.providers";
+import { Injectable, computed, inject } from "@angular/core";
+import { AuthzService } from "./authz.service";
 
 export type AppPermission =
   | "dashboard"
@@ -14,10 +13,10 @@ export type AppPermission =
   | "clientas"
   | "rutas"
   | "localidades"
+  | "salidas"
   | "usuarios";
 
-export type AppRole = "super_admin" | "admin" | "administrativo" | "repartidor";
-
+export type AppRole = "super_admin" | "admin" | "operativo" | "administrativo" | "repartidor";
 export type PermissionMap = Record<AppPermission, boolean>;
 
 export interface AdminProfile {
@@ -42,87 +41,91 @@ export const ALL_PERMISSIONS: AppPermission[] = [
   "clientas",
   "rutas",
   "localidades",
+  "salidas",
   "usuarios",
 ];
 
-export const ADMINISTRATIVO_PERMISSIONS: AppPermission[] = [
-  "dashboard",
-  "validacion",
-  "pedidos",
-  "catalogo",
-  "edicion_productos",
-  "categorias",
-  "proveedores",
-  "inventario",
-  "clientas",
-  "rutas",
-  "localidades",
-];
-
-export const REPARTIDOR_PERMISSIONS: AppPermission[] = ["dashboard", "pedidos", "clientas", "rutas", "localidades"];
+const SECTION_BY_PERMISSION: Record<AppPermission, string> = {
+  dashboard: "sections.dashboard",
+  validacion: "sections.validacion",
+  pedidos: "sections.pedidos",
+  catalogo: "sections.catalogo",
+  edicion_productos: "sections.catalogo",
+  categorias: "sections.categorias",
+  proveedores: "sections.proveedores",
+  inventario: "sections.inventario",
+  clientas: "sections.clientes",
+  rutas: "sections.rutas",
+  localidades: "sections.localidades",
+  salidas: "sections.salidas",
+  usuarios: "sections.usuarios",
+};
 
 export function buildEmptyPermissions(): PermissionMap {
-  return {
-    dashboard: false,
-    validacion: false,
-    pedidos: false,
-    catalogo: false,
-    edicion_productos: false,
-    categorias: false,
-    proveedores: false,
-    inventario: false,
-    clientas: false,
-    rutas: false,
-    localidades: false,
-    usuarios: false,
-  };
+  const out = {} as PermissionMap;
+  for (const key of ALL_PERMISSIONS) out[key] = false;
+  return out;
 }
 
 export function buildDefaultPermissions(): PermissionMap {
-  const base = buildEmptyPermissions();
-  for (const permission of ALL_PERMISSIONS) base[permission] = true;
-  return base;
+  const out = buildEmptyPermissions();
+  for (const key of ALL_PERMISSIONS) out[key] = true;
+  return out;
 }
 
 export function normalizeRole(value: unknown): AppRole {
-  if (value === "super_admin" || value === "admin" || value === "administrativo" || value === "repartidor") {
-    return value;
-  }
-  if (typeof value === "string") {
-    const low = value.trim().toLowerCase();
-    if (low === "super admin") return "super_admin";
-    if (low === "administrativos") return "administrativo";
-    if (low === "repartidores") return "repartidor";
-  }
-  return "admin";
+  if (value === "super_admin" || value === "admin" || value === "operativo" || value === "repartidor") return value;
+  if (value === "administrativo") return "operativo";
+  return "operativo";
 }
 
 export function buildPermissionsForRole(role: AppRole, custom?: Partial<PermissionMap> | null): PermissionMap {
-  let result = buildEmptyPermissions();
+  const out = buildEmptyPermissions();
   if (role === "super_admin" || role === "admin") {
-    result = buildDefaultPermissions();
+    for (const key of ALL_PERMISSIONS) out[key] = true;
   } else if (role === "repartidor") {
-    for (const key of REPARTIDOR_PERMISSIONS) result[key] = true;
+    out.pedidos = true;
+    out.salidas = true;
   } else {
-    for (const key of ADMINISTRATIVO_PERMISSIONS) result[key] = true;
+    out.pedidos = true;
+    out.proveedores = true;
+    out.validacion = true;
+    out.clientas = true;
+    out.inventario = true;
+    out.salidas = true;
   }
-
   if (custom) {
-    for (const key of ALL_PERMISSIONS) result[key] = Boolean(custom[key]);
+    for (const key of ALL_PERMISSIONS) out[key] = Boolean(custom[key]);
   }
-
   if (role !== "super_admin") {
-    result.usuarios = Boolean(custom?.usuarios ?? false);
+    out.usuarios = Boolean(custom?.usuarios ?? out.usuarios);
   }
-  return result;
+  return out;
 }
 
 @Injectable({ providedIn: "root" })
 export class AccessService {
-  profile = signal<AdminProfile | null>(null);
-  loading = signal(false);
+  private authz = inject(AuthzService);
 
-  isSuperAdmin = computed(() => this.profile()?.role === "super_admin");
+  profile = computed<AdminProfile | null>(() => {
+    const user = this.authz.effectiveUserSig();
+    const realUser = this.authz.currentUserSig();
+    if (!user) return null;
+    const role = normalizeRole(user.roleId);
+    return {
+      uid: user.uid,
+      email: user.email,
+      username: user.username || null,
+      displayName: user.displayName,
+      active: Boolean(realUser?.isActive ?? user.isActive),
+      role,
+      permissions: this.buildPermissionMapForCurrentRole(),
+    };
+  });
+
+  loading = computed(() => this.authz.loadingSig());
+
+  isSuperAdmin = computed(() => this.authz.isSuperAdmin());
 
   displayName = computed(() => {
     const profile = this.profile();
@@ -130,67 +133,46 @@ export class AccessService {
   });
 
   async refreshProfile(): Promise<AdminProfile | null> {
-    const user = FIREBASE_AUTH.currentUser;
-    if (!user) {
-      this.profile.set(null);
-      return null;
-    }
-    this.loading.set(true);
-    try {
-      const snap = await getDoc(doc(FIRESTORE, "admins", user.uid));
-      if (!snap.exists()) {
-        this.profile.set(null);
-        return null;
-      }
-      const data = snap.data() as Record<string, any>;
-      const role = normalizeRole(data["role"]);
-      const incoming = (data["permissions"] ?? null) as Record<string, any> | null;
-      const profile: AdminProfile = {
-        uid: user.uid,
-        email: user.email,
-        username: (data["username"] || null) as string | null,
-        displayName: (data["display_name"] || data["name"] || null) as string | null,
-        active: data["active"] === true,
-        role,
-        permissions: buildPermissionsForRole(role, incoming),
-      };
-      this.profile.set(profile);
-      return profile;
-    } finally {
-      this.loading.set(false);
-    }
+    await this.authz.refresh();
+    return this.profile();
   }
 
   can(permission: AppPermission): boolean {
-    const profile = this.profile();
-    if (!profile || !profile.active) return false;
-    if (profile.role === "super_admin") return true;
-    return Boolean(profile.permissions[permission]);
+    return this.authz.canSection(SECTION_BY_PERMISSION[permission]);
   }
 
   canViewUsers(): boolean {
-    return this.canManageUsers() || this.can("usuarios");
+    return this.can("usuarios") || this.authz.canCap("cap.users.view");
   }
 
   canManageUsers(): boolean {
-    return this.profile()?.role === "super_admin";
+    return this.authz.isSuperAdmin() || this.authz.canCap("cap.users.edit");
   }
 
   firstAllowedRoute(): string {
     const map: Array<{ permission: AppPermission; route: string }> = [
       { permission: "dashboard", route: "/main/dashboard" },
-      { permission: "validacion", route: "/main/validacion" },
       { permission: "pedidos", route: "/main/pedidos" },
-      { permission: "catalogo", route: "/main/catalogo" },
+      { permission: "salidas", route: "/main/salidas" },
+      { permission: "validacion", route: "/main/validacion" },
       { permission: "inventario", route: "/main/inventario" },
       { permission: "clientas", route: "/main/clientas" },
       { permission: "rutas", route: "/main/rutas" },
       { permission: "localidades", route: "/main/localidades" },
+      { permission: "catalogo", route: "/main/catalogo" },
       { permission: "usuarios", route: "/main/usuarios" },
     ];
     for (const row of map) {
       if (this.can(row.permission)) return row.route;
     }
     return "/login";
+  }
+
+  private buildPermissionMapForCurrentRole(): PermissionMap {
+    const out = buildEmptyPermissions();
+    for (const key of ALL_PERMISSIONS) {
+      out[key] = this.can(key);
+    }
+    return out;
   }
 }

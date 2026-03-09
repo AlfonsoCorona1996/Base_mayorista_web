@@ -28,13 +28,21 @@ export type OrderStatus =
   | "inbound_in_transit"
   | "en_transito"
   | "recibido_qa"
+  | "packing"
   | "empaque"
+  | "ready_for_route"
+  | "assigned_to_run"
+  | "in_transit"
+  | "delivered"
+  | "delivered_partial"
+  | "closed"
   | "en_ruta"
   | "entregado"
   | "pago_pendiente"
   | "pagado"
   | "cancelado"
-  | "devuelto";
+  | "devuelto"
+  | (string & {});
 
 export type OrderItemState = OrderStatus | "sin_estado";
 
@@ -88,6 +96,25 @@ export interface TimelineEntry {
   actor?: string;
 }
 
+export interface OrderPackingInfo {
+  status: "in_progress" | "done";
+  packages_count: number;
+  completed_at?: string | null;
+}
+
+export interface OrderDispatchRequest {
+  status: "none" | "requested" | "accepted" | "rejected";
+  requested_at?: string | null;
+  requested_by?: { uid: string; name: string } | null;
+  note?: string | null;
+}
+
+export interface OrderTotals {
+  total_amount: number;
+  paid_amount: number;
+  balance_due: number;
+}
+
 export interface Order {
   order_id: string;
   customer_id: string;
@@ -104,6 +131,10 @@ export interface Order {
   packages: PackageRecord[];
   timeline: TimelineEntry[];
   notes?: string;
+  packing: OrderPackingInfo;
+  dispatch_request: OrderDispatchRequest;
+  route_run_id?: string | null;
+  totals: OrderTotals;
 }
 
 export type IncidentSeverity = "low" | "medium" | "high";
@@ -166,7 +197,23 @@ export function computeOrderStatus(
   items: OrderItem[],
   supplierOps: Array<{ status: SupplierOpStatusLite }>,
 ): OrderStatus {
-  const terminalStatuses: OrderStatus[] = ["recibido_qa", "empaque", "en_ruta", "entregado", "pago_pendiente", "pagado", "cancelado", "devuelto"];
+  const terminalStatuses: OrderStatus[] = [
+    "recibido_qa",
+    "packing",
+    "empaque",
+    "ready_for_route",
+    "assigned_to_run",
+    "in_transit",
+    "en_ruta",
+    "entregado",
+    "delivered",
+    "delivered_partial",
+    "pago_pendiente",
+    "pagado",
+    "closed",
+    "cancelado",
+    "devuelto",
+  ];
   const allItemsResolved = items.length > 0 && items.every((item) => !!item.confirmation_state && item.confirmation_state !== "pending");
   if (terminalStatuses.includes(order.status)) return order.status;
   if (items.length === 0) return "borrador";
@@ -222,6 +269,23 @@ export class OrdersService {
       packages: [],
       timeline: [{ id: `t-${Date.now()}`, label: "Borrador creado", created_at: now }],
       notes: notes || "",
+      packing: {
+        status: "in_progress",
+        packages_count: 0,
+        completed_at: null,
+      },
+      dispatch_request: {
+        status: "none",
+        requested_at: null,
+        requested_by: null,
+        note: null,
+      },
+      route_run_id: null,
+      totals: {
+        total_amount: 0,
+        paid_amount: 0,
+        balance_due: 0,
+      },
     };
     await setDoc(doc(this.colRef, orderId), {
       ...draft,
@@ -293,6 +357,23 @@ export class OrdersService {
           { id: "t1", label: "Pedido creado", created_at: now, actor: "admin" },
           { id: "t2", label: "Reservado en inventario", created_at: now, actor: "admin" },
         ],
+        packing: {
+          status: "in_progress",
+          packages_count: 1,
+          completed_at: null,
+        },
+        dispatch_request: {
+          status: "none",
+          requested_at: null,
+          requested_by: null,
+          note: null,
+        },
+        route_run_id: null,
+        totals: {
+          total_amount: 1420,
+          paid_amount: 0,
+          balance_due: 1420,
+        },
       },
       {
         order_id: "P-2402",
@@ -333,6 +414,23 @@ export class OrdersService {
           },
         ],
         timeline: [{ id: "t3", label: "Salida a ruta", created_at: now, actor: "reparto" }],
+        packing: {
+          status: "done",
+          packages_count: 1,
+          completed_at: now,
+        },
+        dispatch_request: {
+          status: "accepted",
+          requested_at: now,
+          requested_by: { uid: "u1", name: "Admin" },
+          note: null,
+        },
+        route_run_id: "run_demo",
+        totals: {
+          total_amount: 337,
+          paid_amount: 0,
+          balance_due: 337,
+        },
       },
       {
         order_id: "P-2403",
@@ -349,6 +447,24 @@ export class OrdersService {
         items: [],
         packages: [],
         timeline: [{ id: "t4", label: "Borrador creado", created_at: now }],
+        notes: "",
+        packing: {
+          status: "in_progress",
+          packages_count: 0,
+          completed_at: null,
+        },
+        dispatch_request: {
+          status: "none",
+          requested_at: null,
+          requested_by: null,
+          note: null,
+        },
+        route_run_id: null,
+        totals: {
+          total_amount: 0,
+          paid_amount: 0,
+          balance_due: 0,
+        },
       },
     ];
 
@@ -869,6 +985,39 @@ export class OrdersService {
     });
   }
 
+  async markReadyForRoute(orderId: string, packagesCount: number) {
+    const now = new Date().toISOString();
+    const order = this.getById(orderId);
+    if (!order) return;
+    const nextDispatch = order.dispatch_request || { status: "none" as const };
+    const next = {
+      ...order,
+      status: "ready_for_route" as OrderStatus,
+      packing: {
+        status: "done" as const,
+        packages_count: Math.max(0, Math.trunc(packagesCount)),
+        completed_at: now,
+      },
+      dispatch_request: {
+        status: (nextDispatch.status || "none") as "none" | "requested" | "accepted" | "rejected",
+        requested_at: nextDispatch.requested_at ?? null,
+        requested_by: nextDispatch.requested_by ?? null,
+        note: nextDispatch.note ?? null,
+      },
+      updated_at: now,
+    };
+    this.rows.update((current) => current.map((row) => (row.order_id === orderId ? next : row)));
+    await updateDoc(doc(this.colRef, orderId), {
+      status: "ready_for_route",
+      packing: {
+        status: "done",
+        packages_count: Math.max(0, Math.trunc(packagesCount)),
+        completed_at: serverTimestamp(),
+      },
+      updated_at: serverTimestamp(),
+    });
+  }
+
   async setPackageState(orderId: string, packageId: string, state: PackageRecord["state"]) {
     const now = new Date().toISOString();
     this.rows.update((current) =>
@@ -912,6 +1061,23 @@ export class OrdersService {
       packages: Array.isArray(data.packages) ? data.packages : [],
       timeline: Array.isArray(data.timeline) ? data.timeline : [],
       notes: data.notes || "",
+      packing: {
+        status: data.packing?.status === "done" ? "done" : "in_progress",
+        packages_count: Number(data.packing?.packages_count ?? 0),
+        completed_at: data.packing?.completed_at ? toIso(data.packing.completed_at) : null,
+      },
+      dispatch_request: {
+        status: (data.dispatch_request?.status || "none") as "none" | "requested" | "accepted" | "rejected",
+        requested_at: data.dispatch_request?.requested_at ? toIso(data.dispatch_request.requested_at) : null,
+        requested_by: data.dispatch_request?.requested_by || null,
+        note: data.dispatch_request?.note || null,
+      },
+      route_run_id: data.route_run_id ?? null,
+      totals: {
+        total_amount: Number(data.totals?.total_amount ?? 0),
+        paid_amount: Number(data.totals?.paid_amount ?? 0),
+        balance_due: Number(data.totals?.balance_due ?? 0),
+      },
     };
   }
 }
