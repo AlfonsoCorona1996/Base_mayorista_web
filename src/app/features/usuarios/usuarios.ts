@@ -1,161 +1,139 @@
-﻿import { Component, computed, inject, signal } from "@angular/core";
-import { DatePipe } from "@angular/common";
+import { Component, computed, inject, signal } from "@angular/core";
 import { FormsModule } from "@angular/forms";
-import { collection, getDocs, limit, orderBy, query } from "firebase/firestore";
 import { environment } from "../../../environments/environment";
+import { AuthzService } from "../../core/authz.service";
 import {
-  ALL_PERMISSIONS,
-  AppPermission,
-  AppRole,
-  AccessService,
-  PermissionMap,
-  buildPermissionsForRole,
-  normalizeRole,
-} from "../../core/access.service";
-import { AuditService } from "../../core/audit.service";
-import { FIREBASE_AUTH, FIRESTORE } from "../../core/firebase.providers";
+  CAPABILITY_KEYS,
+  CapabilityKey,
+  CapabilityOverridesMap,
+  RoleDoc,
+  ROLE_IDS,
+  RoleId,
+  SECTION_KEYS,
+  SectionKey,
+  SectionsMap,
+  SectionOverridesMap,
+  UserDoc,
+  UserLoginType,
+  normalizeCapabilityOverridesMap,
+  buildRolePreset,
+  buildUsernameAuthEmail,
+  normalizeCapabilitiesMap,
+  normalizeSectionOverridesMap,
+  normalizeSectionsMap,
+  normalizeUsername,
+  roleLabel,
+} from "../../core/rbac.constants";
+import { RolesService } from "../../services/roles.service";
+import { UsersService } from "../../services/users.service";
+import {
+  AdminPermissionsPayload,
+  CreateManagedUserInput,
+  ListManagedUserRow,
+  UserAdminApiService,
+} from "../../services/user-admin-api.service";
+import { ImpersonationService } from "../../core/impersonation.service";
 
-interface AdminRow {
+type UsersTab = "users" | "roles";
+
+type CapabilityGroup = {
+  title: string;
+  keys: CapabilityKey[];
+};
+
+type UserDraft = {
   uid: string;
-  email: string | null;
-  username: string | null;
-  displayName: string | null;
-  role: AppRole;
-  active: boolean;
-  permissions: PermissionMap;
-  invitedAt: string | null;
-  acceptedAt: string | null;
-  lastLoginAt: string | null;
-  invitePending: boolean;
-}
+  email: string;
+  authEmail: string;
+  username: string;
+  loginType: UserLoginType;
+  displayName: string;
+  roleId: RoleId;
+  isActive: boolean;
+  mustChangePassword: boolean;
+  sectionOverrides: SectionOverridesMap;
+  capabilityOverrides: CapabilityOverridesMap;
+};
 
-interface AuditRow {
-  id: string;
-  action: string;
-  actor_email: string | null;
-  created_at: string;
-  meta: Record<string, any>;
-}
+const CAPABILITY_GROUPS: CapabilityGroup[] = [
+  { title: "Usuarios y roles", keys: CAPABILITY_KEYS.filter((key) => key.startsWith("cap.users.") || key.startsWith("cap.roles.")) },
+  { title: "Pedidos e items", keys: CAPABILITY_KEYS.filter((key) => key.startsWith("cap.orders.")) },
+  { title: "Validacion", keys: CAPABILITY_KEYS.filter((key) => key.startsWith("cap.validation.")) },
+  { title: "Operaciones proveedor", keys: CAPABILITY_KEYS.filter((key) => key.startsWith("cap.suppliers.ops.")) },
+  { title: "Inventario", keys: CAPABILITY_KEYS.filter((key) => key.startsWith("cap.inventory.")) },
+  { title: "Empaque", keys: CAPABILITY_KEYS.filter((key) => key.startsWith("cap.packing.")) },
+  {
+    title: "Despacho y rutas",
+    keys: CAPABILITY_KEYS.filter(
+      (key) => key.startsWith("cap.dispatch.") || key.startsWith("cap.runs.") || key.startsWith("cap.transfers."),
+    ),
+  },
+  { title: "Entrega", keys: CAPABILITY_KEYS.filter((key) => key.startsWith("cap.delivery.")) },
+  { title: "Pagos", keys: CAPABILITY_KEYS.filter((key) => key.startsWith("cap.payments.")) },
+  { title: "Devoluciones", keys: CAPABILITY_KEYS.filter((key) => key.startsWith("cap.returns.")) },
+  { title: "Incidencias y auditoria", keys: CAPABILITY_KEYS.filter((key) => key.startsWith("cap.incidents.") || key.startsWith("cap.audit.")) },
+];
 
 @Component({
   standalone: true,
   selector: "app-usuarios",
-  imports: [FormsModule, DatePipe],
+  imports: [FormsModule],
   templateUrl: "./usuarios.html",
   styleUrl: "./usuarios.css",
 })
 export default class UsuariosPage {
-  private access = inject(AccessService);
-  private audit = inject(AuditService);
+  private authz = inject(AuthzService);
+  private usersService = inject(UsersService);
+  private rolesService = inject(RolesService);
+  private userAdminApi = inject(UserAdminApiService);
+  private impersonation = inject(ImpersonationService);
 
+  tab = signal<UsersTab>("users");
   loading = signal(false);
   saving = signal(false);
   error = signal<string | null>(null);
   success = signal<string | null>(null);
 
+  users = signal<UserDoc[]>([]);
+  roles = signal<RoleDoc[]>([]);
   search = signal("");
-  rows = signal<AdminRow[]>([]);
-  auditRows = signal<AuditRow[]>([]);
-  editingUid = signal<string | null>(null);
-  resettingUid = signal<string | null>(null);
-  resendingUid = signal<string | null>(null);
-  deletingUid = signal<string | null>(null);
 
-  draftDisplayName = "";
-  draftUsername = "";
-  draftEmail = "";
-  draftRole: AppRole = "administrativo";
-  draftActive = true;
-  draftPermissions: PermissionMap = buildPermissionsForRole("administrativo");
-  readonly rolePreset: Record<AppRole, PermissionMap> = {
-    super_admin: buildPermissionsForRole("super_admin"),
-    admin: buildPermissionsForRole("admin"),
-    administrativo: buildPermissionsForRole("administrativo"),
-    repartidor: buildPermissionsForRole("repartidor"),
-  };
+  editDraft = signal<UserDraft | null>(null);
+  activeRowActionUid = signal<string | null>(null);
+  tempPasswordOut = signal<{ uid: string; password: string | null } | null>(null);
 
-  filteredRows = computed(() => {
+  newDisplayName = signal("");
+  newEmail = signal("");
+  newUsername = signal("");
+  newRoleId = signal<RoleId>("operativo");
+  newLoginType = signal<UserLoginType>("email");
+  newSendActivationEmail = signal(true);
+
+  selectedRoleId = signal<RoleId>("operativo");
+  roleDraft = signal<RoleDoc>(buildRolePreset("operativo"));
+
+  readonly roleIds = ROLE_IDS;
+  readonly sectionKeys = SECTION_KEYS;
+  readonly capGroups = CAPABILITY_GROUPS;
+
+  filteredUsers = computed(() => {
     const term = this.search().trim().toLowerCase();
-    return this.rows().filter((row) => {
-      if (!term) return true;
-      const blob = [row.displayName, row.username, row.email, row.uid].join(" ").toLowerCase();
+    if (!term) return this.users();
+    return this.users().filter((row) => {
+      const blob = `${row.displayName} ${row.email} ${row.authEmail} ${row.username} ${row.uid}`.toLowerCase();
       return blob.includes(term);
     });
   });
 
+  canViewUsers = computed(() => this.authz.canSection("sections.usuarios") || this.authz.canCap("cap.users.view"));
+  canViewRoles = computed(() => this.authz.canCap("cap.roles.view") || this.authz.canSection("sections.usuarios"));
+  canEditRoles = computed(() => this.authz.canCap("cap.roles.edit"));
+  isSuperAdmin = computed(() => this.authz.isRealSuperAdmin());
+  isImpersonating = computed(() => this.authz.isImpersonatingSig());
+  currentUid = computed(() => this.authz.currentUserSig()?.uid || null);
+
   constructor() {
-    this.reload();
-  }
-
-  private adminApiBaseUrl(): string {
-    const fromEnv = ((environment as { adminApiBaseUrl?: string }).adminApiBaseUrl || "").trim();
-    const fromStorage = (typeof window !== "undefined" ? window.localStorage.getItem("adminApiBaseUrl") : "") || "";
-    const fromWindow = (typeof window !== "undefined" ? (window as any).__ADMIN_API_BASE_URL__ : "") || "";
-    const raw = (fromStorage || fromEnv || fromWindow || "").trim();
-    return raw.endsWith("/") ? raw.slice(0, -1) : raw;
-  }
-
-  private buildUrl(path: string): string {
-    return `${this.adminApiBaseUrl()}${path}`;
-  }
-
-  private async authHeaders(): Promise<Record<string, string>> {
-    const user = FIREBASE_AUTH.currentUser;
-    if (!user) throw new Error("No hay sesión activa");
-    const token = await user.getIdToken(true);
-    return {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    };
-  }
-
-  private mapApiError(status: number, code?: string): string {
-    const normalized = (code || "").toUpperCase();
-    if (status === 401 || normalized === "UNAUTHENTICATED") return "Sesión inválida. Inicia sesión de nuevo.";
-    if (status === 403 || normalized === "FORBIDDEN") return "No tienes permisos para esta acción.";
-    if (status === 404 || normalized === "USER_NOT_FOUND") return "Usuario no encontrado.";
-    if (normalized === "SELF_DELETE_PROTECTED") return "No puedes borrarte a ti mismo.";
-    if (status === 409 || normalized === "LAST_SUPER_ADMIN_PROTECTED") return "No puedes modificar/desactivar al último super admin activo.";
-    if (status === 422 || normalized === "INVALID_ROLE_OR_PERMISSIONS") return "Rol o permisos inválidos.";
-    return "Error interno del servidor.";
-  }
-
-  private async postAdmin(path: string, payload: Record<string, any>): Promise<any> {
-    const baseUrl = this.adminApiBaseUrl();
-    const response = await fetch(this.buildUrl(path), {
-      method: "POST",
-      headers: await this.authHeaders(),
-      body: JSON.stringify(payload),
-    });
-
-    const raw = await response.text();
-    const data = raw ? JSON.parse(raw) : {};
-
-    if (!response.ok) {
-      const code = (data?.error_code || data?.code || "") as string;
-      if (response.status === 404 && !baseUrl) {
-        throw new Error("Endpoint no encontrado (404). Configura adminApiBaseUrl con la URL del backend.");
-      }
-      throw new Error(this.mapApiError(response.status, code));
-    }
-
-    return data;
-  }
-
-  canViewUsers(): boolean {
-    return this.access.canViewUsers();
-  }
-
-  canManageUsers(): boolean {
-    return this.access.canManageUsers();
-  }
-
-  currentPermissionItems(): Array<{ key: AppPermission; label: string }> {
-    return ALL_PERMISSIONS.map((key) => ({ key, label: this.permissionLabel(key) }));
-  }
-
-  canEditPermissions(): boolean {
-    return this.canManageUsers();
+    this.reload().catch(() => null);
   }
 
   async reload() {
@@ -163,492 +141,625 @@ export default class UsuariosPage {
     this.error.set(null);
     this.success.set(null);
     try {
-      await this.access.refreshProfile();
-      if (!this.canViewUsers()) {
-        this.error.set("No tienes permiso para ver usuarios.");
-        this.rows.set([]);
-        return;
+      await this.authz.refresh({ force: true });
+      await this.rolesService.ensureDefaultsSeeded();
+      const roles = await this.rolesService.listRoles();
+      this.roles.set(roles);
+      const users = await this.loadUsersFromBestSource();
+      this.users.set(users);
+      if (roles.length > 0) {
+        const targetRole = roles.find((row) => row.roleId === this.selectedRoleId()) || roles[0];
+        this.selectRole(targetRole.roleId);
       }
-      await Promise.all([this.loadUsers(), this.loadAuditLogs()]);
-      if (this.canManageUsers()) {
-        await this.syncInviteStatuses();
-      }
-    } catch (e: any) {
-      this.error.set(e?.message || "No se pudieron cargar usuarios");
+    } catch (error: any) {
+      this.error.set(error?.message || "No se pudo cargar usuarios y roles.");
     } finally {
       this.loading.set(false);
     }
   }
 
-  async loadUsers() {
-    const snap = await getDocs(collection(FIRESTORE, "admins"));
-    const maybeIso = (value: any): string | null => {
-      if (!value) return null;
-      if (typeof value === "string") return value;
-      if (value?.toDate) return value.toDate().toISOString();
-      return null;
-    };
-    const list: AdminRow[] = snap.docs.map((docSnap) => {
-      const data = docSnap.data() as Record<string, any>;
-      const role = normalizeRole(data["role"]);
-      const invitedAt = maybeIso(data["invited_at"]);
-      const acceptedAt = maybeIso(data["accepted_at"]);
-      const lastLoginAt = maybeIso(data["last_login_at"] || data["last_sign_in_at"]);
-      const invitePending = data["invite_pending"] === true;
-      return {
-        uid: docSnap.id,
-        email: (data["email"] || null) as string | null,
-        username: (data["username"] || null) as string | null,
-        displayName: (data["display_name"] || data["name"] || null) as string | null,
-        role,
-        active: data["active"] === true,
-        permissions: buildPermissionsForRole(role, data["permissions"] ?? null),
-        invitedAt,
-        acceptedAt,
-        lastLoginAt,
-        invitePending,
-      };
-    });
-    list.sort((a, b) => (a.displayName || a.email || "").localeCompare(b.displayName || b.email || ""));
-    this.rows.set(list);
+  private async loadUsersFromBestSource(): Promise<UserDoc[]> {
+    if (this.isSuperAdmin() && !this.isImpersonating()) {
+      const rows = await this.userAdminApi.listManagedUsers();
+      return rows.map((row) => this.mapApiRowToUser(row)).sort((a, b) => a.displayName.localeCompare(b.displayName));
+    }
+    return this.usersService.listUsers();
   }
 
-  private async syncInviteStatuses() {
-    const pending = this.rows().filter((row) => this.isInvitationPending(row));
-    if (pending.length === 0) return;
-
-    const calls = pending.map((row) =>
-      this.postAdmin("/admin/users/sync-invite-status", {
-        uid: row.uid,
-      })
+  private mapApiRowToUser(row: ListManagedUserRow): UserDoc {
+    const roleId = this.isRoleId(row.role) ? row.role : "operativo";
+    const loginType: UserLoginType = row.email ? "email" : "username";
+    const sections = normalizeSectionsMap(row.sections || this.mapApiPermissionsToSections(row.permissions, roleId));
+    const capabilities = normalizeCapabilitiesMap(row.capabilities || buildRolePreset(roleId).capabilities);
+    const sectionOverrides = normalizeSectionOverridesMap(row.sectionOverrides || this.deriveSectionOverrides(roleId, sections));
+    const capabilityOverrides = normalizeCapabilityOverridesMap(
+      row.capabilityOverrides || this.deriveCapabilityOverrides(roleId, capabilities),
     );
+    return {
+      uid: row.uid,
+      email: row.email || "",
+      authEmail: row.email || buildUsernameAuthEmail(row.username),
+      username: normalizeUsername(row.username),
+      loginType,
+      displayName: row.display_name || row.username || row.uid,
+      roleId,
+      isActive: Boolean(row.active),
+      mustChangePassword: Boolean(row.must_change_password),
+      sections,
+      capabilities,
+      sectionOverrides,
+      capabilityOverrides,
+      createdAt: null,
+      updatedAt: null,
+    };
+  }
 
-    const results = await Promise.allSettled(calls);
-    const anySuccess = results.some((r) => r.status === "fulfilled");
-    if (anySuccess) {
-      await this.loadUsers();
+  setTab(tab: UsersTab) {
+    this.tab.set(tab);
+  }
+
+  roleName(roleId: RoleId): string {
+    return roleLabel(roleId);
+  }
+
+  sectionLabel(key: SectionKey): string {
+    return key.replace("sections.", "").replaceAll("_", " ");
+  }
+
+  capabilityLabel(key: CapabilityKey): string {
+    return key.replace("cap.", "").replaceAll(".", " / ").replaceAll("_", " ");
+  }
+
+  userLoginLabel(row: UserDoc): string {
+    return row.loginType === "username" ? "Usuario" : "Correo";
+  }
+
+  canManageUsers(): boolean {
+    return this.isSuperAdmin() && !this.isImpersonating();
+  }
+
+  canEditUser(row: UserDoc): boolean {
+    if (!this.canManageUsers()) return false;
+    if (row.roleId === "super_admin") return false;
+    return true;
+  }
+
+  canDisableUser(row: UserDoc): boolean {
+    if (!this.canManageUsers()) return false;
+    if (row.roleId === "super_admin") return false;
+    if (row.uid === this.currentUid()) return false;
+    return true;
+  }
+
+  canRegenerateTemporaryPassword(row: UserDoc): boolean {
+    return this.canManageUsers() && row.roleId !== "super_admin" && !row.isActive;
+  }
+
+  canResendActivation(row: UserDoc): boolean {
+    return this.canManageUsers() && row.roleId !== "super_admin" && !row.isActive && row.loginType === "email";
+  }
+
+  canImpersonateRow(row: UserDoc): boolean {
+    if (!this.isSuperAdmin()) return false;
+    if (row.roleId === "super_admin") return false;
+    if (!row.isActive) return false;
+    if (row.uid === this.currentUid()) return false;
+    return true;
+  }
+
+  isImpersonatingRow(row: UserDoc): boolean {
+    return this.isImpersonating() && this.impersonation.snapshotSig()?.uid === row.uid;
+  }
+
+  toggleImpersonation(row: UserDoc, checked: boolean) {
+    if (!this.canImpersonateRow(row)) return;
+    if (checked) {
+      this.impersonation.startFromUser(row);
+      this.success.set(`Vista activa desde ${row.displayName}.`);
+      return;
+    }
+    if (this.isImpersonatingRow(row)) {
+      this.impersonation.stop();
+      this.success.set("Volviste a vista super admin.");
     }
   }
 
-  async loadAuditLogs() {
-    const q = query(collection(FIRESTORE, "audit_logs"), orderBy("created_at", "desc"), limit(80));
-    const snap = await getDocs(q);
-    const toIso = (val: any) => {
-      if (!val) return new Date().toISOString();
-      if (val.toDate) return val.toDate().toISOString();
-      return String(val);
-    };
-    const rows = snap.docs.map((docSnap) => {
-        const data = docSnap.data() as Record<string, any>;
-        return {
-          id: docSnap.id,
-          action: String(data["action"] || ""),
-          actor_email: (data["actor_email"] || null) as string | null,
-          created_at: toIso(data["created_at"]),
-          meta: (data["meta"] || {}) as Record<string, any>,
-        };
+  startEditUser(row: UserDoc) {
+    if (!this.canEditUser(row)) {
+      if (!environment.production) {
+        console.warn("[AUTHZ][EDIT_USER][BLOCKED]", {
+          uid: row.uid,
+          roleId: row.roleId,
+          isActive: row.isActive,
+          isSuperAdminSession: this.isSuperAdmin(),
+          isImpersonating: this.isImpersonating(),
+          currentUid: this.currentUid(),
+        });
+      }
+      return;
+    }
+    this.error.set(null);
+    this.success.set(null);
+    this.tempPasswordOut.set(null);
+    this.editDraft.set({
+      uid: row.uid,
+      email: row.email,
+      authEmail: row.authEmail,
+      username: row.username,
+      loginType: row.loginType,
+      displayName: row.displayName,
+      roleId: row.roleId,
+      isActive: row.isActive,
+      mustChangePassword: row.mustChangePassword,
+      sectionOverrides: { ...row.sectionOverrides },
+      capabilityOverrides: { ...row.capabilityOverrides },
+    });
+    if (!environment.production) {
+      console.info("[AUTHZ][EDIT_USER]", {
+        uid: row.uid,
+        roleId: row.roleId,
+        isActive: row.isActive,
+        sections: row.sections,
+        capabilities: row.capabilities,
+        sectionOverrides: row.sectionOverrides,
+        capabilityOverrides: row.capabilityOverrides,
       });
-    this.auditRows.set(rows.filter((row) => this.isUserAuditAction(row.action)));
+    }
   }
 
-  startCreate() {
-    this.editingUid.set(null);
-    this.draftDisplayName = "";
-    this.draftUsername = "";
-    this.draftEmail = "";
-    this.draftRole = "administrativo";
-    this.draftActive = true;
-    this.draftPermissions = buildPermissionsForRole(this.draftRole);
+  cancelUserEdit() {
+    this.editDraft.set(null);
+  }
+
+  isEditingRow(row: UserDoc): boolean {
+    return this.editDraft()?.uid === row.uid;
+  }
+
+  updateEditDisplayName(value: string) {
+    this.editDraft.update((draft) => (draft ? { ...draft, displayName: value } : draft));
+  }
+
+  updateEditEmail(value: string) {
+    this.editDraft.update((draft) => (draft ? { ...draft, email: value } : draft));
+  }
+
+  updateEditUsername(value: string) {
+    this.editDraft.update((draft) => (draft ? { ...draft, username: normalizeUsername(value) } : draft));
+  }
+
+  updateEditRoleId(value: string) {
+    if (!this.isRoleId(value)) return;
+    this.editDraft.update((draft) => (draft ? { ...draft, roleId: value } : draft));
+  }
+
+  updateEditLoginType(value: string) {
+    if (!this.isLoginType(value)) return;
+    this.editDraft.update((draft) => (draft ? { ...draft, loginType: value, email: value === "email" ? draft.email : "" } : draft));
+  }
+
+  updateEditIsActive(value: boolean) {
+    this.editDraft.update((draft) => (draft ? { ...draft, isActive: value } : draft));
+  }
+
+  updateEditMustChangePassword(value: boolean) {
+    this.editDraft.update((draft) => (draft ? { ...draft, mustChangePassword: value } : draft));
+  }
+
+  roleOptionsForRow(row: UserDoc): RoleId[] {
+    if (this.isSuperAdmin()) return [...this.roleIds];
+    if (row.roleId === "super_admin") return ["super_admin"];
+    return this.roleIds.filter((roleId) => roleId !== "super_admin");
+  }
+
+  baseSectionByRole(roleId: RoleId, key: SectionKey): boolean {
+    const role = this.roles().find((entry) => entry.roleId === roleId) || buildRolePreset(roleId);
+    return Boolean(role.sections[key]);
+  }
+
+  baseCapByRole(roleId: RoleId, key: CapabilityKey): boolean {
+    const role = this.roles().find((entry) => entry.roleId === roleId) || buildRolePreset(roleId);
+    return Boolean(role.capabilities[key]);
+  }
+
+  userSectionValue(key: SectionKey): boolean {
+    const draft = this.editDraft();
+    if (!draft) return false;
+    const override = draft.sectionOverrides[key];
+    if (typeof override === "boolean") return override;
+    return this.baseSectionByRole(draft.roleId, key);
+  }
+
+  userCapValue(key: CapabilityKey): boolean {
+    const draft = this.editDraft();
+    if (!draft) return false;
+    const override = draft.capabilityOverrides[key];
+    if (typeof override === "boolean") return override;
+    return this.baseCapByRole(draft.roleId, key);
+  }
+
+  setUserSectionValue(key: SectionKey, checked: boolean) {
+    const draft = this.editDraft();
+    if (!draft) return;
+    const base = this.baseSectionByRole(draft.roleId, key);
+    const nextOverrides = { ...draft.sectionOverrides };
+    if (checked === base) {
+      delete nextOverrides[key];
+    } else {
+      nextOverrides[key] = checked;
+    }
+    this.editDraft.set({ ...draft, sectionOverrides: nextOverrides });
+  }
+
+  setUserCapValue(key: CapabilityKey, checked: boolean) {
+    const draft = this.editDraft();
+    if (!draft) return;
+    const base = this.baseCapByRole(draft.roleId, key);
+    const nextOverrides = { ...draft.capabilityOverrides };
+    if (checked === base) {
+      delete nextOverrides[key];
+    } else {
+      nextOverrides[key] = checked;
+    }
+    this.editDraft.set({ ...draft, capabilityOverrides: nextOverrides });
+  }
+
+  clearUserOverrides() {
+    const draft = this.editDraft();
+    if (!draft) return;
+    this.editDraft.set({
+      ...draft,
+      sectionOverrides: {},
+      capabilityOverrides: {},
+    });
+  }
+
+  async createUser() {
+    if (!this.canManageUsers()) return;
     this.error.set(null);
     this.success.set(null);
-  }
+    this.tempPasswordOut.set(null);
 
-  startEdit(row: AdminRow) {
-    this.editingUid.set(row.uid);
-    this.draftDisplayName = row.displayName || "";
-    this.draftUsername = row.username || "";
-    this.draftEmail = row.email || "";
-    this.draftRole = row.role;
-    this.draftActive = row.active;
-    this.draftPermissions = { ...row.permissions };
-    this.error.set(null);
-    this.success.set(null);
-  }
+    const inputError = this.validateCreateInput();
+    if (inputError) {
+      this.error.set(inputError);
+      return;
+    }
 
-  togglePermission(permission: AppPermission, checked: boolean) {
-    if (!this.canEditPermissions()) return;
-    this.draftPermissions = {
-      ...this.draftPermissions,
-      [permission]: checked,
+    const payload: CreateManagedUserInput = {
+      displayName: this.newDisplayName().trim(),
+      username: normalizeUsername(this.newUsername()),
+      loginType: this.newLoginType(),
+      roleId: this.newRoleId(),
+      email: this.newLoginType() === "email" ? this.newEmail().trim().toLowerCase() : undefined,
+      sendActivationEmail: this.newLoginType() === "email" ? this.newSendActivationEmail() : false,
+      permissions: this.buildAdminPermissions(this.newRoleId(), {}),
     };
+
+    this.saving.set(true);
+    try {
+      const result = await this.userAdminApi.createManagedUser(payload);
+      this.success.set("Usuario creado.");
+      if (result.temporaryPassword) {
+        this.tempPasswordOut.set({ uid: result.uid, password: result.temporaryPassword });
+      }
+      this.resetCreateForm();
+      await this.reload();
+    } catch (error: any) {
+      this.error.set(error?.message || "No se pudo crear el usuario.");
+    } finally {
+      this.saving.set(false);
+    }
   }
 
-  onRoleChange(role: AppRole) {
-    this.draftRole = normalizeRole(role);
-    this.draftPermissions = buildPermissionsForRole(this.draftRole);
-  }
+  async saveUser(row: UserDoc) {
+    if (!this.canEditUser(row)) return;
+    const draft = this.editDraft();
+    if (!draft || draft.uid !== row.uid) return;
 
-  setAllPermissions(checked: boolean) {
-    if (!this.canEditPermissions()) return;
-    const next = { ...this.draftPermissions };
-    for (const key of ALL_PERMISSIONS) next[key] = checked;
-    this.draftPermissions = next;
-  }
-
-  applyRoleTemplate() {
-    if (!this.canEditPermissions()) return;
-    this.draftPermissions = { ...this.rolePreset[this.draftRole] };
-  }
-
-  async saveUser() {
-    if (!this.canManageUsers()) {
-      this.error.set("Solo super admin puede crear o editar usuarios.");
+    const draftError = this.validateDraft(draft);
+    if (draftError) {
+      this.error.set(draftError);
       return;
     }
 
     this.saving.set(true);
     this.error.set(null);
     this.success.set(null);
-
     try {
-      const displayName = this.draftDisplayName.trim();
-      const username = this.draftUsername.trim().toLowerCase();
-      const email = this.draftEmail.trim().toLowerCase();
-      const isEdit = Boolean(this.editingUid());
-
-      if (!displayName) throw new Error("Nombre visible es obligatorio");
-      if (!username) throw new Error("Username es obligatorio");
-      if (!email) throw new Error("Email es obligatorio");
-
-      const role = normalizeRole(this.draftRole);
-      const permissions = buildPermissionsForRole(role, this.draftPermissions);
-
-      if (isEdit) {
-        const uid = this.editingUid();
-        if (!uid) throw new Error("UID inválido");
-        const current = this.rows().find((row) => row.uid === uid) || null;
-        const permissionDiff = this.permissionChanges(current?.permissions || null, permissions);
-        const changedFields: string[] = [];
-        if (current && current.role !== role) changedFields.push("role");
-        if (current && current.active !== this.draftActive) changedFields.push("active");
-        if (permissionDiff.length > 0) changedFields.push("permissions");
-
-        await this.postAdmin("/admin/users/update-access", {
-          uid,
-          role,
-          active: this.draftActive,
-          permissions,
-        });
-        await this.auditUserAction("USER_UPDATED", {
-          target_uid: uid,
-          target_email: email,
-          role,
-          active: this.draftActive,
-          changed_fields: changedFields,
-          permission_changes: permissionDiff,
-        });
-
-        this.success.set("Acceso de usuario actualizado");
-      } else {
-        await this.postAdmin("/admin/users/invite", {
-          email,
-          display_name: displayName,
-          username,
-          role,
-          permissions,
-        });
-        await this.auditUserAction("USER_CREATED", {
-          target_email: email,
-          username,
-          role,
-        });
-
-        this.success.set("Usuario invitado. Se envió correo de acceso.");
-      }
-
+      await this.userAdminApi.updateManagedUser(row.uid, {
+        roleId: draft.roleId,
+        isActive: draft.isActive,
+        permissions: this.buildAdminPermissions(draft.roleId, draft.sectionOverrides),
+      });
+      await this.userAdminApi.updateManagedUserProfile({
+        uid: row.uid,
+        displayName: draft.displayName.trim(),
+        username: normalizeUsername(draft.username),
+        email: draft.loginType === "email" ? draft.email.trim().toLowerCase() : null,
+      });
+      this.success.set("Usuario actualizado.");
+      this.cancelUserEdit();
       await this.reload();
-      this.startCreate();
-    } catch (e: any) {
-      this.error.set(e?.message || "No se pudo guardar usuario");
+    } catch (error: any) {
+      this.error.set(error?.message || "No se pudo guardar el usuario.");
     } finally {
       this.saving.set(false);
     }
   }
 
-  async resendInvite(row: AdminRow) {
-    if (!this.canManageUsers()) {
-      this.error.set("Solo super admin puede reenviar invitaciones");
-      return;
-    }
-
-    this.resendingUid.set(row.uid);
+  async disableUser(row: UserDoc) {
+    if (!this.canDisableUser(row)) return;
+    this.saving.set(true);
     this.error.set(null);
     this.success.set(null);
     try {
-      await this.postAdmin("/admin/users/resend-invite", {
-        uid: row.uid,
-        email: row.email || undefined,
+      await this.userAdminApi.updateManagedUser(row.uid, {
+        roleId: row.roleId,
+        isActive: false,
+        permissions: this.buildAdminPermissions(row.roleId, row.sectionOverrides),
       });
-      await this.auditUserAction("USER_INVITE_RESENT", {
-        target_uid: row.uid,
-        target_email: row.email,
-      });
-      this.success.set(`Invitación reenviada a ${row.email || row.uid}`);
-      await this.loadAuditLogs();
-    } catch (e: any) {
-      this.error.set(e?.message || "No se pudo reenviar la invitación");
-    } finally {
-      this.resendingUid.set(null);
-    }
-  }
-
-  async sendReset(row: AdminRow) {
-    if (!this.canManageUsers()) {
-      this.error.set("Solo super admin puede forzar reset de contrasena");
-      return;
-    }
-
-    this.resettingUid.set(row.uid);
-    this.error.set(null);
-    this.success.set(null);
-    try {
-      await this.postAdmin("/admin/users/force-reset-password", {
-        uid: row.uid,
-      });
-      await this.auditUserAction("USER_PASSWORD_RESET_FORCED", {
-        target_uid: row.uid,
-        target_email: row.email,
-      });
-      this.success.set(`Reset de contrasena enviado a ${row.email || row.uid}`);
-      await this.loadAuditLogs();
-    } catch (e: any) {
-      this.error.set(e?.message || "No se pudo forzar el reset de contrasena");
-    } finally {
-      this.resettingUid.set(null);
-    }
-  }
-
-  async softDelete(row: AdminRow) {
-    if (!this.canManageUsers()) {
-      this.error.set("Solo super admin puede borrar usuarios.");
-      return;
-    }
-    const myUid = this.access.profile()?.uid || null;
-    if (myUid && row.uid === myUid) {
-      this.error.set("No puedes borrarte a ti mismo.");
-      return;
-    }
-    const ok = typeof window === "undefined" ? true : window.confirm(`¿Borrar a ${row.displayName || row.email || row.uid}?`);
-    if (!ok) return;
-
-    this.deletingUid.set(row.uid);
-    this.error.set(null);
-    this.success.set(null);
-    try {
-      await this.postAdmin("/admin/users/delete", {
-        uid: row.uid,
-      });
-      await this.auditUserAction("USER_DELETED", {
-        target_uid: row.uid,
-        target_email: row.email,
-      });
-      this.success.set(`Usuario ${row.displayName || row.email || row.uid} eliminado.`);
+      this.success.set("Usuario desactivado.");
       await this.reload();
-    } catch (e: any) {
-      this.error.set(e?.message || "No se pudo borrar usuario");
+    } catch (error: any) {
+      this.error.set(error?.message || "No se pudo desactivar el usuario.");
     } finally {
-      this.deletingUid.set(null);
+      this.saving.set(false);
     }
   }
 
-  canDeleteRow(row: AdminRow): boolean {
-    if (!this.canManageUsers()) return false;
-    if (row.role === "super_admin") return false;
-    const myUid = this.access.profile()?.uid || null;
-    return row.uid !== myUid;
-  }
-
-  canEditRow(row: AdminRow): boolean {
-    if (!this.canManageUsers()) return false;
-    return row.role !== "super_admin";
-  }
-
-  isCurrentUser(row: AdminRow): boolean {
-    const myUid = this.access.profile()?.uid || null;
-    return Boolean(myUid && row.uid === myUid);
-  }
-
-  isInvitationPending(row: AdminRow): boolean {
-    if (row.role === "super_admin") return false;
-    return Boolean(row.invitePending || (row.invitedAt && !row.acceptedAt && !row.lastLoginAt));
-  }
-
-  isUserEffectivelyActive(row: AdminRow): boolean {
-    return Boolean(row.active && !this.isInvitationPending(row));
-  }
-
-  canResendInvite(row: AdminRow): boolean {
-    if (!this.canManageUsers()) return false;
-    if (this.isCurrentUser(row)) return false;
-    if (row.role === "super_admin") return false;
-    return this.isInvitationPending(row);
-  }
-
-  canForceReset(row: AdminRow): boolean {
-    if (!this.canManageUsers()) return false;
-    if (this.isCurrentUser(row)) return false;
-    if (row.role === "super_admin") return false;
-    return !this.isInvitationPending(row);
-  }
-
-  userStatusLabel(row: AdminRow): string {
-    if (this.isInvitationPending(row)) return "Inactivo";
-    if (!row.active) return "Inactivo";
-    return "Activo";
-  }
-
-  userStatusClass(row: AdminRow): string {
-    if (this.isInvitationPending(row)) return "off";
-    if (!row.active) return "off";
-    return "on";
-  }
-
-  roleLabel(role: AppRole): string {
-    const labels: Record<AppRole, string> = {
-      super_admin: "Super admin",
-      admin: "Admin",
-      administrativo: "Administrativo",
-      repartidor: "Repartidor",
-    };
-    return labels[role];
-  }
-
-  permissionLabel(permission: AppPermission): string {
-    const labels: Record<AppPermission, string> = {
-      dashboard: "Dashboard",
-      validacion: "Validacion",
-      pedidos: "Pedidos",
-      catalogo: "Catalogo",
-      edicion_productos: "Edicion productos",
-      categorias: "Categorias",
-      proveedores: "Proveedores",
-      inventario: "Inventario",
-      clientas: "Clientas",
-      rutas: "Rutas",
-      localidades: "Localidades",
-      usuarios: "Usuarios",
-    };
-    return labels[permission];
-  }
-
-  auditActionLabel(action: string): string {
-    const normalized = (action || "").toUpperCase();
-    const labels: Record<string, string> = {
-      USER_CREATED: "Usuario creado",
-      USER_UPDATED: "Usuario editado",
-      USER_DELETED: "Usuario eliminado",
-      USER_INVITE_RESENT: "Invitacion reenviada",
-      USER_PASSWORD_RESET_FORCED: "Reset de contrasena enviado",
-    };
-    return labels[normalized] || normalized || "Evento";
-  }
-
-  auditDetail(row: AuditRow): string | null {
-    const action = (row.action || "").toUpperCase();
-    const meta = row.meta || {};
-    if (action === "USER_CREATED") {
-      const role = this.roleFromMeta(meta);
-      const username = typeof meta["username"] === "string" ? meta["username"] : null;
-      const parts = [role ? `Rol: ${role}` : "", username ? `Username: @${username}` : ""].filter(Boolean);
-      return parts.length ? parts.join(" · ") : null;
+  async resendActivation(row: UserDoc) {
+    if (!this.canResendActivation(row)) return;
+    this.activeRowActionUid.set(row.uid);
+    this.error.set(null);
+    this.success.set(null);
+    try {
+      await this.userAdminApi.resendActivationEmail(row.uid);
+      this.success.set("Correo de activacion reenviado.");
+    } catch (error: any) {
+      this.error.set(error?.message || "No se pudo reenviar el correo de activacion.");
+    } finally {
+      this.activeRowActionUid.set(null);
     }
-    if (action === "USER_UPDATED") {
-      const changed = Array.isArray(meta["changed_fields"]) ? (meta["changed_fields"] as string[]) : [];
-      const parts: string[] = [];
-      if (changed.includes("role")) {
-        const role = this.roleFromMeta(meta);
-        if (role) parts.push(`Rol: ${role}`);
+  }
+
+  async regenerateTemporaryPassword(row: UserDoc) {
+    if (!this.canRegenerateTemporaryPassword(row)) return;
+    this.activeRowActionUid.set(row.uid);
+    this.error.set(null);
+    this.success.set(null);
+    this.tempPasswordOut.set(null);
+    try {
+      const result = await this.userAdminApi.regenerateTemporaryPassword(row.uid);
+      if (result.temporaryPassword) {
+        this.tempPasswordOut.set({ uid: row.uid, password: result.temporaryPassword });
+        this.success.set("Contrasena temporal regenerada.");
+      } else if (result.resetSent) {
+        this.success.set("Correo de reset de contrasena enviado.");
+      } else {
+        this.success.set("Reset de contrasena solicitado.");
       }
-      if (changed.includes("active") && typeof meta["active"] === "boolean") {
-        parts.push(`Estado: ${meta["active"] ? "Activo" : "Inactivo"}`);
-      }
-      if (changed.includes("permissions")) {
-        const changes = Array.isArray(meta["permission_changes"]) ? (meta["permission_changes"] as string[]) : [];
-        const labels = this.permissionChangeLabels(changes);
-        if (labels.length) {
-          parts.push(`Permisos: ${labels.join(", ")}`);
-        } else {
-          parts.push(`Permisos: ${changes.length} cambio(s)`);
-        }
-      }
-      if (!parts.length && changed.length) {
-        parts.push(`Campos: ${changed.join(", ")}`);
-      }
-      return parts.length ? parts.join(" · ") : "Se actualizaron datos de acceso";
+    } catch (error: any) {
+      this.error.set(error?.message || "No se pudo enviar el reset de contrasena.");
+    } finally {
+      this.activeRowActionUid.set(null);
+    }
+  }
+
+  selectRole(roleId: RoleId) {
+    const role = this.roles().find((row) => row.roleId === roleId) || buildRolePreset(roleId);
+    this.selectedRoleId.set(role.roleId);
+    this.roleDraft.set({
+      roleId: role.roleId,
+      label: role.label,
+      sections: { ...role.sections },
+      capabilities: { ...role.capabilities },
+      updatedAt: role.updatedAt ?? null,
+    });
+  }
+
+  isRoleDraftSuperAdmin(): boolean {
+    return this.roleDraft().roleId === "super_admin";
+  }
+
+  setSectionValue(key: SectionKey, checked: boolean) {
+    if (this.isRoleDraftSuperAdmin() || !this.canEditRoles()) return;
+    this.roleDraft.update((current) => ({
+      ...current,
+      sections: {
+        ...current.sections,
+        [key]: checked,
+      },
+    }));
+  }
+
+  setCapValue(key: CapabilityKey, checked: boolean) {
+    if (this.isRoleDraftSuperAdmin() || !this.canEditRoles()) return;
+    this.roleDraft.update((current) => ({
+      ...current,
+      capabilities: {
+        ...current.capabilities,
+        [key]: checked,
+      },
+    }));
+  }
+
+  markAllRole() {
+    if (this.isRoleDraftSuperAdmin() || !this.canEditRoles()) return;
+    this.roleDraft.update((current) => ({
+      ...current,
+      sections: Object.keys(current.sections).reduce(
+        (acc, key) => ({ ...acc, [key]: true }),
+        {} as RoleDoc["sections"],
+      ),
+      capabilities: Object.keys(current.capabilities).reduce(
+        (acc, key) => ({ ...acc, [key]: true }),
+        {} as RoleDoc["capabilities"],
+      ),
+    }));
+  }
+
+  clearRole() {
+    if (this.isRoleDraftSuperAdmin() || !this.canEditRoles()) return;
+    this.roleDraft.update((current) => ({
+      ...current,
+      sections: Object.keys(current.sections).reduce(
+        (acc, key) => ({ ...acc, [key]: false }),
+        {} as RoleDoc["sections"],
+      ),
+      capabilities: Object.keys(current.capabilities).reduce(
+        (acc, key) => ({ ...acc, [key]: false }),
+        {} as RoleDoc["capabilities"],
+      ),
+    }));
+  }
+
+  async saveRoleDraft() {
+    if (!this.canEditRoles()) {
+      this.error.set("No tienes permiso para editar roles.");
+      return;
+    }
+    if (this.isRoleDraftSuperAdmin()) {
+      this.error.set("Super admin siempre tiene todo.");
+      return;
+    }
+
+    this.saving.set(true);
+    this.error.set(null);
+    this.success.set(null);
+    try {
+      const draft = this.roleDraft();
+      await this.rolesService.saveRole({
+        roleId: draft.roleId,
+        label: draft.label,
+        sections: draft.sections,
+        capabilities: draft.capabilities,
+      });
+      this.success.set("Rol actualizado.");
+      await this.reload();
+    } catch (error: any) {
+      this.error.set(error?.message || "No se pudo guardar el rol.");
+    } finally {
+      this.saving.set(false);
+    }
+  }
+
+  getTempPasswordForRow(row: UserDoc): string | null {
+    return this.tempPasswordOut()?.uid === row.uid ? this.tempPasswordOut()?.password || null : null;
+  }
+
+  private buildAdminPermissions(roleId: RoleId, sectionOverrides: SectionOverridesMap): AdminPermissionsPayload {
+    return {
+      dashboard: this.resolveSectionValue(roleId, sectionOverrides, "sections.dashboard"),
+      validacion: this.resolveSectionValue(roleId, sectionOverrides, "sections.validacion"),
+      pedidos: this.resolveSectionValue(roleId, sectionOverrides, "sections.pedidos"),
+      catalogo: this.resolveSectionValue(roleId, sectionOverrides, "sections.catalogo"),
+      edicion_productos: this.resolveSectionValue(roleId, sectionOverrides, "sections.catalogo"),
+      categorias: this.resolveSectionValue(roleId, sectionOverrides, "sections.categorias"),
+      proveedores: this.resolveSectionValue(roleId, sectionOverrides, "sections.proveedores"),
+      inventario: this.resolveSectionValue(roleId, sectionOverrides, "sections.inventario"),
+      clientas: this.resolveSectionValue(roleId, sectionOverrides, "sections.clientes"),
+      rutas: this.resolveSectionValue(roleId, sectionOverrides, "sections.rutas"),
+      localidades: this.resolveSectionValue(roleId, sectionOverrides, "sections.localidades"),
+      usuarios: roleId === "super_admin" ? this.resolveSectionValue(roleId, sectionOverrides, "sections.usuarios") : false,
+    };
+  }
+
+  private resolveSectionValue(roleId: RoleId, sectionOverrides: SectionOverridesMap, key: SectionKey): boolean {
+    const override = sectionOverrides[key];
+    if (typeof override === "boolean") return override;
+    return this.baseSectionByRole(roleId, key);
+  }
+
+  private validateCreateInput(): string | null {
+    const displayName = this.newDisplayName().trim();
+    const username = normalizeUsername(this.newUsername());
+    const loginType = this.newLoginType();
+    const email = this.newEmail().trim().toLowerCase();
+    if (!displayName) return "El nombre es obligatorio.";
+    if (!username || username.length < 3) return "El usuario debe tener al menos 3 caracteres validos.";
+    if (loginType === "email") {
+      if (!email) return "El correo es obligatorio para este tipo de usuario.";
+      if (!this.isValidEmail(email)) return "Ingresa un correo valido.";
     }
     return null;
   }
 
-  auditTarget(meta: Record<string, any>): string | null {
-    return (
-      meta?.["target_email"] ||
-      meta?.["email"] ||
-      meta?.["user_email"] ||
-      meta?.["target_uid"] ||
-      meta?.["uid"] ||
-      meta?.["user_uid"] ||
-      null
-    );
-  }
-
-  private isUserAuditAction(action: string): boolean {
-    const normalized = (action || "").toUpperCase().trim();
-    if (!normalized || normalized === "VIEW_ROUTE") return false;
-    if (normalized.startsWith("USER_")) return true;
-    return (
-      normalized.includes("INVITE") ||
-      normalized.includes("PASSWORD") ||
-      normalized.includes("ACCESS") ||
-      normalized.includes("PERMISSION") ||
-      normalized.includes("ROLE")
-    );
-  }
-
-  private async auditUserAction(action: string, meta: Record<string, any>) {
-    await this.audit.log(action, meta).catch(() => null);
-  }
-
-  private permissionChanges(previous: PermissionMap | null, next: PermissionMap): string[] {
-    const prev = previous || ({} as PermissionMap);
-    const changes: string[] = [];
-    for (const key of ALL_PERMISSIONS) {
-      const before = Boolean(prev[key]);
-      const after = Boolean(next[key]);
-      if (before !== after) {
-        changes.push(`${key}:${before ? "on" : "off"}->${after ? "on" : "off"}`);
-      }
+  private validateDraft(draft: UserDraft): string | null {
+    if (!draft.displayName.trim()) return "El nombre es obligatorio.";
+    if (!normalizeUsername(draft.username)) return "El nombre de usuario es obligatorio.";
+    if (draft.loginType === "email") {
+      const email = draft.email.trim().toLowerCase();
+      if (!email) return "El correo es obligatorio.";
+      if (!this.isValidEmail(email)) return "Ingresa un correo valido.";
     }
-    return changes;
+    if (draft.roleId === "super_admin") return "No se permite editar usuarios super admin desde esta pantalla.";
+    return null;
   }
 
-  private roleFromMeta(meta: Record<string, any>): string | null {
-    const raw = meta?.["role"];
-    if (typeof raw !== "string") return null;
-    return this.roleLabel(normalizeRole(raw as AppRole));
-  }
-
-  private permissionChangeLabels(changes: string[]): string[] {
-    const labels: string[] = [];
-    for (const item of changes) {
-      const [key, transition] = String(item || "").split(":");
-      if (!key || !transition) continue;
-      const permission = key.trim() as AppPermission;
-      if (!ALL_PERMISSIONS.includes(permission)) continue;
-      const [fromRaw, toRaw] = transition.split("->");
-      const from = fromRaw === "on" ? "Si" : "No";
-      const to = toRaw === "on" ? "Si" : "No";
-      labels.push(`${this.permissionLabel(permission)}: ${from} -> ${to}`);
+  private mapApiPermissionsToSections(permissions: AdminPermissionsPayload, roleId: RoleId): SectionsMap {
+    const fallback = buildRolePreset(roleId).sections;
+    if (!permissions || typeof permissions !== "object") {
+      return fallback;
     }
-    return labels;
+    return normalizeSectionsMap({
+      "sections.dashboard": permissions.dashboard,
+      "sections.validacion": permissions.validacion,
+      "sections.pedidos": permissions.pedidos,
+      "sections.catalogo": Boolean(permissions.catalogo || permissions.edicion_productos),
+      "sections.categorias": permissions.categorias,
+      "sections.proveedores": permissions.proveedores,
+      "sections.inventario": permissions.inventario,
+      "sections.clientes": permissions.clientas,
+      "sections.rutas": permissions.rutas,
+      "sections.localidades": permissions.localidades,
+      "sections.salidas": fallback["sections.salidas"],
+      "sections.usuarios": permissions.usuarios,
+    });
   }
+
+  private deriveSectionOverrides(roleId: RoleId, effective: SectionsMap): SectionOverridesMap {
+    const out: SectionOverridesMap = {};
+    for (const key of this.sectionKeys) {
+      const base = this.baseSectionByRole(roleId, key);
+      const value = Boolean(effective[key]);
+      if (value !== base) out[key] = value;
+    }
+    return out;
+  }
+
+  private deriveCapabilityOverrides(roleId: RoleId, effective: RoleDoc["capabilities"]): CapabilityOverridesMap {
+    const out: CapabilityOverridesMap = {};
+    for (const key of this.capGroups.flatMap((entry) => entry.keys)) {
+      const base = this.baseCapByRole(roleId, key);
+      const value = Boolean(effective[key]);
+      if (value !== base) out[key] = value;
+    }
+    return out;
+  }
+
+  private isValidEmail(value: string): boolean {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(value);
+  }
+
+  private resetCreateForm() {
+    this.newDisplayName.set("");
+    this.newEmail.set("");
+    this.newUsername.set("");
+    this.newRoleId.set("operativo");
+    this.newLoginType.set("email");
+    this.newSendActivationEmail.set(true);
+  }
+
+  private isRoleId(value: string): value is RoleId {
+    return value === "super_admin" || value === "admin" || value === "operativo" || value === "repartidor";
+  }
+
+  private isLoginType(value: string): value is UserLoginType {
+    return value === "email" || value === "username";
+  }
+
+  trackUser = (_: number, row: UserDoc) => row.uid;
+  trackRole = (_: number, row: RoleDoc) => row.roleId;
+  trackSection = (_: number, key: SectionKey) => key;
+  trackCap = (_: number, key: CapabilityKey) => key;
 }

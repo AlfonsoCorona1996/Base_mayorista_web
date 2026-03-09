@@ -121,7 +121,7 @@
       <div class="action-toast" role="status" aria-live="polite">{{ actionToast() }}</div>
     }
 
-    <section class="summary" aria-label="Resumen del pedido">
+    <section class="summary" [class.summary--five]="isPackingWorkflowPhase(current)" aria-label="Resumen del pedido">
       <article class="summary-card summary-card--pieces">
         <span
           class="summary-progress-ring"
@@ -143,6 +143,16 @@
           </p>
         </div>
       </article>
+
+      @if (isPackingWorkflowPhase(current)) {
+        <article class="summary-card">
+          <p class="eyebrow">Paquetes</p>
+          <p class="summary-ratio">
+            <strong class="summary-value">{{ closedPackagesCount(current) }}</strong>
+            <span>/ {{ packingBoxesCount(current) }}</span>
+          </p>
+        </article>
+      }
 
       <article class="summary-card summary-card--money">
         <p class="eyebrow">Total venta</p>
@@ -262,10 +272,12 @@
       <div class="panel-head">
         <h2>Productos</h2>
         <div class="panel-actions">
-          <button type="button" class="btn primary with-icon" (click)="openAddItemModal()" [disabled]="!canEditItems(current)">
-            <span class="btn-icon" aria-hidden="true">+</span>
-            Agregar producto
-          </button>
+          @if (canAddProducts(current)) {
+            <button type="button" class="btn primary with-icon" (click)="openAddItemModal()">
+              <span class="btn-icon" aria-hidden="true">+</span>
+              Agregar producto
+            </button>
+          }
           <p class="muted">Escanea o cambia el estado por producto.</p>
         </div>
       </div>
@@ -720,7 +732,11 @@
       </button>
       <div class="sticky-action-meta">
         <p class="sticky-name">{{ customerName(current) }}</p>
-        <p class="sticky-total">Total: {{ formatCurrency(totals().totalClienta) }}</p>
+        @if (canViewFinancialSummary(current)) {
+          <p class="sticky-total">Balance: {{ formatCurrency(orderBalanceDue(current)) }}</p>
+        } @else {
+          <p class="sticky-total">Paquetes: {{ closedPackagesCount(current) }}</p>
+        }
       </div>
       @if (phaseAction(current); as phase) {
         <button
@@ -1026,6 +1042,30 @@
         @if (actionContext()?.actionId !== "confirm_items" && actionContext()?.actionId !== "pack" && actionContext()?.actionId !== "dispatch") {
           <button type="button" class="btn ghost" (click)="closeActionModal()">Cerrar</button>
         }
+      </div>
+    </div>
+  }
+
+  @if (readyForRouteSheetOpen() && order(); as current) {
+    <div class="sheet-backdrop" (click)="closeReadyForRouteSheet()">
+      <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="ready-route-title" (click)="$event.stopPropagation()">
+        <div class="sheet-handle" aria-hidden="true"></div>
+        <h2 id="ready-route-title">Listo para ruta</h2>
+        <p class="muted">Ruta detectada: {{ routeName(current) }}</p>
+        @if (readyForRouteLoading()) {
+          <p class="muted">Buscando salidas de hoy...</p>
+        } @else if (readyForRouteRun(); as run) {
+          <p class="muted">Salida: {{ run.scheduled_at | date: "shortTime" }} · {{ run.driver?.name || "Sin repartidor" }}</p>
+        } @else {
+          <p class="muted">No hay salida programada para hoy.</p>
+        }
+        @if (readyForRouteError()) {
+          <p class="muted">{{ readyForRouteError() }}</p>
+        }
+        <div class="sheet-actions">
+          <button type="button" class="btn primary" (click)="goToSalidas(current)">Ver salidas</button>
+          <button type="button" class="btn ghost" (click)="closeReadyForRouteSheet()">Cerrar</button>
+        </div>
       </div>
     </div>
   }

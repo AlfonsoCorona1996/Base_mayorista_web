@@ -232,6 +232,12 @@
   padding: 0.75rem;
 }
 
+@media (min-width: 1081px) {
+  .summary.summary--five {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
 .summary-card {
   display: grid;
   gap: 0.2rem;
@@ -1696,8 +1702,8 @@
     color: #1e293b;
   }
 
-  .summary-card--pieces,
-  .summary-card--profit {
+  .summary:not(.summary--five) .summary-card--pieces,
+  .summary:not(.summary--five) .summary-card--profit {
     grid-column: 1 / -1;
   }
 
@@ -4461,4 +4467,5 @@ code {
     background: #e5e7eb;
   }
 }
+
 

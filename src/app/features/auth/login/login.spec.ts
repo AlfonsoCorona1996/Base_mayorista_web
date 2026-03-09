@@ -9,7 +9,9 @@ describe("LoginPage", () => {
 
   const authMock = {
     login: jasmine.createSpy("login").and.resolveTo({}),
-    isAdmin: jasmine.createSpy("isAdmin").and.resolveTo(true),
+    getAccessStatus: jasmine
+      .createSpy("getAccessStatus")
+      .and.resolveTo({ uid: "uid-1", roleId: "admin", isActive: true, mustChangePassword: false }),
     logout: jasmine.createSpy("logout").and.resolveTo(undefined),
   };
 
@@ -24,7 +26,7 @@ describe("LoginPage", () => {
   beforeEach(async () => {
     localStorage.clear();
     authMock.login.calls.reset();
-    authMock.isAdmin.calls.reset();
+    authMock.getAccessStatus.calls.reset();
     authMock.logout.calls.reset();
     routerMock.navigateByUrl.calls.reset();
 
@@ -50,16 +52,16 @@ describe("LoginPage", () => {
     expect(component).toBeTruthy();
   });
 
-  it("should restore remembered email", () => {
-    localStorage.setItem("bm_login_remember_email", "1");
-    localStorage.setItem("bm_login_saved_email", "admin@basemayorista.com");
+  it("should restore remembered identifier", () => {
+    localStorage.setItem("bm_login_remember_identifier", "1");
+    localStorage.setItem("bm_login_saved_identifier", "admin@basemayorista.com");
 
     const secondFixture = TestBed.createComponent(LoginPage);
     const secondComponent = secondFixture.componentInstance;
     secondFixture.detectChanges();
 
-    expect(secondComponent.rememberEmail).toBeTrue();
-    expect(secondComponent.email).toBe("admin@basemayorista.com");
+    expect(secondComponent.rememberIdentifier).toBeTrue();
+    expect(secondComponent.identifier).toBe("admin@basemayorista.com");
   });
 
   it("should toggle password visibility", () => {
@@ -68,29 +70,29 @@ describe("LoginPage", () => {
     expect(component.showPassword).toBeTrue();
   });
 
-  it("should not submit when email is invalid", async () => {
-    component.email = "correo-invalido";
+  it("should not submit when identifier is invalid", async () => {
+    component.identifier = "x";
     component.password = "123456";
 
     await component.onLogin();
 
-    expect(component.hasEmailError()).toBeTrue();
+    expect(component.hasIdentifierError()).toBeTrue();
     expect(authMock.login).not.toHaveBeenCalled();
   });
 
-  it("should show email validation after touch", () => {
-    component.email = "";
-    component.markEmailTouched();
+  it("should show identifier validation after touch", () => {
+    component.identifier = "";
+    component.markIdentifierTouched();
 
-    expect(component.hasEmailError()).toBeTrue();
-    expect(component.getEmailError()).toBe("El correo es obligatorio.");
+    expect(component.hasIdentifierError()).toBeTrue();
+    expect(component.getIdentifierError()).toBe("El correo o usuario es obligatorio.");
   });
 
-  it("should mark email as valid after touch with correct format", () => {
-    component.email = "admin@basemayorista.com";
-    component.markEmailTouched();
+  it("should mark identifier as valid after touch with correct format", () => {
+    component.identifier = "admin@basemayorista.com";
+    component.markIdentifierTouched();
 
-    expect(component.hasEmailValid()).toBeTrue();
-    expect(component.hasEmailError()).toBeFalse();
+    expect(component.hasIdentifierValid()).toBeTrue();
+    expect(component.hasIdentifierError()).toBeFalse();
   });
 });

@@ -1,0 +1,116 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function isActiveUser() {
+      return isSignedIn() && userDoc().exists() && userDoc().data.isActive == true;
+    }
+
+    function roleId() {
+      return userDoc().data.roleId;
+    }
+
+    function isSuperAdmin() {
+      return isActiveUser() && roleId() == "super_admin";
+    }
+
+    function isAdmin() {
+      return isActiveUser() && (roleId() == "admin" || roleId() == "super_admin");
+    }
+
+    function isOperativo() {
+      return isActiveUser() && roleId() == "operativo";
+    }
+
+    function changedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    function onlyChanges(keys) {
+      return changedKeys().hasOnly(keys);
+    }
+
+    match /users/{uid} {
+      allow read: if isActiveUser();
+      allow create: if isSuperAdmin() || (isSignedIn() && request.auth.uid == uid);
+      allow update: if isSuperAdmin()
+        || (
+          isAdmin()
+          && request.resource.data.roleId != "super_admin"
+          && resource.data.roleId != "super_admin"
+        )
+        || (
+          isSignedIn()
+          && request.auth.uid == uid
+          && (
+            onlyChanges(["displayName", "updatedAt"])
+            || (
+              resource.data.mustChangePassword == true
+              && onlyChanges(["isActive", "mustChangePassword", "updatedAt"])
+              && request.resource.data.isActive == true
+              && request.resource.data.mustChangePassword == false
+            )
+          )
+        );
+      allow delete: if isSuperAdmin();
+    }
+
+    match /roles/{roleId} {
+      allow read: if isActiveUser();
+      allow write: if isSuperAdmin();
+    }
+
+    match /route_runs/{runId} {
+      allow read: if isActiveUser();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isSuperAdmin();
+
+      match /stops/{orderId} {
+        allow read: if isActiveUser();
+        allow write: if isAdmin();
+      }
+    }
+
+    match /orders/{orderId} {
+      allow read: if isActiveUser();
+      allow create: if isAdmin() || isOperativo();
+
+      // Operativo can request dispatch and mark packing done.
+      // Admin/Super admin can also accept/reject request and assign to route_run.
+      allow update: if isAdmin()
+        || (
+          isOperativo()
+          && (
+            (
+              onlyChanges(["dispatch_request", "updated_at"])
+              && request.resource.data.dispatch_request.status == "requested"
+            )
+            || (
+              onlyChanges(["status", "packing", "updated_at"])
+              && request.resource.data.status == "ready_for_route"
+              && request.resource.data.packing.status == "done"
+            )
+          )
+        );
+
+      allow delete: if isSuperAdmin();
+
+      match /events/{eventId} {
+        allow read: if isActiveUser();
+        allow create: if isAdmin() || isOperativo();
+        allow update, delete: if isSuperAdmin();
+      }
+    }
+
+    // TODO: migrate these checks to full capabilities-based rules using custom claims
+    // or a dedicated authorization projection document.
+  }
+}

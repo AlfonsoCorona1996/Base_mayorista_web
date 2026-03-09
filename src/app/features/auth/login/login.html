@@ -10,7 +10,7 @@
       <h1 class="login-title">Base Mayorista</h1>
       <p class="login-subtitle">Panel de administracion</p>
 
-      @if (returnUrl() !== '/main/dashboard') {
+      @if (returnUrl()) {
         <div class="deep-link-message" role="status" aria-live="polite">
           <span class="deep-link-icon" aria-hidden="true">↗</span>
           Inicia sesion para continuar con la revision solicitada.
@@ -20,28 +20,28 @@
 
     <form class="login-form" (submit)="onLogin(); $event.preventDefault()" novalidate>
       <div class="form-group">
-        <label class="form-label" for="email">Correo</label>
+        <label class="form-label" for="identifier">Correo o usuario</label>
         <div class="input-wrap">
           <span class="field-icon" aria-hidden="true">@</span>
           <input
-            id="email"
-            type="email"
+            id="identifier"
+            type="text"
             class="form-input"
-            [class.form-input-invalid]="hasEmailError()"
-            [class.form-input-valid]="hasEmailValid()"
-            [attr.aria-invalid]="hasEmailError()"
-            [(ngModel)]="email"
-            name="email"
-            placeholder="admin@basemayorista.com"
+            [class.form-input-invalid]="hasIdentifierError()"
+            [class.form-input-valid]="hasIdentifierValid()"
+            [attr.aria-invalid]="hasIdentifierError()"
+            [(ngModel)]="identifier"
+            name="identifier"
+            placeholder="admin@basemayorista.com o usuario"
             [disabled]="loading()"
             required
-            autocomplete="email"
+            autocomplete="username"
             inputmode="email"
-            (blur)="markEmailTouched()"
+            (blur)="markIdentifierTouched()"
           />
         </div>
-        @if (hasEmailError()) {
-          <p class="field-error">{{ getEmailError() }}</p>
+        @if (hasIdentifierError()) {
+          <p class="field-error">{{ getIdentifierError() }}</p>
         }
       </div>
 
@@ -88,16 +88,16 @@
         }
       </div>
 
-      <label class="remember-row" for="rememberEmail">
+      <label class="remember-row" for="rememberIdentifier">
         <input
-          id="rememberEmail"
+          id="rememberIdentifier"
           class="remember-checkbox"
           type="checkbox"
-          [(ngModel)]="rememberEmail"
-          name="rememberEmail"
+          [(ngModel)]="rememberIdentifier"
+          name="rememberIdentifier"
           [disabled]="loading()"
         />
-        <span>Recordar correo en este dispositivo</span>
+        <span>Recordar acceso en este dispositivo</span>
       </label>
 
       @if (error()) {

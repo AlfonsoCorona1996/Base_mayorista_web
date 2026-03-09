@@ -1,0 +1,322 @@
+<section class="salidas-page">
+  <header class="page-head">
+    <div class="page-title">
+      <h1>Salidas</h1>
+      <p>Centro de despacho por ruta.</p>
+    </div>
+    <button
+      type="button"
+      class="btn secondary refresh-btn mobile-refresh-btn"
+      [disabled]="loading()"
+      [attr.aria-label]="loading() ? 'Actualizando salidas' : 'Actualizar salidas'"
+      [title]="loading() ? 'Actualizando...' : 'Actualizar'"
+      (click)="refresh()"
+    >
+      <svg class="refresh-icon" [class.spinning]="loading()" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path d="M23 4v6h-6" />
+        <path d="M1 20v-6h6" />
+        <path d="M3.5 9a9 9 0 0 1 14.2-3.4L23 10" />
+        <path d="M20.5 15a9 9 0 0 1-14.2 3.4L1 14" />
+      </svg>
+    </button>
+    <div class="head-tools">
+      <div class="route-filter">
+        <label for="routeSearch">Filtrar por ruta</label>
+        <input
+          id="routeSearch"
+          type="search"
+          placeholder="Buscar ruta..."
+          [value]="routeSearch()"
+          (input)="onRouteSearch($any($event.target).value || '')"
+          (focus)="onRouteInputFocus()"
+          (blur)="onRouteInputBlur()"
+        />
+        @if (showRouteSuggestions()) {
+          <div class="route-listbox" role="listbox" aria-label="Sugerencias de rutas">
+            @for (route of filteredRouteOptions(); track route.routeId) {
+              <button
+                type="button"
+                class="route-option"
+                [class.active]="selectedRouteId() === route.routeId"
+                (mousedown)="selectRoute($event, route.routeId, route.routeName)"
+              >
+                {{ route.routeName }}
+              </button>
+            }
+            @if (filteredRouteOptions().length === 0) {
+              <p class="route-empty">Sin coincidencias</p>
+            }
+          </div>
+        }
+      </div>
+      <button
+        type="button"
+        class="btn secondary refresh-btn desktop-refresh-btn"
+        [disabled]="loading()"
+        [attr.aria-label]="loading() ? 'Actualizando salidas' : 'Actualizar salidas'"
+        [title]="loading() ? 'Actualizando...' : 'Actualizar'"
+        (click)="refresh()"
+      >
+        <svg class="refresh-icon" [class.spinning]="loading()" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M23 4v6h-6" />
+          <path d="M1 20v-6h6" />
+          <path d="M3.5 9a9 9 0 0 1 14.2-3.4L23 10" />
+          <path d="M20.5 15a9 9 0 0 1-14.2 3.4L1 14" />
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  @if (error()) {
+    <div class="alert error">{{ error() }}</div>
+  }
+
+  @if (toast()) {
+    <div class="alert ok">{{ toast() }}</div>
+  }
+
+  @if (loading()) {
+    <article class="route-card empty">
+      <p>Cargando salidas...</p>
+    </article>
+  } @else if (visibleGroups().length === 0) {
+    <article class="route-card empty">
+      <p>{{ groups().length === 0 ? "No hay pedidos listos en esta ruta" : "No hay rutas que coincidan con el filtro" }}</p>
+    </article>
+  } @else {
+    <div class="route-list">
+      @for (group of visibleGroups(); track group.routeId) {
+        <article class="route-card">
+          <div class="route-head">
+            <button type="button" class="route-head-main" (click)="toggleRoute(group.routeId)">
+              <div>
+                <h2>{{ group.routeName }}</h2>
+                <div class="counts">
+                  <span class="chip">
+                    <span class="chip-label">Programados</span>
+                    <span class="chip-value chip-value-accent">{{ group.programados.length }}</span>
+                  </span>
+                  <span class="chip">
+                    <span class="chip-label">Solicitudes</span>
+                    <span class="chip-value">{{ group.solicitudes.length }}</span>
+                  </span>
+                  <span class="chip">
+                    <span class="chip-label">Listos</span>
+                    <span class="chip-value">{{ group.listos.length }}</span>
+                  </span>
+                  <span class="chip">
+                    <span class="chip-label">Empacando</span>
+                    <span class="chip-value chip-value-accent">{{ group.empacando.length }}</span>
+                  </span>
+                </div>
+              </div>
+            </button>
+            @if (canRunCreate()) {
+              <button type="button" class="btn secondary run-btn" [disabled]="saving()" (click)="createRun(group)">+ Programar salida</button>
+            }
+            <button type="button" class="chevron-btn" (click)="toggleRoute(group.routeId)">
+              <span class="chevron">{{ isRouteOpen(group.routeId) ? "-" : "+" }}</span>
+            </button>
+          </div>
+
+          @if (isRouteOpen(group.routeId)) {
+            <div class="route-body">
+              <section class="lane">
+                <h3>Programados</h3>
+                @if (group.programados.length === 0) {
+                  <p class="empty">No hay programados.</p>
+                } @else {
+                  <div class="run-list">
+                    @for (programado of group.programados; track programado.run.runId) {
+                      <article class="run-card">
+                        <div class="run-main">
+                          <div class="run-row run-row-main">
+                            <span class="run-icon" aria-hidden="true">
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                <rect x="3" y="5" width="18" height="16" rx="3"></rect>
+                                <path d="M16 3v4M8 3v4M3 10h18"></path>
+                              </svg>
+                            </span>
+                            <p class="run-date">{{ runDate(programado.run.scheduled_at) }}</p>
+                          </div>
+                          <div class="run-row run-row-status">
+                            <span class="run-icon" aria-hidden="true">
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                <path d="M2 12h13l2 4h5v-5h-2.5"></path>
+                                <path d="M5 12V7h10v5"></path>
+                                <circle cx="7" cy="17" r="2"></circle>
+                                <circle cx="17" cy="17" r="2"></circle>
+                              </svg>
+                            </span>
+                            <p class="run-status">{{ programado.run.driver?.name ? "Repartidor: " + (programado.run.driver?.name || "") : "Sin repartidor" }}</p>
+                          </div>
+                          <div class="run-metrics">
+                            <span class="metric-item">
+                              <span class="metric-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                  <path d="M3 7.5L12 3l9 4.5-9 4.5-9-4.5z"></path>
+                                  <path d="M3 7.5V16.5L12 21l9-4.5V7.5"></path>
+                                </svg>
+                              </span>
+                              Pedidos: {{ programado.run.counts.orders_total }}
+                            </span>
+                            <span class="metric-item">
+                              <span class="metric-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                  <path d="M3 7.5L12 3l9 4.5-9 4.5-9-4.5z"></path>
+                                  <path d="M3 7.5V16.5L12 21l9-4.5V7.5"></path>
+                                </svg>
+                              </span>
+                              Paquetes: {{ programado.run.counts.packages_total }}
+                            </span>
+                            <span class="metric-item">
+                              <span class="metric-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                  <path d="M7 6h10v4a5 5 0 0 1-10 0V6z"></path>
+                                  <path d="M8 3h8"></path>
+                                  <path d="M5 20h14"></path>
+                                </svg>
+                              </span>
+                              Saldo: {{ money(programado.run.counts.balance_total) }}
+                            </span>
+                          </div>
+                        </div>
+                        <div class="actions run-actions">
+                          <button type="button" class="btn secondary run-action run-action-primary" (click)="goRun(programado.run.runId)">Ver salida</button>
+                        </div>
+                      </article>
+                    }
+                  </div>
+                }
+              </section>
+
+              <section class="lane">
+                <h3>Solicitudes</h3>
+                @if (group.solicitudes.length === 0) {
+                  <p class="empty">No hay solicitudes.</p>
+                } @else {
+                  <div class="packing-list">
+                    @for (row of group.solicitudes; track row.order_id) {
+                      <article class="packing-card packing-card-clickable" (click)="goOrder(row.order_id)">
+                        <div>
+                          <p class="packing-name">{{ row.customerName }}</p>
+                          <p class="packing-order">Pedido {{ row.order_id }}</p>
+                          @if (requestedRunChip(row); as targetDate) {
+                            <p class="request-chip">Salida solicitada: {{ targetDate }}</p>
+                          }
+                          <p class="packing-status">
+                            <span class="status-dot status-dot-solicitud" aria-hidden="true"></span>
+                            Solicitud de salida
+                          </p>
+                        </div>
+                        <div class="actions card-actions" (click)="$event.stopPropagation()">
+                          @if (canProgramOrder()) {
+                            <button type="button" class="btn secondary" [disabled]="saving()" (click)="openScheduleSheet(row, 'programar', $event)">
+                              Programar
+                            </button>
+                          } @else if (canRequestOrder()) {
+                            <button type="button" class="btn secondary" [disabled]="saving()" (click)="openScheduleSheet(row, 'cambiar', $event)">
+                              Cambiar
+                            </button>
+                            <button type="button" class="btn secondary" [disabled]="saving()" (click)="cancelDispatchFromCard(row, $event)">
+                              Cancelar
+                            </button>
+                          }
+                        </div>
+                      </article>
+                    }
+                  </div>
+                }
+              </section>
+
+              <section class="lane">
+                <h3>Listos</h3>
+                @if (group.listos.length === 0) {
+                  <p class="empty">No hay listos.</p>
+                } @else {
+                  <div class="packing-list">
+                    @for (row of group.listos; track row.order_id) {
+                      <article class="packing-card packing-card-clickable" (click)="goOrder(row.order_id)">
+                        <div>
+                          <p class="packing-name">{{ row.customerName }}</p>
+                          <p class="packing-order">Pedido {{ row.order_id }}</p>
+                          <p class="packing-status">
+                            <span class="status-dot status-dot-listo" aria-hidden="true"></span>
+                            Listo para ruta
+                          </p>
+                        </div>
+                        <div class="actions card-actions" (click)="$event.stopPropagation()">
+                          @if (canProgramOrder()) {
+                            <button type="button" class="btn secondary" [disabled]="saving()" (click)="openScheduleSheet(row, 'programar', $event)">
+                              Programar
+                            </button>
+                          } @else if (canRequestOrder()) {
+                            <button type="button" class="btn secondary" [disabled]="saving()" (click)="openScheduleSheet(row, 'solicitar', $event)">
+                              Solicitar salida
+                            </button>
+                          }
+                        </div>
+                      </article>
+                    }
+                  </div>
+                }
+              </section>
+
+              <section class="lane lane-empacando">
+                <h3>Empacando</h3>
+                @if (group.empacando.length === 0) {
+                  <p class="empty">No hay empacando.</p>
+                } @else {
+                  <div class="packing-list">
+                    @for (row of group.empacando; track row.order_id) {
+                      <article class="packing-card packing-card-clickable" (click)="goOrder(row.order_id)">
+                        <div>
+                          <p class="packing-name">{{ row.customerName }}</p>
+                          <p class="packing-order">Pedido {{ row.order_id }}</p>
+                          <p class="packing-status">
+                            <span
+                              class="status-dot"
+                              [class.status-dot-confirmar]="row.processTone === 'confirmar'"
+                              [class.status-dot-espera]="row.processTone === 'espera'"
+                              [class.status-dot-empaque]="row.processTone === 'empaque'"
+                              aria-hidden="true"
+                            ></span>
+                            {{ row.processLabel || "Empacando" }}
+                          </p>
+                        </div>
+                      </article>
+                    }
+                  </div>
+                }
+              </section>
+            </div>
+          }
+        </article>
+      }
+    </div>
+  }
+
+  @if (scheduleSheetOpen() && scheduleSheetOrder(); as selectedOrder) {
+    <div class="sheet-backdrop" (click)="closeScheduleSheet()">
+      <div class="sheet schedule-sheet" role="dialog" aria-modal="true" aria-labelledby="schedule-sheet-title" (click)="$event.stopPropagation()">
+        <div class="sheet-handle" aria-hidden="true"></div>
+        <h2 id="schedule-sheet-title">{{ scheduleActionLabel() }}</h2>
+        <p class="muted">{{ selectedOrder.customerName }} · Pedido {{ selectedOrder.order_id }}</p>
+        <div class="sheet-field">
+          <label for="run-select">Salida programada</label>
+          <select id="run-select" [value]="scheduleSheetRunId()" (change)="onScheduleRunChange($any($event.target).value || '')">
+            @for (run of scheduleSheetRuns(); track run.runId) {
+              <option [value]="run.runId">{{ scheduleRunLabel(run) }}</option>
+            }
+          </select>
+        </div>
+        <div class="sheet-actions">
+          <button type="button" class="btn ghost" [disabled]="saving()" (click)="closeScheduleSheet()">Cerrar</button>
+          <button type="button" class="btn primary" [disabled]="saving() || !scheduleSheetRunId()" (click)="confirmScheduleSheet()">
+            {{ scheduleActionLabel() }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</section>

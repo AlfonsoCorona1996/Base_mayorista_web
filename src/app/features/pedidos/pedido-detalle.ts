@@ -12,6 +12,8 @@ import { NormalizedListingsService, NormalizedListingDoc } from "../../core/norm
 import { SupplierOperationsService } from "../../core/supplier-operations.service";
 import { FIRESTORE } from "../../core/firebase.providers";
 import { ActivityLogComponent } from "../../shared/components/activity-log/activity-log.component";
+import { AuthzService } from "../../core/authz.service";
+import { DispatchOrderRow, RouteRunDoc, RouteRunsService } from "../../services/route-runs.service";
 
 type EstadoConfirmacion = "pendiente" | "confirmado" | "sin_stock";
 
@@ -32,6 +34,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   private inventory = inject(InventoryService);
   private catalog = inject(NormalizedListingsService);
   private supplierOperations = inject(SupplierOperationsService);
+  private authz = inject(AuthzService);
+  private routeRuns = inject(RouteRunsService);
 
   @ViewChild("incidentsSection") incidentsSection?: ElementRef<HTMLElement>;
   @ViewChild("packagesSection") packagesSection?: ElementRef<HTMLElement>;
@@ -99,6 +103,10 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   actionError = signal<string | null>(null);
   actionSaving = signal(false);
   transitConfirmOpen = signal(false);
+  readyForRouteSheetOpen = signal(false);
+  readyForRouteRun = signal<RouteRunDoc | null>(null);
+  readyForRouteLoading = signal(false);
+  readyForRouteError = signal<string | null>(null);
   lateChangeApproved = signal(false);
   packingBusy = signal(false);
   activeOpenBoxId = signal<string | null>(null);
@@ -347,6 +355,40 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     return this.rutas.getById(order.route_id)?.name || order.route_id;
   }
 
+  canCap(key: string): boolean {
+    return this.authz.canCap(key);
+  }
+
+  canRequestDispatchAction(): boolean {
+    return this.canCap("cap.dispatch.request");
+  }
+
+  canAcceptDispatchAction(): boolean {
+    return this.canCap("cap.dispatch.accept_request") && this.canCap("cap.runs.add_order");
+  }
+
+  canViewFinancialSummary(order: Order): boolean {
+    return this.canCap("cap.payments.view");
+  }
+
+  orderBalanceDue(order: Order): number {
+    const fromTotals = Number(order.totals?.balance_due ?? 0);
+    if (Number.isFinite(fromTotals) && fromTotals > 0) return fromTotals;
+    return Math.max(0, (this.totals().totalClienta || 0) - (order.totals?.paid_amount || 0));
+  }
+
+  hasPackingStarted(order: Order): boolean {
+    if ((order.packages || []).length > 0) return true;
+    if (order.packing?.status === "done") return true;
+    return ["ready_for_route", "assigned_to_run", "in_transit", "en_ruta", "delivered", "entregado", "closed", "pagado"].includes(order.status);
+  }
+
+  canAddProducts(order: Order): boolean {
+    if (!this.canEditItems(order)) return false;
+    if (!this.hasPackingStarted(order)) return true;
+    return this.canCap("cap.orders.override_stage_lock");
+  }
+
   statusLabel(status: OrderStatus): string {
     const map: Record<OrderStatus, string> = {
       borrador: "Borrador",
@@ -356,10 +398,17 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       supplier_processing: "Proveedor",
       inbound_in_transit: "En camino proveedor",
       en_transito: "En tránsito",
+      packing: "Empacando",
       recibido_qa: "Recibido/QA",
       empaque: "Empaque",
+      ready_for_route: "Listo para ruta",
+      assigned_to_run: "Asignado a salida",
+      in_transit: "En transito",
       en_ruta: "En ruta",
+      delivered: "Entregado",
+      delivered_partial: "Entrega parcial",
       entregado: "Entregado",
+      closed: "Cerrado",
       pago_pendiente: "Pago pendiente",
       pagado: "Pagado",
       cancelado: "Cancelado",
@@ -371,6 +420,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   statusClass(status: OrderStatus): string {
     switch (status) {
       case "entregado":
+      case "delivered":
+      case "closed":
       case "pagado":
         return "chip success";
       case "cancelado":
@@ -379,6 +430,10 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       case "pago_pendiente":
         return "chip warning";
       case "empaque":
+      case "packing":
+      case "ready_for_route":
+      case "assigned_to_run":
+      case "in_transit":
       case "en_ruta":
       case "en_transito":
       case "inbound_in_transit":
@@ -478,6 +533,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
           limitedEdit: true,
         };
       case "recibido_qa":
+      case "packing":
       case "empaque":
         return {
           canEditItems: false,
@@ -492,6 +548,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
           limitedEdit: false,
         };
       case "en_ruta":
+      case "in_transit":
         return {
           canEditItems: false,
           canConfirmItems: false,
@@ -518,6 +575,11 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
           limitedEdit: false,
         };
       case "pago_pendiente":
+      case "ready_for_route":
+      case "assigned_to_run":
+      case "delivered":
+      case "delivered_partial":
+      case "closed":
         return {
           canEditItems: false,
           canConfirmItems: false,
@@ -559,24 +621,33 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         return { actionId: "supplier_followup", label: "Marcar en transito proveedor" };
       case "inbound_in_transit":
       case "en_transito":
-        if (this.canFinishPacking(order)) {
-          return { actionId: "dispatch", label: "Terminar empaquetado" };
-        }
-        return { actionId: "pack", label: this.canStartPacking(order) ? "Terminar empaquetado" : "Empacar" };
       case "recibido_qa":
+      case "packing":
         if (this.canFinishPacking(order)) {
           return { actionId: "dispatch", label: "Terminar empaquetado" };
         }
         return { actionId: "pack", label: this.canStartPacking(order) ? "Terminar empaquetado" : "Empacar" };
       case "empaque":
         return { actionId: "dispatch", label: "Terminar empaquetado" };
+      case "ready_for_route":
+      case "assigned_to_run":
+        return null;
       case "en_ruta":
+      case "in_transit":
         return { actionId: "deliver", label: "Registrar entrega" };
+      case "delivered_partial":
       case "pago_pendiente":
         return { actionId: "register_payment", label: "Registrar pago/conciliar" };
       default:
         return null;
     }
+  }
+
+  isPackingWorkflowPhase(order: Order | null): boolean {
+    if (!order) return false;
+    const action = this.phaseAction(order)?.actionId;
+    if (action === "pack" || action === "dispatch") return true;
+    return order.status === "ready_for_route" || order.status === "assigned_to_run";
   }
 
   openActionModal(order: Order | null) {
@@ -599,6 +670,10 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
   closedPackagesCount(order: Order): number {
     return this.closedPackingBoxes(order).length;
+  }
+
+  packingBoxesCount(order: Order): number {
+    return this.totalPackingBoxes(order);
   }
 
   deliveredPackagesCount(order: Order): number {
@@ -1010,7 +1085,10 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   canEditItems(order: Order | null): boolean {
     if (!order) return false;
     const base = this.allowedCapabilities(order, this.userRole()).canEditItems;
-    return base || (order.status === "en_ruta" && this.lateChangeApproved());
+    const editableByFlow = base || (order.status === "en_ruta" && this.lateChangeApproved());
+    if (!editableByFlow) return false;
+    if (this.hasPackingStarted(order) && !this.canCap("cap.orders.override_stage_lock")) return false;
+    return true;
   }
 
   nextStatus(order: Order | null): OrderStatus | null {
@@ -2245,6 +2323,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   async dispatchOrder(order: Order) {
+    if (this.actionSaving()) return;
     if (!this.canDispatch(order)) {
       await this.orders.createIncident(order.order_id, {
         orderId: order.order_id,
@@ -2261,8 +2340,140 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       this.actionError.set("No se puede terminar empaque/preparar salida: hay cajas abiertas, cajas vacias o productos sin empacar.");
       return;
     }
-    await this.orders.logEvent(order.order_id, "DISPATCH_READY", "Salida preparada", {});
-    this.actionError.set(null);
+    this.actionSaving.set(true);
+    try {
+      const packagesCount = this.closedPackagesCount(order);
+      await this.orders.markReadyForRoute(order.order_id, packagesCount);
+      await this.orders.logEvent(order.order_id, "DISPATCH_READY", "Pedido listo para ruta", {
+        packages_count: packagesCount,
+      });
+      this.actionError.set(null);
+      this.closeActionModal();
+      const latest = this.orders.getById(order.order_id) || order;
+      await this.openReadyForRouteSheet(latest);
+    } catch (error: any) {
+      this.actionError.set(error?.message || "No se pudo terminar el empaquetado.");
+    } finally {
+      this.actionSaving.set(false);
+    }
+  }
+
+  async openReadyForRouteSheet(order: Order) {
+    this.readyForRouteSheetOpen.set(true);
+    this.readyForRouteLoading.set(true);
+    this.readyForRouteRun.set(null);
+    this.readyForRouteError.set(null);
+    try {
+      const allRuns = await this.routeRuns.listRuns();
+      const now = new Date();
+      const start = new Date(now);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(now);
+      end.setHours(23, 59, 59, 999);
+      const run = allRuns
+        .filter((row) =>
+          row.route_id === order.route_id
+          && (row.status === "draft" || row.status === "scheduled")
+          && new Date(row.scheduled_at).getTime() >= start.getTime()
+          && new Date(row.scheduled_at).getTime() <= end.getTime(),
+        )
+        .sort((a, b) => (a.scheduled_at < b.scheduled_at ? -1 : 1))[0] || null;
+      this.readyForRouteRun.set(run);
+    } catch (error: any) {
+      this.readyForRouteError.set(error?.message || "No se pudo consultar salidas.");
+    } finally {
+      this.readyForRouteLoading.set(false);
+    }
+  }
+
+  closeReadyForRouteSheet() {
+    this.readyForRouteSheetOpen.set(false);
+    this.readyForRouteError.set(null);
+    this.readyForRouteRun.set(null);
+  }
+
+  async requestDispatchFromSheet(order: Order) {
+    const actor = this.currentRunActor();
+    if (!actor) return;
+    this.readyForRouteLoading.set(true);
+    this.readyForRouteError.set(null);
+    try {
+      await this.routeRuns.requestDispatch(order.order_id, actor);
+      await this.orders.logEvent(order.order_id, "dispatch_requested", "Solicitud de salida enviada", {});
+      this.showActionToast("Solicitud de salida enviada.");
+      this.closeReadyForRouteSheet();
+    } catch (error: any) {
+      this.readyForRouteError.set(error?.message || "No se pudo solicitar salida.");
+    } finally {
+      this.readyForRouteLoading.set(false);
+    }
+  }
+
+  async acceptDispatchFromSheet(order: Order) {
+    const actor = this.currentRunActor();
+    if (!actor) return;
+    this.readyForRouteLoading.set(true);
+    this.readyForRouteError.set(null);
+    try {
+      const runId = await this.routeRuns.acceptDispatchRequest({
+        order: this.toDispatchOrder(order),
+        routeName: this.routeName(order),
+        customerName: this.customerName(order),
+        actor,
+      });
+      await this.orders.logEvent(order.order_id, "dispatch_accepted", "Pedido agregado a salida", { runId });
+      this.showActionToast("Pedido agregado a salida.");
+      this.closeReadyForRouteSheet();
+      await this.router.navigateByUrl(`/main/salidas/${runId}`);
+    } catch (error: any) {
+      this.readyForRouteError.set(error?.message || "No se pudo agregar a salida.");
+    } finally {
+      this.readyForRouteLoading.set(false);
+    }
+  }
+
+  goToSalidas(order: Order) {
+    const route = order.route_id || "sin_ruta";
+    this.router.navigateByUrl(`/main/salidas?route=${encodeURIComponent(route)}`);
+  }
+
+  private toDispatchOrder(order: Order): DispatchOrderRow {
+    return {
+      order_id: order.order_id,
+      customer_id: order.customer_id,
+      route_id: order.route_id,
+      status: order.status,
+      route_run_id: order.route_run_id || null,
+      dispatch_request: {
+        status: order.dispatch_request?.status || "none",
+        requested_at: order.dispatch_request?.requested_at || null,
+        requested_by: order.dispatch_request?.requested_by || null,
+        note: order.dispatch_request?.note || null,
+      },
+      packing: {
+        status: order.packing?.status || "in_progress",
+        packages_count: Number(order.packing?.packages_count || this.closedPackagesCount(order)),
+        completed_at: order.packing?.completed_at || null,
+      },
+      totals: {
+        total_amount: Number(order.totals?.total_amount || this.totals().totalClienta || 0),
+        paid_amount: Number(order.totals?.paid_amount || 0),
+        balance_due: Number(order.totals?.balance_due || this.orderBalanceDue(order)),
+      },
+      updated_at: order.updated_at,
+    };
+  }
+
+  private currentRunActor(): { uid: string; name: string } | null {
+    const user = this.authz.currentUserSig();
+    if (!user) {
+      this.readyForRouteError.set("No hay usuario activo.");
+      return null;
+    }
+    return {
+      uid: user.uid,
+      name: user.displayName || user.email || "Usuario",
+    };
   }
 
   async requestLateChange(order: Order) {

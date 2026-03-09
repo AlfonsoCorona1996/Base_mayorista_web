@@ -6,13 +6,22 @@ export const adminGuard: CanActivateFn = async (route, state) => {
   const auth = inject(AuthService);
   const router = inject(Router);
 
-  const ok = await auth.isAdmin();
-  if (!ok) {
-    // 🔑 DEEP LINKING: Guardar la URL de destino
-    console.log('🔗 Usuario no autenticado, guardando returnUrl:', state.url);
-    return router.createUrlTree(['/login'], { 
-      queryParams: { returnUrl: state.url } 
+  const status = await auth.getAccessStatus();
+  if (!status.uid) {
+    return router.createUrlTree(["/login"], {
+      queryParams: { returnUrl: state.url, reason: "UNAUTHENTICATED" },
     });
   }
+
+  if (status.mustChangePassword) {
+    return router.createUrlTree(["/activate-account"]);
+  }
+
+  if (!status.isActive) {
+    return router.createUrlTree(["/login"], {
+      queryParams: { returnUrl: state.url, reason: "INACTIVE_USER" },
+    });
+  }
+
   return true;
 };

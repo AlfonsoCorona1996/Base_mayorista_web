@@ -1,0 +1,151 @@
+﻿<section class="run-page">
+  <header class="page-head">
+    <a class="back-link" routerLink="/main/salidas">Volver a salidas</a>
+    <button type="button" class="btn secondary refresh-btn" [disabled]="loading()" (click)="refresh()">Actualizar</button>
+  </header>
+
+  @if (error()) {
+    <div class="alert error">{{ error() }}</div>
+  }
+
+  @if (toast()) {
+    <div class="alert ok">{{ toast() }}</div>
+  }
+
+  @if (loading()) {
+    <article class="detail-card empty-card">
+      <p>Cargando salida...</p>
+    </article>
+  } @else if (run(); as current) {
+    <article class="detail-card run-head-card">
+      <div class="run-head-top">
+        <div class="run-title-wrap">
+          <h1>{{ current.route_name_snapshot }}</h1>
+          <div class="counts">
+            <span class="chip">
+              <span class="chip-label">Programada</span>
+              <span class="chip-value">{{ current.scheduled_at | date: "dd/MM/yyyy" }}</span>
+            </span>
+            <span class="chip">
+              <span class="chip-label">Estado</span>
+              <span class="chip-value chip-value-accent">{{ statusLabel(current.status) }}</span>
+            </span>
+          </div>
+        </div>
+        <span class="status-pill">{{ statusLabel(current.status) }}</span>
+      </div>
+
+      <div class="run-meta">
+        <span class="meta-item">
+          <span class="meta-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <rect x="3" y="5" width="18" height="16" rx="3"></rect>
+              <path d="M16 3v4M8 3v4M3 10h18"></path>
+            </svg>
+          </span>
+          {{ current.scheduled_at | date: "dd/MM/yyyy" }}
+        </span>
+        <span class="meta-item">
+          <span class="meta-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M2 12h13l2 4h5v-5h-2.5"></path>
+              <path d="M5 12V7h10v5"></path>
+              <circle cx="7" cy="17" r="2"></circle>
+              <circle cx="17" cy="17" r="2"></circle>
+            </svg>
+          </span>
+          {{ current.driver?.name || "Sin repartidor" }}
+        </span>
+        <span class="meta-item">
+          <span class="meta-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M3 7.5L12 3l9 4.5-9 4.5-9-4.5z"></path>
+              <path d="M3 7.5V16.5L12 21l9-4.5V7.5"></path>
+            </svg>
+          </span>
+          Pedidos: {{ current.counts.orders_total }}
+        </span>
+        <span class="meta-item">
+          <span class="meta-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M3 7.5L12 3l9 4.5-9 4.5-9-4.5z"></path>
+              <path d="M3 7.5V16.5L12 21l9-4.5V7.5"></path>
+            </svg>
+          </span>
+          Paquetes: {{ current.counts.packages_total }}
+        </span>
+        <span class="meta-item">
+          <span class="meta-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M7 6h10v4a5 5 0 0 1-10 0V6z"></path>
+              <path d="M8 3h8"></path>
+              <path d="M5 20h14"></path>
+            </svg>
+          </span>
+          Saldo: {{ money(current.counts.balance_total) }}
+        </span>
+      </div>
+    </article>
+
+    <section class="detail-section">
+      <h3>Gestión de salida</h3>
+      <article class="detail-card actions-card">
+        <div class="action-grid">
+          <label>
+            Programar fecha
+            <input class="input" type="date" [value]="scheduleInput()" (input)="scheduleInput.set($any($event.target).value)" />
+          </label>
+          <button type="button" class="btn secondary" [disabled]="!canSchedule() || saving()" (click)="saveSchedule()">Guardar fecha</button>
+        </div>
+
+        <div class="action-grid two-inputs">
+          <label>
+            UID repartidor
+            <input class="input" type="text" [value]="driverUid()" (input)="driverUid.set($any($event.target).value)" />
+          </label>
+          <label>
+            Nombre repartidor
+            <input class="input" type="text" [value]="driverName()" (input)="driverName.set($any($event.target).value)" />
+          </label>
+          <button type="button" class="btn secondary" [disabled]="!canAssignDriver() || saving()" (click)="saveDriver()">Asignar repartidor</button>
+        </div>
+
+        <div class="actions-row">
+          <button type="button" class="btn primary" [disabled]="!canStart() || saving()" (click)="startRun()">Iniciar salida</button>
+          <button type="button" class="btn primary" [disabled]="!canComplete() || saving()" (click)="completeRun()">Completar salida</button>
+          <button type="button" class="btn danger" [disabled]="!canCancel() || !canCancelRun(current) || saving()" (click)="cancelRun()">Cancelar salida</button>
+          <button type="button" class="btn secondary" (click)="copyDeliveryList()">Copiar lista de entregas</button>
+          <button type="button" class="btn secondary" (click)="copyAddresses()">Copiar direcciones</button>
+        </div>
+      </article>
+    </section>
+
+    <section class="detail-section">
+      <h3>Paradas</h3>
+      <article class="detail-card">
+        @if (stops().length === 0) {
+          <p class="empty">Sin pedidos asignados.</p>
+        } @else {
+          <div class="stops">
+            @for (stop of stops(); track stop.order_id) {
+              <article class="stop-row">
+                <div>
+                  <p class="code">{{ stop.customer_name }}</p>
+                  <p class="sub">Pedido {{ stop.order_number }}</p>
+                  <p class="sub">ID {{ stop.order_id }}</p>
+                  <p class="sub">{{ stop.packages_count }} paquetes - {{ money(stop.balance_due) }}</p>
+                </div>
+                <span class="stop-status">{{ stop.stop_status }}</span>
+              </article>
+            }
+          </div>
+        }
+      </article>
+    </section>
+  } @else {
+    <article class="detail-card empty-card">
+      <p>No encontramos esta salida.</p>
+    </article>
+  }
+</section>
+

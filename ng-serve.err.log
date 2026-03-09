@@ -1,0 +1,2071 @@
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2533: Object is possibly 'null' or 'undefined'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salidas.page.html:147:96:
+[37m      147 │ ...name ? "Repartidor: " + run.driver.[32mname[37m : "Sin repartidor" }}</p>
+          ╵                                       [32m~~~~[0m
+
+  Error occurs in the template of component SalidasPage.
+
+    src/app/features/salidas/salidas.page.ts:31:15:
+[37m      31 │   templateUrl: [32m"./salidas.page.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'programadosStops' does not exist on type 'RouteBoardGroup'. Did you mean 'programados'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salidas.page.html:97:72:
+[37m      97 │ ...alue chip-value-accent">{{ group.[32mprogramadosStops[37m.length }}</span>
+         ╵                                     [32m~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component SalidasPage.
+
+    src/app/features/salidas/salidas.page.ts:33:15:
+[37m      33 │   templateUrl: [32m"./salidas.page.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'programadosRun' does not exist on type 'RouteBoardGroup'. Did you mean 'programados'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salidas.page.html:126:27:
+[37m      126 │                 @if (group.[32mprogramadosRun[37m; as run) {
+          ╵                            [32m~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component SalidasPage.
+
+    src/app/features/salidas/salidas.page.ts:33:15:
+[37m      33 │   templateUrl: [32m"./salidas.page.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'programadosRun' does not exist on type 'RouteBoardGroup'. Did you mean 'programados'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salidas.page.html:126:27:
+[37m      126 │                 @if (group.[32mprogramadosRun[37m; as run) {
+          ╵                            [32m~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component SalidasPage.
+
+    src/app/features/salidas/salidas.page.ts:33:15:
+[37m      33 │   templateUrl: [32m"./salidas.page.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2740: Type '{ uid: string; email: any; displayName: any; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; isActive: boolean; createdAt: any; updatedAt: any; }' is missing the following properties from type 'UserDoc': authEmail, username, loginType, mustChangePassword, and 2 more.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/services/users.service.ts:55:6:
+[37m      55 │       [32mreturn[37m {
+         ╵       [32m~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2740: Type '{ uid: string; email: string; displayName: any; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; isActive: boolean; createdAt: null; updatedAt: null; }' is missing the following properties from type 'UserDoc': authEmail, username, loginType, mustChangePassword, and 2 more.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/services/users.service.ts:80:4:
+[37m      80 │     [32mreturn[37m {
+         ╵     [32m~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2740: Type '{ uid: string; email: any; displayName: any; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; isActive: boolean; createdAt: any; updatedAt: any; }' is missing the following properties from type 'UserDoc': authEmail, username, loginType, mustChangePassword, and 2 more.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/services/users.service.ts:131:4:
+[37m      131 │     [32mreturn[37m {
+          ╵     [32m~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2740: Type '{ uid: string; email: any; displayName: any; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; isActive: boolean; createdAt: any; updatedAt: any; }' is missing the following properties from type 'UserDoc': authEmail, username, loginType, mustChangePassword, and 2 more.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/services/users.service.ts:55:6:
+[37m      55 │       [32mreturn[37m {
+         ╵       [32m~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2740: Type '{ uid: string; email: string; displayName: any; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; isActive: boolean; createdAt: null; updatedAt: null; }' is missing the following properties from type 'UserDoc': authEmail, username, loginType, mustChangePassword, and 2 more.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/services/users.service.ts:80:4:
+[37m      80 │     [32mreturn[37m {
+         ╵     [32m~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2740: Type '{ uid: string; email: any; displayName: any; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; isActive: boolean; createdAt: any; updatedAt: any; }' is missing the following properties from type 'UserDoc': authEmail, username, loginType, mustChangePassword, and 2 more.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/services/users.service.ts:131:4:
+[37m      131 │     [32mreturn[37m {
+          ╵     [32m~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module '../services/users.service' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/authz.service.ts:17:29:
+[37m      17 │ import { UsersService } from [32m"../services/users.service"[37m;
+         ╵                              [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/authz.service.ts:84:28:
+[37m      84 │       const userDoc = await [32mthis.users[37m.ensureFromAuth(current);
+         ╵                             [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module '../../services/users.service' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:17:29:
+[37m      17 │ import { UsersService } from [32m"../../services/users.service"[37m;
+         ╵                              [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:106:48:
+[37m      106 │ ...] = await Promise.all([[32mthis.usersService[37m.listUsers(), this.rol...
+          ╵                           [32m~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS7006: Parameter 'row' implicitly has an 'any' type.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:110:39:
+[37m      110 │ ...onst targetRole = roles.find(([32mrow[37m) => row.roleId === this.sele...
+          ╵                                  [32m~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:181:12:
+[37m      181 │       await [32mthis.usersService[37m.saveUser({
+          ╵             [32m~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:204:12:
+[37m      204 │       await [32mthis.usersService[37m.setActive(row.uid, false);
+          ╵             [32m~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "../services/users.service"[0m
+
+    src/app/core/authz.service.ts:6:29:
+[37m      6 │ import { UsersService } from [32m"../services/users.service"[37m;
+        ╵                              [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "../../services/users.service"[0m
+
+    src/app/features/usuarios/usuarios.ts:6:29:
+[37m      6 │ import { UsersService } from [32m"../../services/users.service"[37m;
+        ╵                              [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module '../services/users.service' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/authz.service.ts:17:29:
+[37m      17 │ import { UsersService } from [32m"../services/users.service"[37m;
+         ╵                              [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/authz.service.ts:84:28:
+[37m      84 │       const userDoc = await [32mthis.users[37m.ensureFromAuth(current);
+         ╵                             [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module '../../services/users.service' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:17:29:
+[37m      17 │ import { UsersService } from [32m"../../services/users.service"[37m;
+         ╵                              [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:106:48:
+[37m      106 │ ...] = await Promise.all([[32mthis.usersService[37m.listUsers(), this.rol...
+          ╵                           [32m~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS7006: Parameter 'row' implicitly has an 'any' type.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:110:39:
+[37m      110 │ ...onst targetRole = roles.find(([32mrow[37m) => row.roleId === this.sele...
+          ╵                                  [32m~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:181:12:
+[37m      181 │       await [32mthis.usersService[37m.saveUser({
+          ╵             [32m~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:204:12:
+[37m      204 │       await [32mthis.usersService[37m.setActive(row.uid, false);
+          ╵             [32m~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "../services/users.service"[0m
+
+    src/app/core/authz.service.ts:6:29:
+[37m      6 │ import { UsersService } from [32m"../services/users.service"[37m;
+        ╵                              [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "../../services/users.service"[0m
+
+    src/app/features/usuarios/usuarios.ts:6:29:
+[37m      6 │ import { UsersService } from [32m"../../services/users.service"[37m;
+        ╵                              [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module './authz.service' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/access.service.ts:2:29:
+[37m      2 │ import { AuthzService } from [32m"./authz.service"[37m;
+        ╵                              [32m~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/access.service.ts:111:17:
+[37m      111 │     const user = [32mthis.authz[37m.currentUserSig();
+          ╵                  [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/access.service.ts:125:27:
+[37m      125 │   loading = computed(() => [32mthis.authz[37m.loadingSig());
+          ╵                            [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/access.service.ts:127:32:
+[37m      127 │   isSuperAdmin = computed(() => [32mthis.authz[37m.isSuperAdmin());
+          ╵                                 [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/access.service.ts:135:10:
+[37m      135 │     await [32mthis.authz[37m.refresh();
+          ╵           [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/access.service.ts:140:11:
+[37m      140 │     return [32mthis.authz[37m.canSection(SECTION_BY_PERMISSION[permission]);
+          ╵            [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/access.service.ts:144:35:
+[37m      144 │ ...turn this.can("usuarios") || [32mthis.authz[37m.canCap("cap.users.view");
+          ╵                                 [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/access.service.ts:148:11:
+[37m      148 │     return [32mthis.authz[37m.isSuperAdmin() || this.authz.canCap("cap.us...
+          ╵            [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/access.service.ts:148:40:
+[37m      148 │ ...this.authz.isSuperAdmin() || [32mthis.authz[37m.canCap("cap.users.edit");
+          ╵                                 [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module './authz.service' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/authz.guard.ts:3:29:
+[37m      3 │ import { AuthzService } from [32m"./authz.service"[37m;
+        ╵                              [32m~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS18046: 'authz' is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/authz.guard.ts:11:8:
+[37m      11 │   await [32mauthz[37m.refresh();
+         ╵         [32m~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS18046: 'authz' is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/authz.guard.ts:12:18:
+[37m      12 │   const current = [32mauthz[37m.currentUserSig();
+         ╵                   [32m~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS18046: 'authz' is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/authz.guard.ts:19:26:
+[37m      19 │   if (requiredSection && ![32mauthz[37m.canSection(requiredSection)) {
+         ╵                           [32m~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS18046: 'authz' is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/authz.guard.ts:23:29:
+[37m      23 │   if (requiredCapability && ![32mauthz[37m.canCap(requiredCapability)) {
+         ╵                              [32m~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module '../../core/authz.service' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:15:29:
+[37m      15 │ import { AuthzService } from [32m"../../core/authz.service"[37m;
+         ╵                              [32m~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:359:11:
+[37m      359 │     return [32mthis.authz[37m.canCap(key);
+          ╵            [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:371:17:
+[37m      371 │     const role = [32mthis.authz[37m.currentUserSig()?.roleId || "";
+          ╵                  [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:2469:17:
+[37m      2469 │     const user = [32mthis.authz[37m.currentUserSig();
+           ╵                  [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module '../../core/authz.service' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salida-detalle.page.ts:4:29:
+[37m      4 │ import { AuthzService } from [32m"../../core/authz.service"[37m;
+        ╵                              [32m~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salida-detalle.page.ts:31:22:
+[37m      31 │   canSchedule = () => [32mthis.authz[37m.canCap("cap.runs.schedule");
+         ╵                       [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salida-detalle.page.ts:32:26:
+[37m      32 │   canAssignDriver = () => [32mthis.authz[37m.canCap("cap.runs.assign_drive...
+         ╵                           [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salida-detalle.page.ts:33:19:
+[37m      33 │   canStart = () => [32mthis.authz[37m.canCap("cap.runs.start");
+         ╵                    [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salida-detalle.page.ts:34:22:
+[37m      34 │   canComplete = () => [32mthis.authz[37m.canCap("cap.runs.complete");
+         ╵                       [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salida-detalle.page.ts:35:20:
+[37m      35 │   canCancel = () => [32mthis.authz[37m.canCap("cap.runs.cancel");
+         ╵                     [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salida-detalle.page.ts:48:12:
+[37m      48 │       await [32mthis.authz[37m.refresh();
+         ╵             [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module '../../core/authz.service' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salidas.page.ts:3:29:
+[37m      3 │ import { AuthzService } from [32m"../../core/authz.service"[37m;
+        ╵                              [32m~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salidas.page.ts:58:32:
+[37m      58 │ ...nRunCreate = computed(() => [32mthis.authz[37m.canCap("cap.runs.create"));
+         ╵                                [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salidas.page.ts:59:34:
+[37m      59 │ ...nSchedule = computed(() => [32mthis.authz[37m.canCap("cap.runs.schedule...
+         ╵                               [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salidas.page.ts:60:38:
+[37m      60 │ ...chRequest = computed(() => [32mthis.authz[37m.canCap("cap.dispatch.requ...
+         ╵                               [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salidas.page.ts:61:37:
+[37m      61 │ ...tchCancel = computed(() => [32mthis.authz[37m.canCap("cap.dispatch.canc...
+         ╵                               [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salidas.page.ts:62:37:
+[37m      62 │ ...tchAccept = computed(() => [32mthis.authz[37m.canCap("cap.dispatch.acce...
+         ╵                               [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salidas.page.ts:62:89:
+[37m      62 │ ...spatch.accept_request") && [32mthis.authz[37m.canCap("cap.runs.add_orde...
+         ╵                               [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salidas.page.ts:63:37:
+[37m      63 │ ...tchReject = computed(() => [32mthis.authz[37m.canCap("cap.dispatch.reje...
+         ╵                               [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salidas.page.ts:157:12:
+[37m      157 │       await [32mthis.authz[37m.refresh();
+          ╵             [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salidas.page.ts:472:17:
+[37m      472 │     const user = [32mthis.authz[37m.currentUserSig();
+          ╵                  [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module '../../core/authz.service' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:3:29:
+[37m      3 │ import { AuthzService } from [32m"../../core/authz.service"[37m;
+        ╵                              [32m~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:87:32:
+[37m      87 │ ...ViewUsers = computed(() => [32mthis.authz[37m.canSection("sections.usua...
+         ╵                               [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:87:78:
+[37m      87 │ ...tion("sections.usuarios") || [32mthis.authz[37m.canCap("cap.users.view"));
+         ╵                                 [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:88:32:
+[37m      88 │ ...EditUsers = computed(() => [32mthis.authz[37m.isSuperAdmin() || this.au...
+         ╵                               [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:88:61:
+[37m      88 │ ...this.authz.isSuperAdmin() || [32mthis.authz[37m.canCap("cap.users.edit"));
+         ╵                                 [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:89:35:
+[37m      89 │ ...ableUsers = computed(() => [32mthis.authz[37m.isSuperAdmin() || this.au...
+         ╵                               [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:89:64:
+[37m      89 │ ...is.authz.isSuperAdmin() || [32mthis.authz[37m.canCap("cap.users.disable...
+         ╵                               [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:90:32:
+[37m      90 │ ...ViewRoles = computed(() => [32mthis.authz[37m.isSuperAdmin() || this.au...
+         ╵                               [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:90:61:
+[37m      90 │ ...this.authz.isSuperAdmin() || [32mthis.authz[37m.canCap("cap.roles.view"));
+         ╵                                 [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:91:32:
+[37m      91 │ ...EditRoles = computed(() => [32mthis.authz[37m.isSuperAdmin() || this.au...
+         ╵                               [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:91:61:
+[37m      91 │ ...this.authz.isSuperAdmin() || [32mthis.authz[37m.canCap("cap.roles.edit"));
+         ╵                                 [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:92:32:
+[37m      92 │   isSuperAdmin = computed(() => [32mthis.authz[37m.isSuperAdmin());
+         ╵                                 [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:93:30:
+[37m      93 │   currentUid = computed(() => [32mthis.authz[37m.currentUserSig()?.uid || ...
+         ╵                               [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:104:12:
+[37m      104 │       await [32mthis.authz[37m.refresh();
+          ╵             [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '{ uid: string; email: string; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; isActive: boolean; }' is not assignable to parameter of type 'SaveUserInput'.
+  Type '{ uid: string; email: string; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; isActive: boolean; }' is missing the following properties from type 'SaveUserInput': username, authEmail, loginType, mustChangePassword, and 2 more.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:181:39:
+[37m      181 │       await this.usersService.saveUser([32m{[37m
+          ╵                                        [32m^[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "./authz.service"[0m
+
+    src/app/core/access.service.ts:2:29:
+[37m      2 │ import { AuthzService } from [32m"./authz.service"[37m;
+        ╵                              [32m~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "./authz.service"[0m
+
+    src/app/core/authz.guard.ts:3:29:
+[37m      3 │ import { AuthzService } from [32m"./authz.service"[37m;
+        ╵                              [32m~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "../../core/authz.service"[0m
+
+    src/app/features/pedidos/pedido-detalle.ts:15:29:
+[37m      15 │ import { AuthzService } from [32m"../../core/authz.service"[37m;
+         ╵                              [32m~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "../../core/authz.service"[0m
+
+    src/app/features/salidas/salida-detalle.page.ts:4:29:
+[37m      4 │ import { AuthzService } from [32m"../../core/authz.service"[37m;
+        ╵                              [32m~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "../../core/authz.service"[0m
+
+    src/app/features/salidas/salidas.page.ts:3:29:
+[37m      3 │ import { AuthzService } from [32m"../../core/authz.service"[37m;
+        ╵                              [32m~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "../../core/authz.service"[0m
+
+    src/app/features/usuarios/usuarios.ts:3:29:
+[37m      3 │ import { AuthzService } from [32m"../../core/authz.service"[37m;
+        ╵                              [32m~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module './authz.service' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/access.service.ts:2:29:
+[37m      2 │ import { AuthzService } from [32m"./authz.service"[37m;
+        ╵                              [32m~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/access.service.ts:111:17:
+[37m      111 │     const user = [32mthis.authz[37m.currentUserSig();
+          ╵                  [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/access.service.ts:125:27:
+[37m      125 │   loading = computed(() => [32mthis.authz[37m.loadingSig());
+          ╵                            [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/access.service.ts:127:32:
+[37m      127 │   isSuperAdmin = computed(() => [32mthis.authz[37m.isSuperAdmin());
+          ╵                                 [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/access.service.ts:135:10:
+[37m      135 │     await [32mthis.authz[37m.refresh();
+          ╵           [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/access.service.ts:140:11:
+[37m      140 │     return [32mthis.authz[37m.canSection(SECTION_BY_PERMISSION[permission]);
+          ╵            [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/access.service.ts:144:35:
+[37m      144 │ ...turn this.can("usuarios") || [32mthis.authz[37m.canCap("cap.users.view");
+          ╵                                 [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/access.service.ts:148:11:
+[37m      148 │     return [32mthis.authz[37m.isSuperAdmin() || this.authz.canCap("cap.us...
+          ╵            [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/access.service.ts:148:40:
+[37m      148 │ ...this.authz.isSuperAdmin() || [32mthis.authz[37m.canCap("cap.users.edit");
+          ╵                                 [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module './authz.service' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/authz.guard.ts:3:29:
+[37m      3 │ import { AuthzService } from [32m"./authz.service"[37m;
+        ╵                              [32m~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS18046: 'authz' is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/authz.guard.ts:11:8:
+[37m      11 │   await [32mauthz[37m.refresh();
+         ╵         [32m~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS18046: 'authz' is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/authz.guard.ts:12:18:
+[37m      12 │   const current = [32mauthz[37m.currentUserSig();
+         ╵                   [32m~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS18046: 'authz' is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/authz.guard.ts:19:26:
+[37m      19 │   if (requiredSection && ![32mauthz[37m.canSection(requiredSection)) {
+         ╵                           [32m~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS18046: 'authz' is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/authz.guard.ts:23:29:
+[37m      23 │   if (requiredCapability && ![32mauthz[37m.canCap(requiredCapability)) {
+         ╵                              [32m~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module '../../core/authz.service' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:15:29:
+[37m      15 │ import { AuthzService } from [32m"../../core/authz.service"[37m;
+         ╵                              [32m~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:359:11:
+[37m      359 │     return [32mthis.authz[37m.canCap(key);
+          ╵            [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:371:17:
+[37m      371 │     const role = [32mthis.authz[37m.currentUserSig()?.roleId || "";
+          ╵                  [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:2469:17:
+[37m      2469 │     const user = [32mthis.authz[37m.currentUserSig();
+           ╵                  [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module '../../core/authz.service' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salida-detalle.page.ts:4:29:
+[37m      4 │ import { AuthzService } from [32m"../../core/authz.service"[37m;
+        ╵                              [32m~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salida-detalle.page.ts:31:22:
+[37m      31 │   canSchedule = () => [32mthis.authz[37m.canCap("cap.runs.schedule");
+         ╵                       [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salida-detalle.page.ts:32:26:
+[37m      32 │   canAssignDriver = () => [32mthis.authz[37m.canCap("cap.runs.assign_drive...
+         ╵                           [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salida-detalle.page.ts:33:19:
+[37m      33 │   canStart = () => [32mthis.authz[37m.canCap("cap.runs.start");
+         ╵                    [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salida-detalle.page.ts:34:22:
+[37m      34 │   canComplete = () => [32mthis.authz[37m.canCap("cap.runs.complete");
+         ╵                       [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salida-detalle.page.ts:35:20:
+[37m      35 │   canCancel = () => [32mthis.authz[37m.canCap("cap.runs.cancel");
+         ╵                     [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salida-detalle.page.ts:48:12:
+[37m      48 │       await [32mthis.authz[37m.refresh();
+         ╵             [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module '../../core/authz.service' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salidas.page.ts:3:29:
+[37m      3 │ import { AuthzService } from [32m"../../core/authz.service"[37m;
+        ╵                              [32m~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salidas.page.ts:58:32:
+[37m      58 │ ...nRunCreate = computed(() => [32mthis.authz[37m.canCap("cap.runs.create"));
+         ╵                                [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salidas.page.ts:59:34:
+[37m      59 │ ...nSchedule = computed(() => [32mthis.authz[37m.canCap("cap.runs.schedule...
+         ╵                               [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salidas.page.ts:60:38:
+[37m      60 │ ...chRequest = computed(() => [32mthis.authz[37m.canCap("cap.dispatch.requ...
+         ╵                               [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salidas.page.ts:61:37:
+[37m      61 │ ...tchCancel = computed(() => [32mthis.authz[37m.canCap("cap.dispatch.canc...
+         ╵                               [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salidas.page.ts:62:37:
+[37m      62 │ ...tchAccept = computed(() => [32mthis.authz[37m.canCap("cap.dispatch.acce...
+         ╵                               [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salidas.page.ts:62:89:
+[37m      62 │ ...spatch.accept_request") && [32mthis.authz[37m.canCap("cap.runs.add_orde...
+         ╵                               [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salidas.page.ts:63:37:
+[37m      63 │ ...tchReject = computed(() => [32mthis.authz[37m.canCap("cap.dispatch.reje...
+         ╵                               [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salidas.page.ts:157:12:
+[37m      157 │       await [32mthis.authz[37m.refresh();
+          ╵             [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salidas.page.ts:472:17:
+[37m      472 │     const user = [32mthis.authz[37m.currentUserSig();
+          ╵                  [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module '../../core/authz.service' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:3:29:
+[37m      3 │ import { AuthzService } from [32m"../../core/authz.service"[37m;
+        ╵                              [32m~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:87:32:
+[37m      87 │ ...ViewUsers = computed(() => [32mthis.authz[37m.canSection("sections.usua...
+         ╵                               [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:87:78:
+[37m      87 │ ...tion("sections.usuarios") || [32mthis.authz[37m.canCap("cap.users.view"));
+         ╵                                 [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:88:32:
+[37m      88 │ ...EditUsers = computed(() => [32mthis.authz[37m.isSuperAdmin() || this.au...
+         ╵                               [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:88:61:
+[37m      88 │ ...this.authz.isSuperAdmin() || [32mthis.authz[37m.canCap("cap.users.edit"));
+         ╵                                 [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:89:35:
+[37m      89 │ ...ableUsers = computed(() => [32mthis.authz[37m.isSuperAdmin() || this.au...
+         ╵                               [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:89:64:
+[37m      89 │ ...is.authz.isSuperAdmin() || [32mthis.authz[37m.canCap("cap.users.disable...
+         ╵                               [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:90:32:
+[37m      90 │ ...ViewRoles = computed(() => [32mthis.authz[37m.isSuperAdmin() || this.au...
+         ╵                               [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:90:61:
+[37m      90 │ ...this.authz.isSuperAdmin() || [32mthis.authz[37m.canCap("cap.roles.view"));
+         ╵                                 [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:91:32:
+[37m      91 │ ...EditRoles = computed(() => [32mthis.authz[37m.isSuperAdmin() || this.au...
+         ╵                               [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:91:61:
+[37m      91 │ ...this.authz.isSuperAdmin() || [32mthis.authz[37m.canCap("cap.roles.edit"));
+         ╵                                 [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:92:32:
+[37m      92 │   isSuperAdmin = computed(() => [32mthis.authz[37m.isSuperAdmin());
+         ╵                                 [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:93:30:
+[37m      93 │   currentUid = computed(() => [32mthis.authz[37m.currentUserSig()?.uid || ...
+         ╵                               [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:104:12:
+[37m      104 │       await [32mthis.authz[37m.refresh();
+          ╵             [32m~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '{ uid: string; email: string; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; isActive: boolean; }' is not assignable to parameter of type 'SaveUserInput'.
+  Type '{ uid: string; email: string; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; isActive: boolean; }' is missing the following properties from type 'SaveUserInput': username, authEmail, loginType, mustChangePassword, and 2 more.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:181:39:
+[37m      181 │       await this.usersService.saveUser([32m{[37m
+          ╵                                        [32m^[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "./authz.service"[0m
+
+    src/app/core/access.service.ts:2:29:
+[37m      2 │ import { AuthzService } from [32m"./authz.service"[37m;
+        ╵                              [32m~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "./authz.service"[0m
+
+    src/app/core/authz.guard.ts:3:29:
+[37m      3 │ import { AuthzService } from [32m"./authz.service"[37m;
+        ╵                              [32m~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "../../core/authz.service"[0m
+
+    src/app/features/pedidos/pedido-detalle.ts:15:29:
+[37m      15 │ import { AuthzService } from [32m"../../core/authz.service"[37m;
+         ╵                              [32m~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "../../core/authz.service"[0m
+
+    src/app/features/salidas/salida-detalle.page.ts:4:29:
+[37m      4 │ import { AuthzService } from [32m"../../core/authz.service"[37m;
+        ╵                              [32m~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "../../core/authz.service"[0m
+
+    src/app/features/salidas/salidas.page.ts:3:29:
+[37m      3 │ import { AuthzService } from [32m"../../core/authz.service"[37m;
+        ╵                              [32m~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "../../core/authz.service"[0m
+
+    src/app/features/usuarios/usuarios.ts:3:29:
+[37m      3 │ import { AuthzService } from [32m"../../core/authz.service"[37m;
+        ╵                              [32m~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '{ uid: string; email: string; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; isActive: boolean; }' is not assignable to parameter of type 'SaveUserInput'.
+  Type '{ uid: string; email: string; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; isActive: boolean; }' is missing the following properties from type 'SaveUserInput': authEmail, username, loginType, mustChangePassword, and 2 more.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:181:39:
+[37m      181 │       await this.usersService.saveUser([32m{[37m
+          ╵                                        [32m^[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module './auth.service' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/admin.guard.ts:3:28:
+[37m      3 │ import { AuthService } from [32m"./auth.service"[37m;
+        ╵                             [32m~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS18046: 'auth' is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/admin.guard.ts:9:19:
+[37m      9 │   const ok = await [32mauth[37m.isAdmin();
+        ╵                    [32m~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module '../../../core/auth.service' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/auth/login/login.ts:4:28:
+[37m      4 │ import { AuthService } from [32m"../../../core/auth.service"[37m;
+        ╵                             [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/auth/login/login.ts:161:12:
+[37m      161 │       await [32mthis.auth[37m.login(normalizedEmail, this.password);
+          ╵             [32m~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/auth/login/login.ts:162:23:
+[37m      162 │       const ok = await [32mthis.auth[37m.isAdmin();
+          ╵                        [32m~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/auth/login/login.ts:164:14:
+[37m      164 │         await [32mthis.auth[37m.logout();
+          ╵               [32m~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module '../../core/auth.service' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/inbox/inbox.ts:3:28:
+[37m      3 │ import { AuthService } from [32m"../../core/auth.service"[37m;
+        ╵                             [32m~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module '../../core/auth.service' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/main/main-layout.ts:4:28:
+[37m      4 │ import { AuthService } from [32m"../../core/auth.service"[37m;
+        ╵                             [32m~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/main/main-layout.ts:61:10:
+[37m      61 │     await [32mthis.auth[37m.logout();
+         ╵           [32m~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module '../../core/auth.service' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/review/review-updated.ts:6:28:
+[37m      6 │ import { AuthService } from [32m"../../core/auth.service"[37m;
+        ╵                             [32m~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/review/review-updated.ts:376:18:
+[37m      376 │       const uid = [32mthis.auth[37m.uid();
+          ╵                   [32m~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/review/review-updated.ts:431:18:
+[37m      431 │       const uid = [32mthis.auth[37m.uid();
+          ╵                   [32m~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module '../../core/auth.service' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/review/review.ts:6:28:
+[37m      6 │ import { AuthService } from [32m"../../core/auth.service"[37m;
+        ╵                             [32m~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/review/review.ts:1108:18:
+[37m      1108 │       const uid = [32mthis.auth[37m.uid();
+           ╵                   [32m~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/review/review.ts:1168:18:
+[37m      1168 │       const uid = [32mthis.auth[37m.uid();
+           ╵                   [32m~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '{ uid: string; email: string; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; isActive: boolean; }' is not assignable to parameter of type 'SaveUserInput'.
+  Type '{ uid: string; email: string; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; isActive: boolean; }' is missing the following properties from type 'SaveUserInput': authEmail, username, loginType, mustChangePassword, and 2 more.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:181:39:
+[37m      181 │       await this.usersService.saveUser([32m{[37m
+          ╵                                        [32m^[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "./auth.service"[0m
+
+    src/app/core/admin.guard.ts:3:28:
+[37m      3 │ import { AuthService } from [32m"./auth.service"[37m;
+        ╵                             [32m~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "../../../core/auth.service"[0m
+
+    src/app/features/auth/login/login.ts:4:28:
+[37m      4 │ import { AuthService } from [32m"../../../core/auth.service"[37m;
+        ╵                             [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "../../core/auth.service"[0m
+
+    src/app/features/inbox/inbox.ts:3:20:
+[37m      3 │ import * as i1 from [32m"../../core/auth.service"[37m;
+        ╵                     [32m~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "../../core/auth.service"[0m
+
+    src/app/features/main/main-layout.ts:4:28:
+[37m      4 │ import { AuthService } from [32m"../../core/auth.service"[37m;
+        ╵                             [32m~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "../../core/auth.service"[0m
+
+    src/app/features/review/review.ts:6:28:
+[37m      6 │ import { AuthService } from [32m"../../core/auth.service"[37m;
+        ╵                             [32m~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module './auth.service' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/admin.guard.ts:3:28:
+[37m      3 │ import { AuthService } from [32m"./auth.service"[37m;
+        ╵                             [32m~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS18046: 'auth' is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/admin.guard.ts:9:19:
+[37m      9 │   const ok = await [32mauth[37m.isAdmin();
+        ╵                    [32m~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module '../../../core/auth.service' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/auth/login/login.ts:4:28:
+[37m      4 │ import { AuthService } from [32m"../../../core/auth.service"[37m;
+        ╵                             [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/auth/login/login.ts:161:12:
+[37m      161 │       await [32mthis.auth[37m.login(normalizedEmail, this.password);
+          ╵             [32m~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/auth/login/login.ts:162:23:
+[37m      162 │       const ok = await [32mthis.auth[37m.isAdmin();
+          ╵                        [32m~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/auth/login/login.ts:164:14:
+[37m      164 │         await [32mthis.auth[37m.logout();
+          ╵               [32m~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module '../../core/auth.service' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/inbox/inbox.ts:3:28:
+[37m      3 │ import { AuthService } from [32m"../../core/auth.service"[37m;
+        ╵                             [32m~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module '../../core/auth.service' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/main/main-layout.ts:4:28:
+[37m      4 │ import { AuthService } from [32m"../../core/auth.service"[37m;
+        ╵                             [32m~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/main/main-layout.ts:61:10:
+[37m      61 │     await [32mthis.auth[37m.logout();
+         ╵           [32m~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module '../../core/auth.service' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/review/review-updated.ts:6:28:
+[37m      6 │ import { AuthService } from [32m"../../core/auth.service"[37m;
+        ╵                             [32m~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/review/review-updated.ts:376:18:
+[37m      376 │       const uid = [32mthis.auth[37m.uid();
+          ╵                   [32m~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/review/review-updated.ts:431:18:
+[37m      431 │       const uid = [32mthis.auth[37m.uid();
+          ╵                   [32m~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module '../../core/auth.service' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/review/review.ts:6:28:
+[37m      6 │ import { AuthService } from [32m"../../core/auth.service"[37m;
+        ╵                             [32m~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/review/review.ts:1108:18:
+[37m      1108 │       const uid = [32mthis.auth[37m.uid();
+           ╵                   [32m~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/review/review.ts:1168:18:
+[37m      1168 │       const uid = [32mthis.auth[37m.uid();
+           ╵                   [32m~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '{ uid: string; email: string; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; isActive: boolean; }' is not assignable to parameter of type 'SaveUserInput'.
+  Type '{ uid: string; email: string; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; isActive: boolean; }' is missing the following properties from type 'SaveUserInput': authEmail, username, loginType, mustChangePassword, and 2 more.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:181:39:
+[37m      181 │       await this.usersService.saveUser([32m{[37m
+          ╵                                        [32m^[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "./auth.service"[0m
+
+    src/app/core/admin.guard.ts:3:28:
+[37m      3 │ import { AuthService } from [32m"./auth.service"[37m;
+        ╵                             [32m~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "../../../core/auth.service"[0m
+
+    src/app/features/auth/login/login.ts:4:28:
+[37m      4 │ import { AuthService } from [32m"../../../core/auth.service"[37m;
+        ╵                             [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "../../core/auth.service"[0m
+
+    src/app/features/inbox/inbox.ts:3:20:
+[37m      3 │ import * as i1 from [32m"../../core/auth.service"[37m;
+        ╵                     [32m~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "../../core/auth.service"[0m
+
+    src/app/features/main/main-layout.ts:4:28:
+[37m      4 │ import { AuthService } from [32m"../../core/auth.service"[37m;
+        ╵                             [32m~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "../../core/auth.service"[0m
+
+    src/app/features/review/review.ts:6:28:
+[37m      6 │ import { AuthService } from [32m"../../core/auth.service"[37m;
+        ╵                             [32m~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module './core/admin.guard' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/app.routes.ts:2:27:
+[37m      2 │ import { adminGuard } from [32m"./core/admin.guard"[37m;
+        ╵                            [32m~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '{ uid: string; email: string; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; isActive: boolean; }' is not assignable to parameter of type 'SaveUserInput'.
+  Type '{ uid: string; email: string; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; isActive: boolean; }' is missing the following properties from type 'SaveUserInput': authEmail, username, loginType, mustChangePassword, and 2 more.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:181:39:
+[37m      181 │       await this.usersService.saveUser([32m{[37m
+          ╵                                        [32m^[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "./core/admin.guard"[0m
+
+    src/app/app.routes.ts:1:27:
+[37m      1 │ import { adminGuard } from [32m"./core/admin.guard"[37m;
+        ╵                            [32m~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module './core/admin.guard' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/app.routes.ts:2:27:
+[37m      2 │ import { adminGuard } from [32m"./core/admin.guard"[37m;
+        ╵                            [32m~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '{ uid: string; email: string; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; isActive: boolean; }' is not assignable to parameter of type 'SaveUserInput'.
+  Type '{ uid: string; email: string; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; isActive: boolean; }' is missing the following properties from type 'SaveUserInput': authEmail, username, loginType, mustChangePassword, and 2 more.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:181:39:
+[37m      181 │       await this.usersService.saveUser([32m{[37m
+          ╵                                        [32m^[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "./core/admin.guard"[0m
+
+    src/app/app.routes.ts:1:27:
+[37m      1 │ import { adminGuard } from [32m"./core/admin.guard"[37m;
+        ╵                            [32m~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module './features/auth/login/login' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/app.routes.ts:8:32:
+[37m      8 │ ...ent: () => import([32m"./features/auth/login/login"[37m).then((m) => m.d...
+        ╵                      [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '{ uid: string; email: string; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; isActive: boolean; }' is not assignable to parameter of type 'SaveUserInput'.
+  Type '{ uid: string; email: string; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; isActive: boolean; }' is missing the following properties from type 'SaveUserInput': authEmail, username, loginType, mustChangePassword, and 2 more.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:181:39:
+[37m      181 │       await this.usersService.saveUser([32m{[37m
+          ╵                                        [32m^[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "./features/auth/login/login"[0m
+
+    src/app/app.routes.ts:7:36:
+[37m      7 │ ...ent: () => import([32m"./features/auth/login/login"[37m).then((m) => m.d...
+        ╵                      [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module './features/auth/login/login' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/app.routes.ts:8:32:
+[37m      8 │ ...ent: () => import([32m"./features/auth/login/login"[37m).then((m) => m.d...
+        ╵                      [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '{ uid: string; email: string; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; isActive: boolean; }' is not assignable to parameter of type 'SaveUserInput'.
+  Type '{ uid: string; email: string; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; isActive: boolean; }' is missing the following properties from type 'SaveUserInput': authEmail, username, loginType, mustChangePassword, and 2 more.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:181:39:
+[37m      181 │       await this.usersService.saveUser([32m{[37m
+          ╵                                        [32m^[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "./features/auth/login/login"[0m
+
+    src/app/app.routes.ts:7:36:
+[37m      7 │ ...ent: () => import([32m"./features/auth/login/login"[37m).then((m) => m.d...
+        ╵                      [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module './features/auth/login/login' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/app.routes.ts:8:32:
+[37m      8 │ ...ent: () => import([32m"./features/auth/login/login"[37m).then((m) => m.d...
+        ╵                      [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '{ uid: string; email: string; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; isActive: boolean; }' is not assignable to parameter of type 'SaveUserInput'.
+  Type '{ uid: string; email: string; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; isActive: boolean; }' is missing the following properties from type 'SaveUserInput': authEmail, username, loginType, mustChangePassword, and 2 more.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:181:39:
+[37m      181 │       await this.usersService.saveUser([32m{[37m
+          ╵                                        [32m^[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "./features/auth/login/login"[0m
+
+    src/app/app.routes.ts:7:36:
+[37m      7 │ ...ent: () => import([32m"./features/auth/login/login"[37m).then((m) => m.d...
+        ╵                      [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module './features/auth/login/login' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/app.routes.ts:8:32:
+[37m      8 │ ...ent: () => import([32m"./features/auth/login/login"[37m).then((m) => m.d...
+        ╵                      [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '{ uid: string; email: string; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; isActive: boolean; }' is not assignable to parameter of type 'SaveUserInput'.
+  Type '{ uid: string; email: string; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; isActive: boolean; }' is missing the following properties from type 'SaveUserInput': authEmail, username, loginType, mustChangePassword, and 2 more.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:181:39:
+[37m      181 │       await this.usersService.saveUser([32m{[37m
+          ╵                                        [32m^[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "./features/auth/login/login"[0m
+
+    src/app/app.routes.ts:7:36:
+[37m      7 │ ...ent: () => import([32m"./features/auth/login/login"[37m).then((m) => m.d...
+        ╵                      [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '{ uid: string; email: string; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; isActive: boolean; }' is not assignable to parameter of type 'SaveUserInput'.
+  Type '{ uid: string; email: string; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; isActive: boolean; }' is missing the following properties from type 'SaveUserInput': authEmail, username, loginType, mustChangePassword, and 2 more.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:181:39:
+[37m      181 │       await this.usersService.saveUser([32m{[37m
+          ╵                                        [32m^[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '{ uid: string; email: string; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; isActive: boolean; }' is not assignable to parameter of type 'SaveUserInput'.
+  Type '{ uid: string; email: string; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; isActive: boolean; }' is missing the following properties from type 'SaveUserInput': authEmail, username, loginType, mustChangePassword, and 2 more.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:181:39:
+[37m      181 │       await this.usersService.saveUser([32m{[37m
+          ╵                                        [32m^[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module './features/main/main-layout' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/app.routes.ts:17:32:
+[37m      17 │ ...nt: () => import([32m"./features/main/main-layout"[37m).then((m) => m.d...
+         ╵                     [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '{ uid: string; email: string; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; isActive: boolean; }' is not assignable to parameter of type 'SaveUserInput'.
+  Type '{ uid: string; email: string; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; isActive: boolean; }' is missing the following properties from type 'SaveUserInput': authEmail, username, loginType, mustChangePassword, and 2 more.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:181:39:
+[37m      181 │       await this.usersService.saveUser([32m{[37m
+          ╵                                        [32m^[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "./features/main/main-layout"[0m
+
+    src/app/app.routes.ts:16:36:
+[37m      16 │ ...nt: () => import([32m"./features/main/main-layout"[37m).then((m) => m.d...
+         ╵                     [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module './features/main/main-layout' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/app.routes.ts:17:32:
+[37m      17 │ ...nt: () => import([32m"./features/main/main-layout"[37m).then((m) => m.d...
+         ╵                     [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '{ uid: string; email: string; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; isActive: boolean; }' is not assignable to parameter of type 'SaveUserInput'.
+  Type '{ uid: string; email: string; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; isActive: boolean; }' is missing the following properties from type 'SaveUserInput': authEmail, username, loginType, mustChangePassword, and 2 more.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:181:39:
+[37m      181 │       await this.usersService.saveUser([32m{[37m
+          ╵                                        [32m^[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "./features/main/main-layout"[0m
+
+    src/app/app.routes.ts:16:36:
+[37m      16 │ ...nt: () => import([32m"./features/main/main-layout"[37m).then((m) => m.d...
+         ╵                     [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module './features/main/main-layout' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/app.routes.ts:17:32:
+[37m      17 │ ...nt: () => import([32m"./features/main/main-layout"[37m).then((m) => m.d...
+         ╵                     [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '{ uid: string; email: string; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; isActive: boolean; }' is not assignable to parameter of type 'SaveUserInput'.
+  Type '{ uid: string; email: string; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; isActive: boolean; }' is missing the following properties from type 'SaveUserInput': authEmail, username, loginType, mustChangePassword, and 2 more.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:181:39:
+[37m      181 │       await this.usersService.saveUser([32m{[37m
+          ╵                                        [32m^[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "./features/main/main-layout"[0m
+
+    src/app/app.routes.ts:16:36:
+[37m      16 │ ...nt: () => import([32m"./features/main/main-layout"[37m).then((m) => m.d...
+         ╵                     [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '{ uid: string; email: string; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; isActive: boolean; }' is not assignable to parameter of type 'SaveUserInput'.
+  Type '{ uid: string; email: string; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; isActive: boolean; }' is missing the following properties from type 'SaveUserInput': authEmail, username, loginType, mustChangePassword, and 2 more.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:181:39:
+[37m      181 │       await this.usersService.saveUser([32m{[37m
+          ╵                                        [32m^[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module './features/usuarios/usuarios' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/app.routes.ts:125:36:
+[37m      125 │ ...t: () => import([32m"./features/usuarios/usuarios"[37m).then((m) => m....
+          ╵                    [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "./features/usuarios/usuarios"[0m
+
+    src/app/app.routes.ts:122:44:
+[37m      122 │ ...t: () => import([32m"./features/usuarios/usuarios"[37m).then((m) => m....
+          ╵                    [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module './features/usuarios/usuarios' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/app.routes.ts:125:36:
+[37m      125 │ ...t: () => import([32m"./features/usuarios/usuarios"[37m).then((m) => m....
+          ╵                    [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "./features/usuarios/usuarios"[0m
+
+    src/app/app.routes.ts:122:44:
+[37m      122 │ ...t: () => import([32m"./features/usuarios/usuarios"[37m).then((m) => m....
+          ╵                    [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module './features/usuarios/usuarios' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/app.routes.ts:125:36:
+[37m      125 │ ...t: () => import([32m"./features/usuarios/usuarios"[37m).then((m) => m....
+          ╵                    [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "./features/usuarios/usuarios"[0m
+
+    src/app/app.routes.ts:122:44:
+[37m      122 │ ...t: () => import([32m"./features/usuarios/usuarios"[37m).then((m) => m....
+          ╵                    [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module './features/usuarios/usuarios' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/app.routes.ts:125:36:
+[37m      125 │ ...t: () => import([32m"./features/usuarios/usuarios"[37m).then((m) => m....
+          ╵                    [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "./features/usuarios/usuarios"[0m
+
+    src/app/app.routes.ts:122:44:
+[37m      122 │ ...t: () => import([32m"./features/usuarios/usuarios"[37m).then((m) => m....
+          ╵                    [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mNG2008: Could not find stylesheet file './usuarios.css'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:71:12:
+[37m      71 │   styleUrl: [32m"./usuarios.css"[37m,
+         ╵             [32m~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mNG2008: Could not find stylesheet file './usuarios.css'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:71:12:
+[37m      71 │   styleUrl: [32m"./usuarios.css"[37m,
+         ╵             [32m~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module '../../services/user-admin-api.service' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:23:60:
+[37m      23 │ ...serAdminApiService } from [32m"../../services/user-admin-api.service"[37m;
+         ╵                              [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:368:27:
+[37m      368 │ ...  const result = await [32mthis.userAdminApi[37m.createManagedUser(pay...
+          ╵                           [32m~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:413:12:
+[37m      413 │       await [32mthis.userAdminApi[37m.updateManagedUser(row.uid, {
+          ╵             [32m~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:468:12:
+[37m      468 │       await [32mthis.userAdminApi[37m.resendActivationEmail(row.uid);
+          ╵             [32m~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:484:27:
+[37m      484 │ ...  const result = await [32mthis.userAdminApi[37m.regenerateTemporaryPa...
+          ╵                           [32m~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "../../services/user-admin-api.service"[0m
+
+    src/app/features/usuarios/usuarios.ts:7:36:
+[37m      7 │ ...UserAdminApiService } from [32m"../../services/user-admin-api.service"[37m;
+        ╵                               [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module '../../services/user-admin-api.service' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:23:60:
+[37m      23 │ ...serAdminApiService } from [32m"../../services/user-admin-api.service"[37m;
+         ╵                              [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:368:27:
+[37m      368 │ ...  const result = await [32mthis.userAdminApi[37m.createManagedUser(pay...
+          ╵                           [32m~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:413:12:
+[37m      413 │       await [32mthis.userAdminApi[37m.updateManagedUser(row.uid, {
+          ╵             [32m~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:468:12:
+[37m      468 │       await [32mthis.userAdminApi[37m.resendActivationEmail(row.uid);
+          ╵             [32m~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:484:27:
+[37m      484 │ ...  const result = await [32mthis.userAdminApi[37m.regenerateTemporaryPa...
+          ╵                           [32m~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "../../services/user-admin-api.service"[0m
+
+    src/app/features/usuarios/usuarios.ts:7:36:
+[37m      7 │ ...UserAdminApiService } from [32m"../../services/user-admin-api.service"[37m;
+        ╵                               [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2741: Property 'permissions' is missing in type '{ displayName: string; username: string; loginType: UserLoginType; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; email: string | undefined; sendActivationEmail: boolean; }' but required in type 'CreateManagedUserInput'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:357:10:
+[37m      357 │     const [32mpayload[37m: CreateManagedUserInput = {
+          ╵           [32m~~~~~~~[0m
+
+  'permissions' is declared here.
+
+    src/app/services/user-admin-api.service.ts:29:2:
+[37m      29 │   [32mpermissions[37m: AdminPermissionsPayload;
+         ╵   [32m~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2353: Object literal may only specify known properties, and 'displayName' does not exist in type 'UpdateManagedUserInput'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:414:8:
+[37m      414 │         [32mdisplayName[37m: draft.displayName.trim(),
+          ╵         [32m~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'buildAdminPermissions' does not exist on type 'UsuariosPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:364:24:
+[37m      364 │       permissions: this.[32mbuildAdminPermissions[37m(this.newRoleId(), {}),
+          ╵                         [32m~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2353: Object literal may only specify known properties, and 'displayName' does not exist in type 'UpdateManagedUserInput'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:415:8:
+[37m      415 │         [32mdisplayName[37m: draft.displayName.trim(),
+          ╵         [32m~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'buildAdminPermissions' does not exist on type 'UsuariosPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:364:24:
+[37m      364 │       permissions: this.[32mbuildAdminPermissions[37m(this.newRoleId(), {}),
+          ╵                         [32m~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'buildAdminPermissions' does not exist on type 'UsuariosPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:417:26:
+[37m      417 │ ...   permissions: this.[32mbuildAdminPermissions[37m(draft.roleId, draft...
+          ╵                         [32m~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'buildAdminPermissions' does not exist on type 'UsuariosPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:364:24:
+[37m      364 │       permissions: this.[32mbuildAdminPermissions[37m(this.newRoleId(), {}),
+          ╵                         [32m~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'buildAdminPermissions' does not exist on type 'UsuariosPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:417:26:
+[37m      417 │ ...   permissions: this.[32mbuildAdminPermissions[37m(draft.roleId, draft...
+          ╵                         [32m~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'buildAdminPermissions' does not exist on type 'UsuariosPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:452:26:
+[37m      452 │ ...   permissions: this.[32mbuildAdminPermissions[37m(row.roleId, row.sec...
+          ╵                         [32m~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'buildAdminPermissions' does not exist on type 'UsuariosPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:364:24:
+[37m      364 │       permissions: this.[32mbuildAdminPermissions[37m(this.newRoleId(), {}),
+          ╵                         [32m~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'buildAdminPermissions' does not exist on type 'UsuariosPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:417:26:
+[37m      417 │ ...   permissions: this.[32mbuildAdminPermissions[37m(draft.roleId, draft...
+          ╵                         [32m~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'buildAdminPermissions' does not exist on type 'UsuariosPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:452:26:
+[37m      452 │ ...   permissions: this.[32mbuildAdminPermissions[37m(row.roleId, row.sec...
+          ╵                         [32m~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module '../../services/user-admin-api.service' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:23:85:
+[37m      23 │ ...serAdminApiService } from [32m"../../services/user-admin-api.service"[37m;
+         ╵                              [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:369:27:
+[37m      369 │ ...  const result = await [32mthis.userAdminApi[37m.createManagedUser(pay...
+          ╵                           [32m~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:414:12:
+[37m      414 │       await [32mthis.userAdminApi[37m.updateManagedUser(row.uid, {
+          ╵             [32m~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:449:12:
+[37m      449 │       await [32mthis.userAdminApi[37m.updateManagedUser(row.uid, {
+          ╵             [32m~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:470:12:
+[37m      470 │       await [32mthis.userAdminApi[37m.resendActivationEmail(row.uid);
+          ╵             [32m~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:486:27:
+[37m      486 │ ...  const result = await [32mthis.userAdminApi[37m.regenerateTemporaryPa...
+          ╵                           [32m~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "../../services/user-admin-api.service"[0m
+
+    src/app/features/usuarios/usuarios.ts:7:36:
+[37m      7 │ ...UserAdminApiService } from [32m"../../services/user-admin-api.service"[37m;
+        ╵                               [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module '../../services/user-admin-api.service' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:23:85:
+[37m      23 │ ...serAdminApiService } from [32m"../../services/user-admin-api.service"[37m;
+         ╵                              [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:369:27:
+[37m      369 │ ...  const result = await [32mthis.userAdminApi[37m.createManagedUser(pay...
+          ╵                           [32m~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:414:12:
+[37m      414 │       await [32mthis.userAdminApi[37m.updateManagedUser(row.uid, {
+          ╵             [32m~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:449:12:
+[37m      449 │       await [32mthis.userAdminApi[37m.updateManagedUser(row.uid, {
+          ╵             [32m~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:470:12:
+[37m      470 │       await [32mthis.userAdminApi[37m.resendActivationEmail(row.uid);
+          ╵             [32m~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2571: Object is of type 'unknown'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:486:27:
+[37m      486 │ ...  const result = await [32mthis.userAdminApi[37m.regenerateTemporaryPa...
+          ╵                           [32m~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "../../services/user-admin-api.service"[0m
+
+    src/app/features/usuarios/usuarios.ts:7:36:
+[37m      7 │ ...UserAdminApiService } from [32m"../../services/user-admin-api.service"[37m;
+        ╵                               [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2739: Type '{ uid: string; email: string; authEmail: string; username: string; loginType: UserLoginType; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; ... 5 more ...; updatedAt: null; }' is missing the following properties from type 'UserDoc': sections, capabilities[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:166:4:
+[37m      166 │     [32mreturn[37m {
+          ╵     [32m~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2739: Type '{ uid: string; email: string; authEmail: string; username: string; loginType: UserLoginType; displayName: any; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; ... 5 more ...; updatedAt: null; }' is missing the following properties from type 'UserDoc': sections, capabilities[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/services/users.service.ts:136:4:
+[37m      136 │     [32mreturn[37m {
+          ╵     [32m~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2739: Type '{ uid: string; email: any; authEmail: any; username: string; loginType: UserLoginType; displayName: any; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; isActive: boolean; ... 4 more ...; updatedAt: any; }' is missing the following properties from type 'UserDoc': sections, capabilities[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/services/users.service.ts:229:4:
+[37m      229 │     [32mreturn[37m {
+          ╵     [32m~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2739: Type '{ uid: string; email: string; authEmail: string; username: string; loginType: UserLoginType; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; ... 5 more ...; updatedAt: null; }' is missing the following properties from type 'UserDoc': sections, capabilities[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:166:4:
+[37m      166 │     [32mreturn[37m {
+          ╵     [32m~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'sections' does not exist on type 'ImpersonationSnapshot'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/authz.service.ts:55:30:
+[37m      55 │       sections: { ...snapshot.[32msections[37m },
+         ╵                               [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'capabilities' does not exist on type 'ImpersonationSnapshot'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/authz.service.ts:56:34:
+[37m      56 │       capabilities: { ...snapshot.[32mcapabilities[37m },
+         ╵                                   [32m~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2739: Type '{ uid: string; email: string; authEmail: string; username: string; loginType: UserLoginType; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; ... 5 more ...; updatedAt: null; }' is missing the following properties from type 'UserDoc': sections, capabilities[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:166:4:
+[37m      166 │     [32mreturn[37m {
+          ╵     [32m~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'sections' does not exist on type 'ImpersonationSnapshot'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/authz.service.ts:51:30:
+[37m      51 │       sections: { ...snapshot.[32msections[37m },
+         ╵                               [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'capabilities' does not exist on type 'ImpersonationSnapshot'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/authz.service.ts:52:34:
+[37m      52 │       capabilities: { ...snapshot.[32mcapabilities[37m },
+         ╵                                   [32m~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2739: Type '{ uid: string; email: string; authEmail: string; username: string; loginType: UserLoginType; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; ... 5 more ...; updatedAt: null; }' is missing the following properties from type 'UserDoc': sections, capabilities[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:166:4:
+[37m      166 │     [32mreturn[37m {
+          ╵     [32m~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'sections' does not exist on type 'ImpersonationSnapshot'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/authz.service.ts:54:30:
+[37m      54 │       sections: { ...snapshot.[32msections[37m },
+         ╵                               [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'capabilities' does not exist on type 'ImpersonationSnapshot'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/authz.service.ts:55:34:
+[37m      55 │       capabilities: { ...snapshot.[32mcapabilities[37m },
+         ╵                                   [32m~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2739: Type '{ uid: string; email: string; authEmail: string; username: string; loginType: UserLoginType; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; ... 5 more ...; updatedAt: null; }' is missing the following properties from type 'UserDoc': sections, capabilities[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:166:4:
+[37m      166 │     [32mreturn[37m {
+          ╵     [32m~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'sections' does not exist on type 'ImpersonationSnapshot'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/authz.service.ts:53:30:
+[37m      53 │       sections: { ...snapshot.[32msections[37m },
+         ╵                               [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'capabilities' does not exist on type 'ImpersonationSnapshot'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/authz.service.ts:54:34:
+[37m      54 │       capabilities: { ...snapshot.[32mcapabilities[37m },
+         ╵                                   [32m~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2739: Type '{ uid: string; email: string; authEmail: string; username: string; loginType: UserLoginType; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; ... 5 more ...; updatedAt: null; }' is missing the following properties from type 'UserDoc': sections, capabilities[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:166:4:
+[37m      166 │     [32mreturn[37m {
+          ╵     [32m~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'SectionsMap | {}' is not assignable to type 'SectionsMap'.
+  Type '{}' is missing the following properties from type 'SectionsMap': "sections.dashboard", "sections.pedidos", "sections.proveedores", "sections.validacion", and 8 more.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/impersonation.service.ts:79:8:
+[37m      79 │         [32msections[37m: typeof parsed.sections === "object" && parsed.se...
+         ╵         [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'CapabilitiesMap | {}' is not assignable to type 'CapabilitiesMap'.
+  Type '{}' is missing the following properties from type 'CapabilitiesMap': "cap.users.view", "cap.users.invite", "cap.users.edit", "cap.users.disable", and 64 more.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/impersonation.service.ts:80:8:
+[37m      80 │         [32mcapabilities[37m: typeof parsed.capabilities === "object" && p...
+         ╵         [32m~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2739: Type '{ uid: string; email: string; authEmail: string; username: string; loginType: UserLoginType; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; ... 5 more ...; updatedAt: null; }' is missing the following properties from type 'UserDoc': sections, capabilities[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:166:4:
+[37m      166 │     [32mreturn[37m {
+          ╵     [32m~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2739: Type '{ uid: string; email: string; authEmail: string; username: string; loginType: UserLoginType; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; ... 5 more ...; updatedAt: null; }' is missing the following properties from type 'UserDoc': sections, capabilities[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:166:4:
+[37m      166 │     [32mreturn[37m {
+          ╵     [32m~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'salidas' does not exist on type 'AdminPermissionsPayload'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:684:38:
+[37m      684 │       "sections.salidas": permissions.[32msalidas[37m,
+          ╵                                       [32m~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'salidas' does not exist on type 'AdminPermissionsPayload'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:684:38:
+[37m      684 │       "sections.salidas": permissions.[32msalidas[37m,
+          ╵                                       [32m~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'salidas' does not exist on type 'AdminPermissionsPayload'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:684:38:
+[37m      684 │       "sections.salidas": permissions.[32msalidas[37m,
+          ╵                                       [32m~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'role' does not exist on type 'SessionBootstrapUser'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/auth.service.ts:68:23:
+[37m      68 │           roleId: boot.[32mrole[37m || null,
+         ╵                        [32m~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'active' does not exist on type 'SessionBootstrapUser'. Did you mean 'isActive'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/auth.service.ts:69:33:
+[37m      69 │           isActive: Boolean(boot.[32mactive[37m),
+         ╵                                  [32m~~~~~~[0m
+
+  'isActive' is declared here.
+
+    src/app/services/user-admin-api.service.ts:87:2:
+[37m      87 │   [32misActive[37m: boolean;
+         ╵   [32m~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'sectionOverrides' does not exist on type 'ListManagedUserRow'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:173:62:
+[37m      173 │ ...ectionOverridesMap(row.[32msectionOverrides[37m || this.deriveSectionO...
+          ╵                           [32m~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'capabilityOverrides' does not exist on type 'ListManagedUserRow'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:175:10:
+[37m      175 │       row.[32mcapabilityOverrides[37m || this.deriveCapabilityOverrides(r...
+          ╵           [32m~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m

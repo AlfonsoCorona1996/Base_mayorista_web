@@ -1,0 +1,53 @@
+<section class="activate-page">
+  <article class="activate-card">
+    <header>
+      <h1>Activa tu usuario</h1>
+      <p>Para usar el sistema debes cambiar la contrasena temporal.</p>
+    </header>
+
+    <form class="form" (submit)="submit(); $event.preventDefault()" novalidate>
+      <label>
+        Nueva contrasena
+        <input
+          class="input"
+          type="password"
+          [(ngModel)]="password"
+          name="password"
+          [disabled]="loading()"
+          autocomplete="new-password"
+          required
+        />
+      </label>
+      @if (hasPasswordError()) {
+        <p class="field-error">{{ getPasswordError() }}</p>
+      }
+
+      <label>
+        Confirmar contrasena
+        <input
+          class="input"
+          type="password"
+          [(ngModel)]="confirmPassword"
+          name="confirmPassword"
+          [disabled]="loading()"
+          autocomplete="new-password"
+          required
+        />
+      </label>
+      @if (hasConfirmPasswordError()) {
+        <p class="field-error">{{ getConfirmPasswordError() }}</p>
+      }
+
+      @if (error()) {
+        <div class="alert alert-error">{{ error() }}</div>
+      }
+      @if (success()) {
+        <div class="alert alert-success">{{ success() }}</div>
+      }
+
+      <button type="submit" class="btn btn-primary" [disabled]="loading()">
+        {{ loading() ? "Actualizando..." : "Activar usuario" }}
+      </button>
+    </form>
+  </article>
+</section>
