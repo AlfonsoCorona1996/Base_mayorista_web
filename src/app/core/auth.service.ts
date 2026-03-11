@@ -1,7 +1,6 @@
 import { Injectable, computed, inject, signal } from "@angular/core";
-import { FIREBASE_AUTH, FIRESTORE } from "./firebase.providers";
+import { FIREBASE_AUTH } from "./firebase.providers";
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, User } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
 import { buildUsernameAuthEmail } from "./rbac.constants";
 import { UserAdminApiService } from "../services/user-admin-api.service";
 
@@ -9,6 +8,7 @@ export type AccessStatus = {
   uid: string | null;
   roleId: string | null;
   isActive: boolean;
+  invitePending: boolean;
   mustChangePassword: boolean;
 };
 
@@ -51,7 +51,7 @@ export class AuthService {
       u = FIREBASE_AUTH.currentUser ?? this.user();
     }
     if (!u) {
-      return { uid: null, roleId: null, isActive: false, mustChangePassword: false };
+      return { uid: null, roleId: null, isActive: false, invitePending: false, mustChangePassword: false };
     }
 
     const cached = this.accessCheckCache;
@@ -61,45 +61,13 @@ export class AuthService {
     if (this.accessCheckPromise) return this.accessCheckPromise;
 
     this.accessCheckPromise = (async () => {
-      try {
-        const boot = await this.userAdminApi.getSessionBootstrap();
-        const value: AccessStatus = {
-          uid: boot.uid || u.uid,
-          roleId: boot.roleId || null,
-          isActive: Boolean(boot.isActive),
-          mustChangePassword: Boolean(boot.mustChangePassword),
-        };
-        this.accessCheckCache = { uid: u.uid, value, at: Date.now() };
-        return value;
-      } catch {
-        // Fallback while backend endpoint is unavailable in local or older environments.
-      }
-
-      const userSnap = await getDoc(doc(FIRESTORE, "users", u.uid));
-      if (userSnap.exists()) {
-        const data = userSnap.data() as Record<string, any>;
-        const value: AccessStatus = {
-          uid: u.uid,
-          roleId: typeof data["roleId"] === "string" ? data["roleId"] : null,
-          isActive: Boolean(data["isActive"] ?? true),
-          mustChangePassword: Boolean(data["mustChangePassword"] ?? false),
-        };
-        this.accessCheckCache = { uid: u.uid, value, at: Date.now() };
-        return value;
-      }
-
-      const legacySnap = await getDoc(doc(FIRESTORE, "admins", u.uid));
-      if (!legacySnap.exists()) {
-        const value: AccessStatus = { uid: u.uid, roleId: null, isActive: false, mustChangePassword: false };
-        this.accessCheckCache = { uid: u.uid, value, at: Date.now() };
-        return value;
-      }
-      const legacy = legacySnap.data() as Record<string, any>;
+      const boot = await this.userAdminApi.getSessionBootstrap();
       const value: AccessStatus = {
-        uid: u.uid,
-        roleId: typeof legacy["role"] === "string" ? legacy["role"] : null,
-        isActive: legacy["active"] === true,
-        mustChangePassword: false,
+        uid: boot.uid || u.uid,
+        roleId: boot.roleId || null,
+        isActive: Boolean(boot.isActive),
+        invitePending: Boolean(boot.invitePending),
+        mustChangePassword: Boolean(boot.mustChangePassword),
       };
       this.accessCheckCache = { uid: u.uid, value, at: Date.now() };
       return value;
@@ -114,7 +82,7 @@ export class AuthService {
 
   async isAdmin(): Promise<boolean> {
     const status = await this.getAccessStatus();
-    return Boolean(status.uid && status.isActive);
+    return Boolean(status.uid && status.isActive && !status.invitePending && !status.mustChangePassword);
   }
 
   invalidateAccessCache() {

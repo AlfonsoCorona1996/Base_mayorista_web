@@ -1,6 +1,11 @@
 import { Injectable } from "@angular/core";
 import { FIREBASE_AUTH } from "../core/firebase.providers";
-import { RoleId, UserLoginType, buildUsernameAuthEmail } from "../core/rbac.constants";
+import {
+  RoleId,
+  UserLoginType,
+  buildUsernameAuthEmail,
+  normalizeRoleId,
+} from "../core/rbac.constants";
 import { environment } from "../../environments/environment";
 
 export type AdminPermissionKey =
@@ -41,7 +46,11 @@ export type CreateManagedUserResult = {
 export type UpdateManagedUserInput = {
   roleId: RoleId;
   isActive: boolean;
-  permissions: AdminPermissionsPayload;
+  permissions?: AdminPermissionsPayload;
+  sections?: Record<string, boolean>;
+  capabilities?: Record<string, boolean>;
+  sectionOverrides?: Record<string, boolean>;
+  capabilityOverrides?: Record<string, boolean>;
 };
 
 export type UpdateProfileInput = {
@@ -68,16 +77,15 @@ export type ListManagedUserRow = {
   uid: string;
   email: string | null;
   username: string;
-  display_name: string;
-  role: RoleId;
-  active: boolean;
-  invite_pending: boolean;
-  must_change_password: boolean;
-  permissions: AdminPermissionsPayload;
-  sections?: Record<string, boolean>;
-  capabilities?: Record<string, boolean>;
-  sectionOverrides?: Record<string, boolean>;
-  capabilityOverrides?: Record<string, boolean>;
+  displayName: string;
+  roleId: RoleId;
+  isActive: boolean;
+  invitePending: boolean;
+  mustChangePassword: boolean;
+  sections: Record<string, boolean> | null;
+  capabilities: Record<string, boolean> | null;
+  sectionOverrides: Record<string, boolean> | null;
+  capabilityOverrides: Record<string, boolean> | null;
 };
 
 export type SessionBootstrapUser = {
@@ -92,6 +100,35 @@ export type SessionBootstrapUser = {
   sections?: Record<string, boolean> | null;
   capabilities?: Record<string, boolean> | null;
 };
+
+type BackendSectionKey =
+  | "dashboard"
+  | "validacion"
+  | "pedidos"
+  | "catalogo"
+  | "categorias"
+  | "proveedores"
+  | "inventario"
+  | "clientes"
+  | "rutas"
+  | "localidades"
+  | "salidas"
+  | "usuarios";
+
+const BACKEND_SECTION_KEYS: BackendSectionKey[] = [
+  "dashboard",
+  "validacion",
+  "pedidos",
+  "catalogo",
+  "categorias",
+  "proveedores",
+  "inventario",
+  "clientes",
+  "rutas",
+  "localidades",
+  "salidas",
+  "usuarios",
+];
 
 @Injectable({ providedIn: "root" })
 export class UserAdminApiService {
@@ -140,34 +177,62 @@ export class UserAdminApiService {
   }
 
   async updateManagedUser(uid: string, input: UpdateManagedUserInput): Promise<void> {
+    const payload: Record<string, unknown> = {
+      uid,
+      roleId: input.roleId,
+      isActive: Boolean(input.isActive),
+    };
+
+    if (input.permissions && Object.keys(input.permissions).length > 0) {
+      payload["permissions"] = this.normalizePermissions(input.permissions, input.roleId);
+    }
+    if (input.sections && Object.keys(input.sections).length > 0) {
+      payload["sections"] = this.normalizeSectionsForApi(input.sections, { includeAllKnown: false });
+    }
+    if (input.capabilities && Object.keys(input.capabilities).length > 0) {
+      payload["capabilities"] = this.normalizeCapabilitiesForApi(input.capabilities);
+    }
+    if (input.sectionOverrides && Object.keys(input.sectionOverrides).length > 0) {
+      payload["sectionOverrides"] = this.normalizeSectionsForApi(input.sectionOverrides, { includeAllKnown: false });
+    }
+    if (input.capabilityOverrides && Object.keys(input.capabilityOverrides).length > 0) {
+      payload["capabilityOverrides"] = this.normalizeCapabilitiesForApi(input.capabilityOverrides);
+    }
+
+    if (!environment.production) {
+      console.info("[AUTHZ][UPDATE_ACCESS][PAYLOAD]", payload);
+    }
+
     await this.request<void>("/admin/users/update-access", {
       method: "POST",
-      body: JSON.stringify({
-        uid,
-        role: input.roleId,
-        active: Boolean(input.isActive),
-        permissions: this.normalizePermissions(input.permissions, input.roleId),
-      }),
+      body: JSON.stringify(payload),
     });
   }
 
   async updateManagedUserProfile(input: UpdateProfileInput): Promise<void> {
+    const payload = {
+      uid: input.uid,
+      display_name: input.displayName.trim(),
+      username: input.username.trim().toLowerCase(),
+      email: input.email ? input.email.trim().toLowerCase() : null,
+    };
+    if (!environment.production) {
+      console.info("[AUTHZ][UPDATE_PROFILE][PAYLOAD]", payload);
+    }
     await this.request<void>("/admin/users/update-profile", {
       method: "POST",
-      body: JSON.stringify({
-        uid: input.uid,
-        display_name: input.displayName.trim(),
-        username: input.username.trim().toLowerCase(),
-        email: input.email ? input.email.trim().toLowerCase() : null,
-      }),
+      body: JSON.stringify(payload),
     });
   }
 
   async listManagedUsers(): Promise<ListManagedUserRow[]> {
-    const result = await this.request<{ users: ListManagedUserRow[] }>("/admin/users/list", {
+    const result = await this.request<{ users: unknown[] }>("/admin/users/list", {
       method: "GET",
     });
-    return Array.isArray(result.users) ? result.users : [];
+    if (!Array.isArray(result.users)) return [];
+    return result.users
+      .map((entry) => this.normalizeManagedUserRow(entry))
+      .filter((entry): entry is ListManagedUserRow => entry !== null);
   }
 
   async resendActivationEmail(uid: string): Promise<void> {
@@ -201,15 +266,11 @@ export class UserAdminApiService {
         uid: string;
         email: string | null;
         username: string;
-        display_name?: string | null;
-        role?: string;
-        roleId?: string;
-        active?: boolean;
-        isActive?: boolean;
-        invite_pending?: boolean;
-        invitePending?: boolean;
-        must_change_password?: boolean;
-        mustChangePassword?: boolean;
+        displayName?: string | null;
+        roleId: string;
+        isActive: boolean;
+        invitePending: boolean;
+        mustChangePassword: boolean;
         sections?: Record<string, boolean> | null;
         capabilities?: Record<string, boolean> | null;
       };
@@ -220,11 +281,11 @@ export class UserAdminApiService {
       uid: result.user.uid,
       email: result.user.email,
       username: result.user.username,
-      displayName: (result.user.display_name || null) as string | null,
-      roleId: (result.user.roleId || result.user.role || "") as string,
-      isActive: Boolean(result.user.isActive ?? result.user.active),
-      invitePending: Boolean(result.user.invitePending ?? result.user.invite_pending),
-      mustChangePassword: Boolean(result.user.mustChangePassword ?? result.user.must_change_password),
+      displayName: result.user.displayName || null,
+      roleId: result.user.roleId || "",
+      isActive: Boolean(result.user.isActive),
+      invitePending: Boolean(result.user.invitePending),
+      mustChangePassword: Boolean(result.user.mustChangePassword),
       sections: (result.user.sections || null) as Record<string, boolean> | null,
       capabilities: (result.user.capabilities || null) as Record<string, boolean> | null,
     };
@@ -259,6 +320,38 @@ export class UserAdminApiService {
       localidades: Boolean(input.localidades),
       usuarios: roleId === "super_admin" ? Boolean(input.usuarios) : false,
     };
+  }
+
+  private normalizeSectionsForApi(
+    input: Record<string, unknown>,
+    options: { includeAllKnown: boolean },
+  ): Partial<Record<BackendSectionKey, boolean>> {
+    const out: Partial<Record<BackendSectionKey, boolean>> = {};
+    if (options.includeAllKnown) {
+      for (const key of BACKEND_SECTION_KEYS) out[key] = false;
+    }
+
+    for (const [rawKey, rawValue] of Object.entries(input || {})) {
+      if (typeof rawValue !== "boolean") continue;
+      const normalizedKey = rawKey.startsWith("sections.") ? rawKey.slice("sections.".length) : rawKey;
+      if (!this.isBackendSectionKey(normalizedKey)) continue;
+      out[normalizedKey] = rawValue;
+    }
+    return out;
+  }
+
+  private normalizeCapabilitiesForApi(input: Record<string, unknown>): Record<string, boolean> {
+    const out: Record<string, boolean> = {};
+    for (const [rawKey, rawValue] of Object.entries(input || {})) {
+      if (typeof rawValue !== "boolean") continue;
+      if (!rawKey.startsWith("cap.")) continue;
+      out[rawKey] = rawValue;
+    }
+    return out;
+  }
+
+  private isBackendSectionKey(value: string): value is BackendSectionKey {
+    return BACKEND_SECTION_KEYS.includes(value as BackendSectionKey);
   }
 
   private async request<T>(path: string, init: RequestInit): Promise<T> {
@@ -302,5 +395,54 @@ export class UserAdminApiService {
     } catch {
       return text;
     }
+  }
+
+  private normalizeManagedUserRow(raw: unknown): ListManagedUserRow | null {
+    if (!raw || typeof raw !== "object") return null;
+    const row = raw as Record<string, unknown>;
+    const uid = this.normalizeNonEmptyString(row["uid"]);
+    if (!uid) return null;
+
+    const username = this.normalizeNonEmptyString(row["username"]) || uid;
+    const displayName = this.normalizeNonEmptyString(row["displayName"]) || username;
+    const roleId = normalizeRoleId(row["roleId"]);
+    const email = this.normalizeNullableEmail(row["email"]);
+
+    return {
+      uid,
+      email,
+      username,
+      displayName,
+      roleId,
+      isActive: Boolean(row["isActive"] ?? true),
+      invitePending: Boolean(row["invitePending"] ?? false),
+      mustChangePassword: Boolean(row["mustChangePassword"] ?? false),
+      sections: this.normalizeBooleanRecord(row["sections"]),
+      capabilities: this.normalizeBooleanRecord(row["capabilities"]),
+      sectionOverrides: this.normalizeBooleanRecord(row["sectionOverrides"]),
+      capabilityOverrides: this.normalizeBooleanRecord(row["capabilityOverrides"]),
+    };
+  }
+
+  private normalizeNullableEmail(raw: unknown): string | null {
+    const value = this.normalizeNonEmptyString(raw);
+    if (!value) return null;
+    return value.toLowerCase();
+  }
+
+  private normalizeNonEmptyString(raw: unknown): string | null {
+    if (typeof raw !== "string") return null;
+    const value = raw.trim();
+    return value.length ? value : null;
+  }
+
+  private normalizeBooleanRecord(raw: unknown): Record<string, boolean> | null {
+    if (!raw || typeof raw !== "object") return null;
+    const source = raw as Record<string, unknown>;
+    const out: Record<string, boolean> = {};
+    for (const [key, value] of Object.entries(source)) {
+      if (typeof value === "boolean") out[key] = value;
+    }
+    return Object.keys(out).length ? out : null;
   }
 }

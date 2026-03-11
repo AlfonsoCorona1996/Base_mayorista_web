@@ -11,7 +11,7 @@ describe("LoginPage", () => {
     login: jasmine.createSpy("login").and.resolveTo({}),
     getAccessStatus: jasmine
       .createSpy("getAccessStatus")
-      .and.resolveTo({ uid: "uid-1", roleId: "admin", isActive: true, mustChangePassword: false }),
+      .and.resolveTo({ uid: "uid-1", roleId: "admin", isActive: true, invitePending: false, mustChangePassword: false }),
     logout: jasmine.createSpy("logout").and.resolveTo(undefined),
   };
 

@@ -117,7 +117,7 @@ export class AccessService {
       email: user.email,
       username: user.username || null,
       displayName: user.displayName,
-      active: Boolean(realUser?.isActive ?? user.isActive),
+      active: Boolean(realUser?.isActive ?? user.isActive) && !user.invitePending && !user.mustChangePassword,
       role,
       permissions: this.buildPermissionMapForCurrentRole(),
     };

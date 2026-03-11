@@ -2069,3 +2069,122 @@
           ╵           [32m~~~~~~~~~~~~~~~~~~~[0m
 
 [39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'role' does not exist on type 'ListManagedUserRow'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:172:37:
+[37m      172 │     const roleId = this.isRoleId(row.[32mrole[37m) ? row.role : "operativo";
+          ╵                                      [32m~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'role' does not exist on type 'ListManagedUserRow'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:172:49:
+[37m      172 │     const roleId = this.isRoleId(row.role) ? row.[32mrole[37m : "operativo";
+          ╵                                                  [32m~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'permissions' does not exist on type 'ListManagedUserRow'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:174:95:
+[37m      174 │ ...ns || this.mapApiPermissionsToSections(row.[32mpermissions[37m, roleId));
+          ╵                                               [32m~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'display_name' does not exist on type 'ListManagedUserRow'. Did you mean 'displayName'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:190:23:
+[37m      190 │       displayName: row.[32mdisplay_name[37m || row.username || row.uid,
+          ╵                        [32m~~~~~~~~~~~~[0m
+
+  'displayName' is declared here.
+
+    src/app/services/user-admin-api.service.ts:84:2:
+[37m      84 │   [32mdisplayName[37m: string;
+         ╵   [32m~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'active' does not exist on type 'ListManagedUserRow'. Did you mean 'isActive'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:192:28:
+[37m      192 │       isActive: Boolean(row.[32mactive[37m),
+          ╵                             [32m~~~~~~[0m
+
+  'isActive' is declared here.
+
+    src/app/services/user-admin-api.service.ts:86:2:
+[37m      86 │   [32misActive[37m: boolean;
+         ╵   [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'must_change_password' does not exist on type 'ListManagedUserRow'. Did you mean 'mustChangePassword'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:193:38:
+[37m      193 │       mustChangePassword: Boolean(row.[32mmust_change_password[37m),
+          ╵                                       [32m~~~~~~~~~~~~~~~~~~~~[0m
+
+  'mustChangePassword' is declared here.
+
+    src/app/services/user-admin-api.service.ts:88:2:
+[37m      88 │   [32mmustChangePassword[37m: boolean;
+         ╵   [32m~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2741: Property 'invitePending' is missing in type '{ uid: string; email: string; authEmail: string; username: string; loginType: UserLoginType; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; ... 7 more ...; updatedAt: null; }' but required in type 'UserDoc'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:178:4:
+[37m      178 │     [32mreturn[37m {
+          ╵     [32m~~~~~~[0m
+
+  'invitePending' is declared here.
+
+    src/app/core/rbac.constants.ts:113:2:
+[37m      113 │   [32minvitePending[37m: boolean;
+          ╵   [32m~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2741: Property 'invitePending' is missing in type '{ uid: string; email: string; authEmail: string; username: string; loginType: UserLoginType; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; ... 7 more ...; updatedAt: null; }' but required in type 'UserDoc'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/services/users.service.ts:58:4:
+[37m      58 │     [32mreturn[37m {
+         ╵     [32m~~~~~~[0m
+
+  'invitePending' is declared here.
+
+    src/app/core/rbac.constants.ts:113:2:
+[37m      113 │   [32minvitePending[37m: boolean;
+          ╵   [32m~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2741: Property 'invitePending' is missing in type '{ uid: string; email: any; authEmail: any; username: string; loginType: UserLoginType; displayName: any; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; isActive: boolean; ... 6 more ...; updatedAt: any; }' but required in type 'UserDoc'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/services/users.service.ts:165:4:
+[37m      165 │     [32mreturn[37m {
+          ╵     [32m~~~~~~[0m
+
+  'invitePending' is declared here.
+
+    src/app/core/rbac.constants.ts:113:2:
+[37m      113 │   [32minvitePending[37m: boolean;
+          ╵   [32m~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2741: Property 'invitePending' is missing in type '{ uid: string; email: string; authEmail: string; username: string; loginType: UserLoginType; displayName: string; roleId: "super_admin" | "admin" | "operativo" | "repartidor"; ... 7 more ...; updatedAt: null; }' but required in type 'UserDoc'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:178:4:
+[37m      178 │     [32mreturn[37m {
+          ╵     [32m~~~~~~[0m
+
+  'invitePending' is declared here.
+
+    src/app/core/rbac.constants.ts:113:2:
+[37m      113 │   [32minvitePending[37m: boolean;
+          ╵   [32m~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'invitePending' does not exist on type 'ImpersonationSnapshot'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/authz.service.ts:50:30:
+[37m      50 │       invitePending: snapshot.[32minvitePending[37m,
+         ╵                               [32m~~~~~~~~~~~~~[0m
+
+[39m[22m

@@ -110,6 +110,7 @@ export interface UserDoc {
   displayName: string;
   roleId: RoleId;
   isActive: boolean;
+  invitePending: boolean;
   mustChangePassword: boolean;
   sections: SectionsMap;
   capabilities: CapabilitiesMap;

@@ -47,6 +47,7 @@ export class AuthzService {
       displayName: snapshot.displayName,
       roleId: snapshot.roleId,
       isActive: snapshot.isActive,
+      invitePending: snapshot.invitePending,
       email: snapshot.email,
       authEmail: snapshot.authEmail,
       username: snapshot.username,
@@ -182,13 +183,13 @@ export class AuthzService {
 
   canSection(key: string): boolean {
     const user = this.effectiveUserSig();
-    if (!user || !user.isActive) return false;
+    if (!user || !user.isActive || user.invitePending || user.mustChangePassword) return false;
     return Boolean(this.sectionsSig()[key as SectionKey]);
   }
 
   canCap(key: string): boolean {
     const user = this.effectiveUserSig();
-    if (!user || !user.isActive) return false;
+    if (!user || !user.isActive || user.invitePending || user.mustChangePassword) return false;
     return Boolean(this.capabilitiesSig()[key as CapabilityKey]);
   }
 

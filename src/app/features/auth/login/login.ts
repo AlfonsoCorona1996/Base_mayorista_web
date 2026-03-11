@@ -169,7 +169,7 @@ export default class LoginPage {
       const status = await this.auth.getAccessStatus();
       console.info("[LOGIN] Access status", status);
 
-      if (status.mustChangePassword) {
+      if (status.mustChangePassword || status.invitePending) {
         const moved = await this.router.navigateByUrl("/activate-account");
         if (!moved) {
           this.error.set("No se pudo navegar a la pantalla de activacion.");

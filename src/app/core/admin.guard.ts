@@ -13,7 +13,7 @@ export const adminGuard: CanActivateFn = async (route, state) => {
     });
   }
 
-  if (status.mustChangePassword) {
+  if (status.mustChangePassword || status.invitePending) {
     return router.createUrlTree(["/activate-account"]);
   }
 

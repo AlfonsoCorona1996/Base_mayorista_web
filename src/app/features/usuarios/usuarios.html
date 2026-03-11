@@ -199,7 +199,12 @@
                       @for (key of sectionKeys; track key) {
                         <label class="matrix-row">
                           <span>{{ sectionLabel(key) }}</span>
-                          <input type="checkbox" [checked]="userSectionValue(key)" (change)="setUserSectionValue(key, $any($event.target).checked)" />
+                          <input
+                            type="checkbox"
+                            [checked]="userSectionValue(key)"
+                            [disabled]="isSectionToggleDisabled(key)"
+                            (change)="setUserSectionValue(key, $any($event.target).checked)"
+                          />
                         </label>
                       }
                     </div>
@@ -213,7 +218,12 @@
                             @for (key of group.keys; track key) {
                               <label class="matrix-row">
                                 <span>{{ capabilityLabel(key) }}</span>
-                                <input type="checkbox" [checked]="userCapValue(key)" (change)="setUserCapValue(key, $any($event.target).checked)" />
+                                <input
+                                  type="checkbox"
+                                  [checked]="userCapValue(key)"
+                                  [disabled]="isCapabilityToggleDisabled(key)"
+                                  (change)="setUserCapValue(key, $any($event.target).checked)"
+                                />
                               </label>
                             }
                           </div>

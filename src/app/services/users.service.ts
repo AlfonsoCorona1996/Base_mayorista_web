@@ -46,77 +46,30 @@ export class UsersService {
   private userAdminApi = inject(UserAdminApiService);
 
   async ensureFromAuth(user: User): Promise<UserDoc> {
-    const uid = user.uid;
-    const userRef = doc(FIRESTORE, "users", uid);
-    const snap = await getDoc(userRef);
-    const authEmail = (user.email || "").trim().toLowerCase();
-    const bootstrap = await this.userAdminApi.getSessionBootstrap().catch(() => null);
-
-    if (snap.exists()) {
-      const data = snap.data() as Record<string, any>;
-      const legacy = await getDoc(doc(FIRESTORE, "admins", uid));
-      const legacyData = legacy.exists() ? (legacy.data() as Record<string, any>) : null;
-      const normalized = this.normalizeUserDoc(uid, data, user, bootstrap);
-      const legacyRole = legacyData ? normalizeRoleId(legacyData["role"]) : null;
-      const resolvedRole = legacyRole === "super_admin" ? "super_admin" : normalized.roleId;
-      const resolvedActive = Boolean(bootstrap?.isActive ?? normalized.isActive ?? legacyData?.["active"] ?? true);
-      const resolvedMustChangePassword = Boolean(bootstrap?.mustChangePassword ?? normalized.mustChangePassword ?? false);
-      return {
-        ...normalized,
-        roleId: resolvedRole,
-        isActive: resolvedActive,
-        mustChangePassword: resolvedMustChangePassword,
-      };
-    }
-
-    const legacy = await getDoc(doc(FIRESTORE, "admins", uid));
-    const roleId = normalizeRoleId(bootstrap?.roleId || (legacy.exists() ? legacy.data()?.["role"] : "operativo"));
-    const displayName =
-      (
-        bootstrap?.displayName ||
-        legacy.data()?.["display_name"] ||
-        legacy.data()?.["name"] ||
-        user.displayName ||
-        user.email ||
-        "Usuario"
-      ).toString();
-    const username = normalizeUsername(user.displayName || user.email?.split("@")[0] || uid.slice(0, 10));
+    const bootstrap = await this.userAdminApi.getSessionBootstrap();
+    const uid = bootstrap.uid || user.uid;
+    const roleId = normalizeRoleId(bootstrap.roleId || "operativo");
+    const username =
+      normalizeUsername(bootstrap.username) || normalizeUsername(user.displayName || bootstrap.email?.split("@")[0] || uid.slice(0, 10));
+    const authEmail = (user.email || bootstrap.email || buildUsernameAuthEmail(username)).trim().toLowerCase();
     const loginType: UserLoginType = isUsernameAuthEmail(authEmail) ? "username" : "email";
-    const defaultSections = this.resolveSectionsMap({}, roleId, {}, bootstrap?.sections || null);
-    const defaultCapabilities = this.resolveCapabilitiesMap({}, roleId, {}, bootstrap?.capabilities || null);
-    const payload = {
+    const sections = this.resolveSectionsMap({}, roleId, {}, bootstrap.sections || null);
+    const capabilities = this.resolveCapabilitiesMap({}, roleId, {}, bootstrap.capabilities || null);
+    return {
       uid,
-      email: loginType === "email" ? authEmail : "",
+      email: loginType === "email" ? (bootstrap.email || user.email || "").trim().toLowerCase() : "",
       authEmail: authEmail || buildUsernameAuthEmail(username),
       username,
       loginType,
-      displayName,
+      displayName: (bootstrap.displayName || user.displayName || bootstrap.email || "Usuario").toString(),
       roleId,
-      isActive: Boolean(bootstrap?.isActive ?? (legacy.exists() ? legacy.data()?.["active"] ?? true : true)),
-      active: Boolean(bootstrap?.isActive ?? (legacy.exists() ? legacy.data()?.["active"] ?? true : true)),
-      mustChangePassword: Boolean(bootstrap?.mustChangePassword ?? false),
-      must_change_password: Boolean(bootstrap?.mustChangePassword ?? false),
-      sections: defaultSections,
-      capabilities: defaultCapabilities,
+      isActive: Boolean(bootstrap.isActive),
+      invitePending: Boolean(bootstrap.invitePending),
+      mustChangePassword: Boolean(bootstrap.mustChangePassword),
+      sections,
+      capabilities,
       sectionOverrides: {} as SectionOverridesMap,
       capabilityOverrides: {} as CapabilityOverridesMap,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    };
-    return {
-      uid,
-      email: payload.email,
-      authEmail: payload.authEmail,
-      username: payload.username,
-      loginType: payload.loginType,
-      displayName: payload.displayName,
-      roleId,
-      isActive: payload.isActive,
-      mustChangePassword: payload.mustChangePassword,
-      sections: payload.sections,
-      capabilities: payload.capabilities,
-      sectionOverrides: payload.sectionOverrides,
-      capabilityOverrides: payload.capabilityOverrides,
       createdAt: null,
       updatedAt: null,
     };
@@ -219,6 +172,7 @@ export class UsersService {
       displayName: (bootstrap?.displayName || data["displayName"] || authUser?.displayName || data["email"] || "Usuario").toString(),
       roleId,
       isActive: Boolean(bootstrap?.isActive ?? data["isActive"] ?? data["active"] ?? true),
+      invitePending: Boolean(bootstrap?.invitePending ?? data["invitePending"] ?? data["invite_pending"] ?? false),
       mustChangePassword: Boolean(bootstrap?.mustChangePassword ?? data["mustChangePassword"] ?? data["must_change_password"] ?? false),
       sections,
       capabilities,

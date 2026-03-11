@@ -13,6 +13,7 @@ export type ImpersonationSnapshot = {
   displayName: string;
   roleId: RoleId;
   isActive: boolean;
+  invitePending: boolean;
   email: string;
   authEmail: string;
   username: string;
@@ -37,6 +38,7 @@ export class ImpersonationService {
       displayName: user.displayName,
       roleId: user.roleId,
       isActive: user.isActive,
+      invitePending: user.invitePending,
       email: user.email,
       authEmail: user.authEmail,
       username: user.username,
@@ -79,6 +81,7 @@ export class ImpersonationService {
         displayName: String(parsed.displayName || "Usuario"),
         roleId: parsed.roleId,
         isActive: Boolean(parsed.isActive ?? true),
+        invitePending: Boolean(parsed.invitePending ?? false),
         email: String(parsed.email || ""),
         authEmail: String(parsed.authEmail || ""),
         username: String(parsed.username || ""),
