@@ -1,4 +1,4 @@
-﻿import { Component, computed, inject, signal } from "@angular/core";
+﻿import { Component, computed, inject, signal, ChangeDetectionStrategy } from "@angular/core";
 import { Router } from "@angular/router";
 import { CustomersService } from "../../core/customers.service";
 import { OrdersService } from "../../core/orders.service";
@@ -30,14 +30,8 @@ interface SupplierProductGroup {
   countsByStatus: Record<SupplierOperationStatus, number>;
   linesByStatus: Record<SupplierOperationStatus, SupplierOperationRow[]>;
   lines: SupplierOperationRow[];
+  statusSegments: ProgressSegmentStatus[];
   badge: GroupBadge;
-}
-
-interface SupplierAccordionGroup {
-  supplierId: string;
-  supplierName: string;
-  counts: Record<SupplierOperationStatus, number>;
-  groups: SupplierProductGroup[];
 }
 
 interface PartialProcessCandidate {
@@ -65,6 +59,7 @@ interface SelectionModalState {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   selector: "app-proveedores-operaciones",
   templateUrl: "./proveedores-operaciones.html",
@@ -124,6 +119,7 @@ export default class ProveedoresOperacionesPage {
     { id: "en_camino", label: "En camino" },
     { id: "recibido", label: "Recibido" },
   ];
+  readonly orderListStatuses: OrdersListStatus[] = ["en_camino", "levantado", "por_levantar", "recibido"];
 
   async reload() {
     this.loading.set(true);
@@ -365,15 +361,18 @@ export default class ProveedoresOperacionesPage {
     return group.progressPct;
   }
 
-  getStatusSegments(group: SupplierProductGroup): ProgressSegmentStatus[] {
-    const total = Math.max(0, Math.trunc(group.totalQty || 0));
+  private buildStatusSegments(
+    totalRaw: number,
+    countsByStatus: Record<SupplierOperationStatus, number>,
+  ): ProgressSegmentStatus[] {
+    const total = Math.max(0, Math.trunc(totalRaw || 0));
     if (total === 0) return ["empty"];
 
     const segments: ProgressSegmentStatus[] = [];
     const statuses: SupplierOperationStatus[] = ["por_levantar", "levantado", "en_camino", "recibido"];
 
     for (const status of statuses) {
-      const qty = Math.max(0, Math.trunc(group.countsByStatus[status] || 0));
+      const qty = Math.max(0, Math.trunc(countsByStatus[status] || 0));
       for (let i = 0; i < qty; i += 1) {
         segments.push(status);
       }
@@ -497,34 +496,6 @@ export default class ProveedoresOperacionesPage {
     return /^p-/i.test(raw) ? raw : `P-${raw}`;
   }
 
-  trackSupplier(_: number, section: SupplierAccordionGroup): string {
-    return section.supplierId;
-  }
-
-  trackGroup(_: number, group: SupplierProductGroup): string {
-    return group.key;
-  }
-
-  trackLine(_: number, row: SupplierOperationRow): string {
-    return row.op_id;
-  }
-
-  trackCandidate(_: number, candidate: PartialProcessCandidate): string {
-    return candidate.lineId;
-  }
-
-  orderListStatuses(): OrdersListStatus[] {
-    return ["en_camino", "levantado", "por_levantar", "recibido"];
-  }
-
-  hasLinesForStatus(group: SupplierProductGroup, status: OrdersListStatus): boolean {
-    return group.linesByStatus[status].length > 0;
-  }
-
-  linesForStatus(group: SupplierProductGroup, status: OrdersListStatus): SupplierOperationRow[] {
-    return group.linesByStatus[status];
-  }
-
   orderSectionTitle(status: OrdersListStatus): string {
     if (status === "en_camino") return "EN TRANSITO";
     if (status === "levantado") return "LEVANTADOS";
@@ -584,6 +555,7 @@ export default class ProveedoresOperacionesPage {
           recibido: [],
         },
         lines: [],
+        statusSegments: [],
         badge: "recibido" as GroupBadge,
       };
 
@@ -609,6 +581,7 @@ export default class ProveedoresOperacionesPage {
         group.linesByStatus.en_camino.sort((a, b) => (a.updated_at < b.updated_at ? 1 : -1));
         group.linesByStatus.recibido.sort((a, b) => (a.updated_at < b.updated_at ? 1 : -1));
         group.progressPct = group.totalQty > 0 ? Math.round((group.doneQty / group.totalQty) * 100) : 0;
+        group.statusSegments = this.buildStatusSegments(group.totalQty, group.countsByStatus);
         group.badge = this.resolveGroupBadge(group.countsByStatus);
         return group;
       })

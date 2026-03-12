@@ -1,5 +1,5 @@
 // review.ts - Versión mejorada con UX completa
-import { Component, computed, inject, signal } from "@angular/core";
+import { Component, computed, inject, signal, ChangeDetectionStrategy } from "@angular/core";
 import { ActivatedRoute, Router } from "@angular/router";
 import { FormsModule } from "@angular/forms";
 import { NormalizedListingsService } from "../../core/normalized-listings.service";
@@ -19,6 +19,7 @@ import type {
 import { isNormalizedListingDocV3 } from "../../core/firestore-contracts";
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   selector: "app-review",
   imports: [FormsModule],

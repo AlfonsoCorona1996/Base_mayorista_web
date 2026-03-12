@@ -1,5 +1,5 @@
 ﻿import { CommonModule } from "@angular/common";
-import { Component, computed, input, output, signal } from "@angular/core";
+import { Component, computed, input, output, signal, ChangeDetectionStrategy } from "@angular/core";
 import { FormsModule } from "@angular/forms";
 import { OrderEvent } from "../../../core/orders.service";
 
@@ -25,6 +25,7 @@ type ActivityEventVM = {
 type DayGroup = { label: string; items: ActivityEventVM[] };
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: "app-activity-log",
   standalone: true,
   imports: [CommonModule, FormsModule],

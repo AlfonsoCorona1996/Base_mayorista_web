@@ -1,5 +1,5 @@
 // review-updated.ts - Versión mejorada con UX completa
-import { Component, computed, inject, signal } from "@angular/core";
+import { Component, computed, inject, signal, ChangeDetectionStrategy } from "@angular/core";
 import { ActivatedRoute, Router } from "@angular/router";
 import { FormsModule } from "@angular/forms";
 import { NormalizedListingsService } from "../../core/normalized-listings.service";
@@ -11,6 +11,7 @@ import { FIRESTORE } from "../../core/firebase.providers";
 import type { NormalizedListingDoc, RawPost, NormalizedItem, ItemPrice, PriceTierGlobal } from "../../core/firestore-contracts";
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   selector: "app-review",
   imports: [FormsModule],

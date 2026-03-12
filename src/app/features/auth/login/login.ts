@@ -1,4 +1,4 @@
-import { Component, inject, signal } from "@angular/core";
+import { Component, inject, signal, ChangeDetectionStrategy } from "@angular/core";
 import { FormsModule } from "@angular/forms";
 import { ActivatedRoute, Router } from "@angular/router";
 import { AuthService } from "../../../core/auth.service";
@@ -8,6 +8,7 @@ const REMEMBER_IDENTIFIER_KEY = "bm_login_saved_identifier";
 const REMEMBER_ENABLED_KEY = "bm_login_remember_identifier";
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: "app-login",
   imports: [FormsModule],
   templateUrl: "./login.html",
@@ -23,6 +24,7 @@ export default class LoginPage {
   rememberIdentifier = false;
   loading = signal(false);
   error = signal<string | null>(null);
+  info = signal<string | null>(null);
   returnUrl = signal<string>("");
 
   private auth = inject(AuthService);
@@ -154,6 +156,7 @@ export default class LoginPage {
   async onLogin() {
     this.markSubmitAttempt();
     this.error.set(null);
+    this.info.set(null);
 
     const normalizedIdentifier = this.identifier.trim().toLowerCase();
     const identifierError = this.getIdentifierError();
@@ -169,7 +172,7 @@ export default class LoginPage {
       const status = await this.auth.getAccessStatus();
       console.info("[LOGIN] Access status", status);
 
-      if (status.mustChangePassword) {
+      if (status.mustChangePassword || status.invitePending) {
         const moved = await this.router.navigateByUrl("/activate-account");
         if (!moved) {
           this.error.set("No se pudo navegar a la pantalla de activacion.");
@@ -183,7 +186,7 @@ export default class LoginPage {
       }
 
       this.persistRememberedIdentifier(normalizedIdentifier);
-      const profile = await this.access.refreshProfile();
+      const profile = await this.access.refreshProfile({ force: true });
       const firstAllowed = this.access.firstAllowedRoute();
       const preferred = this.returnUrl() || firstAllowed;
       console.info("[LOGIN] Route resolution", {
@@ -215,6 +218,37 @@ export default class LoginPage {
     } catch (e: any) {
       console.error("[LOGIN] Failed", e);
       this.error.set(e?.message || "Error al iniciar sesion");
+    } finally {
+      this.loading.set(false);
+    }
+  }
+
+  async onForgotPassword() {
+    if (this.loading()) return;
+    this.error.set(null);
+    this.info.set(null);
+    this.identifierTouched = true;
+
+    const identifier = this.identifier.trim().toLowerCase();
+    if (!identifier) {
+      this.error.set("Ingresa tu correo o usuario para recuperar contrasena.");
+      return;
+    }
+    if (this.getIdentifierError()) {
+      this.error.set(this.getIdentifierError());
+      return;
+    }
+
+    this.loading.set(true);
+    try {
+      const mode = await this.auth.requestPasswordReset(identifier);
+      if (mode === "username") {
+        this.info.set("Este acceso es de tipo usuario. Solicita al administrador una contrasena temporal.");
+        return;
+      }
+      this.info.set("Si el correo existe, enviamos instrucciones para restablecer la contrasena.");
+    } catch (error: any) {
+      this.error.set(error?.message || "No se pudo procesar la recuperacion.");
     } finally {
       this.loading.set(false);
     }

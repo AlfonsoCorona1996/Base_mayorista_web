@@ -1,15 +1,17 @@
-import { Component, computed, inject, signal } from "@angular/core";
+import { Component, computed, inject, signal, ChangeDetectionStrategy } from "@angular/core";
 import { FormsModule } from "@angular/forms";
 import { environment } from "../../../environments/environment";
 import { AuthzService } from "../../core/authz.service";
 import {
   CAPABILITY_KEYS,
+  CAPABILITY_KEYS as ALL_CAPABILITY_KEYS,
   CapabilityKey,
   CapabilityOverridesMap,
   RoleDoc,
   ROLE_IDS,
   RoleId,
   SECTION_KEYS,
+  SECTION_KEYS as ALL_SECTION_KEYS,
   SectionKey,
   SectionsMap,
   SectionOverridesMap,
@@ -25,7 +27,6 @@ import {
   roleLabel,
 } from "../../core/rbac.constants";
 import { RolesService } from "../../services/roles.service";
-import { UsersService } from "../../services/users.service";
 import {
   AdminPermissionsPayload,
   CreateManagedUserInput,
@@ -37,6 +38,12 @@ import { ImpersonationService } from "../../core/impersonation.service";
 type UsersTab = "users" | "roles";
 
 type CapabilityGroup = {
+  title: string;
+  keys: CapabilityKey[];
+};
+
+type UserPermissionGroup = {
+  sectionKey: SectionKey | "general";
   title: string;
   keys: CapabilityKey[];
 };
@@ -74,7 +81,23 @@ const CAPABILITY_GROUPS: CapabilityGroup[] = [
   { title: "Incidencias y auditoria", keys: CAPABILITY_KEYS.filter((key) => key.startsWith("cap.incidents.") || key.startsWith("cap.audit.")) },
 ];
 
+const SECTION_CAPABILITY_PREFIXES: Record<SectionKey, string[]> = {
+  "sections.dashboard": [],
+  "sections.pedidos": ["cap.orders."],
+  "sections.proveedores": ["cap.suppliers.ops."],
+  "sections.validacion": ["cap.validation."],
+  "sections.clientes": ["cap.payments.", "cap.returns."],
+  "sections.inventario": ["cap.inventory."],
+  "sections.catalogo": [],
+  "sections.categorias": [],
+  "sections.rutas": ["cap.runs.", "cap.delivery."],
+  "sections.localidades": [],
+  "sections.salidas": ["cap.packing.", "cap.dispatch.", "cap.transfers."],
+  "sections.usuarios": ["cap.users.", "cap.roles.", "cap.audit."],
+};
+
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   selector: "app-usuarios",
   imports: [FormsModule],
@@ -83,7 +106,6 @@ const CAPABILITY_GROUPS: CapabilityGroup[] = [
 })
 export default class UsuariosPage {
   private authz = inject(AuthzService);
-  private usersService = inject(UsersService);
   private rolesService = inject(RolesService);
   private userAdminApi = inject(UserAdminApiService);
   private impersonation = inject(ImpersonationService);
@@ -115,6 +137,7 @@ export default class UsuariosPage {
   readonly roleIds = ROLE_IDS;
   readonly sectionKeys = SECTION_KEYS;
   readonly capGroups = CAPABILITY_GROUPS;
+  readonly userPermissionGroups = this.buildUserPermissionGroups();
 
   filteredUsers = computed(() => {
     const term = this.search().trim().toLowerCase();
@@ -159,32 +182,33 @@ export default class UsuariosPage {
   }
 
   private async loadUsersFromBestSource(): Promise<UserDoc[]> {
-    if (this.isSuperAdmin() && !this.isImpersonating()) {
-      const rows = await this.userAdminApi.listManagedUsers();
-      return rows.map((row) => this.mapApiRowToUser(row)).sort((a, b) => a.displayName.localeCompare(b.displayName));
-    }
-    return this.usersService.listUsers();
+    const rows = await this.userAdminApi.listManagedUsers();
+    return rows.map((row) => this.mapApiRowToUser(row)).sort((a, b) => a.displayName.localeCompare(b.displayName));
   }
 
   private mapApiRowToUser(row: ListManagedUserRow): UserDoc {
-    const roleId = this.isRoleId(row.role) ? row.role : "operativo";
+    const roleId = this.isRoleId(row.roleId) ? row.roleId : "operativo";
+    const username = normalizeUsername(row.username);
     const loginType: UserLoginType = row.email ? "email" : "username";
-    const sections = normalizeSectionsMap(row.sections || this.mapApiPermissionsToSections(row.permissions, roleId));
+    const sections = this.normalizeSectionsFromApi(row.sections, roleId);
     const capabilities = normalizeCapabilitiesMap(row.capabilities || buildRolePreset(roleId).capabilities);
-    const sectionOverrides = normalizeSectionOverridesMap(row.sectionOverrides || this.deriveSectionOverrides(roleId, sections));
-    const capabilityOverrides = normalizeCapabilityOverridesMap(
-      row.capabilityOverrides || this.deriveCapabilityOverrides(roleId, capabilities),
-    );
+    const serverSectionOverrides = this.normalizeSectionOverridesFromApi(row.sectionOverrides);
+    const serverCapabilityOverrides = normalizeCapabilityOverridesMap(row.capabilityOverrides || null);
+    const derivedSectionOverrides = this.deriveSectionOverrides(roleId, sections);
+    const derivedCapabilityOverrides = this.deriveCapabilityOverrides(roleId, capabilities);
+    const sectionOverrides = { ...derivedSectionOverrides, ...serverSectionOverrides };
+    const capabilityOverrides = { ...derivedCapabilityOverrides, ...serverCapabilityOverrides };
     return {
       uid: row.uid,
       email: row.email || "",
-      authEmail: row.email || buildUsernameAuthEmail(row.username),
-      username: normalizeUsername(row.username),
+      authEmail: row.email || buildUsernameAuthEmail(username),
+      username,
       loginType,
-      displayName: row.display_name || row.username || row.uid,
+      displayName: row.displayName || username || row.uid,
       roleId,
-      isActive: Boolean(row.active),
-      mustChangePassword: Boolean(row.must_change_password),
+      isActive: Boolean(row.isActive),
+      invitePending: Boolean(row.invitePending),
+      mustChangePassword: Boolean(row.mustChangePassword),
       sections,
       capabilities,
       sectionOverrides,
@@ -232,7 +256,10 @@ export default class UsuariosPage {
   }
 
   canRegenerateTemporaryPassword(row: UserDoc): boolean {
-    return this.canManageUsers() && row.roleId !== "super_admin" && !row.isActive;
+    if (!this.canManageUsers()) return false;
+    if (row.roleId === "super_admin") return false;
+    if (row.loginType === "username") return true;
+    return !row.isActive;
   }
 
   canResendActivation(row: UserDoc): boolean {
@@ -329,7 +356,24 @@ export default class UsuariosPage {
 
   updateEditRoleId(value: string) {
     if (!this.isRoleId(value)) return;
-    this.editDraft.update((draft) => (draft ? { ...draft, roleId: value } : draft));
+    this.editDraft.update((draft) => {
+      if (!draft) return draft;
+      const next: UserDraft = {
+        ...draft,
+        roleId: value,
+        sectionOverrides: { ...draft.sectionOverrides },
+        capabilityOverrides: { ...draft.capabilityOverrides },
+      };
+      if (value !== "super_admin") {
+        next.sectionOverrides["sections.usuarios"] = false;
+        for (const key of ALL_CAPABILITY_KEYS) {
+          if (this.isCapabilityLockedForRole(value, key)) {
+            next.capabilityOverrides[key] = false;
+          }
+        }
+      }
+      return next;
+    });
   }
 
   updateEditLoginType(value: string) {
@@ -364,6 +408,7 @@ export default class UsuariosPage {
   userSectionValue(key: SectionKey): boolean {
     const draft = this.editDraft();
     if (!draft) return false;
+    if (this.isSectionLockedForRole(draft.roleId, key)) return false;
     const override = draft.sectionOverrides[key];
     if (typeof override === "boolean") return override;
     return this.baseSectionByRole(draft.roleId, key);
@@ -372,6 +417,7 @@ export default class UsuariosPage {
   userCapValue(key: CapabilityKey): boolean {
     const draft = this.editDraft();
     if (!draft) return false;
+    if (this.isCapabilityLockedForRole(draft.roleId, key)) return false;
     const override = draft.capabilityOverrides[key];
     if (typeof override === "boolean") return override;
     return this.baseCapByRole(draft.roleId, key);
@@ -380,6 +426,7 @@ export default class UsuariosPage {
   setUserSectionValue(key: SectionKey, checked: boolean) {
     const draft = this.editDraft();
     if (!draft) return;
+    if (this.isSectionLockedForRole(draft.roleId, key)) return;
     const base = this.baseSectionByRole(draft.roleId, key);
     const nextOverrides = { ...draft.sectionOverrides };
     if (checked === base) {
@@ -393,6 +440,7 @@ export default class UsuariosPage {
   setUserCapValue(key: CapabilityKey, checked: boolean) {
     const draft = this.editDraft();
     if (!draft) return;
+    if (this.isCapabilityLockedForRole(draft.roleId, key)) return;
     const base = this.baseCapByRole(draft.roleId, key);
     const nextOverrides = { ...draft.capabilityOverrides };
     if (checked === base) {
@@ -466,20 +514,45 @@ export default class UsuariosPage {
     this.error.set(null);
     this.success.set(null);
     try {
-      await this.userAdminApi.updateManagedUser(row.uid, {
-        roleId: draft.roleId,
-        isActive: draft.isActive,
-        permissions: this.buildAdminPermissions(draft.roleId, draft.sectionOverrides),
-      });
-      await this.userAdminApi.updateManagedUserProfile({
-        uid: row.uid,
-        displayName: draft.displayName.trim(),
-        username: normalizeUsername(draft.username),
-        email: draft.loginType === "email" ? draft.email.trim().toLowerCase() : null,
-      });
+      const sectionOverridesPayload = this.buildChangedSectionOverridesPayload(row, draft);
+      const capabilityOverridesPayload = this.buildChangedCapabilityOverridesPayload(row, draft);
+      const profileChanged = this.hasProfileChanges(row, draft);
+      const accessChanged =
+        draft.roleId !== row.roleId ||
+        draft.isActive !== row.isActive ||
+        Boolean(sectionOverridesPayload) ||
+        Boolean(capabilityOverridesPayload);
+
+      if (profileChanged) {
+        await this.userAdminApi.updateManagedUserProfile({
+          uid: row.uid,
+          displayName: draft.displayName.trim(),
+          username: normalizeUsername(draft.username),
+          email: draft.loginType === "email" ? draft.email.trim().toLowerCase() : null,
+        });
+      }
+
+      if (accessChanged) {
+        const accessPayload: Parameters<UserAdminApiService["updateManagedUser"]>[1] = {
+          roleId: draft.roleId,
+          isActive: draft.isActive,
+        };
+        if (sectionOverridesPayload) {
+          accessPayload.sectionOverrides = sectionOverridesPayload;
+        }
+        if (capabilityOverridesPayload) {
+          accessPayload.capabilityOverrides = capabilityOverridesPayload;
+        }
+        await this.userAdminApi.updateManagedUser(row.uid, accessPayload);
+      }
+      const nextRow = this.buildUserFromDraft(row, draft);
+      this.users.update((current) =>
+        current
+          .map((entry) => (entry.uid === row.uid ? nextRow : entry))
+          .sort((a, b) => a.displayName.localeCompare(b.displayName)),
+      );
       this.success.set("Usuario actualizado.");
       this.cancelUserEdit();
-      await this.reload();
     } catch (error: any) {
       this.error.set(error?.message || "No se pudo guardar el usuario.");
     } finally {
@@ -496,7 +569,6 @@ export default class UsuariosPage {
       await this.userAdminApi.updateManagedUser(row.uid, {
         roleId: row.roleId,
         isActive: false,
-        permissions: this.buildAdminPermissions(row.roleId, row.sectionOverrides),
       });
       this.success.set("Usuario desactivado.");
       await this.reload();
@@ -528,8 +600,20 @@ export default class UsuariosPage {
     this.error.set(null);
     this.success.set(null);
     this.tempPasswordOut.set(null);
+    const restorePayload: Parameters<UserAdminApiService["updateManagedUser"]>[1] = {
+      roleId: row.roleId,
+      isActive: row.isActive,
+    };
+    if (Object.keys(row.sectionOverrides).length > 0) {
+      restorePayload.sectionOverrides = { ...row.sectionOverrides };
+    }
+    if (Object.keys(row.capabilityOverrides).length > 0) {
+      restorePayload.capabilityOverrides = { ...row.capabilityOverrides };
+    }
     try {
       const result = await this.userAdminApi.regenerateTemporaryPassword(row.uid);
+      await this.userAdminApi.updateManagedUser(row.uid, restorePayload);
+      await this.reload();
       if (result.temporaryPassword) {
         this.tempPasswordOut.set({ uid: row.uid, password: result.temporaryPassword });
         this.success.set("Contrasena temporal regenerada.");
@@ -581,6 +665,40 @@ export default class UsuariosPage {
         [key]: checked,
       },
     }));
+  }
+
+  roleSectionGroupValue(key: SectionKey | "general"): boolean {
+    if (key === "general") return false;
+    return Boolean(this.roleDraft().sections[key]);
+  }
+
+  setRoleSectionGroupValue(key: SectionKey | "general", checked: boolean) {
+    if (key === "general") return;
+    this.setSectionValue(key, checked);
+  }
+
+  isRoleSectionGroupToggleDisabled(key: SectionKey | "general"): boolean {
+    if (key === "general") return true;
+    return this.isRoleDraftSuperAdmin() || !this.canEditRoles();
+  }
+
+  isRoleCapabilityToggleDisabled(_key: CapabilityKey): boolean {
+    return this.isRoleDraftSuperAdmin() || !this.canEditRoles();
+  }
+
+  roleEnabledSectionsCount(): number {
+    const sections = this.roleDraft().sections;
+    return this.sectionKeys.reduce((total, key) => total + (sections[key] ? 1 : 0), 0);
+  }
+
+  roleEnabledCapabilitiesCount(): number {
+    const capabilities = this.roleDraft().capabilities;
+    return ALL_CAPABILITY_KEYS.reduce((total, key) => total + (capabilities[key] ? 1 : 0), 0);
+  }
+
+  roleGroupEnabledCount(keys: CapabilityKey[]): number {
+    const capabilities = this.roleDraft().capabilities;
+    return keys.reduce((total, key) => total + (capabilities[key] ? 1 : 0), 0);
   }
 
   markAllRole() {
@@ -647,6 +765,21 @@ export default class UsuariosPage {
     return this.tempPasswordOut()?.uid === row.uid ? this.tempPasswordOut()?.password || null : null;
   }
 
+  userSectionGroupValue(key: SectionKey | "general"): boolean {
+    if (key === "general") return false;
+    return this.userSectionValue(key);
+  }
+
+  setUserSectionGroupValue(key: SectionKey | "general", checked: boolean) {
+    if (key === "general") return;
+    this.setUserSectionValue(key, checked);
+  }
+
+  isSectionGroupToggleDisabled(key: SectionKey | "general"): boolean {
+    if (key === "general") return true;
+    return this.isSectionToggleDisabled(key);
+  }
+
   private buildAdminPermissions(roleId: RoleId, sectionOverrides: SectionOverridesMap): AdminPermissionsPayload {
     return {
       dashboard: this.resolveSectionValue(roleId, sectionOverrides, "sections.dashboard"),
@@ -696,25 +829,31 @@ export default class UsuariosPage {
     return null;
   }
 
-  private mapApiPermissionsToSections(permissions: AdminPermissionsPayload, roleId: RoleId): SectionsMap {
-    const fallback = buildRolePreset(roleId).sections;
-    if (!permissions || typeof permissions !== "object") {
-      return fallback;
+  private normalizeSectionsFromApi(raw: Record<string, boolean> | null, roleId: RoleId): SectionsMap {
+    if (!raw) return buildRolePreset(roleId).sections;
+    const canonical = this.toCanonicalSectionsRecord(raw);
+    if (Object.keys(canonical).length === 0) return buildRolePreset(roleId).sections;
+    return normalizeSectionsMap(canonical);
+  }
+
+  private normalizeSectionOverridesFromApi(raw: Record<string, boolean> | null): SectionOverridesMap {
+    if (!raw) return {};
+    return normalizeSectionOverridesMap(this.toCanonicalSectionsRecord(raw));
+  }
+
+  private toCanonicalSectionsRecord(raw: Record<string, boolean>): Partial<Record<SectionKey, boolean>> {
+    const out: Partial<Record<SectionKey, boolean>> = {};
+    for (const key of this.sectionKeys) {
+      const shortKey = key.slice("sections.".length);
+      if (typeof raw[key] === "boolean") {
+        out[key] = raw[key];
+        continue;
+      }
+      if (typeof raw[shortKey] === "boolean") {
+        out[key] = raw[shortKey];
+      }
     }
-    return normalizeSectionsMap({
-      "sections.dashboard": permissions.dashboard,
-      "sections.validacion": permissions.validacion,
-      "sections.pedidos": permissions.pedidos,
-      "sections.catalogo": Boolean(permissions.catalogo || permissions.edicion_productos),
-      "sections.categorias": permissions.categorias,
-      "sections.proveedores": permissions.proveedores,
-      "sections.inventario": permissions.inventario,
-      "sections.clientes": permissions.clientas,
-      "sections.rutas": permissions.rutas,
-      "sections.localidades": permissions.localidades,
-      "sections.salidas": fallback["sections.salidas"],
-      "sections.usuarios": permissions.usuarios,
-    });
+    return out;
   }
 
   private deriveSectionOverrides(roleId: RoleId, effective: SectionsMap): SectionOverridesMap {
@@ -735,6 +874,180 @@ export default class UsuariosPage {
       if (value !== base) out[key] = value;
     }
     return out;
+  }
+
+  private buildChangedSectionOverridesPayload(row: UserDoc, draft: UserDraft): Record<string, boolean> | undefined {
+    const out: Record<string, boolean> = {};
+    for (const key of ALL_SECTION_KEYS) {
+      const before = row.sectionOverrides[key];
+      const after = draft.sectionOverrides[key];
+      if (before === after) continue;
+      if (typeof after === "boolean") {
+        out[this.toApiSectionKey(key)] = this.isSectionLockedForRole(draft.roleId, key) ? false : after;
+        continue;
+      }
+      out[this.toApiSectionKey(key)] = this.baseSectionByRole(draft.roleId, key);
+    }
+    return Object.keys(out).length ? out : undefined;
+  }
+
+  private buildChangedCapabilityOverridesPayload(row: UserDoc, draft: UserDraft): Record<string, boolean> | undefined {
+    const out: Record<string, boolean> = {};
+    for (const key of ALL_CAPABILITY_KEYS) {
+      const before = row.capabilityOverrides[key];
+      const after = draft.capabilityOverrides[key];
+      if (before === after) continue;
+      if (typeof after === "boolean") {
+        out[key] = this.isCapabilityLockedForRole(draft.roleId, key) ? false : after;
+        continue;
+      }
+      out[key] = this.isCapabilityLockedForRole(draft.roleId, key) ? false : this.baseCapByRole(draft.roleId, key);
+    }
+    return Object.keys(out).length ? out : undefined;
+  }
+
+  private hasProfileChanges(row: UserDoc, draft: UserDraft): boolean {
+    const currentDisplayName = row.displayName.trim();
+    const nextDisplayName = draft.displayName.trim();
+    if (currentDisplayName !== nextDisplayName) return true;
+
+    const currentUsername = normalizeUsername(row.username);
+    const nextUsername = normalizeUsername(draft.username);
+    if (currentUsername !== nextUsername) return true;
+
+    const currentEmail = row.loginType === "email" ? row.email.trim().toLowerCase() : null;
+    const nextEmail = draft.loginType === "email" ? draft.email.trim().toLowerCase() : null;
+    if (currentEmail !== nextEmail) return true;
+
+    return false;
+  }
+
+  private buildUserFromDraft(row: UserDoc, draft: UserDraft): UserDoc {
+    const username = normalizeUsername(draft.username);
+    const loginType = draft.loginType;
+    const email = loginType === "email" ? draft.email.trim().toLowerCase() : "";
+    const authEmail = loginType === "email" ? email : buildUsernameAuthEmail(username);
+    const sectionOverrides = this.normalizeDraftSectionOverrides(draft.roleId, draft.sectionOverrides);
+    const capabilityOverrides = this.normalizeDraftCapabilityOverrides(draft.roleId, draft.capabilityOverrides);
+    const sections = this.resolveSectionsForRole(draft.roleId, sectionOverrides);
+    const capabilities = this.resolveCapabilitiesForRole(draft.roleId, capabilityOverrides);
+    return {
+      ...row,
+      displayName: draft.displayName.trim(),
+      username,
+      loginType,
+      email,
+      authEmail,
+      roleId: draft.roleId,
+      isActive: draft.isActive,
+      mustChangePassword: draft.mustChangePassword,
+      sections,
+      capabilities,
+      sectionOverrides,
+      capabilityOverrides,
+    };
+  }
+
+  private normalizeDraftSectionOverrides(roleId: RoleId, overrides: SectionOverridesMap): SectionOverridesMap {
+    const out: SectionOverridesMap = {};
+    for (const key of ALL_SECTION_KEYS) {
+      const raw = overrides[key];
+      if (typeof raw !== "boolean") continue;
+      const safe = this.isSectionLockedForRole(roleId, key) ? false : raw;
+      const base = this.baseSectionByRole(roleId, key);
+      if (safe === base) continue;
+      out[key] = safe;
+    }
+    return out;
+  }
+
+  private normalizeDraftCapabilityOverrides(roleId: RoleId, overrides: CapabilityOverridesMap): CapabilityOverridesMap {
+    const out: CapabilityOverridesMap = {};
+    for (const key of ALL_CAPABILITY_KEYS) {
+      const raw = overrides[key];
+      if (typeof raw !== "boolean") continue;
+      const safe = this.isCapabilityLockedForRole(roleId, key) ? false : raw;
+      const base = this.baseCapByRole(roleId, key);
+      if (safe === base) continue;
+      out[key] = safe;
+    }
+    return out;
+  }
+
+  private resolveSectionsForRole(roleId: RoleId, overrides: SectionOverridesMap): SectionsMap {
+    const out = { ...buildRolePreset(roleId).sections };
+    for (const key of ALL_SECTION_KEYS) {
+      const override = overrides[key];
+      if (this.isSectionLockedForRole(roleId, key)) {
+        out[key] = false;
+        continue;
+      }
+      out[key] = typeof override === "boolean" ? override : this.baseSectionByRole(roleId, key);
+    }
+    return normalizeSectionsMap(out);
+  }
+
+  private resolveCapabilitiesForRole(roleId: RoleId, overrides: CapabilityOverridesMap): RoleDoc["capabilities"] {
+    const out = { ...buildRolePreset(roleId).capabilities };
+    for (const key of ALL_CAPABILITY_KEYS) {
+      const override = overrides[key];
+      if (this.isCapabilityLockedForRole(roleId, key)) {
+        out[key] = false;
+        continue;
+      }
+      out[key] = typeof override === "boolean" ? override : this.baseCapByRole(roleId, key);
+    }
+    return normalizeCapabilitiesMap(out);
+  }
+
+  private toApiSectionKey(key: SectionKey): string {
+    return key.slice("sections.".length);
+  }
+
+  private buildUserPermissionGroups(): UserPermissionGroup[] {
+    const assigned = new Set<CapabilityKey>();
+    const allCapabilities = this.capGroups.flatMap((group) => group.keys);
+    const groups: UserPermissionGroup[] = this.sectionKeys.map((sectionKey) => {
+      const prefixes = SECTION_CAPABILITY_PREFIXES[sectionKey] ?? [];
+      const keys = allCapabilities.filter((capabilityKey) => prefixes.some((prefix) => capabilityKey.startsWith(prefix)));
+      for (const key of keys) assigned.add(key);
+      return {
+        sectionKey,
+        title: this.sectionLabel(sectionKey),
+        keys,
+      };
+    });
+
+    const generalKeys = allCapabilities.filter((capabilityKey) => !assigned.has(capabilityKey));
+    groups.push({
+      sectionKey: "general",
+      title: "Permisos generales",
+      keys: generalKeys,
+    });
+    return groups;
+  }
+
+  isSectionToggleDisabled(key: SectionKey): boolean {
+    const draft = this.editDraft();
+    if (!draft) return true;
+    if (!this.canManageUsers()) return true;
+    return this.isSectionLockedForRole(draft.roleId, key);
+  }
+
+  isCapabilityToggleDisabled(key: CapabilityKey): boolean {
+    const draft = this.editDraft();
+    if (!draft) return true;
+    if (!this.canManageUsers()) return true;
+    return this.isCapabilityLockedForRole(draft.roleId, key);
+  }
+
+  private isSectionLockedForRole(roleId: RoleId, key: SectionKey): boolean {
+    return roleId !== "super_admin" && key === "sections.usuarios";
+  }
+
+  private isCapabilityLockedForRole(roleId: RoleId, key: CapabilityKey): boolean {
+    if (roleId === "super_admin") return false;
+    return key.startsWith("cap.users.") || key.startsWith("cap.roles.");
   }
 
   private isValidEmail(value: string): boolean {

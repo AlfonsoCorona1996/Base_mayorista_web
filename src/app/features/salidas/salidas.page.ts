@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from "@angular/core";
+import { Component, computed, inject, signal, ChangeDetectionStrategy } from "@angular/core";
 import { Router } from "@angular/router";
 import { AuthzService } from "../../core/authz.service";
 import { CustomersService } from "../../core/customers.service";
@@ -15,6 +15,7 @@ type DispatchCard = DispatchOrderRow & {
   customerName: string;
   processLabel?: string;
   processTone?: "confirmar" | "espera" | "empaque";
+  requestedRunChip?: string | null;
 };
 type ScheduleSheetMode = "programar" | "solicitar" | "cambiar";
 
@@ -24,6 +25,8 @@ type RouteBoardGroup = {
   programados: Array<{
     run: RouteRunDoc;
     stops: RouteRunStopDoc[];
+    scheduledDateLabel: string;
+    balanceLabel: string;
   }>;
   solicitudes: DispatchCard[];
   listos: DispatchCard[];
@@ -31,6 +34,7 @@ type RouteBoardGroup = {
 };
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   selector: "app-salidas-page",
   templateUrl: "./salidas.page.html",
@@ -54,6 +58,16 @@ export default class SalidasPage {
   routeSearch = signal("");
   selectedRouteId = signal<string>("all");
   showRouteSuggestions = signal(false);
+  private readonly moneyFormatter = new Intl.NumberFormat("es-MX", {
+    style: "currency",
+    currency: "MXN",
+    maximumFractionDigits: 0,
+  });
+  private readonly runDateFormatter = new Intl.DateTimeFormat("es-MX", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
 
   canRunCreate = computed(() => this.authz.canCap("cap.runs.create"));
   canRunSchedule = computed(() => this.authz.canCap("cap.runs.schedule"));
@@ -97,6 +111,8 @@ export default class SalidasPage {
       group.programados.push({
         run,
         stops: stopsByRunId[run.runId] || [],
+        scheduledDateLabel: this.runDate(run.scheduled_at),
+        balanceLabel: this.money(run.counts.balance_total),
       });
     }
 
@@ -168,6 +184,7 @@ export default class SalidasPage {
         ...row,
         routeName: this.routeName(row.route_id),
         customerName: this.customerName(row.customer_id),
+        requestedRunChip: this.requestedRunChip(row),
       }));
       this.orders.set(cards);
       this.runs.set(activeRuns);
@@ -341,7 +358,7 @@ export default class SalidasPage {
     return `${this.runDate(run.scheduled_at)}${driver}`;
   }
 
-  requestedRunChip(row: DispatchCard): string | null {
+  requestedRunChip(row: Pick<DispatchOrderRow, "dispatch_request">): string | null {
     const parsed = this.parseDispatchTarget(row.dispatch_request.note);
     if (!parsed?.scheduledAt) return null;
     return this.runDate(parsed.scheduledAt);
@@ -418,15 +435,13 @@ export default class SalidasPage {
   }
 
   money(value: number): string {
-    return new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format(value || 0);
+    return this.moneyFormatter.format(value || 0);
   }
 
   runDate(value: string): string {
-    return new Date(value).toLocaleDateString("es-MX", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    return this.runDateFormatter.format(date);
   }
 
   private upcomingRunsForRoute(routeId: string | null): RouteRunDoc[] {

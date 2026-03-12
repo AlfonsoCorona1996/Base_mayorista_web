@@ -42,7 +42,7 @@
         <div class="skeleton-bone skeleton-line skeleton-line--md"></div>
       </div>
       <div class="order-item-grid">
-        @for (i of [1, 2, 3, 4]; track i) {
+        @for (i of skeletonRows; track i) {
           <article class="product-card skeleton-card">
             <div class="skeleton-row">
               <span class="skeleton-bone skeleton-thumb"></span>
@@ -61,6 +61,7 @@
     </section>
   </section>
 } @else if (order(); as current) {
+  @if (orderViewVm(); as vm) {
   <section class="page" (scroll)="onPageScroll($event)">
     <header class="page-head" #pageHead>
       <div class="page-head-main">
@@ -88,30 +89,30 @@
             }
           </div>
         </div>
-        <h1>{{ customerName(current) }}</h1>
+        <h1>{{ vm.customerName }}</h1>
         <p class="muted page-updated">Actualizado {{ current.updated_at | date: "short" }}</p>
         <div class="title-row title-row--meta">
-          <span class="meta-dot-pill">{{ statusLabel(current.status) }}</span>
+          <span class="meta-dot-pill">{{ vm.statusLabel }}</span>
           <span class="meta-dot-pill meta-dot-pill--location">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <path d="M12 22s7-6 7-12a7 7 0 1 0-14 0c0 6 7 12 7 12z"></path>
               <circle cx="12" cy="10" r="2.5"></circle>
             </svg>
-            {{ routeName(current) }}
+            {{ vm.routeName }}
           </span>
         </div>
       </div>
       <div class="status-actions">
-        @if (phaseAction(current); as phase) {
+        @if (vm.phase; as phase) {
           <button
             type="button"
             class="btn confirm-intelligent-btn"
-            [class.primary]="phase.actionId !== 'confirm_items' || isConfirmExistencesReady(current)"
-            [class.ghost]="phase.actionId === 'confirm_items' && !isConfirmExistencesReady(current)"
+            [class.primary]="phase.actionId !== 'confirm_items' || vm.allItemsResolved"
+            [class.ghost]="phase.actionId === 'confirm_items' && !vm.allItemsResolved"
             [disabled]="phase.actionId === 'confirm_items' && current.items.length === 0"
             (click)="openActionModal(current)"
           >
-            {{ phase.actionId === "confirm_items" ? confirmExistencesActionLabel(current) : phase.label }}
+            {{ phase.actionId === "confirm_items" ? vm.confirmExistencesActionLabel : phase.label }}
           </button>
         }
       </div>
@@ -121,35 +122,35 @@
       <div class="action-toast" role="status" aria-live="polite">{{ actionToast() }}</div>
     }
 
-    <section class="summary" [class.summary--five]="isPackingWorkflowPhase(current)" aria-label="Resumen del pedido">
+    <section class="summary" [class.summary--five]="vm.isPackingWorkflowPhase" aria-label="Resumen del pedido">
       <article class="summary-card summary-card--pieces">
         <span
           class="summary-progress-ring"
           aria-hidden="true"
-          [style.--progress]="confirmedPiecesPercent(current)"
+          [style.--progress]="vm.confirmedPiecesPercent"
         >
           <span class="summary-progress-ring__value">
-            {{ confirmedPiecesPercent(current) }}%
+            {{ vm.confirmedPiecesPercent }}%
           </span>
         </span>
         <div>
           <p class="eyebrow">Piezas</p>
           <p class="summary-ratio">
-            <strong class="summary-value">{{ confirmedPieces(current) }}</strong>
-            <span>/ {{ totalPieces(current) }}</span>
+            <strong class="summary-value">{{ vm.confirmedPieces }}</strong>
+            <span>/ {{ vm.totalPieces }}</span>
           </p>
-          <p class="summary-note" [class.summary-note--warning]="pendingPieces(current) > 0">
-            {{ pendingPieces(current) }} pieza{{ pendingPieces(current) === 1 ? "" : "s" }} pendientes
+          <p class="summary-note" [class.summary-note--warning]="vm.pendingPieces > 0">
+            {{ vm.pendingPieces }} pieza{{ vm.pendingPieces === 1 ? "" : "s" }} pendientes
           </p>
         </div>
       </article>
 
-      @if (isPackingWorkflowPhase(current)) {
+      @if (vm.isPackingWorkflowPhase) {
         <article class="summary-card">
           <p class="eyebrow">Paquetes</p>
           <p class="summary-ratio">
-            <strong class="summary-value">{{ closedPackagesCount(current) }}</strong>
-            <span>/ {{ packingBoxesCount(current) }}</span>
+            <strong class="summary-value">{{ vm.closedPackagesCount }}</strong>
+            <span>/ {{ vm.packingBoxesCount }}</span>
           </p>
         </article>
       }
@@ -158,7 +159,7 @@
         <p class="eyebrow">Total venta</p>
         <p class="summary-money">
           <span>MXN</span>
-          <strong class="summary-value">{{ formatCurrency(totals().totalVenta) }}</strong>
+          <strong class="summary-value">{{ formatCurrency(vm.totals.totalVenta) }}</strong>
         </p>
       </article>
 
@@ -166,7 +167,7 @@
         <p class="eyebrow">Total clienta</p>
         <p class="summary-money">
           <span>MXN</span>
-          <strong class="summary-value">{{ formatCurrency(totals().totalClienta) }}</strong>
+          <strong class="summary-value">{{ formatCurrency(vm.totals.totalClienta) }}</strong>
         </p>
       </article>
 
@@ -174,7 +175,7 @@
         <p class="eyebrow">Ganancia</p>
         <p class="summary-money summary-money--profit">
           <span>MXN</span>
-          <strong class="summary-value summary-value--profit">{{ formatCurrency(totals().ganancia) }}</strong>
+          <strong class="summary-value summary-value--profit">{{ formatCurrency(vm.totals.ganancia) }}</strong>
         </p>
       </article>
     </section>
@@ -186,6 +187,7 @@
       <button type="button" (click)="scrollToSection('bitacora')">Bitacora</button>
     </nav>
 
+    @if (resolvedIncidents(); as resolvedIncidentsList) {
     <section class="panel" id="incidencias" #incidentsSection>
       <div class="panel-head">
         <h2>Incidencias</h2>
@@ -195,65 +197,67 @@
             Nueva incidencia
           </button>
           <button type="button" class="btn link" (click)="toggleResolved()">
-            {{ showResolvedIncidents() ? "Ocultar" : "Ver" }} resueltas ({{ resolvedIncidents().length }})
+            {{ showResolvedIncidents() ? "Ocultar" : "Ver" }} resueltas ({{ resolvedIncidentsList.length }})
           </button>
         </div>
       </div>
-      <div class="incidents">
-        @if (openIncidents().length === 0) {
-          <p class="muted">Sin incidencias abiertas.</p>
-        }
-        @for (inc of openIncidents(); track inc.id) {
-          <article
-            class="incident-card"
-            [class.high]="inc.severity === 'high'"
-            [class.medium]="inc.severity === 'medium'"
-            [class.low]="inc.severity === 'low'"
-          >
-            <div class="incident-main">
-              <div class="incident-head">
-                <div class="incident-title-row">
-                  <p class="incident-title">{{ inc.title }}</p>
-                  <div class="incident-chips">
-                    <span class="chip incident-chip incident-chip-type">{{ inc.type }}</span>
-                    <span class="chip incident-chip incident-chip-severity">
-                      {{ inc.severity === "high" ? "Alta" : inc.severity === "medium" ? "Media" : "Baja" }}
-                    </span>
+      @if (openIncidents(); as openIncidentsList) {
+        <div class="incidents">
+          @if (openIncidentsList.length === 0) {
+            <p class="muted">Sin incidencias abiertas.</p>
+          }
+          @for (inc of openIncidentsList; track inc.id) {
+            <article
+              class="incident-card"
+              [class.high]="inc.severity === 'high'"
+              [class.medium]="inc.severity === 'medium'"
+              [class.low]="inc.severity === 'low'"
+            >
+              <div class="incident-main">
+                <div class="incident-head">
+                  <div class="incident-title-row">
+                    <p class="incident-title">{{ inc.title }}</p>
+                    <div class="incident-chips">
+                      <span class="chip incident-chip incident-chip-type">{{ inc.type }}</span>
+                      <span class="chip incident-chip incident-chip-severity">
+                        {{ inc.severity === "high" ? "Alta" : inc.severity === "medium" ? "Media" : "Baja" }}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-              <p class="incident-reason">{{ inc.reason }}</p>
-              <div class="incident-meta-grid">
-                <p class="incident-meta"><strong>Asignado a:</strong> {{ inc.assigneeId || "Sin asignar" }}</p>
-                <p class="incident-meta"><strong>Fecha:</strong> {{ inc.createdAt | date: "short" }}</p>
-                <p class="incident-meta"><strong>Admin:</strong> {{ inc.createdBy }}</p>
-              </div>
-              @if ((inc.evidenceUrls?.length || 0) > 0) {
-                <div class="evidence">
-                  <p class="evidence-count">{{ (inc.evidenceUrls?.length || 0) }} evidencia{{ (inc.evidenceUrls?.length || 0) === 1 ? "" : "s" }}</p>
-                  @for (url of inc.evidenceUrls || []; track url) {
-                    <a class="evidence-thumb" [href]="url" target="_blank" rel="noreferrer">
-                      <img [src]="url" [alt]="'Evidencia de ' + inc.title" loading="lazy" />
-                    </a>
-                  }
+                <p class="incident-reason">{{ inc.reason }}</p>
+                <div class="incident-meta-grid">
+                  <p class="incident-meta"><strong>Asignado a:</strong> {{ inc.assigneeId || "Sin asignar" }}</p>
+                  <p class="incident-meta"><strong>Fecha:</strong> {{ inc.createdAt | date: "short" }}</p>
+                  <p class="incident-meta"><strong>Admin:</strong> {{ inc.createdBy }}</p>
                 </div>
-              }
-            </div>
-            <div class="incident-actions">
-              <button type="button" class="btn primary" (click)="openResolveModal(inc)">Resolver</button>
-              <button type="button" class="btn ghost" (click)="openAssignModal(inc)">Asignar</button>
-              <label class="btn ghost file-btn">
-                <input type="file" accept="image/*" (change)="attachEvidence(inc, $event)" />
-                {{ uploadingEvidence()[inc.id] ? "Subiendo..." : "Adjuntar foto" }}
-              </label>
-              <button type="button" class="btn link incident-link" (click)="scrollToTimeline()">Ver en bitacora</button>
-            </div>
-          </article>
-        }
-      </div>
-      @if (showResolvedIncidents() && resolvedIncidents().length > 0) {
+                @if ((inc.evidenceUrls?.length || 0) > 0) {
+                  <div class="evidence">
+                    <p class="evidence-count">{{ (inc.evidenceUrls?.length || 0) }} evidencia{{ (inc.evidenceUrls?.length || 0) === 1 ? "" : "s" }}</p>
+                    @for (url of inc.evidenceUrls || []; track url) {
+                      <a class="evidence-thumb" [href]="url" target="_blank" rel="noreferrer">
+                        <img [src]="url" [alt]="'Evidencia de ' + inc.title" loading="lazy" />
+                      </a>
+                    }
+                  </div>
+                }
+              </div>
+              <div class="incident-actions">
+                <button type="button" class="btn primary" (click)="openResolveModal(inc)">Resolver</button>
+                <button type="button" class="btn ghost" (click)="openAssignModal(inc)">Asignar</button>
+                <label class="btn ghost file-btn">
+                  <input type="file" accept="image/*" (change)="attachEvidence(inc, $event)" />
+                  {{ uploadingEvidence()[inc.id] ? "Subiendo..." : "Adjuntar foto" }}
+                </label>
+                <button type="button" class="btn link incident-link" (click)="scrollToTimeline()">Ver en bitacora</button>
+              </div>
+            </article>
+          }
+        </div>
+      }
+      @if (showResolvedIncidents() && resolvedIncidentsList.length > 0) {
         <div class="incidents resolved">
-          @for (inc of resolvedIncidents(); track inc.id) {
+          @for (inc of resolvedIncidentsList; track inc.id) {
             <article class="incident-card resolved">
               <div>
                 <p class="eyebrow">{{ inc.title }} - {{ inc.type }}</p>
@@ -267,12 +271,13 @@
         </div>
       }
     </section>
+    }
 
     <section class="panel" id="productos">
       <div class="panel-head">
         <h2>Productos</h2>
         <div class="panel-actions">
-          @if (canAddProducts(current)) {
+          @if (vm.canAddProducts) {
             <button type="button" class="btn primary with-icon" (click)="openAddItemModal()">
               <span class="btn-icon" aria-hidden="true">+</span>
               Agregar producto
@@ -289,59 +294,61 @@
             [class.active]="productStockFilter() === 'all'"
             (click)="setProductStockFilter('all')"
           >
-            Todo ({{ totalItems(current) }})
+            Todo ({{ vm.totalItems }})
           </button>
           <button
             type="button"
             class="products-filter-btn"
             [class.active]="productStockFilter() === 'out_of_stock'"
-            [disabled]="outOfStockItemsCount(current) === 0"
+            [disabled]="vm.outOfStockItems === 0"
             (click)="setProductStockFilter('out_of_stock')"
           >
-            Sin stock ({{ outOfStockItemsCount(current) }})
+            Sin stock ({{ vm.outOfStockItems }})
           </button>
           <button
             type="button"
             class="products-filter-btn"
             [class.active]="productStockFilter() === 'confirmed'"
-            [disabled]="confirmedItemsCount(current) === 0"
+            [disabled]="vm.confirmedItems === 0"
             (click)="setProductStockFilter('confirmed')"
           >
-            Confirmados ({{ confirmedItemsCount(current) }})
+            Confirmados ({{ vm.confirmedItems }})
           </button>
           <button
             type="button"
             class="products-filter-btn"
             [class.active]="productStockFilter() === 'pending'"
-            [disabled]="pendingConfirmationItemsCount(current) === 0"
+            [disabled]="vm.pendingConfirmationItems === 0"
             (click)="setProductStockFilter('pending')"
           >
-            Pendientes ({{ pendingConfirmationItemsCount(current) }})
+            Pendientes ({{ vm.pendingConfirmationItems }})
           </button>
-          @if (isConfirmItemsPhase(current) && hasPendingItems(current)) {
+          @if (vm.phase?.actionId === "confirm_items" && vm.hasPendingItems) {
             <button
               type="button"
               class="products-batch-btn"
               (click)="confirmarTodoDisponible()"
-              [disabled]="!canMagicConfirm(current)"
+              [disabled]="!vm.canMagicConfirm"
             >
               Marcar todo como disponible
             </button>
           }
         </div>
       }
-      <div class="items order-item-grid">
-        @for (item of filteredProductItems(current); track item.item_id) {
+      @if (visibleProductCardsVm(); as visibleProductItems) {
+        <div class="items order-item-grid">
+          @for (card of visibleProductItems; track card.item.item_id) {
+          @if (card.item; as item) {
           <article
             class="product-card"
-            [id]="productCardId(item)"
-            [class.status--confirmed]="isConfirmedConfirmation(item)"
-            [class.status--partial]="isConfirmedConfirmation(item) && hasPartialConfirmation(item)"
-            [class.status--out]="isOutOfStockConfirmation(item)"
-            [class.status--alert]="hasInsufficientStock(item) && !isOutOfStockConfirmation(item)"
+            [id]="card.cardId"
+            [class.status--confirmed]="card.isConfirmed"
+            [class.status--partial]="card.isConfirmed && card.hasPartial"
+            [class.status--out]="card.isOutOfStock"
+            [class.status--alert]="card.hasInsufficientStock && !card.isOutOfStock"
           >
             @if (current.status === "borrador") {
-              <button type="button" class="btn-close" (click)="removeItem(current, item)" [disabled]="!canEditItems(current)">
+              <button type="button" class="btn-close" (click)="removeItem(current, item)" [disabled]="!vm.canEditItems">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M3 6h18"></path>
                   <path stroke-linecap="round" stroke-linejoin="round" d="M8 6V4h8v2"></path>
@@ -352,18 +359,18 @@
 
             <div class="card-body">
               <div class="main-info">
-                <button type="button" class="image-container" (click)="openImagePreview(itemImage(item) || 'https://via.placeholder.com/800?text=Producto')">
-                  <img [src]="itemImage(item) || 'https://via.placeholder.com/100'" [alt]="item.title" />
+                <button type="button" class="image-container" (click)="openImagePreview(card.imageUrl || 'https://via.placeholder.com/800?text=Producto')">
+                  <img [src]="card.imageUrl || 'https://via.placeholder.com/100'" [alt]="item.title" />
                   <span class="source-tag source-text--overlay" [class.source--catalogo]="item.source === 'catalogo'">
                     {{ item.source | uppercase }}
                   </span>
-                  @if (isConfirmedConfirmation(item)) {
-                    <span class="pieces-state" [class.pieces-state--partial]="hasPartialConfirmation(item)" [class.pieces-state--ok]="!hasPartialConfirmation(item)">
+                  @if (card.isConfirmed) {
+                    <span class="pieces-state" [class.pieces-state--partial]="card.hasPartial" [class.pieces-state--ok]="!card.hasPartial">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" d="m5 13 4 4L19 7"></path>
                       </svg>
                     </span>
-                  } @else if (isOutOfStockConfirmation(item)) {
+                  } @else if (card.isOutOfStock) {
                     <span class="pieces-state pieces-state--out">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M18 6L6 18M6 6l12 12"></path>
@@ -388,10 +395,10 @@
                     </div>
                     <div class="spec-status-row">
                       <div class="spec-item spec-item--pieces">
-                        @if (isOutOfStockConfirmation(item)) {
+                        @if (card.isOutOfStock) {
                           <span>Piezas: <strong>{{ item.quantity }}</strong></span>
                         } @else if (item.quantity > 1) {
-                          <span>Piezas: <strong>{{ confirmedQty(item) }}</strong> de <strong>{{ item.quantity }}</strong></span>
+                          <span>Piezas: <strong>{{ card.confirmedQty }}</strong> de <strong>{{ item.quantity }}</strong></span>
                         } @else {
                           <span>Piezas: <strong>{{ item.quantity }}</strong></span>
                         }
@@ -408,25 +415,25 @@
                 </div>
 
                 <div class="action-stack">
-                  @if (isConfirmItemsPhase(current)) {
+                  @if (vm.phase?.actionId === "confirm_items") {
                     <div class="button-group">
-                      @if (isConfirmedConfirmation(item) && item.quantity > 1) {
+                      @if (card.isConfirmed && item.quantity > 1) {
                         <div class="confirmed-counter" [attr.aria-label]="'Confirmados para ' + item.title">
                           <button
                             type="button"
                             class="confirmed-counter__btn"
-                            [disabled]="isQuickConfirming(item)"
+                            [disabled]="card.quickConfirming"
                             (click)="decreaseConfirmedCounter(item)"
                           >
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
                               <path stroke-linecap="round" stroke-linejoin="round" d="M6 12h12"></path>
                             </svg>
                           </button>
-                          <span class="confirmed-counter__value">{{ getCardDraftConfirmedQty(item) }} / {{ item.quantity }}</span>
+                          <span class="confirmed-counter__value">{{ card.draftConfirmedQty }} / {{ item.quantity }}</span>
                           <button
                             type="button"
                             class="confirmed-counter__btn"
-                            [disabled]="isQuickConfirming(item)"
+                            [disabled]="card.quickConfirming"
                             (click)="increaseConfirmedCounter(item)"
                           >
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
@@ -434,16 +441,16 @@
                             </svg>
                           </button>
                         </div>
-                      } @else if (!isConfirmedConfirmation(item)) {
+                      } @else if (!card.isConfirmed) {
                         <button class="btn-main btn-confirm" (click)="confirmarItem(item)">Marcar <span class="btn-confirm-word">Disponible</span></button>
                       }
-                      @if (!isOutOfStockConfirmation(item)) {
+                      @if (!card.isOutOfStock) {
                         <button class="btn-sub btn-out" (click)="marcarAgotado(item)">Marcar <span class="btn-out-word">Agotado</span></button>
                       }
                     </div>
-                  } @else if (isSupplierManagedItem(item) && !isSupplierItemReceived(current, item) && isConfirmedConfirmation(item)) {
-                    <button type="button" class="btn card-receive-btn" [disabled]="isItemActionLoading(item)" (click)="receiveItem(current, item)">
-                      @if (isItemActionLoading(item)) {
+                  } @else if (card.showSupplierReceive) {
+                    <button type="button" class="btn card-receive-btn" [disabled]="card.itemActionLoading" (click)="receiveItem(current, item)">
+                      @if (card.itemActionLoading) {
                         <span class="btn-spinner" aria-hidden="true"></span>
                         Procesando...
                       } @else {
@@ -455,21 +462,24 @@
               </div>
             </div>
           </article>
-        }
+          }
+          }
 
-        @if (current.items.length === 0) {
-          <div class="empty-state">
-            <p>Aun no hay productos en este pedido.</p>
-          </div>
-        }
-      </div>
+          @if (vm.totalItems === 0) {
+            <div class="empty-state">
+              <p>Aun no hay productos en este pedido.</p>
+            </div>
+          }
+        </div>
+      }
     </section>
 
-    @if (allowedCapabilities(current, userRole()).canCreatePackages) {
+    @if (vm.canCreatePackages) {
+      @if (packingVm(); as packing) {
       <section class="panel package-shell packing-mode" id="paquetes" #packagesSection>
         <header class="packHeader">
           <h2>Empacando Pedido</h2>
-          <p>{{ unpackedCount(current) }} pendientes por empacar</p>
+          <p>{{ packing.unpackedCount }} pendientes por empacar</p>
         </header>
         <div class="packPage" (click)="closePackingMenus()">
 
@@ -490,97 +500,97 @@
                 </button>
               </div>
 
-              @if (openPackingBoxes(current).length > 0) {
+              @if (packing.openBoxes.length > 0) {
                 <div class="boxList">
-                  @for (openBox of openPackingBoxes(current); track openBox.package_id) {
-                    <article
-                      class="boxCard"
-                      [class.isActive]="activeOpenBox(current)?.package_id === openBox.package_id"
-                      (click)="setActiveOpenBox(openBox.package_id); closePackingMenus()"
-                    >
-                      <div class="boxCard__top">
-                        <div>
-                          <p class="boxCard__title">
-                            Caja {{ packingBoxNumber(current, openBox) }}
-                            @if (activeOpenBox(current)?.package_id === openBox.package_id) {
-                              <span class="statusBadge statusBadge--active">Activa</span>
-                            }
-                          </p>
-                          <p class="boxCard__meta">{{ packingItemsInBox(current, openBox).length }} productos</p>
-                        </div>
-                        <div class="menuWrap">
-                          <button
-                            type="button"
-                            class="menuBtn"
-                            [disabled]="packingBusy()"
-                            (click)="$event.stopPropagation(); toggleOpenBoxMenu(openBox.package_id)"
-                            aria-label="Acciones de caja"
-                          >
-                            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
-                          </button>
-                          @if (openBoxMenuId() === openBox.package_id) {
-                            <div class="menuDropdown" (click)="$event.stopPropagation()">
-                              <button type="button" class="menuItem" [disabled]="packingBusy() || packingItemsInBox(current, openBox).length === 0" (click)="requestMoveFromPackage(current, openBox)">
-                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h14m0 0-5-5m5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                                {{ isMoveMode(openBox.package_id) ? "Ocultar mover" : "Mover productos" }}
-                              </button>
-                              <button type="button" class="menuItem danger" [disabled]="packingBusy()" (click)="requestDeleteOpenPackage(current, openBox)">
-                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M9 6V4h6v2m-8 0 1 14h8l1-14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                                Eliminar caja
-                              </button>
-                            </div>
+                  @for (openBox of packing.openBoxes; track openBox.pkg.package_id) {
+                  <article
+                    class="boxCard"
+                    [class.isActive]="openBox.isActive"
+                    (click)="setActiveOpenBox(openBox.pkg.package_id); closePackingMenus()"
+                  >
+                    <div class="boxCard__top">
+                      <div>
+                        <p class="boxCard__title">
+                          {{ openBox.title }}
+                          @if (openBox.isActive) {
+                            <span class="statusBadge statusBadge--active">Activa</span>
                           }
-                        </div>
+                        </p>
+                        <p class="boxCard__meta">{{ openBox.rows.length }} productos</p>
                       </div>
+                      <div class="menuWrap">
+                        <button
+                          type="button"
+                          class="menuBtn"
+                          [disabled]="packingBusy()"
+                          (click)="$event.stopPropagation(); toggleOpenBoxMenu(openBox.pkg.package_id)"
+                          aria-label="Acciones de caja"
+                        >
+                          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
+                        </button>
+                        @if (openBox.isMenuOpen) {
+                          <div class="menuDropdown" (click)="$event.stopPropagation()">
+                            <button type="button" class="menuItem" [disabled]="packingBusy() || openBox.rows.length === 0" (click)="requestMoveFromPackage(current, openBox.pkg)">
+                              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h14m0 0-5-5m5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                              {{ openBox.isMoveMode ? "Ocultar mover" : "Mover productos" }}
+                            </button>
+                            <button type="button" class="menuItem danger" [disabled]="packingBusy()" (click)="requestDeleteOpenPackage(current, openBox.pkg)">
+                              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M9 6V4h6v2m-8 0 1 14h8l1-14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                              Eliminar caja
+                            </button>
+                          </div>
+                        }
+                      </div>
+                    </div>
 
-                      @if (packingItemsInBox(current, openBox).length > 0) {
-                        <div class="boxCard__body">
-                          @for (row of packingItemsInBox(current, openBox); track row.item.item_id) {
-                            <div class="itemRow" [class.itemRow--withAction]="isMoveMode(openBox.package_id)">
-                              <div class="itemRow__thumb">
-                                @if (itemImage(row.item)) {
-                                  <img [src]="itemImage(row.item)" [alt]="row.item.title" loading="lazy" />
-                                } @else {
-                                  <span>{{ row.item.title.slice(0, 2).toUpperCase() }}</span>
-                                }
-                              </div>
-                              <div class="itemRow__main">
-                                <p class="itemRow__title">{{ row.item.title }} - {{ row.qty }} pza</p>
-                                <div class="chipRow">
-                                  @if (row.item.variant) { <span class="metaChip">{{ row.item.variant }}</span> }
-                                  @if (row.item.color) { <span class="metaChip">{{ row.item.color }}</span> }
-                                </div>
-                              </div>
-                              @if (isMoveMode(openBox.package_id)) {
-                                <button type="button" class="rowMoveBtn" [disabled]="packingBusy()" (click)="$event.stopPropagation(); openMoveSheet(openBox, row.item, row.qty)">
-                                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h14m0 0-5-5m5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                                  Mover
-                                </button>
+                    @if (openBox.rows.length > 0) {
+                      <div class="boxCard__body">
+                        @for (row of openBox.rows; track row.item.item_id) {
+                          <div class="itemRow" [class.itemRow--withAction]="openBox.isMoveMode">
+                            <div class="itemRow__thumb">
+                              @if (row.imageUrl) {
+                                <img [src]="row.imageUrl" [alt]="row.item.title" loading="lazy" />
+                              } @else {
+                                <span>{{ row.initials }}</span>
                               }
                             </div>
-                          }
-                        </div>
-                      }
-
-                      <div class="boxCard__actions">
-                        @if (activeOpenBox(current)?.package_id === openBox.package_id) {
-                          <button type="button" class="scanCta" [disabled]="packingBusy()" (click)="$event.stopPropagation()">
-                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3H7a2 2 0 0 0-2 2v2m12-4h2a2 2 0 0 1 2 2v2M9 21H7a2 2 0 0 1-2-2v-2m12 4h2a2 2 0 0 0 2-2v-2M6 12h12M12 6v12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-                            Escanear producto
-                          </button>
-                        }
-                        @if (activeOpenBox(current)?.package_id === openBox.package_id) {
-                          <button
-                            type="button"
-                            class="secondaryBtn"
-                            [disabled]="packingBusy() || packingItemsInBox(current, openBox).length === 0"
-                            (click)="$event.stopPropagation(); closePackage(current, openBox)"
-                          >
-                            Cerrar caja
-                          </button>
+                            <div class="itemRow__main">
+                              <p class="itemRow__title">{{ row.item.title }} - {{ row.qty }} pza</p>
+                              <div class="chipRow">
+                                @if (row.item.variant) { <span class="metaChip">{{ row.item.variant }}</span> }
+                                @if (row.item.color) { <span class="metaChip">{{ row.item.color }}</span> }
+                              </div>
+                            </div>
+                            @if (openBox.isMoveMode) {
+                              <button type="button" class="rowMoveBtn" [disabled]="packingBusy()" (click)="$event.stopPropagation(); openMoveSheet(openBox.pkg, row.item, row.qty)">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h14m0 0-5-5m5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                Mover
+                              </button>
+                            }
+                          </div>
                         }
                       </div>
-                    </article>
+                    }
+
+                    <div class="boxCard__actions">
+                      @if (openBox.isActive) {
+                        <button type="button" class="scanCta" [disabled]="packingBusy()" (click)="$event.stopPropagation()">
+                          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3H7a2 2 0 0 0-2 2v2m12-4h2a2 2 0 0 1 2 2v2M9 21H7a2 2 0 0 1-2-2v-2m12 4h2a2 2 0 0 0 2-2v-2M6 12h12M12 6v12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                          Escanear producto
+                        </button>
+                      }
+                      @if (openBox.isActive) {
+                        <button
+                          type="button"
+                          class="secondaryBtn"
+                          [disabled]="packingBusy() || openBox.rows.length === 0"
+                          (click)="$event.stopPropagation(); closePackage(current, openBox.pkg)"
+                        >
+                          Cerrar caja
+                        </button>
+                      }
+                    </div>
+                  </article>
                   }
                 </div>
               } @else {
@@ -597,24 +607,24 @@
                   </svg>
                   PRODUCTOS SIN EMPACAR
                 </p>
-                <span class="countPill">{{ unpackedCount(current) }}</span>
+                <span class="countPill">{{ packing.unpackedCount }}</span>
               </div>
               <div class="unpackedMeta">
-                @if (activeOpenBox(current); as targetBox) {
-                  <p>Caja activa: {{ activeOpenBoxNumber(current) }}</p>
+                @if (packing.activeOpenBoxNumber !== null) {
+                  <p>Caja activa: {{ packing.activeOpenBoxNumber }}</p>
                 } @else {
                   <p>Selecciona una caja para escanear</p>
                 }
               </div>
-              @if (unpackedItems(current).length > 0) {
+              @if (packing.unpackedRows.length > 0) {
                 <div class="unpackedList">
-                  @for (row of unpackedItems(current); track row.item.item_id) {
+                  @for (row of packing.unpackedRows; track row.item.item_id) {
                     <button type="button" class="itemRow itemRow--button" [disabled]="packingBusy()" (click)="addItemToOpenBox(current, row)">
                       <div class="itemRow__thumb">
-                        @if (itemImage(row.item)) {
-                          <img [src]="itemImage(row.item)" [alt]="row.item.title" loading="lazy" />
+                        @if (row.imageUrl) {
+                          <img [src]="row.imageUrl" [alt]="row.item.title" loading="lazy" />
                         } @else {
-                          <span>{{ row.item.title.slice(0, 2).toUpperCase() }}</span>
+                          <span>{{ row.initials }}</span>
                         }
                       </div>
                       <div class="itemRow__main">
@@ -644,58 +654,58 @@
                 CAJAS CERRADAS
               </p>
             </div>
-            @if (closedPackingBoxes(current).length > 0) {
+            @if (packing.closedBoxes.length > 0) {
               <div class="closedList">
-                @for (pkg of closedPackingBoxes(current); track pkg.package_id) {
+                @for (pkg of packing.closedBoxes; track pkg.pkg.package_id) {
                   <article class="closedCard">
-                    <div class="closedCard__top">
-                      <div>
-                        <p class="closedCard__title">{{ closedBoxTitle(current, pkg) }}</p>
-                        <p class="closedCard__meta">{{ packingItemsInBox(current, pkg).length }} producto{{ packingItemsInBox(current, pkg).length === 1 ? "" : "s" }}</p>
-                      </div>
-                      <span class="statusBadge statusBadge--closed">
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 13 4 4L19 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                        {{ closedBoxLabel(current, pkg) }}
-                      </span>
+                  <div class="closedCard__top">
+                    <div>
+                      <p class="closedCard__title">{{ pkg.title }}</p>
+                      <p class="closedCard__meta">{{ pkg.rows.length }} producto{{ pkg.rows.length === 1 ? "" : "s" }}</p>
                     </div>
+                    <span class="statusBadge statusBadge--closed">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 13 4 4L19 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      {{ pkg.label }}
+                    </span>
+                  </div>
 
-                    <div class="closedActions">
-                      <button type="button" class="secondaryBtn" (click)="toggleClosedBox(pkg)"> {{ isClosedBoxExpanded(pkg) ? "Ocultar contenido" : "Ver contenido" }} </button>
-                      <button type="button" class="secondaryBtn" [disabled]="packingBusy()" (click)="printLabel(current, pkg)">
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V4h10v5m-10 8h10v3H7v-3Zm12 0h1a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                        Imprimir etiqueta
-                      </button>
-                      <button type="button" class="reopenBtn" [disabled]="packingBusy()" (click)="reopenPackage(current, pkg)">
-                        <svg viewBox="0 0 24 24" aria-hidden="true">
-                          <path d="M10 7 5 12l5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                          <path d="M6 12h8a5 5 0 0 1 0 10h-1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                        Reabrir caja
-                      </button>
-                    </div>
+                  <div class="closedActions">
+                    <button type="button" class="secondaryBtn" (click)="toggleClosedBox(pkg.pkg)"> {{ pkg.isExpanded ? "Ocultar contenido" : "Ver contenido" }} </button>
+                    <button type="button" class="secondaryBtn" [disabled]="packingBusy()" (click)="printLabel(current, pkg.pkg)">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V4h10v5m-10 8h10v3H7v-3Zm12 0h1a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      Imprimir etiqueta
+                    </button>
+                    <button type="button" class="reopenBtn" [disabled]="packingBusy()" (click)="reopenPackage(current, pkg.pkg)">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M10 7 5 12l5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M6 12h8a5 5 0 0 1 0 10h-1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                      Reabrir caja
+                    </button>
+                  </div>
 
-                    @if (isClosedBoxExpanded(pkg)) {
-                      <div class="boxCard__body">
-                        @for (row of packingItemsInBox(current, pkg); track row.item.item_id) {
-                          <div class="itemRow">
-                            <div class="itemRow__thumb">
-                              @if (itemImage(row.item)) {
-                                <img [src]="itemImage(row.item)" [alt]="row.item.title" loading="lazy" />
-                              } @else {
-                                <span>{{ row.item.title.slice(0, 2).toUpperCase() }}</span>
-                              }
-                            </div>
-                            <div class="itemRow__main">
-                              <p class="itemRow__title">{{ row.item.title }} - {{ row.qty }} pza</p>
-                              <div class="chipRow">
-                                @if (row.item.variant) { <span class="metaChip">{{ row.item.variant }}</span> }
-                                @if (row.item.color) { <span class="metaChip">{{ row.item.color }}</span> }
-                              </div>
+                  @if (pkg.isExpanded) {
+                    <div class="boxCard__body">
+                      @for (row of pkg.rows; track row.item.item_id) {
+                        <div class="itemRow">
+                          <div class="itemRow__thumb">
+                            @if (row.imageUrl) {
+                              <img [src]="row.imageUrl" [alt]="row.item.title" loading="lazy" />
+                            } @else {
+                              <span>{{ row.initials }}</span>
+                            }
+                          </div>
+                          <div class="itemRow__main">
+                            <p class="itemRow__title">{{ row.item.title }} - {{ row.qty }} pza</p>
+                            <div class="chipRow">
+                              @if (row.item.variant) { <span class="metaChip">{{ row.item.variant }}</span> }
+                              @if (row.item.color) { <span class="metaChip">{{ row.item.color }}</span> }
                             </div>
                           </div>
-                        }
-                      </div>
-                    }
+                        </div>
+                      }
+                    </div>
+                  }
                   </article>
                 }
               </div>
@@ -706,6 +716,7 @@
 
         </div>
       </section>
+      }
     } @else {
       <section class="panel locked package-shell" id="paquetes" #packagesSection>
         <div class="panel-head">
@@ -731,29 +742,29 @@
         </svg>
       </button>
       <div class="sticky-action-meta">
-        <p class="sticky-name">{{ customerName(current) }}</p>
-        @if (canViewFinancialSummary(current)) {
-          <p class="sticky-total">Balance: {{ formatCurrency(orderBalanceDue(current)) }}</p>
+        <p class="sticky-name">{{ vm.customerName }}</p>
+        @if (vm.canViewFinancialSummary) {
+          <p class="sticky-total">Balance: {{ formatCurrency(vm.orderBalanceDue) }}</p>
         } @else {
-          <p class="sticky-total">Paquetes: {{ closedPackagesCount(current) }}</p>
+          <p class="sticky-total">Paquetes: {{ vm.closedPackagesCount }}</p>
         }
       </div>
-      @if (phaseAction(current); as phase) {
+      @if (vm.phase; as phase) {
         <button
           type="button"
           class="btn sticky-confirm-btn confirm-intelligent-btn"
-          [class.primary]="phase.actionId !== 'confirm_items' || isConfirmExistencesReady(current)"
-          [class.ghost]="phase.actionId === 'confirm_items' && !isConfirmExistencesReady(current)"
+          [class.primary]="phase.actionId !== 'confirm_items' || vm.allItemsResolved"
+          [class.ghost]="phase.actionId === 'confirm_items' && !vm.allItemsResolved"
           [disabled]="phase.actionId === 'confirm_items' && current.items.length === 0"
           (click)="openActionModal(current)"
         >
-          {{ phase.actionId === "confirm_items" ? confirmExistencesActionLabel(current) : phase.label }}
+          {{ phase.actionId === "confirm_items" ? vm.confirmExistencesActionLabel : phase.label }}
         </button>
       }
     </div>
-    @if (shouldShowStockFab(current)) {
+    @if (vm.shouldShowStockFab) {
       <button type="button" class="stock-fab" (click)="scrollToFirstInsufficientProduct(current)">
-        {{ insufficientItemsCount(current) }} errores
+        {{ vm.insufficientItemsCount }} errores
       </button>
     }
   </section>
@@ -782,15 +793,15 @@
 
         @if (actionContext()?.actionId === "confirm_items") {
           <section class="confirm-shell" id="confirm-items-description">
-            <header class="confirm-header" [class.confirm-header-resolved]="allItemsResolved(current)">
+            <header class="confirm-header" [class.confirm-header-resolved]="vm.allItemsResolved">
               <div class="confirm-header-main">
                 <p class="eyebrow">Control de inventario</p>
                 <h2 id="confirm-items-title">Confirmar existencias</h2>
-                @if (!allItemsResolved(current)) {
+                @if (!vm.allItemsResolved) {
                   <p class="muted">Valida cada pieza para poder cerrar esta etapa.</p>
                 }
               </div>
-              @if (allItemsResolved(current)) {
+              @if (vm.allItemsResolved) {
                 <div class="confirm-header-state" aria-label="Resuelto">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                     <path d="m5 13 4 4L19 7"></path>
@@ -804,61 +815,63 @@
               <div class="confirm-kpis">
                 <article class="confirm-kpi kpi-confirmed">
                   <p class="kpi-label">Confirmadas</p>
-                  <p class="kpi-value">{{ confirmedPieces(current) }}</p>
+                  <p class="kpi-value">{{ vm.confirmedPieces }}</p>
                 </article>
                 <article class="confirm-kpi kpi-out">
                   <p class="kpi-label">Sin stock</p>
-                  <p class="kpi-value">{{ outOfStockPieces(current) }}</p>
+                  <p class="kpi-value">{{ vm.outOfStockPieces }}</p>
                 </article>
                 <article class="confirm-kpi kpi-pending">
                   <p class="kpi-label">Pendientes</p>
-                  <p class="kpi-value">{{ pendingPieces(current) }}</p>
+                  <p class="kpi-value">{{ vm.pendingPieces }}</p>
                 </article>
               </div>
             }
 
           @if (current.items.length > 0) {
             <div class="confirm-summary">
-              <div class="confirm-progress" role="progressbar" [attr.aria-valuenow]="resolvedPieces(current)" aria-valuemin="0" [attr.aria-valuemax]="totalPieces(current)">
-                <span class="confirm-progress-bar" [style.width.%]="totalPieces(current) > 0 ? (resolvedPieces(current) * 100) / totalPieces(current) : 0"></span>
+              <div class="confirm-progress" role="progressbar" [attr.aria-valuenow]="vm.resolvedPieces" aria-valuemin="0" [attr.aria-valuemax]="vm.totalPieces">
+                <span class="confirm-progress-bar" [style.width.%]="vm.totalPieces > 0 ? (vm.resolvedPieces * 100) / vm.totalPieces : 0"></span>
               </div>
             </div>
           }
           @if (current.items.length > 0) {
-            <div class="confirm-items-list">
-              @for (group of groupedItemsBySupplier(current); track group.supplierId) {
-                <div class="supplier-head" [class.resolved]="groupPendingCount(group.items) === 0">
-                  <div class="supplier-meta">
-                    <p class="supplier-title">{{ groupDisplayName(group) }}</p>
-                    <div class="supplier-stats">
-                      @if (groupOutOfStockCount(group.items) > 0) {
-                        <span class="stat-chip danger">Sin Stock {{ groupOutOfStockCount(group.items) }}</span>
-                      }
-                      @if (groupConfirmedCount(group.items) > 0) {
-                        <span class="stat-chip success">Confirmados {{ groupConfirmedCount(group.items) }}</span>
-                      }
-                      @if (groupPendingCount(group.items) > 0) {
-                        <span class="stat-chip pending">Pendientes {{ groupPendingCount(group.items) }}</span>
-                      }
+            @if (supplierGroupsVm(); as supplierGroups) {
+              <div class="confirm-items-list">
+                @for (group of supplierGroups; track group.supplierId) {
+                  <div class="supplier-head" [class.resolved]="group.pendingCount === 0">
+                    <div class="supplier-meta">
+                      <p class="supplier-title">{{ group.displayName }}</p>
+                      <div class="supplier-stats">
+                        @if (group.outOfStockCount > 0) {
+                          <span class="stat-chip danger">Sin Stock {{ group.outOfStockCount }}</span>
+                        }
+                        @if (group.confirmedCount > 0) {
+                          <span class="stat-chip success">Confirmados {{ group.confirmedCount }}</span>
+                        }
+                        @if (group.pendingCount > 0) {
+                          <span class="stat-chip pending">Pendientes {{ group.pendingCount }}</span>
+                        }
+                      </div>
                     </div>
                   </div>
-                </div>
-              }
-            </div>
+                }
+              </div>
+            }
           }
           @if (current.items.length > 0) {
             <div class="confirm-footer">
               <div class="confirm-footer-text">
                 <p class="confirm-footer-title">
-                  {{ confirmedPieces(current) + outOfStockPieces(current) }}/{{ totalPieces(current) }} piezas resueltas
+                  {{ vm.resolvedPieces }}/{{ vm.totalPieces }} piezas resueltas
                 </p>
               </div>
               <button type="button" class="btn ghost" (click)="closeActionModal()">Cancelar</button>
               <button
                 type="button"
                 class="btn primary confirm-submit-btn"
-                [class.confirm-submit-btn--blocked]="pendingPieces(current) > 0 && !actionSaving()"
-                [attr.aria-disabled]="pendingPieces(current) > 0 ? 'true' : null"
+                [class.confirm-submit-btn--blocked]="vm.pendingPieces > 0 && !actionSaving()"
+                [attr.aria-disabled]="vm.pendingPieces > 0 ? 'true' : null"
                 [disabled]="actionSaving()"
                 (click)="onConfirmExistencesClick(current)"
               >
@@ -871,15 +884,15 @@
 
         @if (actionContext()?.actionId === "pack") {
           <section class="confirm-shell">
-            <header class="confirm-header" [class.confirm-header-resolved]="canDispatch(current)">
+            <header class="confirm-header" [class.confirm-header-resolved]="vm.canDispatch">
               <div class="confirm-header-main">
                 <p class="eyebrow">Control de empaque</p>
                 <h2>Terminar empaquetado</h2>
-                @if (!canDispatch(current)) {
+                @if (!vm.canDispatch) {
                   <p class="muted">Completa el empaque de todas las piezas para habilitar salida.</p>
                 }
               </div>
-              @if (canDispatch(current)) {
+              @if (vm.canDispatch) {
                 <div class="confirm-header-state" aria-label="Resuelto">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                     <path d="m5 13 4 4L19 7"></path>
@@ -888,25 +901,25 @@
               }
             </header>
 
-            @if (!canStartPacking(current)) {
+            @if (!vm.canStartPacking) {
               <div class="sheet-warning">
                 <p class="eyebrow">Bloqueo operativo</p>
-                <p>Faltan {{ packBlockedCount(current) }} item(s) por recibir de proveedor antes de empacar.</p>
+                <p>Faltan {{ vm.packBlockedCount }} item(s) por recibir de proveedor antes de empacar.</p>
               </div>
             }
 
             <div class="confirm-kpis">
               <article class="confirm-kpi kpi-confirmed">
                 <p class="kpi-label">Empacadas</p>
-                <p class="kpi-value">{{ packedCount(current) }}</p>
+                <p class="kpi-value">{{ vm.packedCount }}</p>
               </article>
               <article class="confirm-kpi kpi-pending">
                 <p class="kpi-label">Sin empacar</p>
-                <p class="kpi-value">{{ unpackedCount(current) }}</p>
+                <p class="kpi-value">{{ vm.unpackedCount }}</p>
               </article>
               <article class="confirm-kpi kpi-open">
                 <p class="kpi-label">Cajas abiertas</p>
-                <p class="kpi-value">{{ openPackingBoxes(current).length }}</p>
+                <p class="kpi-value">{{ vm.openBoxesCount }}</p>
               </article>
             </div>
 
@@ -914,25 +927,25 @@
               <div
                 class="confirm-progress"
                 role="progressbar"
-                [attr.aria-valuenow]="packedCount(current)"
+                [attr.aria-valuenow]="vm.packedCount"
                 aria-valuemin="0"
-                [attr.aria-valuemax]="confirmedPieces(current)"
+                [attr.aria-valuemax]="vm.confirmedPieces"
               >
-                <span class="confirm-progress-bar" [style.width.%]="packingProgressPercent(current)"></span>
+                <span class="confirm-progress-bar" [style.width.%]="vm.packingProgressPercent"></span>
               </div>
             </div>
 
             <div class="confirm-footer">
               <div class="confirm-footer-text">
-                <p class="confirm-footer-title">{{ packedCount(current) }}/{{ confirmedPieces(current) }} piezas empacadas</p>
+                <p class="confirm-footer-title">{{ vm.packedCount }}/{{ vm.confirmedPieces }} piezas empacadas</p>
               </div>
               <button type="button" class="btn ghost" (click)="closeActionModal()">Cancelar</button>
               <button
                 type="button"
                 class="btn primary confirm-submit-btn"
-                [class.confirm-submit-btn--blocked]="!canDispatch(current) && !actionSaving()"
-                [attr.aria-disabled]="!canDispatch(current) ? 'true' : null"
-                [disabled]="!canDispatch(current) || actionSaving()"
+                [class.confirm-submit-btn--blocked]="!vm.canDispatch && !actionSaving()"
+                [attr.aria-disabled]="!vm.canDispatch ? 'true' : null"
+                [disabled]="!vm.canDispatch || actionSaving()"
                 (click)="dispatchOrder(current)"
               >
                 {{ actionSaving() ? "Guardando..." : "Terminar empaquetado" }}
@@ -950,15 +963,15 @@
 
         @if (actionContext()?.actionId === "dispatch") {
           <section class="confirm-shell">
-            <header class="confirm-header" [class.confirm-header-resolved]="canDispatch(current)">
+            <header class="confirm-header" [class.confirm-header-resolved]="vm.canDispatch">
               <div class="confirm-header-main">
                 <p class="eyebrow">Control de empaque</p>
                 <h2>Terminar empaquetado</h2>
-                @if (!canDispatch(current)) {
+                @if (!vm.canDispatch) {
                   <p class="muted">Completa el empaque de todas las piezas para habilitar salida.</p>
                 }
               </div>
-              @if (canDispatch(current)) {
+              @if (vm.canDispatch) {
                 <div class="confirm-header-state" aria-label="Resuelto">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                     <path d="m5 13 4 4L19 7"></path>
@@ -970,15 +983,15 @@
             <div class="confirm-kpis">
               <article class="confirm-kpi kpi-confirmed">
                 <p class="kpi-label">Empacadas</p>
-                <p class="kpi-value">{{ packedCount(current) }}</p>
+                <p class="kpi-value">{{ vm.packedCount }}</p>
               </article>
               <article class="confirm-kpi kpi-pending">
                 <p class="kpi-label">Sin empacar</p>
-                <p class="kpi-value">{{ unpackedCount(current) }}</p>
+                <p class="kpi-value">{{ vm.unpackedCount }}</p>
               </article>
               <article class="confirm-kpi kpi-open">
                 <p class="kpi-label">Cajas abiertas</p>
-                <p class="kpi-value">{{ openPackingBoxes(current).length }}</p>
+                <p class="kpi-value">{{ vm.openBoxesCount }}</p>
               </article>
             </div>
 
@@ -986,26 +999,26 @@
               <div
                 class="confirm-progress"
                 role="progressbar"
-                [attr.aria-valuenow]="packedCount(current)"
+                [attr.aria-valuenow]="vm.packedCount"
                 aria-valuemin="0"
-                [attr.aria-valuemax]="confirmedPieces(current)"
+                [attr.aria-valuemax]="vm.confirmedPieces"
               >
-                <span class="confirm-progress-bar" [style.width.%]="packingProgressPercent(current)"></span>
+                <span class="confirm-progress-bar" [style.width.%]="vm.packingProgressPercent"></span>
               </div>
             </div>
 
 
             <div class="confirm-footer">
               <div class="confirm-footer-text">
-                <p class="confirm-footer-title">{{ packedCount(current) }}/{{ confirmedPieces(current) }} piezas empacadas</p>
+                <p class="confirm-footer-title">{{ vm.packedCount }}/{{ vm.confirmedPieces }} piezas empacadas</p>
               </div>
               <button type="button" class="btn ghost" (click)="closeActionModal()">Cancelar</button>
               <button
                 type="button"
                 class="btn primary confirm-submit-btn"
-                [class.confirm-submit-btn--blocked]="!canDispatch(current) && !actionSaving()"
-                [attr.aria-disabled]="!canDispatch(current) ? 'true' : null"
-                [disabled]="!canDispatch(current) || actionSaving()"
+                [class.confirm-submit-btn--blocked]="!vm.canDispatch && !actionSaving()"
+                [attr.aria-disabled]="!vm.canDispatch ? 'true' : null"
+                [disabled]="!vm.canDispatch || actionSaving()"
                 (click)="dispatchOrder(current)"
               >
                 {{ actionSaving() ? "Guardando..." : "Terminar empaquetado" }}
@@ -1015,19 +1028,21 @@
         }
 
         @if (actionContext()?.actionId === "deliver") {
-          <div class="packages">
-            @for (pkg of closedPackingBoxes(current); track pkg.package_id) {
-              <article class="package">
-                <div class="package-top">
-                  <div>
-                    <p class="eyebrow">{{ closedBoxTitle(current, pkg) }}</p>
-                    <p class="muted">{{ packingItemsInBox(current, pkg).length }} productos</p>
+          @if (packingVm(); as packing) {
+            <div class="packages">
+              @for (pkg of packing.closedBoxes; track pkg.pkg.package_id) {
+                <article class="package">
+                  <div class="package-top">
+                    <div>
+                      <p class="eyebrow">{{ pkg.title }}</p>
+                      <p class="muted">{{ pkg.rows.length }} productos</p>
+                    </div>
                   </div>
-                </div>
-                <button type="button" class="btn primary" (click)="deliverPackage(current, pkg)">Registrar entrega</button>
-              </article>
-            }
-          </div>
+                  <button type="button" class="btn primary" (click)="deliverPackage(current, pkg.pkg)">Registrar entrega</button>
+                </article>
+              }
+            </div>
+          }
         }
 
         @if (actionContext()?.actionId === "register_payment") {
@@ -1051,7 +1066,7 @@
       <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="ready-route-title" (click)="$event.stopPropagation()">
         <div class="sheet-handle" aria-hidden="true"></div>
         <h2 id="ready-route-title">Listo para ruta</h2>
-        <p class="muted">Ruta detectada: {{ routeName(current) }}</p>
+        <p class="muted">Ruta detectada: {{ vm.routeName }}</p>
         @if (readyForRouteLoading()) {
           <p class="muted">Buscando salidas de hoy...</p>
         } @else if (readyForRouteRun(); as run) {
@@ -1090,21 +1105,23 @@
               />
             </div>
           }
-          @if (moveSheetTargetBoxes(current).length > 0) {
-            <div class="sheet-actions">
-              @for (target of moveSheetTargetBoxes(current); track target.package_id) {
-                <button
-                  type="button"
-                  class="btn ghost"
-                  [disabled]="packingBusy()"
-                  (click)="moveItemToOpenBox(current, target.package_id)"
-                >
-                  Caja {{ packingBoxNumber(current, target) }}
-                </button>
-              }
-            </div>
-          } @else {
-            <p class="muted">No hay otras cajas abiertas para mover este producto.</p>
+          @if (moveSheetTargetBoxes(current); as moveTargets) {
+            @if (moveTargets.length > 0) {
+              <div class="sheet-actions">
+                @for (target of moveTargets; track target.package_id) {
+                  <button
+                    type="button"
+                    class="btn ghost"
+                    [disabled]="packingBusy()"
+                    (click)="moveItemToOpenBox(current, target.package_id)"
+                  >
+                    Caja {{ packingBoxNumber(current, target) }}
+                  </button>
+                }
+              </div>
+            } @else {
+              <p class="muted">No hay otras cajas abiertas para mover este producto.</p>
+            }
           }
         }
         <div class="sheet-actions">
@@ -1176,7 +1193,7 @@
         <div class="sheet-handle" aria-hidden="true"></div>
         <h2 id="transit-alert-title">Confirmar cambio a transito proveedor</h2>
         <p class="muted">
-          Estas por marcar {{ supplierTransitCandidatesCount(current) }} producto{{ supplierTransitCandidatesCount(current) === 1 ? "" : "s" }}
+          Estas por marcar {{ vm.supplierTransitCandidatesCount }} producto{{ vm.supplierTransitCandidatesCount === 1 ? "" : "s" }}
           como en transito de proveedor.
         </p>
         <div class="sheet-warning transit-alert-copy">
@@ -1286,11 +1303,11 @@
           <div class="section-row">
             <div class="pill source-toggle">
               <label>
-                <input type="radio" name="source" value="catalogo" [(ngModel)]="newItemSource" [disabled]="!canEditItems(current)" />
+                <input type="radio" name="source" value="catalogo" [(ngModel)]="newItemSource" [disabled]="!vm.canEditItems" />
                 Catalogo
               </label>
               <label>
-                <input type="radio" name="source" value="inventario" [(ngModel)]="newItemSource" [disabled]="!canEditItems(current)" />
+                <input type="radio" name="source" value="inventario" [(ngModel)]="newItemSource" [disabled]="!vm.canEditItems" />
                 Inventario
               </label>
             </div>
@@ -1306,7 +1323,7 @@
                 [(ngModel)]="newItemSearch"
               (focus)="showProductList.set(true)"
               (keydown.escape)="showProductList.set(false)"
-                [disabled]="!canEditItems(current)"
+                [disabled]="!vm.canEditItems"
               />
             </div>
             @if (showProductList() && (inventorySuggestions().length > 0 || catalogSuggestions().length > 0)) {
@@ -1381,7 +1398,7 @@
               type="text"
               [(ngModel)]="newItemTitle"
               [readonly]="lockItemFields()"
-              [disabled]="!selectedPreview() || !canEditItems(current)"
+              [disabled]="!selectedPreview() || !vm.canEditItems"
             />
           </div>
           @if (catalogVariantOptions().length > 0) {
@@ -1391,7 +1408,7 @@
                 class="input"
                 [ngModel]="newItemVariant()"
                 (ngModelChange)="onVariantChange($event)"
-                [disabled]="!selectedPreview() || !canEditItems(current)"
+                [disabled]="!selectedPreview() || !vm.canEditItems"
               >
                 @for (v of catalogVariantOptions(); track v) {
                   <option [value]="v">{{ v }}</option>
@@ -1406,7 +1423,7 @@
                 type="text"
                 [(ngModel)]="newItemVariant"
                 [readonly]="lockItemFields()"
-                [disabled]="!selectedPreview() || !canEditItems(current)"
+                [disabled]="!selectedPreview() || !vm.canEditItems"
               />
             </div>
           }
@@ -1417,7 +1434,7 @@
                 class="input"
                 [ngModel]="newItemColor()"
                 (ngModelChange)="onColorChange($event)"
-                [disabled]="!selectedPreview() || !canEditItems(current)"
+                [disabled]="!selectedPreview() || !vm.canEditItems"
               >
                 @for (c of catalogColorOptions(); track c) {
                   <option [value]="c">{{ c }}</option>
@@ -1432,7 +1449,7 @@
                 type="text"
                 [(ngModel)]="newItemColor"
                 [readonly]="lockItemFields()"
-                [disabled]="!selectedPreview() || !canEditItems(current)"
+                [disabled]="!selectedPreview() || !vm.canEditItems"
               />
             </div>
           }
@@ -1443,7 +1460,7 @@
               type="number"
               min="1"
               [(ngModel)]="newItemQty"
-              [disabled]="!selectedPreview() || !canEditItems(current)"
+              [disabled]="!selectedPreview() || !vm.canEditItems"
             />
           </div>
           <div class="field">
@@ -1457,7 +1474,7 @@
                 (focus)="onPriceInputFocus('final')"
                 (input)="onPriceInputChange('final', $any($event.target).value)"
                 (blur)="onPriceInputBlur('final')"
-                [disabled]="!selectedPreview() || !canEditItems(current)"
+                [disabled]="!selectedPreview() || !vm.canEditItems"
               />
             </div>
           </div>
@@ -1490,7 +1507,7 @@
         </div>
         </div>
         <div class="sheet-footer">
-          <button type="button" class="btn primary" (click)="addItem(current)" [disabled]="!selectedPreview() || !canEditItems(current)">
+          <button type="button" class="btn primary" (click)="addItem(current)" [disabled]="!selectedPreview() || !vm.canEditItems">
             Anadir al pedido
           </button>
           <button type="button" class="btn danger" (click)="closeAddItemModal()">Cancelar</button>
@@ -1519,6 +1536,7 @@
         </div>
       </div>
     </div>
+  }
   }
 } @else {
   <section class="page">

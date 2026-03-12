@@ -36,7 +36,7 @@
     <p class="empty">No hay operaciones de proveedor para mostrar.</p>
   } @else {
     <section class="supplier-sections">
-      @for (section of supplierSections(); track trackSupplier($index, section)) {
+      @for (section of supplierSections(); track section.supplierId) {
         <article class="panel supplier-section">
           <header class="supplier-header">
             <button
@@ -69,7 +69,7 @@
 
           @if (isSupplierExpanded(section.supplierId)) {
             <div class="group-list">
-              @for (group of section.groups; track trackGroup($index, group)) {
+              @for (group of section.groups; track group.key) {
                 <article class="group-card">
                   <div class="group-main">
                     @if (group.imageUrl; as image) {
@@ -93,7 +93,7 @@
                       <div class="group-status-bar" aria-label="Avance del grupo">
                         <p class="status-total">Total: {{ getTotalQty(group) }}</p>
                         <div class="status-progress-track">
-                          @for (segment of getStatusSegments(group); track $index) {
+                          @for (segment of group.statusSegments; track segment + '-' + $index) {
                             <span [class]="progressSegmentClass(segment)"></span>
                           }
                         </div>
@@ -176,14 +176,14 @@
 
                   @if (isGroupExpanded(group.key)) {
                     <section class="orders-list">
-                      @for (status of orderListStatuses(); track status) {
-                        @if (hasLinesForStatus(group, status)) {
+                      @for (status of orderListStatuses; track status) {
+                        @if (group.linesByStatus[status].length > 0) {
                           <div class="orders-status-group">
                             <p class="orders-group-title">
-                              {{ orderSectionTitle(status) }} ({{ linesForStatus(group, status).length }})
+                              {{ orderSectionTitle(status) }} ({{ group.linesByStatus[status].length }})
                             </p>
                             <ul class="orders-group-items">
-                              @for (line of linesForStatus(group, status); track trackLine($index, line)) {
+                              @for (line of group.linesByStatus[status]; track line.op_id) {
                                 <li class="order-line">
                                   <button type="button" class="order-line-main" (click)="onOrderChipClick(line.order_id)">
                                     <span
@@ -244,7 +244,7 @@
       <p class="sheet-selected">Seleccionado: {{ modal.selectedQty }} / {{ modal.availableQty }}</p>
 
       <div class="sheet-list" role="list">
-        @for (candidate of modal.candidates; track trackCandidate($index, candidate)) {
+        @for (candidate of modal.candidates; track candidate.lineId) {
           <label class="candidate-row" [class.candidate-disabled]="isCandidateDisabled(candidate.lineId)">
             <input
               type="checkbox"

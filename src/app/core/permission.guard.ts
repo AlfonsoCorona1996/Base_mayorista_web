@@ -9,13 +9,18 @@ export const permissionGuard: CanActivateFn = async (route, state) => {
   const permission = route.data?.["permission"] as AppPermission | undefined;
   if (!permission) return true;
 
-  const profile = await access.refreshProfile();
+  let profile = await access.refreshProfile();
+  if (!profile?.active) {
+    profile = await access.refreshProfile({ force: true });
+  }
   if (!profile?.active) {
     return router.createUrlTree(["/login"], {
       queryParams: { returnUrl: state.url, reason: "INACTIVE_USER" },
     });
   }
 
+  if (access.can(permission)) return true;
+  await access.refreshProfile({ force: true });
   if (access.can(permission)) return true;
   return router.createUrlTree(["/login"], {
     queryParams: { returnUrl: state.url, reason: "NO_ROUTE_PERMISSION", permission },

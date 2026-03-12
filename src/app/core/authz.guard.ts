@@ -7,7 +7,11 @@ export const authzGuard: CanActivateFn = async (route, state) => {
   const router = inject(Router);
 
   await authz.refresh();
-  const current = authz.currentUserSig();
+  let current = authz.currentUserSig();
+  if (!current?.isActive) {
+    await authz.refresh({ force: true });
+    current = authz.currentUserSig();
+  }
   if (!current?.isActive) {
     return router.createUrlTree(["/login"], {
       queryParams: { returnUrl: state.url, reason: "INACTIVE_USER" },
@@ -17,11 +21,17 @@ export const authzGuard: CanActivateFn = async (route, state) => {
   const requiredCapability = route.data?.["capability"] as string | undefined;
 
   if (requiredSection && !authz.canSection(requiredSection)) {
+    await authz.refresh({ force: true });
+  }
+  if (requiredSection && !authz.canSection(requiredSection)) {
     return router.createUrlTree(["/login"], {
       queryParams: { returnUrl: state.url, reason: "NO_SECTION_PERMISSION", section: requiredSection },
     });
   }
 
+  if (requiredCapability && !authz.canCap(requiredCapability)) {
+    await authz.refresh({ force: true });
+  }
   if (requiredCapability && !authz.canCap(requiredCapability)) {
     return router.createUrlTree(["/login"], {
       queryParams: { returnUrl: state.url, reason: "NO_CAPABILITY_PERMISSION", capability: requiredCapability },

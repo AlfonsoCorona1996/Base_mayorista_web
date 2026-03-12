@@ -23,7 +23,28 @@
       <p>Cargando...</p>
     </div>
   } @else if (draft(); as d) {
-    <section class="card">
+    <section class="review-summary">
+      <article class="summary-item">
+        <span class="summary-label">Variantes</span>
+        <strong>{{ d.listing.items.length }}</strong>
+      </article>
+      <article class="summary-item">
+        <span class="summary-label">Colores globales</span>
+        <strong>{{ (d.product_colors || []).length }}</strong>
+      </article>
+      <article class="summary-item">
+        <span class="summary-label">Imagenes disponibles</span>
+        <strong>{{ visibleRawImages().length }}</strong>
+      </article>
+      <article class="summary-item">
+        <span class="summary-label">ID</span>
+        <strong>{{ id }}</strong>
+      </article>
+    </section>
+
+    <div class="review-layout">
+      <div class="review-column review-column-main">
+        <section class="card card-basic">
       <h2 class="section-title">Informacion basica</h2>
 
       <div class="form-group">
@@ -81,10 +102,10 @@
         </div>
         <small class="hint">Categoria estandarizada del producto</small>
       </div>
-    </section>
+        </section>
 
-    <section class="card">
-      <h2 class="section-title">Imagenes y Colores</h2>
+        <section class="card card-media">
+          <h2 class="section-title">Imagenes y Colores</h2>
 
       <div class="subsection">
         <h3 class="subsection-title">Imagen de Portada</h3>
@@ -139,7 +160,7 @@
         </div>
 
         <div class="images-gallery">
-          @for (color of (d.product_colors || []); track $index; let i = $index) {
+          @for (color of (d.product_colors || []); track (color.name || i); let i = $index) {
             <div class="gallery-item">
               <div class="gallery-item-image-wrapper">
                 @if (hasColorImage(color.image_url)) {
@@ -192,15 +213,17 @@
           <p class="text-muted">No hay colores definidos. Agrega al menos uno usando los botones de arriba.</p>
         }
       </div>
-    </section>
-
-    <section class="card">
-      <div class="section-header">
-        <h2 class="section-title">Variantes y precios</h2>
-        <button type="button" class="btn btn-sm btn-primary" (click)="addVariant()">
-          + Agregar variante
-        </button>
+        </section>
       </div>
+
+      <div class="review-column review-column-variants">
+        <section class="card card-variants">
+          <div class="section-header">
+            <h2 class="section-title">Variantes y precios</h2>
+            <button type="button" class="btn btn-sm btn-primary" (click)="addVariant()">
+              + Agregar variante
+            </button>
+          </div>
 
       <div class="form-group">
         <label class="checkbox-label">
@@ -216,7 +239,7 @@
       </div>
 
       <div class="variants-list">
-        @for (variant of d.listing.items; track $index; let i = $index) {
+        @for (variant of d.listing.items; track (variant.sku || variant.variant_name || i); let i = $index) {
           <div class="variant-card">
             <div class="variant-header">
               <span class="variant-number">#{{ i + 1 }}</span>
@@ -279,7 +302,7 @@
 
                 @if ((variant.color_stock || []).length > 0) {
                   <div class="colors-list-readonly">
-                    @for (entry of (variant.color_stock || []); track $index; let ci = $index) {
+                    @for (entry of (variant.color_stock || []); track (entry.color_name || ci); let ci = $index) {
                       <div class="color-chip">
                         @if (getColorImage(entry.color_name); as colorImage) {
                           <img [src]="colorImage" alt="{{entry.color_name}}" class="color-chip-image" />
@@ -391,12 +414,14 @@
         }
       </div>
 
-      @if (d.listing.items.length === 0) {
-        <div class="empty-state">
-          <p>No hay variantes. Agrega al menos una para continuar.</p>
-        </div>
-      }
-    </section>
+          @if (d.listing.items.length === 0) {
+            <div class="empty-state">
+              <p>No hay variantes. Agrega al menos una para continuar.</p>
+            </div>
+          }
+        </section>
+      </div>
+    </div>
 
     <section class="card card-secondary">
       <h2 class="section-title">Mensaje original (solo lectura)</h2>
@@ -406,16 +431,18 @@
       <small class="hint">ID: {{ id }}</small>
     </section>
 
-    <div class="actions-bar">
-      <button type="button" class="btn btn-secondary" (click)="save()">
-        Guardar cambios
-      </button>
-      <button type="button" class="btn btn-primary" (click)="validate()">
-        Validar y publicar
-      </button>
-      <button type="button" class="btn btn-danger-outline" (click)="reject()">
-        Rechazar
-      </button>
+    <div class="actions-shell">
+      <div class="actions-bar">
+        <button type="button" class="btn btn-secondary" (click)="save()">
+          Guardar cambios
+        </button>
+        <button type="button" class="btn btn-primary" (click)="validate()">
+          Validar y publicar
+        </button>
+        <button type="button" class="btn btn-danger-outline" (click)="reject()">
+          Rechazar
+        </button>
+      </div>
     </div>
   }
 </div>

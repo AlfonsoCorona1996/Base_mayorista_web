@@ -137,7 +137,7 @@
                                 <path d="M16 3v4M8 3v4M3 10h18"></path>
                               </svg>
                             </span>
-                            <p class="run-date">{{ runDate(programado.run.scheduled_at) }}</p>
+                            <p class="run-date">{{ programado.scheduledDateLabel }}</p>
                           </div>
                           <div class="run-row run-row-status">
                             <span class="run-icon" aria-hidden="true">
@@ -177,7 +177,7 @@
                                   <path d="M5 20h14"></path>
                                 </svg>
                               </span>
-                              Saldo: {{ money(programado.run.counts.balance_total) }}
+                              Saldo: {{ programado.balanceLabel }}
                             </span>
                           </div>
                         </div>
@@ -201,7 +201,7 @@
                         <div>
                           <p class="packing-name">{{ row.customerName }}</p>
                           <p class="packing-order">Pedido {{ row.order_id }}</p>
-                          @if (requestedRunChip(row); as targetDate) {
+                          @if (row.requestedRunChip; as targetDate) {
                             <p class="request-chip">Salida solicitada: {{ targetDate }}</p>
                           }
                           <p class="packing-status">

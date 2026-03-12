@@ -1,10 +1,11 @@
-import { Component, inject, signal } from "@angular/core";
+import { Component, computed, inject, signal, ChangeDetectionStrategy } from "@angular/core";
 import { DatePipe } from "@angular/common";
 import { ActivatedRoute, Router, RouterLink } from "@angular/router";
 import { AuthzService } from "../../core/authz.service";
 import { RouteRunDoc, RouteRunStopDoc, RouteRunsService } from "../../services/route-runs.service";
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   selector: "app-salida-detalle-page",
   imports: [RouterLink, DatePipe],
@@ -28,11 +29,11 @@ export default class SalidaDetallePage {
   driverUid = signal("");
   driverName = signal("");
 
-  canSchedule = () => this.authz.canCap("cap.runs.schedule");
-  canAssignDriver = () => this.authz.canCap("cap.runs.assign_driver");
-  canStart = () => this.authz.canCap("cap.runs.start");
-  canComplete = () => this.authz.canCap("cap.runs.complete");
-  canCancel = () => this.authz.canCap("cap.runs.cancel");
+  canSchedule = computed(() => this.authz.canCap("cap.runs.schedule"));
+  canAssignDriver = computed(() => this.authz.canCap("cap.runs.assign_driver"));
+  canStart = computed(() => this.authz.canCap("cap.runs.start"));
+  canComplete = computed(() => this.authz.canCap("cap.runs.complete"));
+  canCancel = computed(() => this.authz.canCap("cap.runs.cancel"));
 
   constructor() {
     this.runId.set(this.route.snapshot.paramMap.get("runId") || "");
