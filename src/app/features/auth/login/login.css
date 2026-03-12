@@ -260,6 +260,28 @@
   color: #a63a2b;
 }
 
+.forgot-link {
+  margin-top: 8px;
+  border: 0;
+  background: transparent;
+  color: #1f5e78;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.forgot-link:hover:not(:disabled) {
+  color: #12495f;
+}
+
+.forgot-link:disabled {
+  opacity: 0.68;
+  cursor: not-allowed;
+}
+
 .remember-row {
   display: flex;
   align-items: center;
@@ -316,11 +338,34 @@
   font-size: 0.81rem;
 }
 
+.info-message {
+  margin: 0 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #c8dfed;
+  border-radius: 11px;
+  background: #ecf6fc;
+  color: #25536a;
+  padding: 9px 10px;
+  font-size: 0.81rem;
+}
+
 .error-icon {
   width: 18px;
   height: 18px;
   border-radius: 50%;
   background: color-mix(in srgb, var(--alert-text) 14%, white 86%);
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+}
+
+.info-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #d8ecf7;
   display: grid;
   place-items: center;
   font-weight: 700;
@@ -387,6 +432,7 @@
 
 .form-input:focus-visible,
 .remember-checkbox:focus-visible,
+.forgot-link:focus-visible,
 .login-button:focus-visible {
   outline: 2px solid #36728d;
   outline-offset: 2px;

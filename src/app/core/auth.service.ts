@@ -1,7 +1,7 @@
 import { Injectable, computed, inject, signal } from "@angular/core";
 import { FIREBASE_AUTH } from "./firebase.providers";
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut, User } from "firebase/auth";
-import { buildUsernameAuthEmail } from "./rbac.constants";
+import { onAuthStateChanged, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, User } from "firebase/auth";
+import { buildUsernameAuthEmail, isUsernameAuthEmail } from "./rbac.constants";
 import { UserAdminApiService } from "../services/user-admin-api.service";
 
 export type AccessStatus = {
@@ -42,6 +42,30 @@ export class AuthService {
     this.user.set(null);
     this.accessCheckCache = null;
     this.accessCheckPromise = null;
+  }
+
+  async requestPasswordReset(identifier: string): Promise<"email" | "username"> {
+    const normalizedIdentifier = this.normalizeIdentifier(identifier);
+    if (!normalizedIdentifier) {
+      throw new Error("Ingresa tu correo o usuario.");
+    }
+
+    if (isUsernameAuthEmail(normalizedIdentifier)) {
+      return "username";
+    }
+
+    try {
+      await sendPasswordResetEmail(FIREBASE_AUTH, normalizedIdentifier);
+      return "email";
+    } catch (error: any) {
+      const code = String(error?.code || "");
+      if (code.includes("auth/user-not-found")) return "email";
+      if (code.includes("auth/invalid-email")) throw new Error("Ingresa un correo valido.");
+      if (code.includes("auth/too-many-requests")) {
+        throw new Error("Demasiados intentos. Intenta de nuevo en unos minutos.");
+      }
+      throw new Error("No se pudo enviar el correo de recuperacion.");
+    }
   }
 
   async getAccessStatus(): Promise<AccessStatus> {

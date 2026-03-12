@@ -1,4 +1,4 @@
-import { Component, inject, signal } from "@angular/core";
+import { Component, inject, signal, ChangeDetectionStrategy } from "@angular/core";
 import { FormsModule } from "@angular/forms";
 import { Router } from "@angular/router";
 import { updatePassword } from "firebase/auth";
@@ -8,6 +8,7 @@ import { AuthService } from "../../../core/auth.service";
 import { UserAdminApiService } from "../../../services/user-admin-api.service";
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   selector: "app-activate-account",
   imports: [FormsModule],
@@ -111,7 +112,7 @@ export default class ActivateAccountPage {
   }
 
   private async redirectToFirstAllowedRoute() {
-    await this.access.refreshProfile();
+    await this.access.refreshProfile({ force: true });
     const target = this.access.firstAllowedRoute();
     await this.router.navigateByUrl(target === "/login" ? "/main/dashboard" : target);
   }

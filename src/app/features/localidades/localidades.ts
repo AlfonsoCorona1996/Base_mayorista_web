@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from "@angular/core";
+import { Component, computed, inject, signal, ChangeDetectionStrategy } from "@angular/core";
 import { FormsModule } from "@angular/forms";
 import { LocalitiesService, Locality } from "../../core/localities.service";
 
@@ -12,6 +12,7 @@ interface LocalityDraft {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   selector: "app-localidades",
   imports: [FormsModule],

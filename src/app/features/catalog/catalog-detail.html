@@ -52,7 +52,7 @@
     </section>
 
     <section class="variants-grid">
-      @for (item of d.listing.items; track $index; let i = $index) {
+      @for (item of d.listing.items; track (item.sku || item.variant_name || $index); let i = $index) {
         <article class="variant-card">
           <div class="variant-head">
             <h2>{{ variantLabel(item, i) }}</h2>
@@ -86,7 +86,7 @@
               <p class="muted">Esta variante no tiene colores definidos.</p>
             } @else {
               <div class="color-rows">
-                @for (color of (item.color_stock || []); track $index; let ci = $index) {
+                @for (color of (item.color_stock || []); track (color.color_name || ci); let ci = $index) {
                   <div class="color-row">
                     <span class="color-name">{{ color.color_name }}</span>
                     <select

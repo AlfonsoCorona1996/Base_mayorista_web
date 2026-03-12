@@ -1,8 +1,9 @@
-import { Component, signal } from '@angular/core';
+import { Component, signal, ChangeDetectionStrategy } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { firebaseSmokeTest } from "./core/firebase.smoketest";
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-root',
    standalone: true,
   imports: [RouterOutlet],

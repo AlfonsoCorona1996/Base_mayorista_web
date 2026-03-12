@@ -1,7 +1,8 @@
-﻿import { Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild, computed, inject, signal } from "@angular/core";
+﻿import { Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild, computed, inject, signal, ChangeDetectionStrategy, DestroyRef } from "@angular/core";
 import { DatePipe, UpperCasePipe } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { ActivatedRoute, Router, RouterLink } from "@angular/router";
+import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { collection, getDocs, limit, orderBy, query } from "firebase/firestore";
 import { CustomersService } from "../../core/customers.service";
 import { SuppliersService } from "../../core/suppliers.service";
@@ -17,7 +18,117 @@ import { DispatchOrderRow, RouteRunDoc, RouteRunsService } from "../../services/
 
 type EstadoConfirmacion = "pendiente" | "confirmado" | "sin_stock";
 
+type ProductCountsVm = {
+  total: number;
+  outOfStock: number;
+  confirmed: number;
+  pending: number;
+  hasPending: boolean;
+  canMagicConfirm: boolean;
+  insufficient: number;
+};
+
+type ProductCardVm = {
+  item: OrderItem;
+  cardId: string;
+  imageUrl: string | null;
+  isConfirmed: boolean;
+  isOutOfStock: boolean;
+  hasPartial: boolean;
+  hasInsufficientStock: boolean;
+  confirmedQty: number;
+  draftConfirmedQty: number;
+  quickConfirming: boolean;
+  showSupplierReceive: boolean;
+  itemActionLoading: boolean;
+};
+
+type PackingRowVm = {
+  item: OrderItem;
+  qty: number;
+  imageUrl: string | null;
+  initials: string;
+};
+
+type PackingBoxVm = {
+  pkg: PackageRecord;
+  boxNumber: number;
+  title: string;
+  label: string;
+  rows: PackingRowVm[];
+  isActive: boolean;
+  isMenuOpen: boolean;
+  isMoveMode: boolean;
+  isExpanded: boolean;
+};
+
+type PackingVm = {
+  openBoxes: PackingBoxVm[];
+  closedBoxes: PackingBoxVm[];
+  unpackedRows: PackingRowVm[];
+  unpackedCount: number;
+  packedCount: number;
+  confirmedPieces: number;
+  progressPercent: number;
+  canDispatch: boolean;
+  canStartPacking: boolean;
+  packBlockedCount: number;
+  activeOpenBoxNumber: number | null;
+  openBoxesCount: number;
+  closedBoxesCount: number;
+  totalBoxes: number;
+};
+
+type SupplierGroupVm = {
+  supplierId: string | null;
+  displayName: string;
+  confirmedCount: number;
+  outOfStockCount: number;
+  pendingCount: number;
+};
+
+type OrderViewVm = {
+  customerName: string;
+  routeName: string;
+  statusLabel: string;
+  phase: { actionId: string; label: string } | null;
+  isPackingWorkflowPhase: boolean;
+  canCreatePackages: boolean;
+  canEditItems: boolean;
+  canAddProducts: boolean;
+  canViewFinancialSummary: boolean;
+  orderBalanceDue: number;
+  totals: { totalVenta: number; totalClienta: number; totalCosto: number; ganancia: number };
+  totalItems: number;
+  outOfStockItems: number;
+  confirmedItems: number;
+  pendingConfirmationItems: number;
+  hasPendingItems: boolean;
+  canMagicConfirm: boolean;
+  insufficientItemsCount: number;
+  shouldShowStockFab: boolean;
+  totalPieces: number;
+  confirmedPieces: number;
+  outOfStockPieces: number;
+  pendingPieces: number;
+  resolvedPieces: number;
+  confirmedPiecesPercent: number;
+  allItemsResolved: boolean;
+  confirmExistencesActionLabel: string;
+  closedPackagesCount: number;
+  packingBoxesCount: number;
+  packedCount: number;
+  unpackedCount: number;
+  openBoxesCount: number;
+  canDispatch: boolean;
+  canStartPacking: boolean;
+  packBlockedCount: number;
+  packingProgressPercent: number;
+  supplierTransitCandidatesCount: number;
+};
+
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   selector: "app-pedido-detalle",
   imports: [FormsModule, RouterLink, DatePipe, UpperCasePipe, ActivityLogComponent],
@@ -36,6 +147,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   private supplierOperations = inject(SupplierOperationsService);
   private authz = inject(AuthzService);
   private routeRuns = inject(RouteRunsService);
+  private destroyRef = inject(DestroyRef);
 
   @ViewChild("incidentsSection") incidentsSection?: ElementRef<HTMLElement>;
   @ViewChild("packagesSection") packagesSection?: ElementRef<HTMLElement>;
@@ -52,6 +164,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     );
     this.updateStickyByScroll(scrollTop);
   };
+  readonly skeletonRows = [1, 2, 3, 4] as const;
 
   orderId = signal<string>("");
   error = signal<string | null>(null);
@@ -60,6 +173,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
   order = computed<Order | null>(() => this.orders.getById(this.orderId()));
   incidents = signal<Incident[]>([]);
+  openIncidents = computed(() => this.incidents().filter((inc) => inc.status === "open"));
+  resolvedIncidents = computed(() => this.incidents().filter((inc) => inc.status === "resolved"));
   events = signal<OrderEvent[]>([]);
   eventsCursor = signal<any>(null);
   eventsLoading = signal(false);
@@ -192,6 +307,15 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     for (const row of this.inventory.items()) map.set(row.inventory_id, row);
     return map;
   });
+  private itemImageByItemId = computed(() => {
+    const map = new Map<string, string | null>();
+    const currentOrder = this.order();
+    if (!currentOrder) return map;
+    for (const item of currentOrder.items || []) {
+      map.set(item.item_id, this.resolveItemImage(item));
+    }
+    return map;
+  });
 
   inventorySuggestions = computed(() => {
     if (this.newItemSource() !== "inventario") return [];
@@ -211,7 +335,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     const term = this.newItemSearch().trim().toLowerCase();
     if (term.length < 2) return [];
     const matches: { doc: NormalizedListingDoc; variant: any; color: string; image: string | null }[] = [];
-    for (const doc of this.catalogRows || []) {
+    for (const doc of this.catalogRows()) {
       const listing: any = doc.listing || { items: [] };
       const title = (listing.title || "").toLowerCase();
       const cat = (listing.category_hint || "").toLowerCase();
@@ -230,7 +354,253 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     return matches.slice(0, 6);
   });
 
-  private catalogRows: NormalizedListingDoc[] = [];
+  private catalogRows = signal<NormalizedListingDoc[]>([]);
+  private catalogById = computed(() => {
+    const map = new Map<string, NormalizedListingDoc>();
+    for (const doc of this.catalogRows()) map.set(doc.normalized_id, doc);
+    return map;
+  });
+
+  readonly productCountsVm = computed<ProductCountsVm>(() => {
+    const currentOrder = this.order();
+    if (!currentOrder) {
+      return {
+        total: 0,
+        outOfStock: 0,
+        confirmed: 0,
+        pending: 0,
+        hasPending: false,
+        canMagicConfirm: false,
+        insufficient: 0,
+      };
+    }
+    let outOfStock = 0;
+    let confirmed = 0;
+    let pending = 0;
+    let insufficient = 0;
+    for (const item of currentOrder.items || []) {
+      const state = this.estado_confirmacion(item);
+      if (state === "sin_stock") outOfStock += 1;
+      else if (state === "confirmado") confirmed += 1;
+      else pending += 1;
+      if (this.hasInsufficientStock(item) || state === "sin_stock") insufficient += 1;
+    }
+    return {
+      total: (currentOrder.items || []).length,
+      outOfStock,
+      confirmed,
+      pending,
+      hasPending: pending > 0,
+      canMagicConfirm: this.canMagicConfirm(currentOrder),
+      insufficient,
+    };
+  });
+
+  readonly visibleProductCardsVm = computed<ProductCardVm[]>(() => {
+    const currentOrder = this.order();
+    if (!currentOrder) return [];
+    const filter = this.productStockFilter();
+    const isConfirmPhase = this.isConfirmItemsPhase(currentOrder);
+    const quickMap = this.quickConfirming();
+    const loadingMap = this.itemActionLoading();
+    const rows: ProductCardVm[] = [];
+
+    for (const item of currentOrder.items || []) {
+      const state = this.estado_confirmacion(item);
+      const isConfirmed = state === "confirmado";
+      const isOutOfStock = state === "sin_stock";
+      const isPending = state === "pendiente";
+      if (filter === "out_of_stock" && !isOutOfStock) continue;
+      if (filter === "confirmed" && !isConfirmed) continue;
+      if (filter === "pending" && !isPending) continue;
+
+      rows.push({
+        item,
+        cardId: `product-card-${item.item_id}`,
+        imageUrl: this.itemImage(item),
+        isConfirmed,
+        isOutOfStock,
+        hasPartial: isConfirmed && this.hasPartialConfirmation(item),
+        hasInsufficientStock: this.hasInsufficientStock(item),
+        confirmedQty: this.confirmedQty(item),
+        draftConfirmedQty: this.getCardDraftConfirmedQty(item),
+        quickConfirming: !!quickMap[item.item_id],
+        showSupplierReceive: !isConfirmPhase && isConfirmed && this.isSupplierManagedItem(item) && !this.isSupplierItemReceived(currentOrder, item),
+        itemActionLoading: !!loadingMap[item.item_id],
+      });
+    }
+    return rows;
+  });
+
+  readonly supplierGroupsVm = computed<SupplierGroupVm[]>(() => {
+    const currentOrder = this.order();
+    if (!currentOrder || (currentOrder.items || []).length === 0) return [];
+    const groups = this.groupedItemsBySupplier(currentOrder);
+    return groups.map((group) => ({
+      supplierId: group.supplierId,
+      displayName: this.groupDisplayName(group),
+      confirmedCount: this.groupConfirmedCount(group.items),
+      outOfStockCount: this.groupOutOfStockCount(group.items),
+      pendingCount: this.groupPendingCount(group.items),
+    }));
+  });
+
+  readonly packingVm = computed<PackingVm | null>(() => {
+    const currentOrder = this.order();
+    if (!currentOrder) return null;
+    const allPackages = currentOrder.packages || [];
+    const orderedByCreate = [...allPackages].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    const totalBoxes = orderedByCreate.length;
+    const boxNumberById = new Map<string, number>();
+    orderedByCreate.forEach((pkg, index) => boxNumberById.set(pkg.package_id, index + 1));
+    const byItemId = new Map((currentOrder.items || []).map((item) => [item.item_id, item]));
+    const activeId = this.activeOpenBoxId();
+    const menuId = this.openBoxMenuId();
+    const moveModeId = this.moveModeBoxId();
+    const expandedMap = this.expandedClosedBoxes();
+
+    const rowsForPackage = (pkg: PackageRecord): PackingRowVm[] =>
+      this.packageItems(pkg)
+        .map((entry) => {
+          const item = byItemId.get(entry.orderItemId);
+          if (!item || entry.qty <= 0) return null;
+          return {
+            item,
+            qty: entry.qty,
+            imageUrl: this.itemImage(item),
+            initials: this.itemInitials(item),
+          };
+        })
+        .filter((row): row is PackingRowVm => !!row);
+
+    const openPackages = orderedByCreate.filter((pkg) => this.packageStatus(pkg) === "open");
+    const openBoxes = openPackages.map((pkg, index) => {
+      const boxNumber = boxNumberById.get(pkg.package_id) ?? (index + 1);
+      return {
+        pkg,
+        boxNumber,
+        title: `Caja ${boxNumber}`,
+        label: `${boxNumber}/${Math.max(1, totalBoxes)}`,
+        rows: rowsForPackage(pkg),
+        isActive: activeId ? activeId === pkg.package_id : index === 0,
+        isMenuOpen: menuId === pkg.package_id,
+        isMoveMode: moveModeId === pkg.package_id,
+        isExpanded: false,
+      } as PackingBoxVm;
+    });
+
+    const closedPackages = [...allPackages]
+      .filter((pkg) => this.packageStatus(pkg) === "closed")
+      .sort((a, b) => {
+        const aDate = new Date((a as any).closed_at || a.created_at).getTime();
+        const bDate = new Date((b as any).closed_at || b.created_at).getTime();
+        return aDate - bDate;
+      });
+    const closedBoxes = closedPackages.map((pkg, index) => {
+      const boxNumber = boxNumberById.get(pkg.package_id) ?? (index + 1);
+      return {
+        pkg,
+        boxNumber,
+        title: `Caja ${boxNumber}`,
+        label: `${boxNumber}/${Math.max(1, totalBoxes)}`,
+        rows: rowsForPackage(pkg),
+        isActive: false,
+        isMenuOpen: false,
+        isMoveMode: false,
+        isExpanded: !!expandedMap[pkg.package_id],
+      } as PackingBoxVm;
+    });
+
+    const unpackedRows = this.unpackedItems(currentOrder).map((row) => ({
+      item: row.item,
+      qty: row.qty,
+      imageUrl: this.itemImage(row.item),
+      initials: this.itemInitials(row.item),
+    }));
+    const unpackedCount = unpackedRows.reduce((sum, row) => sum + row.qty, 0);
+    const confirmedPieces = this.confirmedPieces(currentOrder);
+    const packedCount = Math.max(0, confirmedPieces - unpackedCount);
+    const progressPercent = confirmedPieces > 0
+      ? Math.max(0, Math.min(100, Math.round((packedCount * 100) / confirmedPieces)))
+      : 0;
+    const activeOpen = openBoxes.find((box) => box.isActive) || null;
+    const packBlockedCount = this.packBlockedCount(currentOrder);
+
+    return {
+      openBoxes,
+      closedBoxes,
+      unpackedRows,
+      unpackedCount,
+      packedCount,
+      confirmedPieces,
+      progressPercent,
+      canDispatch: this.canFinishPacking(currentOrder),
+      canStartPacking: packBlockedCount === 0,
+      packBlockedCount,
+      activeOpenBoxNumber: activeOpen?.boxNumber ?? null,
+      openBoxesCount: openBoxes.length,
+      closedBoxesCount: closedBoxes.length,
+      totalBoxes,
+    };
+  });
+
+  readonly orderViewVm = computed<OrderViewVm | null>(() => {
+    const currentOrder = this.order();
+    if (!currentOrder) return null;
+    const caps = this.allowedCapabilities(currentOrder, this.userRole());
+    const phase = this.phaseAction(currentOrder);
+    const counts = this.productCountsVm();
+    const packing = this.packingVm();
+    const totals = this.totals();
+    const totalPieces = this.totalPieces(currentOrder);
+    const confirmedPieces = this.confirmedPieces(currentOrder);
+    const outOfStockPieces = this.outOfStockPieces(currentOrder);
+    const pendingPieces = this.pendingPieces(currentOrder);
+    const resolvedPieces = confirmedPieces + outOfStockPieces;
+    const confirmedPiecesPercent = totalPieces > 0
+      ? Math.max(0, Math.min(100, Math.round((confirmedPieces * 100) / totalPieces)))
+      : 0;
+
+    return {
+      customerName: this.customerName(currentOrder),
+      routeName: this.routeName(currentOrder),
+      statusLabel: this.statusLabel(currentOrder.status),
+      phase,
+      isPackingWorkflowPhase: this.isPackingWorkflowPhase(currentOrder),
+      canCreatePackages: caps.canCreatePackages,
+      canEditItems: this.canEditItems(currentOrder),
+      canAddProducts: this.canAddProducts(currentOrder),
+      canViewFinancialSummary: this.canViewFinancialSummary(currentOrder),
+      orderBalanceDue: this.orderBalanceDue(currentOrder),
+      totals,
+      totalItems: counts.total,
+      outOfStockItems: counts.outOfStock,
+      confirmedItems: counts.confirmed,
+      pendingConfirmationItems: counts.pending,
+      hasPendingItems: counts.hasPending,
+      canMagicConfirm: counts.canMagicConfirm,
+      insufficientItemsCount: counts.insufficient,
+      shouldShowStockFab: this.showStockFab() && counts.total >= 8 && counts.insufficient > 0,
+      totalPieces,
+      confirmedPieces,
+      outOfStockPieces,
+      pendingPieces,
+      resolvedPieces,
+      confirmedPiecesPercent,
+      allItemsResolved: pendingPieces <= 0,
+      confirmExistencesActionLabel: `Confirmar existencias · ${confirmedPieces}/${totalPieces}`,
+      closedPackagesCount: packing?.closedBoxesCount ?? this.closedPackagesCount(currentOrder),
+      packingBoxesCount: packing?.totalBoxes ?? this.packingBoxesCount(currentOrder),
+      packedCount: packing?.packedCount ?? this.packedCount(currentOrder),
+      unpackedCount: packing?.unpackedCount ?? this.unpackedCount(currentOrder),
+      openBoxesCount: packing?.openBoxesCount ?? this.openPackingBoxes(currentOrder).length,
+      canDispatch: packing?.canDispatch ?? this.canDispatch(currentOrder),
+      canStartPacking: packing?.canStartPacking ?? this.canStartPacking(currentOrder),
+      packBlockedCount: packing?.packBlockedCount ?? this.packBlockedCount(currentOrder),
+      packingProgressPercent: packing?.progressPercent ?? this.packingProgressPercent(currentOrder),
+      supplierTransitCandidatesCount: this.supplierTransitCandidatesCount(currentOrder),
+    };
+  });
 
   ngOnInit() {
     this.orderId.set(this.route.snapshot.paramMap.get("id") || "");
@@ -244,7 +614,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       this.supplierOperations.loadFromFirestore().catch(() => null),
       this.loadAssigneeOptions().catch(() => null),
       this.catalog.listValidated(120).then((page) => {
-        this.catalogRows = page.docs;
+        this.catalogRows.set(page.docs);
         this.catalogLoaded.set(true);
       }).catch(() => null),
     ]).then(() => {
@@ -261,12 +631,14 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       this.initialHydration.set(false);
     });
 
-    this.route.queryParamMap.subscribe((params) => {
-      const focus = params.get("focus");
-      this.debugMode.set(params.get("debug") === "1");
-      if (!focus) return;
-      setTimeout(() => this.applyFocus(focus), 60);
-    });
+    this.route.queryParamMap
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((params) => {
+        const focus = params.get("focus");
+        this.debugMode.set(params.get("debug") === "1");
+        if (!focus) return;
+        setTimeout(() => this.applyFocus(focus), 60);
+      });
 
     // Capture scroll from window/body and nested scroll containers.
     window.addEventListener("scroll", this.onAnyScroll, true);
@@ -303,14 +675,6 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       .filter(Boolean)
       .sort((a, b) => a.localeCompare(b));
     this.assigneeOptions.set(Array.from(new Set(names)));
-  }
-
-  openIncidents(): Incident[] {
-    return this.incidents().filter((inc) => inc.status === "open");
-  }
-
-  resolvedIncidents(): Incident[] {
-    return this.incidents().filter((inc) => inc.status === "resolved");
   }
 
   itemHasOpenIncident(itemId: string): boolean {
@@ -713,14 +1077,20 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   itemImage(item: OrderItem): string | null {
+    const cached = this.itemImageByItemId();
+    if (cached.has(item.item_id)) return cached.get(item.item_id) ?? null;
+    return this.resolveItemImage(item);
+  }
+
+  private resolveItemImage(item: OrderItem): string | null {
     if (item.image_url) return item.image_url;
 
     if (item.source === "inventario" && item.inventory_id) {
-      return this.inventory.items().find((row) => row.inventory_id === item.inventory_id)?.image_urls?.[0] || null;
+      return this.inventoryById().get(item.inventory_id)?.image_urls?.[0] || null;
     }
 
     if (item.source === "catalogo" && item.product_id) {
-      const doc = this.catalogRows.find((row) => row.normalized_id === item.product_id) || null;
+      const doc = this.catalogById().get(item.product_id) || null;
       if (!doc) return null;
       const listing: any = doc.listing || { items: [] };
       const variant = (listing.items || []).find((v: any) => (v.variant_name || "") === (item.variant || "")) || null;
@@ -728,6 +1098,10 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     }
 
     return null;
+  }
+
+  private itemInitials(item: OrderItem): string {
+    return (item.title || "?").slice(0, 2).toUpperCase();
   }
 
   groupedItemsBySupplier(order: Order): { supplierId: string | null; supplierName: string; items: OrderItem[] }[] {
@@ -3430,17 +3804,6 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     return `${action}_${orderId}_${orderItemId}_${inventoryId}_${Math.max(0, Math.trunc(qty))}`;
   }
 }
-
-
-
-
-
-
-
-
-
-
-
 
 
 

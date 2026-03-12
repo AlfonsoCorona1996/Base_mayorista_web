@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from "@angular/core";
+import { Component, computed, inject, signal, ChangeDetectionStrategy } from "@angular/core";
 import { FormsModule } from "@angular/forms";
 import { CategoriesService, Category } from "../../core/categories.service";
 
@@ -11,6 +11,7 @@ interface TreeRow {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   selector: "app-categorias",
   imports: [FormsModule],

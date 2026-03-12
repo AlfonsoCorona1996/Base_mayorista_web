@@ -1,4 +1,5 @@
-import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, QueryList, ViewChildren, computed, inject, signal } from "@angular/core";
+import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, QueryList, ViewChildren, computed, inject, signal, ChangeDetectionStrategy, DestroyRef } from "@angular/core";
+import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { DatePipe } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { Router } from "@angular/router";
@@ -18,7 +19,22 @@ type IntentFilter =
   | "cobranza_pendiente"
   | "cerrados";
 
+type OrderAlert = { label: string; tone: "danger" | "warning" };
+
+type OrderCardMeta = {
+  customerName: string;
+  routeName: string;
+  primaryAlert: OrderAlert | null;
+  hiddenAlertsCount: number;
+  packagesMetaLabel: string;
+  updatedAtRelative: string;
+  visibleItems: Order["items"];
+  hiddenItemsCount: number;
+  ariaLabel: string;
+};
+
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   selector: "app-pedidos",
   imports: [FormsModule, DatePipe],
@@ -30,6 +46,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   private customers = inject(CustomersService);
   private routes = inject(RoutesService);
   private router = inject(Router);
+  private destroyRef = inject(DestroyRef);
 
   search = signal("");
   intentFilter = signal<IntentFilter>("por_confirmar");
@@ -66,6 +83,16 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     "cobranza_pendiente",
     "cerrados",
   ];
+  private readonly orderMetaCache = new Map<
+    string,
+    {
+      orderRef: Order;
+      visibleCount: number;
+      customerName: string;
+      routeName: string;
+      meta: OrderCardMeta;
+    }
+  >();
 
   list = computed(() => this.orders.list());
   intentCounts = computed(() => {
@@ -107,6 +134,13 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
         return this.matchesSearchTerm(order, term);
       })
       .sort((a, b) => (a.updated_at > b.updated_at ? -1 : 1));
+  });
+  private filteredById = computed(() => {
+    const map = new Map<string, Order>();
+    for (const order of this.filtered()) {
+      map.set(order.order_id, order);
+    }
+    return map;
   });
 
   routeOptions = computed(() => [{ id: "todos", name: "Todas las rutas" }, ...this.routes.routes().map((r) => ({ id: r.route_id, name: r.name }))]);
@@ -153,7 +187,9 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
       }
     });
 
-    this.pillsRows.changes.subscribe(() => this.observePillRows());
+    this.pillsRows.changes
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.observePillRows());
     this.observePillRows();
 
     queueMicrotask(() => this.recomputeAllPills());
@@ -215,8 +251,45 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     this.intentFilter.set(id);
   }
 
-  intentCount(intent: IntentFilter): number {
-    return this.intentCounts()[intent] ?? 0;
+  orderMeta(order: Order): OrderCardMeta {
+    const orderId = order.order_id;
+    const visibleRaw = this.visiblePillsByOrder()[orderId];
+    const visibleCount = typeof visibleRaw === "number" ? visibleRaw : Math.min(3, order.items.length);
+    const customerName = this.customerName(order.customer_id);
+    const routeName = this.routeName(order.route_id);
+    const cached = this.orderMetaCache.get(orderId);
+    if (
+      cached
+      && cached.orderRef === order
+      && cached.visibleCount === visibleCount
+      && cached.customerName === customerName
+      && cached.routeName === routeName
+    ) {
+      return cached.meta;
+    }
+
+    const alerts = this.orderAlerts(order);
+    const visibleItems = order.items.slice(0, Math.max(0, visibleCount));
+    const meta: OrderCardMeta = {
+      customerName,
+      routeName,
+      primaryAlert: alerts[0] ?? null,
+      hiddenAlertsCount: Math.max(0, alerts.length - 1),
+      packagesMetaLabel: this.packagesMetaLabel(order),
+      updatedAtRelative: this.updatedAtRelative(order.updated_at),
+      visibleItems,
+      hiddenItemsCount: Math.max(0, order.items.length - visibleItems.length),
+      ariaLabel: `Abrir pedido ${order.order_id} de ${customerName}`,
+    };
+
+    this.orderMetaCache.set(orderId, {
+      orderRef: order,
+      visibleCount,
+      customerName,
+      routeName,
+      meta,
+    });
+    return meta;
   }
 
   isToday(dateInput: string): boolean {
@@ -283,16 +356,6 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     if (summary === "0/-") return "Sin paquetes";
     if (summary.endsWith("/-")) return summary.replace("/-", "");
     return summary;
-  }
-
-  visibleItems(order: Order) {
-    const visible = this.visiblePillsByOrder()[order.order_id];
-    const count = typeof visible === "number" ? visible : Math.min(3, order.items.length);
-    return order.items.slice(0, Math.max(0, count));
-  }
-
-  hiddenItemsCount(order: Order): number {
-    return Math.max(0, order.items.length - this.visibleItems(order).length);
   }
 
   hasIncompletePackages(order: Order): boolean {
@@ -364,15 +427,6 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     if (!compactTerm) return false;
     const compactBlob = this.compactSearchValue(searchableParts.join(" "));
     return compactBlob.includes(compactTerm);
-  }
-
-  primaryAlert(order: Order): { label: string; tone: "danger" | "warning" } | null {
-    const alerts = this.orderAlerts(order);
-    return alerts.length > 0 ? alerts[0] : null;
-  }
-
-  hiddenAlertsCount(order: Order): number {
-    return Math.max(0, this.orderAlerts(order).length - 1);
   }
 
   updatedAtRelative(dateInput: string): string {
@@ -708,12 +762,12 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private recomputePillsForRow(row: HTMLElement, orderId: string) {
-    const order = this.filtered().find((entry) => entry.order_id === orderId);
+    const order = this.filteredById().get(orderId);
     if (!order) return;
 
     const available = row.clientWidth;
     if (!available || order.items.length === 0) {
-      this.visiblePillsByOrder.update((map) => ({ ...map, [orderId]: 0 }));
+      this.visiblePillsByOrder.update((map) => (map[orderId] === 0 ? map : { ...map, [orderId]: 0 }));
       return;
     }
 
@@ -741,7 +795,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     }
 
     if (visible === 0) visible = 1;
-    this.visiblePillsByOrder.update((map) => ({ ...map, [orderId]: visible }));
+    this.visiblePillsByOrder.update((map) => (map[orderId] === visible ? map : { ...map, [orderId]: visible }));
   }
 
   private measurePillWidth(text: string, isMore: boolean): number {

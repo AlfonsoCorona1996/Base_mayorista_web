@@ -1,86 +1,125 @@
-﻿<div class="inbox-container">
-  <header class="inbox-header">
-    <div class="inbox-title-section">
-      <h1 class="inbox-title">Validacion</h1>
-      <p class="inbox-subtitle">Productos pendientes por revisar y publicar</p>
+<section class="inbox-page">
+  <header class="page-head">
+    <div class="page-title">
+      <h1>Validacion</h1>
+      <p>Productos pendientes por revisar y publicar.</p>
     </div>
-
-    <div class="inbox-actions">
-      <button class="btn-icon" (click)="reload()" [disabled]="loading()" title="Recargar">
-        Actualizar
-      </button>
-    </div>
+    <button
+      type="button"
+      class="icon-btn"
+      [disabled]="loading()"
+      [attr.aria-label]="loading() ? 'Actualizando productos' : 'Actualizar productos'"
+      [title]="loading() ? 'Actualizando...' : 'Actualizar'"
+      (click)="reload()"
+    >
+      <svg class="refresh-icon" [class.spinning]="loading()" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path d="M23 4v6h-6" />
+        <path d="M1 20v-6h6" />
+        <path d="M3.5 9a9 9 0 0 1 14.2-3.4L23 10" />
+        <path d="M20.5 15a9 9 0 0 1-14.2 3.4L1 14" />
+      </svg>
+    </button>
   </header>
 
   @if (error()) {
-    <div class="alert-error"><strong>Error:</strong> {{ error() }}</div>
+    <div class="alert alert-error"><strong>Error:</strong> {{ error() }}</div>
   }
 
   @if (loading()) {
-    <div class="loading-state">
+    <article class="state-card loading-state">
       <div class="spinner-large"></div>
       <p>Cargando productos...</p>
-    </div>
+    </article>
   } @else {
     @if (rows().length > 0) {
-      <div class="stats-bar">
-        <div class="stat-item">
-          <span class="stat-value">{{ rows().length }}</span>
-          <span class="stat-label">pendiente{{ rows().length !== 1 ? 's' : '' }}</span>
+      <section class="overview-card">
+        <div class="overview-main">
+          <p class="overview-label">Pendientes cargados</p>
+          <p class="overview-value">{{ rows().length }}</p>
         </div>
-      </div>
+        <div class="overview-meta">
+          <span class="overview-chip">Lote incremental de 25</span>
+          @if (hasMore()) {
+            <span class="overview-chip overview-chip-accent">Hay mas por cargar</span>
+          } @else {
+            <span class="overview-chip">Sin pendientes adicionales</span>
+          }
+        </div>
+      </section>
 
-      <div class="products-list">
-        @for (r of rows(); track r.normalized_id) {
-          <article class="product-card" (click)="open(r.normalized_id)">
-            <div class="product-image">
-              @if (r.preview_image_url) {
-                <img [src]="r.preview_image_url" alt="{{ r.listing.title }}" />
-              } @else {
-                <div class="product-image-placeholder">
-                  <span>Sin imagen</span>
+      <section class="list-card">
+        <div class="list-head">
+          <h2>Bandeja de revision</h2>
+          <p>Selecciona un producto para validar ficha, imagenes, variantes y precios.</p>
+        </div>
+
+        <div class="products-list">
+          @for (r of rows(); track r.normalized_id) {
+            <article class="product-card" (click)="open(r.normalized_id)">
+              <div class="product-image">
+                @if (r.preview_image_url) {
+                  <img [src]="r.preview_image_url" alt="{{ r.listing.title || 'Producto sin titulo' }}" />
+                } @else {
+                  <div class="product-image-placeholder">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                      <path d="M4 7h4l2-2h4l2 2h4v12H4z"></path>
+                      <circle cx="12" cy="13" r="3"></circle>
+                    </svg>
+                    <span>Sin imagen</span>
+                  </div>
+                }
+              </div>
+
+              <div class="product-content">
+                <div class="content-main">
+                  <h3 class="product-title">{{ r.listing.title || "(sin titulo)" }}</h3>
+                  <p class="category-line">{{ r.listing.category_hint || "Sin categoria" }}</p>
                 </div>
-              }
-            </div>
 
-            <div class="product-content">
-              <h3 class="product-title">{{ r.listing.title || "(sin titulo)" }}</h3>
-
-              <div class="product-meta">
-                <div class="meta-item">
-                  <span class="meta-icon">Categoria:</span>
-                  <span>{{ r.listing.category_hint || "Sin categoria" }}</span>
-                </div>
-                <div class="meta-item">
-                  <span class="meta-icon">Variantes:</span>
-                  <span>{{ r.listing.items.length }}</span>
+                <div class="meta-pills">
+                  <span class="meta-pill">
+                    <span class="meta-key">SKU base</span>
+                    <strong>{{ shortId(r.normalized_id) }}</strong>
+                  </span>
+                  <span class="meta-pill">
+                    <span class="meta-key">Variantes</span>
+                    <strong>{{ r.listing.items.length }}</strong>
+                  </span>
+                  <span class="meta-pill">
+                    <span class="meta-key">Actualizado</span>
+                    <strong>{{ timeAgo(r.updated_at ?? r.created_at) }}</strong>
+                  </span>
                 </div>
               </div>
-            </div>
 
-            <div class="product-footer">
-              <span class="product-time">Actualizado {{ timeAgo(r.updated_at ?? r.created_at) }}</span>
-              <button class="btn-review" (click)="open(r.normalized_id); $event.stopPropagation()">
-                Revisar
-              </button>
-            </div>
-          </article>
-        }
-      </div>
-
-      @if (hasMore()) {
-        <div class="load-more-wrapper">
-          <button class="btn-review" (click)="loadMore()" [disabled]="loadingMore()">
-            {{ loadingMore() ? "Cargando..." : "Cargar mas" }}
-          </button>
+              <div class="card-actions">
+                <button type="button" class="btn btn-primary" (click)="open(r.normalized_id); $event.stopPropagation()">
+                  Revisar
+                </button>
+              </div>
+            </article>
+          }
         </div>
-      }
+
+        @if (hasMore()) {
+          <div class="load-more-wrapper">
+            <button type="button" class="btn btn-secondary" (click)="loadMore()" [disabled]="loadingMore()">
+              {{ loadingMore() ? "Cargando..." : "Cargar mas productos" }}
+            </button>
+          </div>
+        }
+      </section>
     } @else {
-      <div class="empty-state">
-        <div class="empty-icon">Listo</div>
-        <h2 class="empty-title">No hay pendientes</h2>
-        <p class="empty-message">Cuando entren nuevos productos apareceran aqui.</p>
-      </div>
+      <article class="state-card empty-state">
+        <div class="empty-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <circle cx="12" cy="12" r="9"></circle>
+            <path d="M8 12l2.6 2.6L16 9.2"></path>
+          </svg>
+        </div>
+        <h2>No hay pendientes</h2>
+        <p>Cuando entren nuevos productos apareceran aqui.</p>
+      </article>
     }
   }
-</div>
+</section>

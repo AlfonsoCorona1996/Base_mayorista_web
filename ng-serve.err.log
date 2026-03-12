@@ -2188,3 +2188,1267 @@
          ╵                               [32m~~~~~~~~~~~~~[0m
 
 [39m[22m
+[1m[33m[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.html:79:52:
+[37m      79 │ ...ount" [class.zero]="([32mcounts[intent.id] ?? 0[37m) === 0">{{ counts[i...
+         ╵                         [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Warning occurs in the template of component PedidosPage.
+
+    src/app/features/pedidos/pedidos.ts:40:15:
+[37m      40 │   templateUrl: [32m"./pedidos.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.html:79:86:
+[37m      79 │ ...counts[intent.id] ?? 0) === 0">{{ [32mcounts[intent.id] ?? 0[37m }}</span>
+         ╵                                      [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Warning occurs in the template of component PedidosPage.
+
+    src/app/features/pedidos/pedidos.ts:40:15:
+[37m      40 │   templateUrl: [32m"./pedidos.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[33m[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.html:79:52:
+[37m      79 │ ...ount" [class.zero]="([32mcounts[intent.id] ?? 0[37m) === 0">{{ counts[i...
+         ╵                         [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Warning occurs in the template of component PedidosPage.
+
+    src/app/features/pedidos/pedidos.ts:40:15:
+[37m      40 │   templateUrl: [32m"./pedidos.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.html:79:86:
+[37m      79 │ ...counts[intent.id] ?? 0) === 0">{{ [32mcounts[intent.id] ?? 0[37m }}</span>
+         ╵                                      [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Warning occurs in the template of component PedidosPage.
+
+    src/app/features/pedidos/pedidos.ts:40:15:
+[37m      40 │   templateUrl: [32m"./pedidos.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[33m[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.html:79:52:
+[37m      79 │ ...ount" [class.zero]="([32mcounts[intent.id] ?? 0[37m) === 0">{{ counts[i...
+         ╵                         [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Warning occurs in the template of component PedidosPage.
+
+    src/app/features/pedidos/pedidos.ts:40:15:
+[37m      40 │   templateUrl: [32m"./pedidos.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.html:79:86:
+[37m      79 │ ...counts[intent.id] ?? 0) === 0">{{ [32mcounts[intent.id] ?? 0[37m }}</span>
+         ╵                                      [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Warning occurs in the template of component PedidosPage.
+
+    src/app/features/pedidos/pedidos.ts:40:15:
+[37m      40 │   templateUrl: [32m"./pedidos.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[33m[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.html:79:52:
+[37m      79 │ ...ount" [class.zero]="([32mcounts[intent.id] ?? 0[37m) === 0">{{ counts[i...
+         ╵                         [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Warning occurs in the template of component PedidosPage.
+
+    src/app/features/pedidos/pedidos.ts:40:15:
+[37m      40 │   templateUrl: [32m"./pedidos.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.html:79:86:
+[37m      79 │ ...counts[intent.id] ?? 0) === 0">{{ [32mcounts[intent.id] ?? 0[37m }}</span>
+         ╵                                      [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Warning occurs in the template of component PedidosPage.
+
+    src/app/features/pedidos/pedidos.ts:40:15:
+[37m      40 │   templateUrl: [32m"./pedidos.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mDuplicate member "orderListStatuses" in class body[0m [duplicate-class-member]
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.ts:822:4:
+[37m      822 │     [32morderListStatuses[37m() {
+          ╵     [32m~~~~~~~~~~~~~~~~~[0m
+
+  The original member "orderListStatuses" is here:
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.ts:466:4:
+[37m      466 │     [32morderListStatuses[37m = ["en_camino", "levantado", "por_levantar"...
+          ╵     [32m~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2349: This expression is not callable.
+  Type 'SupplierOperationStatus[]' has no call signatures.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.html:179:38:
+[37m      179 │ ...             @for (status of [32morderListStatuses[37m(); track status) {
+          ╵                                 [32m~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component ProveedoresOperacionesPage.
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.ts:72:15:
+[37m      72 │   templateUrl: [32m"./proveedores-operaciones.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2300: Duplicate identifier 'orderListStatuses'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.ts:129:11:
+[37m      129 │   readonly [32morderListStatuses[37m: OrdersListStatus[] = ["en_camino", ...
+          ╵            [32m~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2300: Duplicate identifier 'orderListStatuses'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.ts:519:2:
+[37m      519 │   [32morderListStatuses[37m(): OrdersListStatus[] {
+          ╵   [32m~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2300: Duplicate identifier 'orderListStatuses'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.ts:519:2:
+[37m      519 │   [32morderListStatuses[37m(): OrdersListStatus[] {
+          ╵   [32m~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type 'SupplierOperationRow' is not assignable to parameter of type 'never'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.ts:593:26:
+[37m      593 │       existing.lines.push([32mrow[37m);
+          ╵                           [32m~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type 'SupplierOperationRow' is not assignable to parameter of type 'never'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.ts:594:46:
+[37m      594 │       existing.linesByStatus[row.status].push([32mrow[37m);
+          ╵                                               [32m~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type 'SupplierProductGroup | { key: string; supplierId: string; supplierName: string; productName: string; imageUrl: string | null; size: string; color: string; variant: string; ... 6 more ...; badge: GroupBadge; }' is not assignable to parameter of type 'SupplierProductGroup'.
+  Property 'statusSegments' is missing in type '{ key: string; supplierId: string; supplierName: string; productName: string; imageUrl: string | null; size: string; color: string; variant: string; totalQty: number; doneQty: number; progressPct: number; countsByStatus: { ...; }; linesByStatus: { ...; }; lines: never[]; badge: GroupBadge; }' but required in type 'SupplierProductGroup'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.ts:604:19:
+[37m      604 │       map.set(key, [32mexisting[37m);
+          ╵                    [32m~~~~~~~~[0m
+
+  'statusSegments' is declared here.
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.ts:33:2:
+[37m      33 │   [32mstatusSegments[37m: ProgressSegmentStatus[];
+         ╵   [32m~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[33m[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.html:79:52:
+[37m      79 │ ...ount" [class.zero]="([32mcounts[intent.id] ?? 0[37m) === 0">{{ counts[i...
+         ╵                         [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Warning occurs in the template of component PedidosPage.
+
+    src/app/features/pedidos/pedidos.ts:40:15:
+[37m      40 │   templateUrl: [32m"./pedidos.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.html:79:86:
+[37m      79 │ ...counts[intent.id] ?? 0) === 0">{{ [32mcounts[intent.id] ?? 0[37m }}</span>
+         ╵                                      [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Warning occurs in the template of component PedidosPage.
+
+    src/app/features/pedidos/pedidos.ts:40:15:
+[37m      40 │   templateUrl: [32m"./pedidos.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mDuplicate member "orderListStatuses" in class body[0m [duplicate-class-member]
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.ts:822:4:
+[37m      822 │     [32morderListStatuses[37m() {
+          ╵     [32m~~~~~~~~~~~~~~~~~[0m
+
+  The original member "orderListStatuses" is here:
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.ts:466:4:
+[37m      466 │     [32morderListStatuses[37m = ["en_camino", "levantado", "por_levantar"...
+          ╵     [32m~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'getStatusSegments' does not exist on type 'ProveedoresOperacionesPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.html:96:43:
+[37m      96 │ ...        @for (segment of [32mgetStatusSegments[37m(group); track $index) {
+         ╵                             [32m~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component ProveedoresOperacionesPage.
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.ts:72:15:
+[37m      72 │   templateUrl: [32m"./proveedores-operaciones.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2349: This expression is not callable.
+  Type 'SupplierOperationStatus[]' has no call signatures.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.html:179:38:
+[37m      179 │ ...             @for (status of [32morderListStatuses[37m(); track status) {
+          ╵                                 [32m~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component ProveedoresOperacionesPage.
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.ts:72:15:
+[37m      72 │   templateUrl: [32m"./proveedores-operaciones.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2300: Duplicate identifier 'orderListStatuses'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.ts:129:11:
+[37m      129 │   readonly [32morderListStatuses[37m: OrdersListStatus[] = ["en_camino", ...
+          ╵            [32m~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2300: Duplicate identifier 'orderListStatuses'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.ts:522:2:
+[37m      522 │   [32morderListStatuses[37m(): OrdersListStatus[] {
+          ╵   [32m~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2300: Duplicate identifier 'orderListStatuses'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.ts:522:2:
+[37m      522 │   [32morderListStatuses[37m(): OrdersListStatus[] {
+          ╵   [32m~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type 'SupplierOperationRow' is not assignable to parameter of type 'never'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.ts:596:26:
+[37m      596 │       existing.lines.push([32mrow[37m);
+          ╵                           [32m~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type 'SupplierOperationRow' is not assignable to parameter of type 'never'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.ts:597:46:
+[37m      597 │       existing.linesByStatus[row.status].push([32mrow[37m);
+          ╵                                               [32m~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type 'SupplierProductGroup | { key: string; supplierId: string; supplierName: string; productName: string; imageUrl: string | null; size: string; color: string; variant: string; ... 6 more ...; badge: GroupBadge; }' is not assignable to parameter of type 'SupplierProductGroup'.
+  Property 'statusSegments' is missing in type '{ key: string; supplierId: string; supplierName: string; productName: string; imageUrl: string | null; size: string; color: string; variant: string; totalQty: number; doneQty: number; progressPct: number; countsByStatus: { ...; }; linesByStatus: { ...; }; lines: never[]; badge: GroupBadge; }' but required in type 'SupplierProductGroup'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.ts:607:19:
+[37m      607 │       map.set(key, [32mexisting[37m);
+          ╵                    [32m~~~~~~~~[0m
+
+  'statusSegments' is declared here.
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.ts:33:2:
+[37m      33 │   [32mstatusSegments[37m: ProgressSegmentStatus[];
+         ╵   [32m~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[33m[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.html:79:52:
+[37m      79 │ ...ount" [class.zero]="([32mcounts[intent.id] ?? 0[37m) === 0">{{ counts[i...
+         ╵                         [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Warning occurs in the template of component PedidosPage.
+
+    src/app/features/pedidos/pedidos.ts:40:15:
+[37m      40 │   templateUrl: [32m"./pedidos.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.html:79:86:
+[37m      79 │ ...counts[intent.id] ?? 0) === 0">{{ [32mcounts[intent.id] ?? 0[37m }}</span>
+         ╵                                      [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Warning occurs in the template of component PedidosPage.
+
+    src/app/features/pedidos/pedidos.ts:40:15:
+[37m      40 │   templateUrl: [32m"./pedidos.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'getStatusSegments' does not exist on type 'ProveedoresOperacionesPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.html:96:43:
+[37m      96 │ ...        @for (segment of [32mgetStatusSegments[37m(group); track $index) {
+         ╵                             [32m~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component ProveedoresOperacionesPage.
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.ts:72:15:
+[37m      72 │   templateUrl: [32m"./proveedores-operaciones.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2349: This expression is not callable.
+  Type 'SupplierOperationStatus[]' has no call signatures.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.html:179:38:
+[37m      179 │ ...             @for (status of [32morderListStatuses[37m(); track status) {
+          ╵                                 [32m~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component ProveedoresOperacionesPage.
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.ts:72:15:
+[37m      72 │   templateUrl: [32m"./proveedores-operaciones.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'hasLinesForStatus' does not exist on type 'ProveedoresOperacionesPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.html:180:29:
+[37m      180 │                         @if ([32mhasLinesForStatus[37m(group, status)) {
+          ╵                              [32m~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component ProveedoresOperacionesPage.
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.ts:72:15:
+[37m      72 │   templateUrl: [32m"./proveedores-operaciones.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'linesForStatus' does not exist on type 'ProveedoresOperacionesPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.html:183:66:
+[37m      183 │ ...tionTitle(status) }} ({{ [32mlinesForStatus[37m(group, status).length }})
+          ╵                             [32m~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component ProveedoresOperacionesPage.
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.ts:72:15:
+[37m      72 │   templateUrl: [32m"./proveedores-operaciones.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'linesForStatus' does not exist on type 'ProveedoresOperacionesPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.html:186:44:
+[37m      186 │ ...          @for (line of [32mlinesForStatus[37m(group, status); track t...
+          ╵                            [32m~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component ProveedoresOperacionesPage.
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.ts:72:15:
+[37m      72 │   templateUrl: [32m"./proveedores-operaciones.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type 'SupplierOperationRow' is not assignable to parameter of type 'never'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.ts:584:26:
+[37m      584 │       existing.lines.push([32mrow[37m);
+          ╵                           [32m~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type 'SupplierOperationRow' is not assignable to parameter of type 'never'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.ts:585:46:
+[37m      585 │       existing.linesByStatus[row.status].push([32mrow[37m);
+          ╵                                               [32m~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type 'SupplierProductGroup | { key: string; supplierId: string; supplierName: string; productName: string; imageUrl: string | null; size: string; color: string; variant: string; ... 6 more ...; badge: GroupBadge; }' is not assignable to parameter of type 'SupplierProductGroup'.
+  Property 'statusSegments' is missing in type '{ key: string; supplierId: string; supplierName: string; productName: string; imageUrl: string | null; size: string; color: string; variant: string; totalQty: number; doneQty: number; progressPct: number; countsByStatus: { ...; }; linesByStatus: { ...; }; lines: never[]; badge: GroupBadge; }' but required in type 'SupplierProductGroup'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.ts:595:19:
+[37m      595 │       map.set(key, [32mexisting[37m);
+          ╵                    [32m~~~~~~~~[0m
+
+  'statusSegments' is declared here.
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.ts:33:2:
+[37m      33 │   [32mstatusSegments[37m: ProgressSegmentStatus[];
+         ╵   [32m~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[33m[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.html:79:52:
+[37m      79 │ ...ount" [class.zero]="([32mcounts[intent.id] ?? 0[37m) === 0">{{ counts[i...
+         ╵                         [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Warning occurs in the template of component PedidosPage.
+
+    src/app/features/pedidos/pedidos.ts:40:15:
+[37m      40 │   templateUrl: [32m"./pedidos.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.html:79:86:
+[37m      79 │ ...counts[intent.id] ?? 0) === 0">{{ [32mcounts[intent.id] ?? 0[37m }}</span>
+         ╵                                      [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Warning occurs in the template of component PedidosPage.
+
+    src/app/features/pedidos/pedidos.ts:40:15:
+[37m      40 │   templateUrl: [32m"./pedidos.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'getStatusSegments' does not exist on type 'ProveedoresOperacionesPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.html:96:43:
+[37m      96 │ ...        @for (segment of [32mgetStatusSegments[37m(group); track $index) {
+         ╵                             [32m~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component ProveedoresOperacionesPage.
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.ts:72:15:
+[37m      72 │   templateUrl: [32m"./proveedores-operaciones.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2349: This expression is not callable.
+  Type 'SupplierOperationStatus[]' has no call signatures.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.html:179:38:
+[37m      179 │ ...             @for (status of [32morderListStatuses[37m(); track status) {
+          ╵                                 [32m~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component ProveedoresOperacionesPage.
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.ts:72:15:
+[37m      72 │   templateUrl: [32m"./proveedores-operaciones.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'hasLinesForStatus' does not exist on type 'ProveedoresOperacionesPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.html:180:29:
+[37m      180 │                         @if ([32mhasLinesForStatus[37m(group, status)) {
+          ╵                              [32m~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component ProveedoresOperacionesPage.
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.ts:72:15:
+[37m      72 │   templateUrl: [32m"./proveedores-operaciones.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'linesForStatus' does not exist on type 'ProveedoresOperacionesPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.html:183:66:
+[37m      183 │ ...tionTitle(status) }} ({{ [32mlinesForStatus[37m(group, status).length }})
+          ╵                             [32m~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component ProveedoresOperacionesPage.
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.ts:72:15:
+[37m      72 │   templateUrl: [32m"./proveedores-operaciones.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'linesForStatus' does not exist on type 'ProveedoresOperacionesPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.html:186:44:
+[37m      186 │ ...          @for (line of [32mlinesForStatus[37m(group, status); track t...
+          ╵                            [32m~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component ProveedoresOperacionesPage.
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.ts:72:15:
+[37m      72 │   templateUrl: [32m"./proveedores-operaciones.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[33m[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.html:79:52:
+[37m      79 │ ...ount" [class.zero]="([32mcounts[intent.id] ?? 0[37m) === 0">{{ counts[i...
+         ╵                         [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Warning occurs in the template of component PedidosPage.
+
+    src/app/features/pedidos/pedidos.ts:40:15:
+[37m      40 │   templateUrl: [32m"./pedidos.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.html:79:86:
+[37m      79 │ ...counts[intent.id] ?? 0) === 0">{{ [32mcounts[intent.id] ?? 0[37m }}</span>
+         ╵                                      [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Warning occurs in the template of component PedidosPage.
+
+    src/app/features/pedidos/pedidos.ts:40:15:
+[37m      40 │   templateUrl: [32m"./pedidos.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[33m[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.html:79:52:
+[37m      79 │ ...ount" [class.zero]="([32mcounts[intent.id] ?? 0[37m) === 0">{{ counts[i...
+         ╵                         [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Warning occurs in the template of component PedidosPage.
+
+    src/app/features/pedidos/pedidos.ts:40:15:
+[37m      40 │   templateUrl: [32m"./pedidos.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.html:79:86:
+[37m      79 │ ...counts[intent.id] ?? 0) === 0">{{ [32mcounts[intent.id] ?? 0[37m }}</span>
+         ╵                                      [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Warning occurs in the template of component PedidosPage.
+
+    src/app/features/pedidos/pedidos.ts:40:15:
+[37m      40 │   templateUrl: [32m"./pedidos.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[33m[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.html:79:52:
+[37m      79 │ ...ount" [class.zero]="([32mcounts[intent.id] ?? 0[37m) === 0">{{ counts[i...
+         ╵                         [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Warning occurs in the template of component PedidosPage.
+
+    src/app/features/pedidos/pedidos.ts:40:15:
+[37m      40 │   templateUrl: [32m"./pedidos.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.html:79:86:
+[37m      79 │ ...counts[intent.id] ?? 0) === 0">{{ [32mcounts[intent.id] ?? 0[37m }}</span>
+         ╵                                      [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Warning occurs in the template of component PedidosPage.
+
+    src/app/features/pedidos/pedidos.ts:40:15:
+[37m      40 │   templateUrl: [32m"./pedidos.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[33m[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.html:79:52:
+[37m      79 │ ...ount" [class.zero]="([32mcounts[intent.id] ?? 0[37m) === 0">{{ counts[i...
+         ╵                         [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Warning occurs in the template of component PedidosPage.
+
+    src/app/features/pedidos/pedidos.ts:40:15:
+[37m      40 │   templateUrl: [32m"./pedidos.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.html:79:86:
+[37m      79 │ ...counts[intent.id] ?? 0) === 0">{{ [32mcounts[intent.id] ?? 0[37m }}</span>
+         ╵                                      [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Warning occurs in the template of component PedidosPage.
+
+    src/app/features/pedidos/pedidos.ts:40:15:
+[37m      40 │   templateUrl: [32m"./pedidos.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[33m[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.html:79:52:
+[37m      79 │ ...ount" [class.zero]="([32mcounts[intent.id] ?? 0[37m) === 0">{{ counts[i...
+         ╵                         [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Warning occurs in the template of component PedidosPage.
+
+    src/app/features/pedidos/pedidos.ts:40:15:
+[37m      40 │   templateUrl: [32m"./pedidos.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.html:79:86:
+[37m      79 │ ...counts[intent.id] ?? 0) === 0">{{ [32mcounts[intent.id] ?? 0[37m }}</span>
+         ╵                                      [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Warning occurs in the template of component PedidosPage.
+
+    src/app/features/pedidos/pedidos.ts:40:15:
+[37m      40 │   templateUrl: [32m"./pedidos.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[33m[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.html:79:52:
+[37m      79 │ ...ount" [class.zero]="([32mcounts[intent.id] ?? 0[37m) === 0">{{ counts[i...
+         ╵                         [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Warning occurs in the template of component PedidosPage.
+
+    src/app/features/pedidos/pedidos.ts:40:15:
+[37m      40 │   templateUrl: [32m"./pedidos.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.html:79:86:
+[37m      79 │ ...counts[intent.id] ?? 0) === 0">{{ [32mcounts[intent.id] ?? 0[37m }}</span>
+         ╵                                      [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Warning occurs in the template of component PedidosPage.
+
+    src/app/features/pedidos/pedidos.ts:40:15:
+[37m      40 │   templateUrl: [32m"./pedidos.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[33m[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.html:79:52:
+[37m      79 │ ...ount" [class.zero]="([32mcounts[intent.id] ?? 0[37m) === 0">{{ counts[i...
+         ╵                         [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Warning occurs in the template of component PedidosPage.
+
+    src/app/features/pedidos/pedidos.ts:40:15:
+[37m      40 │   templateUrl: [32m"./pedidos.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.html:79:86:
+[37m      79 │ ...counts[intent.id] ?? 0) === 0">{{ [32mcounts[intent.id] ?? 0[37m }}</span>
+         ╵                                      [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Warning occurs in the template of component PedidosPage.
+
+    src/app/features/pedidos/pedidos.ts:40:15:
+[37m      40 │   templateUrl: [32m"./pedidos.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[33m[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.html:79:52:
+[37m      79 │ ...ount" [class.zero]="([32mcounts[intent.id] ?? 0[37m) === 0">{{ counts[i...
+         ╵                         [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Warning occurs in the template of component PedidosPage.
+
+    src/app/features/pedidos/pedidos.ts:41:15:
+[37m      41 │   templateUrl: [32m"./pedidos.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.html:79:86:
+[37m      79 │ ...counts[intent.id] ?? 0) === 0">{{ [32mcounts[intent.id] ?? 0[37m }}</span>
+         ╵                                      [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Warning occurs in the template of component PedidosPage.
+
+    src/app/features/pedidos/pedidos.ts:41:15:
+[37m      41 │   templateUrl: [32m"./pedidos.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[33m[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.html:79:52:
+[37m      79 │ ...ount" [class.zero]="([32mcounts[intent.id] ?? 0[37m) === 0">{{ counts[i...
+         ╵                         [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Warning occurs in the template of component PedidosPage.
+
+    src/app/features/pedidos/pedidos.ts:41:15:
+[37m      41 │   templateUrl: [32m"./pedidos.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.html:79:86:
+[37m      79 │ ...counts[intent.id] ?? 0) === 0">{{ [32mcounts[intent.id] ?? 0[37m }}</span>
+         ╵                                      [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Warning occurs in the template of component PedidosPage.
+
+    src/app/features/pedidos/pedidos.ts:41:15:
+[37m      41 │   templateUrl: [32m"./pedidos.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[33m[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.html:79:52:
+[37m      79 │ ...ount" [class.zero]="([32mcounts[intent.id] ?? 0[37m) === 0">{{ counts[i...
+         ╵                         [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Warning occurs in the template of component PedidosPage.
+
+    src/app/features/pedidos/pedidos.ts:41:15:
+[37m      41 │   templateUrl: [32m"./pedidos.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.html:79:86:
+[37m      79 │ ...counts[intent.id] ?? 0) === 0">{{ [32mcounts[intent.id] ?? 0[37m }}</span>
+         ╵                                      [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Warning occurs in the template of component PedidosPage.
+
+    src/app/features/pedidos/pedidos.ts:41:15:
+[37m      41 │   templateUrl: [32m"./pedidos.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[33m[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.html:79:52:
+[37m      79 │ ...ount" [class.zero]="([32mcounts[intent.id] ?? 0[37m) === 0">{{ counts[i...
+         ╵                         [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Warning occurs in the template of component PedidosPage.
+
+    src/app/features/pedidos/pedidos.ts:41:15:
+[37m      41 │   templateUrl: [32m"./pedidos.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.html:79:86:
+[37m      79 │ ...counts[intent.id] ?? 0) === 0">{{ [32mcounts[intent.id] ?? 0[37m }}</span>
+         ╵                                      [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Warning occurs in the template of component PedidosPage.
+
+    src/app/features/pedidos/pedidos.ts:41:15:
+[37m      41 │   templateUrl: [32m"./pedidos.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2739: Type 'NormalizedListingDoc[]' is missing the following properties from type 'WritableSignal<NormalizedListingDoc[]>': set, update, asReadonly, [ɵWRITABLE_SIGNAL], [SIGNAL][0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:366:8:
+[37m      366 │         [32mthis.catalogRows[37m = page.docs;
+          ╵         [32m~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'find' does not exist on type 'WritableSignal<NormalizedListingDoc[]>'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:836:35:
+[37m      836 │ ...const doc = this.catalogRows.[32mfind[37m((row) => row.normalized_id =...
+          ╵                                 [32m~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS7006: Parameter 'row' implicitly has an 'any' type.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:836:41:
+[37m      836 │ ... doc = this.catalogRows.find(([32mrow[37m) => row.normalized_id === it...
+          ╵                                  [32m~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'resolveItemImage' does not exist on type 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:314:33:
+[37m      314 │       map.set(item.item_id, this.[32mresolveItemImage[37m(item));
+          ╵                                  [32m~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2739: Type 'NormalizedListingDoc[]' is missing the following properties from type 'WritableSignal<NormalizedListingDoc[]>': set, update, asReadonly, [ɵWRITABLE_SIGNAL], [SIGNAL][0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:375:8:
+[37m      375 │         [32mthis.catalogRows[37m = page.docs;
+          ╵         [32m~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'find' does not exist on type 'WritableSignal<NormalizedListingDoc[]>'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:845:35:
+[37m      845 │ ...const doc = this.catalogRows.[32mfind[37m((row) => row.normalized_id =...
+          ╵                                 [32m~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS7006: Parameter 'row' implicitly has an 'any' type.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:845:41:
+[37m      845 │ ... doc = this.catalogRows.find(([32mrow[37m) => row.normalized_id === it...
+          ╵                                  [32m~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'resolveItemImage' does not exist on type 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:314:33:
+[37m      314 │       map.set(item.item_id, this.[32mresolveItemImage[37m(item));
+          ╵                                  [32m~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'itemInitials' does not exist on type 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:470:27:
+[37m      470 │             initials: this.[32mitemInitials[37m(item),
+          ╵                            [32m~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'itemInitials' does not exist on type 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:517:21:
+[37m      517 │       initials: this.[32mitemInitials[37m(row.item),
+          ╵                      [32m~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2739: Type 'NormalizedListingDoc[]' is missing the following properties from type 'WritableSignal<NormalizedListingDoc[]>': set, update, asReadonly, [ɵWRITABLE_SIGNAL], [SIGNAL][0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:615:8:
+[37m      615 │         [32mthis.catalogRows[37m = page.docs;
+          ╵         [32m~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'find' does not exist on type 'WritableSignal<NormalizedListingDoc[]>'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:1085:35:
+[37m      1085 │ ...const doc = this.catalogRows.[32mfind[37m((row) => row.normalized_id ...
+           ╵                                 [32m~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS7006: Parameter 'row' implicitly has an 'any' type.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:1085:41:
+[37m      1085 │ ...doc = this.catalogRows.find(([32mrow[37m) => row.normalized_id === it...
+           ╵                                 [32m~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'resolveItemImage' does not exist on type 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:314:33:
+[37m      314 │       map.set(item.item_id, this.[32mresolveItemImage[37m(item));
+          ╵                                  [32m~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'itemInitials' does not exist on type 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:470:27:
+[37m      470 │             initials: this.[32mitemInitials[37m(item),
+          ╵                            [32m~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'itemInitials' does not exist on type 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:517:21:
+[37m      517 │       initials: this.[32mitemInitials[37m(row.item),
+          ╵                      [32m~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'find' does not exist on type 'WritableSignal<NormalizedListingDoc[]>'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:1085:35:
+[37m      1085 │ ...const doc = this.catalogRows.[32mfind[37m((row) => row.normalized_id ...
+           ╵                                 [32m~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS7006: Parameter 'row' implicitly has an 'any' type.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:1085:41:
+[37m      1085 │ ...doc = this.catalogRows.find(([32mrow[37m) => row.normalized_id === it...
+           ╵                                 [32m~~~[0m
+
+[39m[22m
+[1m[33m[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8113: RouterLink is not used within the template of PedidoDetallePage[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:133:25:
+[37m      133 │   imports: [FormsModule, [32mRouterLink[37m, DatePipe, UpperCasePipe, Act...
+          ╵                          [32m~~~~~~~~~~[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8113: DatePipe is not used within the template of PedidoDetallePage[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:133:37:
+[37m      133 │ ... [FormsModule, RouterLink, [32mDatePipe[37m, UpperCasePipe, ActivityLo...
+          ╵                               [32m~~~~~~~~[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8113: UpperCasePipe is not used within the template of PedidoDetallePage[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:133:47:
+[37m      133 │ ...dule, RouterLink, DatePipe, [32mUpperCasePipe[37m, ActivityLogComponent],
+          ╵                                [32m~~~~~~~~~~~~~[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8113: ActivityLogComponent is not used within the template of PedidoDetallePage[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:133:62:
+[37m      133 │ ...dule, RouterLink, DatePipe, UpperCasePipe, [32mActivityLogComponent[37m],
+          ╵                                               [32m~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mNG5002: Unclosed block "else if"[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:63:2:
+[37m      63 │ } [32m@else if (order(); as current) {[37m
+         ╵   [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:134:15:
+[37m      134 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[33m[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8113: RouterLink is not used within the template of PedidoDetallePage[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:133:25:
+[37m      133 │   imports: [FormsModule, [32mRouterLink[37m, DatePipe, UpperCasePipe, Act...
+          ╵                          [32m~~~~~~~~~~[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8113: DatePipe is not used within the template of PedidoDetallePage[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:133:37:
+[37m      133 │ ... [FormsModule, RouterLink, [32mDatePipe[37m, UpperCasePipe, ActivityLo...
+          ╵                               [32m~~~~~~~~[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8113: UpperCasePipe is not used within the template of PedidoDetallePage[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:133:47:
+[37m      133 │ ...dule, RouterLink, DatePipe, [32mUpperCasePipe[37m, ActivityLogComponent],
+          ╵                                [32m~~~~~~~~~~~~~[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8113: ActivityLogComponent is not used within the template of PedidoDetallePage[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:133:62:
+[37m      133 │ ...dule, RouterLink, DatePipe, UpperCasePipe, [32mActivityLogComponent[37m],
+          ╵                                               [32m~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mNG5002: Unclosed block "else if"[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:63:2:
+[37m      63 │ } [32m@else if (order(); as current) {[37m
+         ╵   [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:134:15:
+[37m      134 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[33m[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8113: RouterLink is not used within the template of PedidoDetallePage[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:133:25:
+[37m      133 │   imports: [FormsModule, [32mRouterLink[37m, DatePipe, UpperCasePipe, Act...
+          ╵                          [32m~~~~~~~~~~[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8113: DatePipe is not used within the template of PedidoDetallePage[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:133:37:
+[37m      133 │ ... [FormsModule, RouterLink, [32mDatePipe[37m, UpperCasePipe, ActivityLo...
+          ╵                               [32m~~~~~~~~[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8113: UpperCasePipe is not used within the template of PedidoDetallePage[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:133:47:
+[37m      133 │ ...dule, RouterLink, DatePipe, [32mUpperCasePipe[37m, ActivityLogComponent],
+          ╵                                [32m~~~~~~~~~~~~~[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8113: ActivityLogComponent is not used within the template of PedidoDetallePage[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:133:62:
+[37m      133 │ ...dule, RouterLink, DatePipe, UpperCasePipe, [32mActivityLogComponent[37m],
+          ╵                                               [32m~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mNG5002: Unclosed block "else if"[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:63:2:
+[37m      63 │ } [32m@else if (order(); as current) {[37m
+         ╵   [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:134:15:
+[37m      134 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[33m[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8113: RouterLink is not used within the template of PedidoDetallePage[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:133:25:
+[37m      133 │   imports: [FormsModule, [32mRouterLink[37m, DatePipe, UpperCasePipe, Act...
+          ╵                          [32m~~~~~~~~~~[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8113: DatePipe is not used within the template of PedidoDetallePage[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:133:37:
+[37m      133 │ ... [FormsModule, RouterLink, [32mDatePipe[37m, UpperCasePipe, ActivityLo...
+          ╵                               [32m~~~~~~~~[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8113: UpperCasePipe is not used within the template of PedidoDetallePage[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:133:47:
+[37m      133 │ ...dule, RouterLink, DatePipe, [32mUpperCasePipe[37m, ActivityLogComponent],
+          ╵                                [32m~~~~~~~~~~~~~[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8113: ActivityLogComponent is not used within the template of PedidoDetallePage[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:133:62:
+[37m      133 │ ...dule, RouterLink, DatePipe, UpperCasePipe, [32mActivityLogComponent[37m],
+          ╵                                               [32m~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mNG5002: Unclosed block "else if"[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:63:2:
+[37m      63 │ } [32m@else if (order(); as current) {[37m
+         ╵   [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:134:15:
+[37m      134 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[33m[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8113: RouterLink is not used within the template of PedidoDetallePage[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:133:25:
+[37m      133 │   imports: [FormsModule, [32mRouterLink[37m, DatePipe, UpperCasePipe, Act...
+          ╵                          [32m~~~~~~~~~~[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8113: DatePipe is not used within the template of PedidoDetallePage[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:133:37:
+[37m      133 │ ... [FormsModule, RouterLink, [32mDatePipe[37m, UpperCasePipe, ActivityLo...
+          ╵                               [32m~~~~~~~~[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8113: UpperCasePipe is not used within the template of PedidoDetallePage[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:133:47:
+[37m      133 │ ...dule, RouterLink, DatePipe, [32mUpperCasePipe[37m, ActivityLogComponent],
+          ╵                                [32m~~~~~~~~~~~~~[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8113: ActivityLogComponent is not used within the template of PedidoDetallePage[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:133:62:
+[37m      133 │ ...dule, RouterLink, DatePipe, UpperCasePipe, [32mActivityLogComponent[37m],
+          ╵                                               [32m~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mNG5002: Unclosed block "else if"[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:63:2:
+[37m      63 │ } [32m@else if (order(); as current) {[37m
+         ╵   [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:134:15:
+[37m      134 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[33m[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8113: RouterLink is not used within the template of PedidoDetallePage[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:134:25:
+[37m      134 │   imports: [FormsModule, [32mRouterLink[37m, DatePipe, UpperCasePipe, Act...
+          ╵                          [32m~~~~~~~~~~[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8113: DatePipe is not used within the template of PedidoDetallePage[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:134:37:
+[37m      134 │ ... [FormsModule, RouterLink, [32mDatePipe[37m, UpperCasePipe, ActivityLo...
+          ╵                               [32m~~~~~~~~[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8113: UpperCasePipe is not used within the template of PedidoDetallePage[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:134:47:
+[37m      134 │ ...dule, RouterLink, DatePipe, [32mUpperCasePipe[37m, ActivityLogComponent],
+          ╵                                [32m~~~~~~~~~~~~~[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8113: ActivityLogComponent is not used within the template of PedidoDetallePage[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:134:62:
+[37m      134 │ ...dule, RouterLink, DatePipe, UpperCasePipe, [32mActivityLogComponent[37m],
+          ╵                                               [32m~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mNG5002: Unclosed block "else if"[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:63:2:
+[37m      63 │ } [32m@else if (order(); as current) {[37m
+         ╵   [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:135:15:
+[37m      135 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[33m[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8113: RouterLink is not used within the template of PedidoDetallePage[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:134:25:
+[37m      134 │   imports: [FormsModule, [32mRouterLink[37m, DatePipe, UpperCasePipe, Act...
+          ╵                          [32m~~~~~~~~~~[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8113: DatePipe is not used within the template of PedidoDetallePage[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:134:37:
+[37m      134 │ ... [FormsModule, RouterLink, [32mDatePipe[37m, UpperCasePipe, ActivityLo...
+          ╵                               [32m~~~~~~~~[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8113: UpperCasePipe is not used within the template of PedidoDetallePage[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:134:47:
+[37m      134 │ ...dule, RouterLink, DatePipe, [32mUpperCasePipe[37m, ActivityLogComponent],
+          ╵                                [32m~~~~~~~~~~~~~[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8113: ActivityLogComponent is not used within the template of PedidoDetallePage[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:134:62:
+[37m      134 │ ...dule, RouterLink, DatePipe, UpperCasePipe, [32mActivityLogComponent[37m],
+          ╵                                               [32m~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mNG5002: Unclosed block "else if"[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:63:2:
+[37m      63 │ } [32m@else if (order(); as current) {[37m
+         ╵   [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:135:15:
+[37m      135 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '{ run: RouteRunDoc; stops: RouteRunStopDoc[]; }' is not assignable to parameter of type '{ run: RouteRunDoc; stops: RouteRunStopDoc[]; scheduledDateLabel: string; balanceLabel: string; }'.
+  Type '{ run: RouteRunDoc; stops: RouteRunStopDoc[]; }' is missing the following properties from type '{ run: RouteRunDoc; stops: RouteRunStopDoc[]; scheduledDateLabel: string; balanceLabel: string; }': scheduledDateLabel, balanceLabel[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salidas.page.ts:111:29:
+[37m      111 │       group.programados.push([32m{[37m
+          ╵                              [32m^[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type 'DispatchOrderRow' is not assignable to parameter of type 'DispatchCard'.
+  Type 'DispatchOrderRow' is missing the following properties from type '{ routeName: string; customerName: string; processLabel?: string | undefined; processTone?: "confirmar" | "espera" | "empaque" | undefined; requestedRunChip?: string | null | undefined; }': routeName, customerName[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salidas.page.ts:187:48:
+[37m      187 │         requestedRunChip: this.requestedRunChip([32mrow[37m),
+          ╵                                                 [32m~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type 'DispatchOrderRow' is not assignable to parameter of type 'DispatchCard'.
+  Type 'DispatchOrderRow' is missing the following properties from type '{ routeName: string; customerName: string; processLabel?: string | undefined; processTone?: "confirmar" | "espera" | "empaque" | undefined; requestedRunChip?: string | null | undefined; }': routeName, customerName[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salidas.page.ts:187:48:
+[37m      187 │         requestedRunChip: this.requestedRunChip([32mrow[37m),
+          ╵                                                 [32m~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type 'DispatchOrderRow' is not assignable to parameter of type 'DispatchCard'.
+  Type 'DispatchOrderRow' is missing the following properties from type '{ routeName: string; customerName: string; processLabel?: string | undefined; processTone?: "confirmar" | "espera" | "empaque" | undefined; requestedRunChip?: string | null | undefined; }': routeName, customerName[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salidas.page.ts:187:48:
+[37m      187 │         requestedRunChip: this.requestedRunChip([32mrow[37m),
+          ╵                                                 [32m~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'buildUserPermissionGroups' does not exist on type 'UsuariosPage'. Did you mean 'userPermissionGroups'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:140:39:
+[37m      140 │   readonly userPermissionGroups = this.[32mbuildUserPermissionGroups[37m();
+          ╵                                        [32m~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  'userPermissionGroups' is declared here.
+
+    src/app/features/usuarios/usuarios.ts:140:11:
+[37m      140 │   readonly [32muserPermissionGroups[37m = this.buildUserPermissionGroups();
+          ╵            [32m~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'buildUserPermissionGroups' does not exist on type 'UsuariosPage'. Did you mean 'userPermissionGroups'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:140:39:
+[37m      140 │   readonly userPermissionGroups = this.[32mbuildUserPermissionGroups[37m();
+          ╵                                        [32m~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  'userPermissionGroups' is declared here.
+
+    src/app/features/usuarios/usuarios.ts:140:11:
+[37m      140 │   readonly [32muserPermissionGroups[37m = this.buildUserPermissionGroups();
+          ╵            [32m~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m

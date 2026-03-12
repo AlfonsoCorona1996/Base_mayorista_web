@@ -171,7 +171,7 @@
       <!-- Descuentos globales -->
       <div class="global-discounts">
         <h3 class="subsection-title">Descuentos globales</h3>
-        @for (tier of d.listing.price_tiers_global; track $index; let i = $index) {
+        @for (tier of d.listing.price_tiers_global; track (tier.tier_name || i); let i = $index) {
           <div class="discount-row">
             <input
               type="text"
@@ -204,7 +204,7 @@
 
       <!-- Lista de variantes -->
       <div class="variants-list">
-        @for (variant of d.listing.items; track $index; let i = $index) {
+        @for (variant of d.listing.items; track (variant.sku || variant.variant_name || i); let i = $index) {
           <div class="variant-card">
             <div class="variant-header">
               <span class="variant-number">#{{ i + 1 }}</span>
@@ -265,7 +265,7 @@
             <!-- Precios -->
             <div class="prices-section">
               <label class="label">Precios</label>
-              @for (price of variant.prices; track $index; let pi = $index) {
+              @for (price of variant.prices; track (price.tier_name || pi); let pi = $index) {
                 <div class="price-row">
                   <input
                     type="text"

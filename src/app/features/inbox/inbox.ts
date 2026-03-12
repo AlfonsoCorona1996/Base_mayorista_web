@@ -1,4 +1,4 @@
-﻿import { Component, signal } from "@angular/core";
+﻿import { Component, signal, ChangeDetectionStrategy } from "@angular/core";
 import { Router } from "@angular/router";
 import { AuthService } from "../../core/auth.service";
 import { NormalizedListingsService } from "../../core/normalized-listings.service";
@@ -6,6 +6,7 @@ import type { NormalizedListingDoc } from "../../core/firestore-contracts";
 
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   selector: 'app-inbox',
   imports: [],

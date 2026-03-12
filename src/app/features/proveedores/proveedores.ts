@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from "@angular/core";
+import { Component, computed, inject, signal, ChangeDetectionStrategy } from "@angular/core";
 import { FormsModule } from "@angular/forms";
 import { Supplier, SuppliersService } from "../../core/suppliers.service";
 
@@ -14,6 +14,7 @@ interface SupplierDraft {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   selector: "app-proveedores",
   imports: [FormsModule],

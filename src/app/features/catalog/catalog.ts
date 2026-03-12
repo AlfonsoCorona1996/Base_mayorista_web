@@ -1,4 +1,4 @@
-﻿import { Component, computed, inject, signal } from "@angular/core";
+﻿import { Component, computed, inject, signal, ChangeDetectionStrategy } from "@angular/core";
 import { FormsModule } from "@angular/forms";
 import { Router } from "@angular/router";
 import type { DocumentData, QueryDocumentSnapshot } from "firebase/firestore";
@@ -12,6 +12,7 @@ import type {
 import { isNormalizedListingDocV3 } from "../../core/firestore-contracts";
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   selector: "app-catalog",
   imports: [FormsModule],

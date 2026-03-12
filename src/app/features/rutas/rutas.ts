@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from "@angular/core";
+import { Component, computed, inject, signal, ChangeDetectionStrategy } from "@angular/core";
 import { FormsModule } from "@angular/forms";
 import { LocalitiesService } from "../../core/localities.service";
 import { RoutePlan, RoutesService } from "../../core/routes.service";
@@ -14,6 +14,7 @@ interface RouteDraft {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   selector: "app-rutas",
   imports: [FormsModule],

@@ -132,8 +132,8 @@ export class AccessService {
     return profile?.displayName || profile?.username || profile?.email || "Usuario";
   });
 
-  async refreshProfile(): Promise<AdminProfile | null> {
-    await this.authz.refresh();
+  async refreshProfile(opts?: { force?: boolean }): Promise<AdminProfile | null> {
+    await this.authz.refresh({ force: Boolean(opts?.force) });
     return this.profile();
   }
 

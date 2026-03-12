@@ -1,4 +1,4 @@
-import { Component, HostListener, computed, inject, signal } from "@angular/core";
+import { Component, HostListener, computed, inject, signal, ChangeDetectionStrategy } from "@angular/core";
 import { FormsModule } from "@angular/forms";
 import { RouterLink } from "@angular/router";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
@@ -25,6 +25,7 @@ interface InventoryDraft {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   selector: "app-inventario",
   imports: [FormsModule, RouterLink],

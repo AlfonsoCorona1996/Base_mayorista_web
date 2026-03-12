@@ -1,4 +1,5 @@
-import { Component, HostListener, computed, inject, signal } from "@angular/core";
+import { Component, HostListener, computed, inject, signal, ChangeDetectionStrategy, DestroyRef } from "@angular/core";
+import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from "@angular/router";
 import { filter } from "rxjs";
 import { AuthService } from "../../core/auth.service";
@@ -8,6 +9,7 @@ import { ImpersonationService } from "../../core/impersonation.service";
 import { AuthzService } from "../../core/authz.service";
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   selector: "app-main-layout",
   imports: [RouterOutlet, RouterLink, RouterLinkActive],
@@ -24,6 +26,7 @@ export default class MainLayoutPage {
   private audit = inject(AuditService);
   private authz = inject(AuthzService);
   private impersonation = inject(ImpersonationService);
+  private destroyRef = inject(DestroyRef);
 
   isImpersonating = computed(() => this.authz.isRealSuperAdmin() && this.impersonation.snapshotSig() !== null);
   impersonatedName = computed(() => this.impersonation.snapshotSig()?.displayName || "Usuario");
@@ -31,10 +34,15 @@ export default class MainLayoutPage {
   ngOnInit() {
     this.syncMenuForViewport();
     this.access.refreshProfile().catch(() => null);
-    this.router.events.pipe(filter((event) => event instanceof NavigationEnd)).subscribe((event) => {
-      const nav = event as NavigationEnd;
-      this.audit.log("VIEW_ROUTE", { url: nav.urlAfterRedirects }).catch(() => null);
-    });
+    this.router.events
+      .pipe(
+        filter((event) => event instanceof NavigationEnd),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((event) => {
+        const nav = event as NavigationEnd;
+        this.audit.log("VIEW_ROUTE", { url: nav.urlAfterRedirects }).catch(() => null);
+      });
   }
 
   @HostListener("window:resize")
