@@ -37,14 +37,6 @@
           <p class="overview-label">Pendientes cargados</p>
           <p class="overview-value">{{ rows().length }}</p>
         </div>
-        <div class="overview-meta">
-          <span class="overview-chip">Lote incremental de 25</span>
-          @if (hasMore()) {
-            <span class="overview-chip overview-chip-accent">Hay mas por cargar</span>
-          } @else {
-            <span class="overview-chip">Sin pendientes adicionales</span>
-          }
-        </div>
       </section>
 
       <section class="list-card">
@@ -55,7 +47,12 @@
 
         <div class="products-list">
           @for (r of rows(); track r.normalized_id) {
-            <article class="product-card" (click)="open(r.normalized_id)">
+            <article
+              class="product-card"
+              [class.product-card-priority-urgent]="reviewPriority(r.updated_at ?? r.created_at) === 'urgent'"
+              [class.product-card-priority-recent]="reviewPriority(r.updated_at ?? r.created_at) === 'recent'"
+              (click)="open(r.normalized_id)"
+            >
               <div class="product-image">
                 @if (r.preview_image_url) {
                   <img [src]="r.preview_image_url" alt="{{ r.listing.title || 'Producto sin titulo' }}" />
@@ -76,25 +73,49 @@
                   <p class="category-line">{{ r.listing.category_hint || "Sin categoria" }}</p>
                 </div>
 
-                <div class="meta-pills">
-                  <span class="meta-pill">
-                    <span class="meta-key">SKU base</span>
-                    <strong>{{ shortId(r.normalized_id) }}</strong>
-                  </span>
-                  <span class="meta-pill">
-                    <span class="meta-key">Variantes</span>
+                <div class="meta-stats" aria-label="Resumen de producto">
+                  <span class="meta-stat">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true">
+                      <rect x="3.5" y="4.5" width="7" height="7" rx="1.5"></rect>
+                      <rect x="13.5" y="4.5" width="7" height="7" rx="1.5"></rect>
+                      <rect x="3.5" y="14.5" width="7" height="7" rx="1.5"></rect>
+                      <rect x="13.5" y="14.5" width="7" height="7" rx="1.5"></rect>
+                    </svg>
+                    <span>Variantes</span>
                     <strong>{{ r.listing.items.length }}</strong>
                   </span>
-                  <span class="meta-pill">
-                    <span class="meta-key">Actualizado</span>
-                    <strong>{{ timeAgo(r.updated_at ?? r.created_at) }}</strong>
+                  <span class="meta-stat">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M11 7 6 2"></path>
+                      <path d="M18.992 12H2.041"></path>
+                      <path d="M21.145 18.38A3.34 3.34 0 0 1 20 16.5a3.3 3.3 0 0 1-1.145 1.88c-.575.46-.855 1.02-.855 1.595A2 2 0 0 0 20 22a2 2 0 0 0 2-2.025c0-.58-.285-1.13-.855-1.595"></path>
+                      <path d="m8.5 4.5 2.148-2.148a1.205 1.205 0 0 1 1.704 0l7.296 7.296a1.205 1.205 0 0 1 0 1.704l-7.592 7.592a3.615 3.615 0 0 1-5.112 0l-3.888-3.888a3.615 3.615 0 0 1 0-5.112L5.67 7.33"></path>
+                    </svg>
+                    <span>Colores</span>
+                    <strong>{{ r.product_colors?.length ?? 0 }}</strong>
                   </span>
+                </div>
+
+                <div class="meta-foot">
+                  <span>ID {{ shortId(r.normalized_id) }}</span>
+                  <span class="meta-updated">{{ timeAgo(r.updated_at ?? r.created_at) }}</span>
                 </div>
               </div>
 
               <div class="card-actions">
-                <button type="button" class="btn btn-primary" (click)="open(r.normalized_id); $event.stopPropagation()">
-                  Revisar
+                <button type="button" class="btn btn-review" (click)="open(r.normalized_id); $event.stopPropagation()">
+                  <span>Revisar</span>
+                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true">
+                    <path d="M7 4.5 12.5 10 7 15.5"></path>
+                  </svg>
                 </button>
               </div>
             </article>
