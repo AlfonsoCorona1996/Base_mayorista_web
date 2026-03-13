@@ -1,91 +1,122 @@
-﻿<div class="catalog-page">
-  <header class="catalog-header">
-    <div>
+<section class="catalog-page">
+  <header class="catalog-header surface-card">
+    <div class="heading-copy">
+      <p class="heading-kicker">
+        <span class="material-symbols-rounded" aria-hidden="true">inventory_2</span>
+        Gestion de catalogo
+      </p>
       <h1 class="catalog-title">Catalogo publicado</h1>
       <p class="catalog-subtitle">Aqui aparecen los productos en estado validated.</p>
     </div>
-    <button type="button" class="btn btn-secondary" (click)="reload()" [disabled]="loading()">
+
+    <button type="button" class="btn btn-ghost" (click)="reload()" [disabled]="loading()">
+      <span class="material-symbols-rounded" aria-hidden="true">refresh</span>
       {{ loading() ? "Actualizando..." : "Actualizar" }}
     </button>
   </header>
 
   @if (error()) {
-    <div class="alert-error"><strong>Error:</strong> {{ error() }}</div>
+    <div class="notice notice-error">
+      <span class="material-symbols-rounded" aria-hidden="true">error</span>
+      <p><strong>Error:</strong> {{ error() }}</p>
+    </div>
   }
 
   @if (loading()) {
-    <div class="loading-state">
-      <div class="spinner"></div>
+    <section class="loading-state surface-card">
+      <div class="spinner" aria-hidden="true"></div>
       <p>Cargando catalogo...</p>
-    </div>
+    </section>
   } @else {
-    <section class="filters-card">
-      <div class="filters-row">
+    <section class="filters-card surface-card">
+      <label class="field search-field" for="catalog-search">
+        <span class="material-symbols-rounded" aria-hidden="true">search</span>
         <input
+          id="catalog-search"
           type="text"
           class="input"
           [ngModel]="searchTerm()"
           (ngModelChange)="searchTerm.set($event)"
           placeholder="Buscar por nombre, proveedor, categoria o color"
         />
-      </div>
+      </label>
 
       <div class="filters-grid">
-        <select class="input" [ngModel]="supplierFilter()" (ngModelChange)="supplierFilter.set($event)">
-          <option value="">Proveedor (todos)</option>
-          @for (opt of suppliersOptions(); track opt.id) {
-            <option [value]="opt.id">{{ opt.label }}</option>
-          }
-        </select>
+        <label class="field select-field" for="supplier-filter">
+          <span class="material-symbols-rounded" aria-hidden="true">storefront</span>
+          <select id="supplier-filter" class="input" [ngModel]="supplierFilter()" (ngModelChange)="supplierFilter.set($event)">
+            <option value="">Proveedor (todos)</option>
+            @for (opt of suppliersOptions(); track opt.id) {
+              <option [value]="opt.id">{{ opt.label }}</option>
+            }
+          </select>
+        </label>
 
-        <select class="input" [ngModel]="categoryFilter()" (ngModelChange)="categoryFilter.set($event)">
-          <option value="">Categoria (todas)</option>
-          @for (opt of categoriesOptions(); track opt) {
-            <option [value]="opt">{{ opt }}</option>
-          }
-        </select>
+        <label class="field select-field" for="category-filter">
+          <span class="material-symbols-rounded" aria-hidden="true">category</span>
+          <select id="category-filter" class="input" [ngModel]="categoryFilter()" (ngModelChange)="categoryFilter.set($event)">
+            <option value="">Categoria (todas)</option>
+            @for (opt of categoriesOptions(); track opt) {
+              <option [value]="opt">{{ opt }}</option>
+            }
+          </select>
+        </label>
 
-        <select class="input" [ngModel]="colorFilter()" (ngModelChange)="colorFilter.set($event)">
-          <option value="">Color (todos)</option>
-          @for (opt of colorsOptions(); track opt) {
-            <option [value]="opt">{{ opt }}</option>
-          }
-        </select>
+        <label class="field select-field" for="color-filter">
+          <span class="material-symbols-rounded" aria-hidden="true">palette</span>
+          <select id="color-filter" class="input" [ngModel]="colorFilter()" (ngModelChange)="colorFilter.set($event)">
+            <option value="">Color (todos)</option>
+            @for (opt of colorsOptions(); track opt) {
+              <option [value]="opt">{{ opt }}</option>
+            }
+          </select>
+        </label>
 
-        <select class="input" [ngModel]="statusFilter()" (ngModelChange)="onStatusFilterChange($event)">
-          @for (opt of stockFilterOptions; track opt.value) {
-            <option [ngValue]="opt.value">{{ opt.label }}</option>
-          }
-        </select>
+        <label class="field select-field" for="status-filter">
+          <span class="material-symbols-rounded" aria-hidden="true">inventory</span>
+          <select id="status-filter" class="input" [ngModel]="statusFilter()" (ngModelChange)="onStatusFilterChange($event)">
+            @for (opt of stockFilterOptions; track opt.value) {
+              <option [ngValue]="opt.value">{{ opt.label }}</option>
+            }
+          </select>
+        </label>
 
-        <label class="stock-toggle">
+        <label class="toggle-field" for="hide-out-of-stock">
           <input
+            id="hide-out-of-stock"
             type="checkbox"
             [ngModel]="hideOutOfStock()"
             (ngModelChange)="onToggleHideOutOfStock($event)"
           />
-          <span>Ocultar agotados</span>
+          <span class="toggle-switch" aria-hidden="true"></span>
+          <span class="toggle-copy">
+            <span class="material-symbols-rounded" aria-hidden="true">visibility_off</span>
+            Ocultar agotados
+          </span>
         </label>
 
-        <button type="button" class="btn btn-outline" (click)="clearFilters()" [disabled]="!hasActiveFilters()">
+        <button type="button" class="btn btn-ghost clear-btn" (click)="clearFilters()" [disabled]="!hasActiveFilters()">
+          <span class="material-symbols-rounded" aria-hidden="true">filter_alt_off</span>
           Limpiar
         </button>
       </div>
 
       <p class="results-info">
+        <span class="material-symbols-rounded" aria-hidden="true">list_alt</span>
         Mostrando {{ filteredRows().length }} de {{ rows().length }} producto{{ rows().length !== 1 ? 's' : '' }}
       </p>
     </section>
 
     @if (filteredRows().length === 0) {
-      <section class="empty-state">
+      <section class="empty-state surface-card">
+        <span class="material-symbols-rounded empty-icon" aria-hidden="true">inventory_2</span>
         <h2>No hay productos para mostrar</h2>
         <p>Valida un producto o ajusta filtros para verlo aqui.</p>
       </section>
     } @else {
       <section class="catalog-grid">
         @for (doc of filteredRows(); track doc.normalized_id) {
-          <article class="catalog-card" (click)="open(doc.normalized_id)">
+          <article class="catalog-card surface-card" (click)="open(doc.normalized_id)">
             <div class="card-image-wrap">
               @if (getCoverImage(doc); as cover) {
                 <img [src]="cover" alt="{{ doc.listing.title || 'Producto' }}" class="card-image" />
@@ -102,24 +133,40 @@
                 </span>
               </div>
 
-              <div class="chips">
-                <span class="chip">{{ supplierName(doc.supplier_id) }}</span>
-                <span class="chip">{{ doc.listing.category_hint || "Sin categoria" }}</span>
-                <span class="chip">{{ doc.listing.items.length }} variante{{ doc.listing.items.length !== 1 ? 's' : '' }}</span>
-              </div>
-
-              <div class="colors-line">
-                <strong>Colores:</strong>
-                @if (getColorNames(doc).length > 0) {
-                  <span>{{ getColorNames(doc).join(", ") }}</span>
-                } @else {
-                  <span>sin colores</span>
+              <ul class="meta-list">
+                <li>
+                  <span class="material-symbols-rounded" aria-hidden="true">storefront</span>
+                  <span class="meta-value">{{ supplierName(doc.supplier_id) }}</span>
+                </li>
+                <li>
+                  <span class="material-symbols-rounded" aria-hidden="true">category</span>
+                  <span class="meta-value">{{ doc.listing.category_hint || "Sin categoria" }}</span>
+                </li>
+                <li>
+                  <span class="material-symbols-rounded" aria-hidden="true">deployed_code</span>
+                  <span class="meta-value">{{ doc.listing.items.length }} variante{{ doc.listing.items.length !== 1 ? 's' : '' }}</span>
+                </li>
+                @if (getColorNames(doc); as colors) {
+                  <li>
+                    <span class="material-symbols-rounded" aria-hidden="true">palette</span>
+                    <span class="meta-value">
+                      @if (colors.length > 0) {
+                        {{ colors.join(", ") }}
+                      } @else {
+                        Sin colores
+                      }
+                    </span>
+                  </li>
                 }
-              </div>
+              </ul>
             </div>
 
             <div class="card-footer">
-              <span>Actualizado {{ timeAgo(doc.updated_at ?? doc.created_at) }}</span>
+              <span class="updated-at">
+                <span class="material-symbols-rounded" aria-hidden="true">schedule</span>
+                Actualizado {{ timeAgo(doc.updated_at ?? doc.created_at) }}
+              </span>
+
               <div class="card-footer-actions">
                 <button
                   type="button"
@@ -127,9 +174,11 @@
                   (click)="markProductOutOfStock(doc.normalized_id, $event)"
                   [disabled]="isBusy(doc.normalized_id)"
                 >
+                  <span class="material-symbols-rounded" aria-hidden="true">block</span>
                   {{ isBusy(doc.normalized_id) ? "Guardando..." : "Agotar" }}
                 </button>
                 <button type="button" class="btn btn-primary" (click)="open(doc.normalized_id); $event.stopPropagation()">
+                  <span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span>
                   Gestionar
                 </button>
               </div>
@@ -140,11 +189,12 @@
 
       @if (hasMore()) {
         <div class="more-wrapper">
-          <button class="btn btn-secondary" (click)="loadMore()" [disabled]="loadingMore()">
+          <button class="btn btn-ghost" (click)="loadMore()" [disabled]="loadingMore()">
+            <span class="material-symbols-rounded" aria-hidden="true">expand_more</span>
             {{ loadingMore() ? "Cargando..." : "Cargar mas" }}
           </button>
         </div>
       }
     }
   }
-</div>
+</section>

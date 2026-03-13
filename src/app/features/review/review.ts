@@ -18,6 +18,16 @@ import type {
 } from "../../core/firestore-contracts";
 import { isNormalizedListingDocV3 } from "../../core/firestore-contracts";
 
+type ReviewPopupKind = "info" | "success" | "warning" | "error";
+
+interface ReviewPopupState {
+  kind: ReviewPopupKind;
+  title: string;
+  message: string;
+  confirmText: string;
+  dismissible?: boolean;
+}
+
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
@@ -71,6 +81,9 @@ export default class ReviewPage {
   uploading = signal(false);
   uploadError = signal<string | null>(null);
   hasVariantColors = signal(false);
+
+  popupState = signal<ReviewPopupState | null>(null);
+  private popupResolver: ((value: boolean) => void) | null = null;
 
   readonly stockOptions: Array<{ value: StockState; label: string }> = [
     { value: "in_stock", label: "Disponible" },
@@ -261,10 +274,13 @@ export default class ReviewPage {
   // ==========================================================================
   // PROVEEDORES
   // ==========================================================================
-
   onSupplierChange() {
-    // Aquí podrías cargar configuración específica del proveedor
-    console.log("Proveedor cambiado:", this.draft()?.supplier_id);
+    const d = this.draft();
+    if (!d) return;
+
+    this.rebuildVariantSkusForSupplier(d);
+    this.draft.set({ ...d });
+    console.log("Proveedor cambiado:", d.supplier_id);
   }
 
   // ==========================================================================
@@ -583,6 +599,33 @@ export default class ReviewPage {
     });
   }
 
+  private rebuildVariantSkusForSupplier(d: NormalizedListingDocV3): void {
+    const supplierToken = this.toSkuToken(d.supplier_id, "SUP", 6);
+    const listingToken = this.toSkuToken(d.normalized_id, "LIST", 8);
+    const used = new Set<string>();
+
+    d.listing.items.forEach((item, index) => {
+      const cleanSku = (item.sku || "").trim().toUpperCase();
+      const skuParts = cleanSku ? cleanSku.split("-").filter(Boolean) : [];
+      const tail =
+        skuParts.length >= 2
+          ? skuParts.slice(1).join("-")
+          : `${listingToken}-${this.toSkuToken(item.variant_name, `VAR${index + 1}`, 10)}`;
+
+      const base = `${supplierToken}-${tail}`;
+      let candidate = base;
+      let seq = 2;
+
+      while (used.has(candidate)) {
+        candidate = `${base}-${seq}`;
+        seq++;
+      }
+
+      item.sku = candidate;
+      used.add(candidate);
+    });
+  }
+
   private isRequiredSchema(doc: unknown): doc is NormalizedListingDocV3 {
     return isNormalizedListingDocV3(doc) && doc.schema_version === this.requiredSchemaVersion;
   }
@@ -727,7 +770,7 @@ export default class ReviewPage {
     if (this.isPriceLossRisk(item)) {
       if (!this.priceAlertShownByKey.has(key)) {
         this.priceAlertShownByKey.add(key);
-        alert("Precio clienta no puede ser menor a precio costo. Eso significa perdidas.");
+        this.showInfoPopup("Precio clienta no puede ser menor a precio costo. Eso significa perdidas.", "Regla de precios", "warning");
       }
       return;
     }
@@ -746,7 +789,7 @@ export default class ReviewPage {
       .map(c => ({ url: c.image_url || "", name: c.name || "Sin nombre" }));
 
     if (availableColors.length === 0) {
-      alert("⚠️ Primero debes crear colores en la sección 'Colores Globales del Producto' más arriba.");
+      this.showInfoPopup("Primero debes crear colores en la seccion Colores Globales del Producto.", "Faltan colores", "warning");
       return;
     }
 
@@ -820,7 +863,7 @@ export default class ReviewPage {
   removeVariant(index: number) {
     const d = this.draft();
     if (!d || d.listing.items.length <= 1) {
-      alert("Debe haber al menos una variante");
+      this.showInfoPopup("Debe haber al menos una variante.", "Accion bloqueada", "warning");
       return;
     }
 
@@ -893,7 +936,7 @@ export default class ReviewPage {
 
         let colorName = "";
         if (options.length === 0) {
-          alert("Solo puedes asignar colores globales existentes.");
+          this.showInfoPopup("Solo puedes asignar colores globales existentes.", "Color no disponible", "warning");
           return;
         }
         if (options.length === 1) {
@@ -1014,7 +1057,7 @@ export default class ReviewPage {
       }
 
       this.uploading.set(false);
-      alert(`✅ Imagen subida exitosamente: ${colorName}`);
+      this.showInfoPopup(`Imagen subida exitosamente: ${colorName}`, "Carga completada", "success");
 
       // Limpiar input
       input.value = '';
@@ -1038,7 +1081,7 @@ export default class ReviewPage {
       
       this.uploadError.set(errorMsg);
       this.uploading.set(false);
-      alert(errorMsg);
+      this.showInfoPopup(errorMsg, "Error", "error");
     }
   }
 
@@ -1060,7 +1103,7 @@ export default class ReviewPage {
 
       // Validar que tenga al menos una variante
       if (d.listing.items.length === 0) {
-        alert("Agrega al menos una variante antes de guardar");
+        this.showInfoPopup("Agrega al menos una variante antes de guardar.", "Validacion", "warning");
         return;
       }
 
@@ -1075,7 +1118,7 @@ export default class ReviewPage {
           item.prices.precio_clienta < item.prices.precio_costo
       );
       if (invalidPrices) {
-        alert("Regla de precios invalida: precio final x 0.75 no puede ser menor a precio costo.");
+        this.showInfoPopup("Regla de precios invalida: precio final x 0.75 no puede ser menor a precio costo.", "Validacion", "warning");
         return;
       }
 
@@ -1098,9 +1141,9 @@ export default class ReviewPage {
       });
 
       await this.load();
-      alert("Guardado ✅");
+      this.showInfoPopup("Guardado correctamente.", "Exito", "success");
     } catch (e: any) {
-      alert("No se pudo guardar: " + (e?.message || String(e)));
+      this.showInfoPopup("No se pudo guardar: " + (e?.message || String(e)), "Error al guardar", "error");
     }
   }
 
@@ -1117,22 +1160,22 @@ export default class ReviewPage {
 
       // Validaciones pre-validación
       if (!d.supplier_id) {
-        alert("Selecciona un proveedor");
+        this.showInfoPopup("Selecciona un proveedor.", "Validacion", "warning");
         return;
       }
 
       if (!d.listing.title) {
-        alert("Agrega un título");
+        this.showInfoPopup("Agrega un titulo.", "Validacion", "warning");
         return;
       }
 
       if (!d.listing.category_hint) {
-        alert("Selecciona una categoría");
+        this.showInfoPopup("Selecciona una categoria.", "Validacion", "warning");
         return;
       }
 
       if (d.listing.items.length === 0) {
-        alert("Agrega al menos una variante");
+        this.showInfoPopup("Agrega al menos una variante.", "Validacion", "warning");
         return;
       }
 
@@ -1147,7 +1190,7 @@ export default class ReviewPage {
       );
 
       if (invalidVariants.length > 0) {
-        alert("Todas las variantes deben tener precio costo válido y precio clienta mayor o igual al costo");
+        this.showInfoPopup("Todas las variantes deben tener precio costo valido y precio clienta mayor o igual al costo.", "Validacion", "warning");
         return;
       }
 
@@ -1200,6 +1243,41 @@ export default class ReviewPage {
     const valid: StockState[] = ["in_stock", "last_pair", "out_of_stock", "unknown_qty"];
     return valid.includes(value as StockState) ? (value as StockState) : null;
   }
+
+  private openPopup(config: ReviewPopupState): Promise<boolean> {
+    return new Promise((resolve) => {
+      this.popupResolver = resolve;
+      this.popupState.set(config);
+    });
+  }
+
+  closePopupFromBackdrop() {
+    const popup = this.popupState();
+    if (!popup?.dismissible) return;
+    this.resolvePopup(true);
+  }
+
+  confirmPopup() {
+    this.resolvePopup(true);
+  }
+
+  private resolvePopup(value: boolean) {
+    const resolver = this.popupResolver;
+    this.popupResolver = null;
+    this.popupState.set(null);
+    resolver?.(value);
+  }
+
+  private showInfoPopup(message: string, title = "Aviso", kind: ReviewPopupKind = "info") {
+    void this.openPopup({
+      kind,
+      title,
+      message,
+      confirmText: "Aceptar",
+      dismissible: true,
+    });
+  }
+
 
   formatMoney(value: number | null | undefined, currency = "MXN"): string {
     if (typeof value !== "number" || !Number.isFinite(value)) return "--";

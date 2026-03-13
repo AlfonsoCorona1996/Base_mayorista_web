@@ -35,6 +35,31 @@ export default class Inbox {
     return id.length > 12 ? `${id.slice(0, 6)}â€¦${id.slice(-4)}` : id;
   }
 
+  private toDate(ts: any): Date | null {
+    return ts?.toDate?.() ? ts.toDate() : ts instanceof Date ? ts : null;
+  }
+
+  private ageMinutes(ts: any): number | null {
+    const d = this.toDate(ts);
+    if (!d) return null;
+    return Math.max(0, Math.floor((Date.now() - d.getTime()) / 60000));
+  }
+
+  reviewPriority(ts: any): "urgent" | "recent" | "normal" {
+    const age = this.ageMinutes(ts);
+    if (age === null) return "normal";
+    if (age >= 180) return "urgent";
+    if (age >= 45) return "recent";
+    return "normal";
+  }
+
+  reviewPriorityLabel(ts: any): string {
+    const p = this.reviewPriority(ts);
+    if (p === "urgent") return "Atencion";
+    if (p === "recent") return "Hoy";
+    return "Pendiente";
+  }
+
   async reload() {
     this.error.set(null);
     this.loading.set(true);
@@ -85,10 +110,7 @@ export default class Inbox {
   }
 
   timeAgo(ts: any): string {
-    const d: Date | null =
-      ts?.toDate?.() ? ts.toDate() :
-        ts instanceof Date ? ts :
-          null;
+    const d = this.toDate(ts);
 
     if (!d) return "sin fecha";
 

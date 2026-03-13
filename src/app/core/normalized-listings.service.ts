@@ -43,11 +43,12 @@ export class NormalizedListingsService {
     pageSize = 20,
     cursor?: QueryDocumentSnapshot<DocumentData> | null
   ): Promise<ListPage<NormalizedListingDoc>> {
+    const fetchSize = Math.max(1, pageSize) + 1;
     let q = query(
       this.colRef,
       where("workflow.status", "==", status),
       orderBy("created_at", "desc"),
-      limit(pageSize)
+      limit(fetchSize)
     );
 
     if (cursor) {
@@ -55,8 +56,10 @@ export class NormalizedListingsService {
     }
 
     const snap = await getDocs(q);
-    const docs = snap.docs.map((d) => d.data() as NormalizedListingDoc);
-    const nextCursor = snap.docs.length ? snap.docs[snap.docs.length - 1] : null;
+    const hasMore = snap.docs.length > pageSize;
+    const pageDocs = hasMore ? snap.docs.slice(0, pageSize) : snap.docs;
+    const docs = pageDocs.map((d) => d.data() as NormalizedListingDoc);
+    const nextCursor = hasMore && pageDocs.length ? pageDocs[pageDocs.length - 1] : null;
 
     return { docs, nextCursor };
   }

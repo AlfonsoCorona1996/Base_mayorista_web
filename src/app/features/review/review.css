@@ -133,6 +133,7 @@
   display: grid;
   grid-template-columns: 1fr;
   gap: 12px;
+  align-items: start;
 }
 
 .card-basic .section-title {
@@ -931,6 +932,130 @@ textarea.input {
   }
 
   .review-summary {
+    grid-template-columns: 1fr;
+  }
+}
+
+.popup-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.42);
+  backdrop-filter: blur(5px);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  z-index: 85;
+}
+
+.popup-card {
+  width: min(440px, 100%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: 0 24px 50px rgba(15, 23, 42, 0.24);
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+}
+
+.popup-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.popup-copy {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.popup-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: #eef2ff;
+  color: #4f46e5;
+  border: 1px solid rgba(79, 70, 229, 0.24);
+}
+
+.popup-icon-success {
+  background: #ecfdf3;
+  color: #15803d;
+  border-color: rgba(21, 128, 61, 0.25);
+}
+
+.popup-icon-warning {
+  background: #fff8e8;
+  color: #b45309;
+  border-color: rgba(180, 83, 9, 0.28);
+}
+
+.popup-icon-error {
+  background: #fef2f2;
+  color: #b91c1c;
+  border-color: rgba(185, 28, 28, 0.26);
+}
+
+.popup-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.popup-card h3 {
+  margin: 0;
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+  color: #0f172a;
+  line-height: 1.2;
+}
+
+.popup-message {
+  margin: 0;
+  font-size: 0.83rem;
+  color: #475569;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.popup-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid rgba(148, 163, 184, 0.25);
+  padding-top: 12px;
+}
+
+.popup-actions .btn {
+  min-width: 128px;
+}
+
+@media (max-width: 760px) {
+  .popup-backdrop {
+    place-items: end center;
+    padding: 0;
+  }
+
+  .popup-card {
+    width: 100%;
+    border-radius: 18px 18px 0 0;
+    padding: 14px;
+  }
+
+  .popup-header {
+    gap: 10px;
+  }
+
+  .popup-actions .btn {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .popup-header {
     grid-template-columns: 1fr;
   }
 }
