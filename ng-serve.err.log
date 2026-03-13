@@ -3580,3 +3580,68 @@
          ╵                [32m~~~~~~~~~~~~~~[0m
 
 [39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'darkMode' does not exist on type 'MainLayoutPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/main/main-layout.html:1:75:
+[37m      1 │ ...out" [class.menu-open]="menuOpen()" [class.dark-mode]="[32mdarkMode[37m()">
+        ╵                                                           [32m~~~~~~~~[0m
+
+  Error occurs in the template of component MainLayoutPage.
+
+    src/app/features/main/main-layout.ts:16:15:
+[37m      16 │   templateUrl: [32m"./main-layout.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'toggleDarkMode' does not exist on type 'MainLayoutPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/main/main-layout.html:176:17:
+[37m      176 │         (click)="[32mtoggleDarkMode[37m()"
+          ╵                  [32m~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component MainLayoutPage.
+
+    src/app/features/main/main-layout.ts:16:15:
+[37m      16 │   templateUrl: [32m"./main-layout.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'darkMode' does not exist on type 'MainLayoutPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/main/main-layout.html:177:27:
+[37m      177 │         [attr.aria-label]="[32mdarkMode[37m() ? 'Cambiar a modo claro' : ...
+          ╵                            [32m~~~~~~~~[0m
+
+  Error occurs in the template of component MainLayoutPage.
+
+    src/app/features/main/main-layout.ts:16:15:
+[37m      16 │   templateUrl: [32m"./main-layout.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'darkMode' does not exist on type 'MainLayoutPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/main/main-layout.html:179:69:
+[37m      179 │ ...ded" aria-hidden="true">{{ [32mdarkMode[37m() ? 'light_mode' : 'dark_m...
+          ╵                               [32m~~~~~~~~[0m
+
+  Error occurs in the template of component MainLayoutPage.
+
+    src/app/features/main/main-layout.ts:16:15:
+[37m      16 │   templateUrl: [32m"./main-layout.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'darkMode' does not exist on type 'MainLayoutPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/main/main-layout.html:180:17:
+[37m      180 │         <span>{{ [32mdarkMode[37m() ? 'Claro' : 'Oscuro' }}</span>
+          ╵                  [32m~~~~~~~~[0m
+
+  Error occurs in the template of component MainLayoutPage.
+
+    src/app/features/main/main-layout.ts:16:15:
+[37m      16 │   templateUrl: [32m"./main-layout.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
