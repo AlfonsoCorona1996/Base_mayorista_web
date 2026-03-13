@@ -3645,3 +3645,82 @@
          ╵                [32m~~~~~~~~~~~~~~~~~~~~[0m
 
 [39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2554: Expected 1 arguments, but got 2.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salidas.page.html:176:106:
+[37m      176 │ ...g-card-clickable" (click)="goOrder(row.order_id, [32mgroup.routeId[37m)">
+          ╵                                                     [32m~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component SalidasPage.
+
+    src/app/features/salidas/salidas.page.ts:40:15:
+[37m      40 │   templateUrl: [32m"./salidas.page.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2554: Expected 1 arguments, but got 2.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salidas.page.html:218:106:
+[37m      218 │ ...g-card-clickable" (click)="goOrder(row.order_id, [32mgroup.routeId[37m)">
+          ╵                                                     [32m~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component SalidasPage.
+
+    src/app/features/salidas/salidas.page.ts:40:15:
+[37m      40 │   templateUrl: [32m"./salidas.page.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2554: Expected 1 arguments, but got 2.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/salidas/salidas.page.html:251:106:
+[37m      251 │ ...g-card-clickable" (click)="goOrder(row.order_id, [32mgroup.routeId[37m)">
+          ╵                                                     [32m~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component SalidasPage.
+
+    src/app/features/salidas/salidas.page.ts:40:15:
+[37m      40 │   templateUrl: [32m"./salidas.page.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '{ actionType: PartialActionType; fromStatus: SupplierOperationStatus; targetStatus: SupplierOperationStatus; ... 9 more ...; saving: false; }' is not assignable to parameter of type 'SelectionModalState'.
+  Property 'supplierId' is missing in type '{ actionType: PartialActionType; fromStatus: SupplierOperationStatus; targetStatus: SupplierOperationStatus; ... 9 more ...; saving: false; }' but required in type 'SelectionModalState'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.ts:204:26:
+[37m      204 │     this.partialModal.set([32m{[37m
+          ╵                           [32m^[0m
+
+  'supplierId' is declared here.
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.ts:50:2:
+[37m      50 │   [32msupplierId[37m: string;
+         ╵   [32m~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2554: Expected 3 arguments, but got 1.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.html:286:89:
+[37m      286 │ ...lass="order-line-main" (click)="[32monOrderChipClick[37m(line.order_id)">
+          ╵                                    [32m~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component ProveedoresOperacionesPage.
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.ts:66:15:
+[37m      66 │   templateUrl: [32m"./proveedores-operaciones.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2554: Expected 3 arguments, but got 1.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.html:390:46:
+[37m      390 │ ...candidate-link" [href]="[32morderDetailHref[37m(candidate.orderId)" ta...
+          ╵                            [32m~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component ProveedoresOperacionesPage.
+
+    src/app/features/proveedores-operaciones/proveedores-operaciones.ts:66:15:
+[37m      66 │   templateUrl: [32m"./proveedores-operaciones.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m

@@ -3229,6 +3229,32 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   backToList() {
+    const fromQuery = String(this.route.snapshot.queryParamMap.get("from") || "").trim();
+    if (fromQuery === "proveedores-operaciones") {
+      const supplierId = String(this.route.snapshot.queryParamMap.get("supplierId") || "").trim();
+      const groupKey = String(this.route.snapshot.queryParamMap.get("groupKey") || "").trim();
+      this.router.navigate(["/main/proveedores-operaciones"], {
+        queryParams: {
+          from: "proveedores-operaciones",
+          ...(supplierId ? { supplierId } : {}),
+          ...(groupKey ? { groupKey } : {}),
+          openGroup: 1,
+        },
+      });
+      return;
+    }
+
+    const navState = (history.state || {}) as { from?: string; routeId?: string | null };
+    if (navState.from === "salidas") {
+      const routeId = String(navState.routeId || "").trim();
+      this.router.navigate(["/main/salidas"], {
+        queryParams: {
+          ...(routeId ? { routeId } : {}),
+          openRoute: 1,
+        },
+      });
+      return;
+    }
     this.router.navigate(["/main/pedidos"]);
   }
 

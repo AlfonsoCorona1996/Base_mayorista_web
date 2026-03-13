@@ -68,6 +68,7 @@ export default class ReviewPage {
   categorySearch = "";
   filteredCategories = signal<Category[]>([]);
   showCategoryDropdown = signal(false);
+  categoryProposalSaving = signal(false);
 
   // Proveedores
   activeSuppliers = computed(() => this.suppliersService.getActive());
@@ -81,6 +82,7 @@ export default class ReviewPage {
   uploading = signal(false);
   uploadError = signal<string | null>(null);
   hasVariantColors = signal(false);
+  useSharedPrices = signal(false);
 
   popupState = signal<ReviewPopupState | null>(null);
   private popupResolver: ((value: boolean) => void) | null = null;
@@ -102,6 +104,10 @@ export default class ReviewPage {
     maximumFractionDigits: 2,
   });
   private priceInputBuffers: Record<string, string> = {};
+  private sharedPriceInputBuffers: Record<"costo" | "final", string> = {
+    costo: "",
+    final: "",
+  };
   private priceAlertShownByKey = new Set<string>();
 
   // ✅ Schema v1.1: Portada con fallback a v1
@@ -168,6 +174,7 @@ export default class ReviewPage {
 
       // v3: Normalizar estructura editable de variantes/precios/colores
       this.normalizeV3Draft(clone);
+      this.initializeSharedPriceInputs();
 
       // Inicializar colores desde variantes existentes (ahora con product_colors si es v1.1)
       this.initializeImageColors();
@@ -179,6 +186,8 @@ export default class ReviewPage {
       // Inicializar búsqueda de categoría con la actual
       if (clone.listing.category_hint) {
         this.categorySearch = clone.listing.category_hint;
+      } else if (clone.listing.category_proposed) {
+        this.categorySearch = clone.listing.category_proposed;
       }
 
     } catch (e: any) {
@@ -266,9 +275,46 @@ export default class ReviewPage {
     if (!d) return;
 
     d.listing.category_hint = cat.fullPath;
+    d.listing.category_proposed = null;
     this.categorySearch = cat.fullPath;
     this.showCategoryDropdown.set(false);
     this.draft.set({ ...d });
+  }
+
+  async acceptCategoryProposal() {
+    const d = this.draft();
+    if (!d) return;
+
+    const proposedPath = String(d.listing.category_proposed || "").trim();
+    if (!proposedPath) {
+      this.showInfoPopup("No hay categoria propuesta por IA.", "Categoria", "warning");
+      return;
+    }
+
+    this.categoryProposalSaving.set(true);
+    try {
+      const finalPath = await this.ensureCategoryPathExists(proposedPath);
+      d.listing.category_hint = finalPath;
+      d.listing.category_proposed = null;
+      this.categorySearch = finalPath;
+      this.showCategoryDropdown.set(false);
+      this.draft.set({ ...d });
+      this.showInfoPopup("Categoria propuesta aceptada y registrada.", "Categoria", "success");
+    } catch (error: any) {
+      this.showInfoPopup(error?.message || "No se pudo registrar la categoria propuesta.", "Categoria", "error");
+    } finally {
+      this.categoryProposalSaving.set(false);
+    }
+  }
+
+  chooseExistingCategoryFromProposal() {
+    const d = this.draft();
+    if (!d) return;
+    const proposedPath = String(d.listing.category_proposed || "").trim();
+    const proposedLeaf = proposedPath.split(">").map((segment) => segment.trim()).filter(Boolean).pop() || proposedPath;
+    this.categorySearch = proposedLeaf || this.categorySearch;
+    this.onCategorySearch();
+    this.showCategoryDropdown.set(true);
   }
 
   // ==========================================================================
@@ -676,6 +722,79 @@ export default class ReviewPage {
     });
   }
 
+  private initializeSharedPriceInputs(): void {
+    const d = this.draft();
+    if (!d || d.listing.items.length === 0) {
+      this.sharedPriceInputBuffers = { costo: "", final: "" };
+      this.useSharedPrices.set(false);
+      return;
+    }
+
+    const first = d.listing.items[0];
+    this.sharedPriceInputBuffers = {
+      costo: this.formatNumberOnly(first.prices?.precio_costo),
+      final: this.formatNumberOnly(first.prices?.precio_final),
+    };
+    this.useSharedPrices.set(this.allVariantsShareSamePrices(d));
+  }
+
+  private allVariantsShareSamePrices(d: NormalizedListingDocV3): boolean {
+    if (!d.listing.items || d.listing.items.length < 2) return false;
+    const first = d.listing.items[0];
+    const firstCost = this.toValidNumber(first.prices?.precio_costo);
+    const firstFinal = this.toValidNumber(first.prices?.precio_final);
+
+    return d.listing.items.every((item) => {
+      const itemCost = this.toValidNumber(item.prices?.precio_costo);
+      const itemFinal = this.toValidNumber(item.prices?.precio_final);
+      return itemCost === firstCost && itemFinal === firstFinal;
+    });
+  }
+
+  toggleSharedPrices(checked: boolean): void {
+    this.useSharedPrices.set(checked);
+    if (!checked) return;
+    this.applySharedPricesToAllVariantsFromFirst();
+  }
+
+  private applySharedPricesToAllVariantsFromFirst(): void {
+    const d = this.draft();
+    if (!d || d.listing.items.length === 0) return;
+    const first = d.listing.items[0];
+    const sharedCost = this.toValidNumber(first.prices?.precio_costo);
+    const sharedFinal = this.toValidNumber(first.prices?.precio_final);
+    this.applySharedPricesToAllVariants(sharedCost, sharedFinal);
+  }
+
+  private applySharedPricesToAllVariants(
+    costo: number | null,
+    finalPrice: number | null,
+    options?: { preserveSharedInputBuffers?: boolean }
+  ): void {
+    const d = this.draft();
+    if (!d) return;
+
+    d.listing.items.forEach((item, index) => {
+      item.prices = {
+        ...item.prices,
+        precio_costo: costo,
+        precio_final: finalPrice,
+        currency: item.prices?.currency || "MXN",
+      };
+      this.recalculateVariantPrices(item);
+      this.priceInputBuffers[this.priceBufferKey(index, "costo")] = this.formatNumberOnly(costo);
+      this.priceInputBuffers[this.priceBufferKey(index, "final")] = this.formatNumberOnly(finalPrice);
+    });
+
+    if (!options?.preserveSharedInputBuffers) {
+      this.sharedPriceInputBuffers = {
+        costo: this.formatNumberOnly(costo),
+        final: this.formatNumberOnly(finalPrice),
+      };
+    }
+    this.draft.set({ ...d });
+  }
+
   private recalculateVariantPrices(item: NormalizedItemV3): void {
     const cost = this.toValidNumber(item.prices?.precio_costo);
     const finalPrice = this.toValidNumber(item.prices?.precio_final);
@@ -716,6 +835,22 @@ export default class ReviewPage {
     this.draft.set({ ...d });
   }
 
+  onSharedPriceInputChange(field: "costo" | "final", rawValue: string): void {
+    this.sharedPriceInputBuffers[field] = rawValue;
+    const parsed = this.parsePriceInput(rawValue);
+
+    const d = this.draft();
+    if (!d || d.listing.items.length === 0) return;
+    const first = d.listing.items[0];
+    const firstCost = this.toValidNumber(first.prices?.precio_costo);
+    const firstFinal = this.toValidNumber(first.prices?.precio_final);
+    const nextCost = field === "costo" ? parsed : firstCost;
+    const nextFinal = field === "final" ? parsed : firstFinal;
+    this.applySharedPricesToAllVariants(nextCost, nextFinal, {
+      preserveSharedInputBuffers: true,
+    });
+  }
+
   onPriceInputBlur(variantIndex: number, field: "costo" | "final") {
     const d = this.draft();
     if (!d) return;
@@ -726,6 +861,16 @@ export default class ReviewPage {
     const key = this.priceBufferKey(variantIndex, field);
     this.priceInputBuffers[key] = this.formatNumberOnly(value);
     this.notifyPriceLossIfNeeded(variantIndex, item);
+  }
+
+  onSharedPriceInputBlur(field: "costo" | "final"): void {
+    const d = this.draft();
+    if (!d || d.listing.items.length === 0) return;
+    const first = d.listing.items[0];
+    const value = field === "costo" ? first.prices?.precio_costo : first.prices?.precio_final;
+    this.sharedPriceInputBuffers[field] = this.formatNumberOnly(value);
+
+    d.listing.items.forEach((item, index) => this.notifyPriceLossIfNeeded(index, item));
   }
 
   getPriceInputValue(variantIndex: number, field: "costo" | "final"): string {
@@ -740,6 +885,23 @@ export default class ReviewPage {
     if (!item) return "";
     const value = field === "costo" ? item.prices.precio_costo : item.prices.precio_final;
     return this.formatNumberOnly(value);
+  }
+
+  getSharedPriceInputValue(field: "costo" | "final"): string {
+    return this.sharedPriceInputBuffers[field] || "";
+  }
+
+  getSharedClientPriceValue(): string {
+    const d = this.draft();
+    if (!d || d.listing.items.length === 0) return "";
+    const first = d.listing.items[0];
+    return this.formatMoney(first.prices?.precio_clienta, first.prices?.currency || "MXN");
+  }
+
+  isSharedPriceLossRisk(): boolean {
+    const d = this.draft();
+    if (!d) return false;
+    return d.listing.items.some((item) => this.isPriceLossRisk(item));
   }
 
   private parsePriceInput(rawValue: string): number | null {
@@ -856,6 +1018,17 @@ export default class ReviewPage {
     newVariant.stock_state = "in_stock";
 
     d.listing.items.push(newVariant);
+    if (this.useSharedPrices()) {
+      const sharedCost = this.parsePriceInput(this.sharedPriceInputBuffers.costo);
+      const sharedFinal = this.parsePriceInput(this.sharedPriceInputBuffers.final);
+      newVariant.prices = {
+        ...newVariant.prices,
+        precio_costo: sharedCost,
+        precio_final: sharedFinal,
+        currency: newVariant.prices?.currency || "MXN",
+      };
+      this.recalculateVariantPrices(newVariant);
+    }
     this.syncGlobalColorsToVariantsIfNeeded();
     this.draft.set({ ...d });
   }
@@ -1224,6 +1397,40 @@ export default class ReviewPage {
 
   goInbox() {
     this.router.navigateByUrl("/main/validacion");
+  }
+
+  private async ensureCategoryPathExists(fullPathInput: string): Promise<string> {
+    const segments = String(fullPathInput || "")
+      .split(">")
+      .map((segment) => segment.trim())
+      .filter(Boolean);
+
+    if (segments.length === 0) {
+      throw new Error("La propuesta de categoria no es valida.");
+    }
+
+    await this.categoriesService.loadCategories();
+
+    let parentId: string | null = null;
+    let currentPath = "";
+
+    for (const segment of segments) {
+      currentPath = currentPath ? `${currentPath} > ${segment}` : segment;
+
+      let existing = this.categoriesService.getByPath(currentPath);
+      if (!existing) {
+        await this.categoriesService.addCategory(segment, parentId);
+        existing = this.categoriesService.getByPath(currentPath);
+      }
+
+      if (!existing) {
+        throw new Error(`No se pudo crear/obtener la categoria: ${currentPath}`);
+      }
+
+      parentId = existing.id;
+    }
+
+    return currentPath;
   }
   
   // ============================================================================

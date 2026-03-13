@@ -10,6 +10,12 @@ interface TreeRow {
   childCount: number;
 }
 
+interface ParentOption {
+  id: string;
+  fullPath: string;
+  disabled: boolean;
+}
+
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
@@ -152,16 +158,28 @@ export default class CategoriasPage {
     }));
   });
 
-  availableParentOptions = computed(() => {
+  availableParentOptions = computed<ParentOption[]>(() => {
     const editingId = this.editingId();
-    const rows = this.sortCategories(this.categories().filter((category) => category.active));
+    const rows = [...this.categories().filter((category) => category.active)].sort((a, b) =>
+      a.fullPath.localeCompare(b.fullPath, "es", { sensitivity: "base" })
+    );
 
-    if (!editingId) return rows;
+    if (!editingId) {
+      return rows.map((category) => ({
+        id: category.id,
+        fullPath: category.fullPath,
+        disabled: false,
+      }));
+    }
 
     const forbidden = this.collectDescendantIds(editingId, this.categories());
-    forbidden.add(editingId);
-
-    return rows.filter((category) => !forbidden.has(category.id));
+    return rows
+      .filter((category) => !forbidden.has(category.id))
+      .map((category) => ({
+        id: category.id,
+        fullPath: category.fullPath,
+        disabled: category.id === editingId,
+      }));
   });
 
   async reload() {

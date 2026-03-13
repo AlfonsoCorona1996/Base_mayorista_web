@@ -1,5 +1,5 @@
 import { Component, computed, inject, signal, ChangeDetectionStrategy } from "@angular/core";
-import { Router } from "@angular/router";
+import { ActivatedRoute, Router } from "@angular/router";
 import { AuthzService } from "../../core/authz.service";
 import { CustomersService } from "../../core/customers.service";
 import { RoutesService } from "../../core/routes.service";
@@ -45,7 +45,9 @@ export default class SalidasPage {
   private routes = inject(RoutesService);
   private customers = inject(CustomersService);
   private authz = inject(AuthzService);
+  private route = inject(ActivatedRoute);
   private router = inject(Router);
+  private openRouteOnLoad: string | null = null;
 
   loading = signal(false);
   saving = signal(false);
@@ -162,6 +164,12 @@ export default class SalidasPage {
   });
 
   constructor() {
+    const routeId = String(this.route.snapshot.queryParamMap.get("routeId") || "").trim();
+    const shouldOpenRoute = this.route.snapshot.queryParamMap.get("openRoute") === "1";
+    if (routeId && routeId !== "all") {
+      this.selectedRouteId.set(routeId);
+      if (shouldOpenRoute) this.openRouteOnLoad = routeId;
+    }
     this.refresh().catch(() => null);
   }
 
@@ -197,6 +205,16 @@ export default class SalidasPage {
           this.openRoutes(),
         ),
       );
+      if (this.openRouteOnLoad) {
+        const targetRoute = this.openRouteOnLoad;
+        if (this.groups().some((row) => row.routeId === targetRoute)) {
+          this.openRoutes.update((current) => ({
+            ...current,
+            [targetRoute]: true,
+          }));
+        }
+        this.openRouteOnLoad = null;
+      }
     } catch (error: any) {
       this.error.set(error?.message || "No se pudo cargar salidas.");
     } finally {
@@ -309,8 +327,13 @@ export default class SalidasPage {
     this.router.navigateByUrl(`/main/salidas/${runId}`);
   }
 
-  goOrder(orderId: string) {
-    this.router.navigateByUrl(`/main/pedidos/${orderId}`);
+  goOrder(orderId: string, routeId?: string) {
+    this.router.navigate(["/main/pedidos", orderId], {
+      state: {
+        from: "salidas",
+        routeId: routeId || null,
+      },
+    });
   }
 
   openScheduleSheet(row: DispatchCard, mode: ScheduleSheetMode, event?: MouseEvent) {
