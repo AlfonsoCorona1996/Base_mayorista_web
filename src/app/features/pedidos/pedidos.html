@@ -1,24 +1,33 @@
-<section class="page">
-  <header class="page-head">
-    <div>
-      <p class="eyebrow">Pedidos</p>
+﻿<section class="orders-page">
+  <header class="page-head surface-card">
+    <div class="head-copy">
+      <p class="kicker">
+        <span class="material-symbols-rounded" aria-hidden="true">receipt_long</span>
+        Pedidos
+      </p>
       <h1>Seguimiento end-to-end</h1>
       <p class="muted">Confirma con proveedor, reserva inventario y entrega sin perder trazabilidad.</p>
     </div>
   </header>
 
-  <section class="quick-create">
+  <section class="quick-create surface-card">
     <div class="qc-head">
       <div>
-        <p class="eyebrow">Crear pedido</p>
-        <p class="muted">Escribe para buscar clienta; ruta se autollenar&aacute;.</p>
+        <p class="kicker">
+          <span class="material-symbols-rounded" aria-hidden="true">add_circle</span>
+          Crear pedido
+        </p>
+        <p class="muted">Escribe para buscar clienta; ruta se autollenara.</p>
       </div>
       <button type="button" class="btn primary" (click)="createOrder()" [disabled]="creating() || !canCreateOrder()">
+        <span class="material-symbols-rounded" aria-hidden="true">add</span>
         Crear
       </button>
     </div>
+
     <div class="qc-grid">
-      <div class="autocomplete">
+      <div class="autocomplete field with-icon">
+        <span class="material-symbols-rounded" aria-hidden="true">person_search</span>
         <input
           class="input"
           type="text"
@@ -28,6 +37,7 @@
           (blur)="closeCustomerListSoon()"
           (ngModelChange)="newCustomerId.set(''); showCustomerList.set(true)"
         />
+
         @if (showCustomerList() && customerSuggestions().length > 0) {
           <div class="auto-list" (mousedown)="$event.preventDefault()">
             @for (c of customerSuggestions(); track c.customer_id) {
@@ -43,39 +53,62 @@
           </div>
         }
       </div>
-      <div class="pill route-pill">
-        Ruta: <strong>{{ inferredRouteName() }}</strong>
+
+      <div class="route-pill">
+        <span class="material-symbols-rounded" aria-hidden="true">route</span>
+        <span>Ruta: <strong>{{ inferredRouteName() }}</strong></span>
       </div>
     </div>
   </section>
 
-  <div class="filters">
-    <input
-      type="search"
-      placeholder="Buscar por clienta, producto o ID"
-      [(ngModel)]="search"
-      class="input"
-    />
+  <section class="filters surface-card">
+    <label class="field with-icon" for="orders-search">
+      <span class="material-symbols-rounded" aria-hidden="true">search</span>
+      <input
+        id="orders-search"
+        type="search"
+        placeholder="Buscar por clienta, producto o ID"
+        [(ngModel)]="search"
+        class="input"
+      />
+    </label>
 
-    <select class="input" [(ngModel)]="routeFilter">
-      @for (route of routeOptions(); track route.id) {
-        <option [value]="route.id">{{ route.name }}</option>
-      }
-    </select>
-  </div>
+    <label class="field with-icon" for="route-filter">
+      <span class="material-symbols-rounded" aria-hidden="true">map</span>
+      <select id="route-filter" class="input" [(ngModel)]="routeFilter">
+        @for (route of routeOptions(); track route.id) {
+          <option [value]="route.id">{{ route.name }}</option>
+        }
+      </select>
+    </label>
+  </section>
 
-  <div class="intent-tabs" role="tablist" aria-label="Filtros por intenci&oacute;n">
+  <div class="intent-tabs surface-card" role="tablist" aria-label="Filtros por intencion">
     @if (intentCounts(); as counts) {
       @for (intent of intentOptions; track intent.id) {
         <button
           type="button"
-          class="intent-chip"
+          class="intent-tab"
           [class.active]="intentFilter() === intent.id"
           (click)="setIntentFilter(intent.id)"
           role="tab"
           [attr.aria-selected]="intentFilter() === intent.id"
+          [attr.aria-label]="intent.label + ': ' + counts[intent.id]"
+          [attr.title]="intent.label"
         >
-          {{ intent.label }}
+          <span class="material-symbols-rounded" aria-hidden="true">
+            {{
+              intent.id === 'por_confirmar' ? 'pending_actions' :
+              intent.id === 'en_transito' ? 'local_shipping' :
+              intent.id === 'en_empaque' ? 'inventory_2' :
+              intent.id === 'listos_ruta' ? 'task_alt' :
+              intent.id === 'en_ruta' ? 'route' :
+              intent.id === 'con_incidencias' ? 'warning' :
+              intent.id === 'cobranza_pendiente' ? 'payments' :
+              'done_all'
+            }}
+          </span>
+          <span class="intent-label">{{ intent.label }}</span>
           <span class="intent-count" [class.zero]="counts[intent.id] === 0">{{ counts[intent.id] }}</span>
         </button>
       }
@@ -83,19 +116,24 @@
   </div>
 
   @if (loading()) {
-    <p class="muted">Cargando pedidos...</p>
+    <article class="empty-card surface-card">
+      <p>Cargando pedidos...</p>
+    </article>
   }
 
   @if (error()) {
-    <div class="alert error">{{ error() }}</div>
+    <div class="alert error">
+      <span class="material-symbols-rounded" aria-hidden="true">error</span>
+      <span>{{ error() }}</span>
+    </div>
   }
 
   @if (filtered(); as filteredOrders) {
-    <div class="grid">
+    <div class="orders-grid">
       @for (order of filteredOrders; track order.order_id) {
         @if (orderMeta(order); as meta) {
           <article
-            class="order-card"
+            class="order-card surface-card"
             role="link"
             tabindex="0"
             [attr.aria-label]="meta.ariaLabel"
@@ -103,64 +141,67 @@
             (keydown.enter)="open(order.order_id)"
             (keydown.space)="open(order.order_id); $event.preventDefault()"
           >
-            <div class="order-main">
-              <div class="order-head">
-                <div class="order-title">
-                  <div class="title-row">
-                    <h3>{{ meta.customerName }}</h3>
-                    @if (meta.primaryAlert; as alert) {
-                      <span class="chip tiny" [class.danger]="alert.tone === 'danger'" [class.warning]="alert.tone === 'warning'">{{ alert.label }}</span>
-                    }
-                    @if (meta.hiddenAlertsCount > 0) {
-                      <span class="chip tiny muted-chip">+{{ meta.hiddenAlertsCount }} alertas</span>
-                    }
-                  </div>
-                  <p class="eyebrow order-id">Pedido {{ order.order_id }}</p>
-                  <span class="route-mini-chip" [attr.title]="'Ruta: ' + meta.routeName">
-                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <path d="M12 3.6c-3.47 0-6.28 2.78-6.28 6.21 0 4.79 5.48 9.97 5.72 10.18a.82.82 0 0 0 1.12 0c.24-.21 5.72-5.39 5.72-10.18 0-3.43-2.81-6.21-6.28-6.21Zm0 8.63a2.42 2.42 0 1 1 0-4.84 2.42 2.42 0 0 1 0 4.84Z" fill="currentColor"/>
-                    </svg>
-                    <span>{{ meta.routeName }}</span>
-                  </span>
-                </div>
+            <div class="order-head">
+              <div class="title-wrap">
+                <h3>{{ meta.customerName }}</h3>
+                <p class="order-id">Pedido {{ order.order_id }}</p>
               </div>
 
-              <div class="meta">
-                <span class="meta-item">
-                  <svg class="meta-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path d="M6.5 8.5h11l-1 9h-9l-1-9ZM9 8.5V7a3 3 0 0 1 6 0v1.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                  <span class="meta-value">{{ order.items.length }}</span>
-                  <span class="meta-label">productos</span>
-                </span>
-                <span class="meta-item">
-                  <svg class="meta-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path d="M3 7.5 12 3l9 4.5v9L12 21 3 16.5v-9ZM3 7.5 12 12l9-4.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                  @if (meta.packagesMetaLabel === "Sin paquetes") {
-                    <span class="meta-label">Sin paquetes</span>
-                  } @else {
-                    <span class="meta-value">{{ meta.packagesMetaLabel }}</span>
-                    <span class="meta-label">paquetes</span>
+              <div class="route-badge" [attr.title]="'Ruta: ' + meta.routeName">
+                <span class="material-symbols-rounded" aria-hidden="true">location_on</span>
+                <span>{{ meta.routeName }}</span>
+              </div>
+            </div>
+
+            @if (meta.primaryAlert; as alert) {
+              <p class="alert-row" [class.alert-row-danger]="alert.tone === 'danger'" [class.alert-row-warning]="alert.tone === 'warning'">
+                <span class="material-symbols-rounded" aria-hidden="true">warning</span>
+                <span>{{ alert.label }}</span>
+                @if (meta.hiddenAlertsCount > 0) {
+                  <span class="alert-extra">+{{ meta.hiddenAlertsCount }} alerta{{ meta.hiddenAlertsCount === 1 ? '' : 's' }}</span>
+                }
+              </p>
+            }
+
+            <div class="meta-grid">
+              <span class="meta-item">
+                <span class="material-symbols-rounded" aria-hidden="true">shopping_bag</span>
+                <span class="meta-value">{{ order.items.length }}</span>
+                <span class="meta-label">productos</span>
+              </span>
+
+              <span class="meta-item">
+                <span class="material-symbols-rounded" aria-hidden="true">inventory</span>
+                @if (meta.packagesMetaLabel === "Sin paquetes") {
+                  <span class="meta-label">Sin paquetes</span>
+                } @else {
+                  <span class="meta-value">{{ meta.packagesMetaLabel }}</span>
+                  <span class="meta-label">paquetes</span>
+                }
+              </span>
+
+              <span class="meta-item" [attr.title]="'Actualizado ' + (order.updated_at | date: 'medium')">
+                <span class="material-symbols-rounded" aria-hidden="true">schedule</span>
+                <span class="meta-label">Actualizado</span>
+                <span class="meta-dot">·</span>
+                <span class="meta-value">{{ meta.updatedAtRelative }}</span>
+              </span>
+            </div>
+
+            <div class="items-line">
+              <span class="material-symbols-rounded" aria-hidden="true">sell</span>
+              <p>
+                @if (meta.visibleItems.length === 0) {
+                  <span>Sin productos capturados</span>
+                } @else {
+                  @for (item of meta.visibleItems; track item.item_id; let isLast = $last) {
+                    <span>{{ item.title || "Producto sin titulo" }}</span>@if (!isLast) {<span>, </span>}
                   }
-                </span>
-                <span class="meta-item" [attr.title]="'Actualizado ' + (order.updated_at | date: 'medium')">
-                  <svg class="meta-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.6"/>
-                    <path d="M12 7.8V12l2.8 1.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                  <span class="meta-label">Actualizado</span>
-                  <span class="meta-value">{{ meta.updatedAtRelative }}</span>
-                </span>
-              </div>
-              <div class="pills" #pillsRow [attr.data-order-id]="order.order_id">
-                @for (item of meta.visibleItems; track item.item_id) {
-                  <span class="pill" [attr.title]="item.title">{{ item.title }}</span>
+                  @if (meta.hiddenItemsCount > 0) {
+                    <span> +{{ meta.hiddenItemsCount }} mas</span>
+                  }
                 }
-                @if (meta.hiddenItemsCount > 0) {
-                  <span class="pill more">+{{ meta.hiddenItemsCount }}</span>
-                }
-              </div>
+              </p>
             </div>
           </article>
         }
@@ -168,10 +209,10 @@
     </div>
 
     @if (filteredOrders.length === 0 && !loading()) {
-      <div class="empty">
-        <p class="eyebrow">Sin resultados</p>
+      <article class="empty-card surface-card">
+        <p class="kicker">Sin resultados</p>
         <p class="muted">Crea tu primer pedido o ajusta los filtros.</p>
-      </div>
+      </article>
     }
   }
 
@@ -179,9 +220,9 @@
     <div class="sheet-backdrop" (click)="closePlannedPackages()">
       <div class="sheet" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
         <div class="sheet-handle" aria-hidden="true"></div>
-        <h2>&iquest;Cu&aacute;ntos paquetes esperas?</h2>
+        <h2>Cuantos paquetes esperas?</h2>
         <p class="muted">
-          {{ customerName(plannedOrder()?.customer_id || "") }} &middot; {{ routeName(plannedOrder()?.route_id || null) }}
+          {{ customerName(plannedOrder()?.customer_id || "") }} · {{ routeName(plannedOrder()?.route_id || null) }}
         </p>
         <div class="sheet-field">
           <label>Paquetes planificados</label>
@@ -201,7 +242,7 @@
         <div class="sheet-handle" aria-hidden="true"></div>
         <h2>{{ sheetAction()?.label }}</h2>
         <p class="muted">
-          {{ customerName(sheetOrder()?.customer_id || "") }} &middot; {{ routeName(sheetOrder()?.route_id || null) }}
+          {{ customerName(sheetOrder()?.customer_id || "") }} · {{ routeName(sheetOrder()?.route_id || null) }}
         </p>
         <div class="sheet-summary">
           <span>{{ sheetOrder()?.items?.length ?? 0 }} productos</span>
@@ -209,7 +250,7 @@
           <span>Actualizado {{ sheetOrder()?.updated_at | date: "shortDate" }}</span>
         </div>
         <div class="sheet-checklist">
-          <p class="eyebrow">Checklist</p>
+          <p class="kicker">Checklist</p>
           <ul>
             @for (row of sheetChecklist()?.items || []; track row.text) {
               <li [class.ok]="row.ok" [class.bad]="!row.ok">
@@ -221,7 +262,7 @@
         </div>
         @if (sheetChecklist()?.blocking) {
           <div class="sheet-warning">
-            <p class="eyebrow">Qu&eacute; falta</p>
+            <p class="kicker">Que falta</p>
             <ul>
               @for (row of sheetChecklist()?.items || []; track row.text) {
                 @if (!row.ok) {
@@ -263,3 +304,4 @@
     </div>
   }
 </section>
+

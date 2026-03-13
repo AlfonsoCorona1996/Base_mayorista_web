@@ -127,6 +127,7 @@ export interface PriceTierGlobal {
 export interface NormalizedListing {
   title: string | null;
   category_hint: string | null;
+  category_proposed?: string | null;
   price_tiers_global: PriceTierGlobal[];
   items: NormalizedItem[];
 }
@@ -134,6 +135,7 @@ export interface NormalizedListing {
 export interface NormalizedListingV3 {
   title: string | null;
   category_hint: string | null;
+  category_proposed?: string | null;
   items: NormalizedItemV3[];
 }
 

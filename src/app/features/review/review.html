@@ -100,6 +100,31 @@
             </div>
           }
         </div>
+        @if (!d.listing.category_hint && d.listing.category_proposed) {
+          <div class="category-proposal">
+            <p class="category-proposal-text">
+              Propuesta IA: <strong>{{ d.listing.category_proposed }}</strong>
+            </p>
+            <div class="category-proposal-actions">
+              <button
+                type="button"
+                class="btn btn-sm btn-primary"
+                [disabled]="categoryProposalSaving()"
+                (click)="acceptCategoryProposal()"
+              >
+                {{ categoryProposalSaving() ? "Registrando..." : "Aceptar y registrar" }}
+              </button>
+              <button
+                type="button"
+                class="btn btn-sm btn-secondary"
+                [disabled]="categoryProposalSaving()"
+                (click)="chooseExistingCategoryFromProposal()"
+              >
+                Elegir existente
+              </button>
+            </div>
+          </div>
+        }
         <small class="hint">Categoria estandarizada del producto</small>
       </div>
         </section>
@@ -238,6 +263,61 @@
         <small class="hint">Por defecto, los colores globales se aplican automaticamente a todas las variantes.</small>
       </div>
 
+      <div class="form-group">
+        <label class="checkbox-label">
+          <input
+            type="checkbox"
+            class="checkbox"
+            [checked]="useSharedPrices()"
+            (change)="toggleSharedPrices($any($event.target).checked)"
+          />
+          <span>Usar precios generales para todas las variantes</span>
+        </label>
+        <small class="hint">Edita una sola vez y se replica en todas las variantes.</small>
+      </div>
+
+      @if (useSharedPrices()) {
+        <div class="prices-section prices-section-shared">
+          <label class="label">Precios generales</label>
+          <div class="price-row">
+            <span class="price-label">Precio costo</span>
+            <input
+              type="text"
+              [ngModel]="getSharedPriceInputValue('costo')"
+              (ngModelChange)="onSharedPriceInputChange('costo', $event)"
+              (blur)="onSharedPriceInputBlur('costo')"
+              class="input input-sm price-input"
+              [class.input-error]="isSharedPriceLossRisk()"
+              placeholder="0.00"
+            />
+            <span class="currency">MXN</span>
+          </div>
+          <div class="price-row">
+            <span class="price-label">Precio final</span>
+            <input
+              type="text"
+              [ngModel]="getSharedPriceInputValue('final')"
+              (ngModelChange)="onSharedPriceInputChange('final', $event)"
+              (blur)="onSharedPriceInputBlur('final')"
+              class="input input-sm price-input"
+              [class.input-error]="isSharedPriceLossRisk()"
+              placeholder="0.00"
+            />
+            <span class="currency">MXN</span>
+          </div>
+          <div class="price-row">
+            <span class="price-label">Precio clienta</span>
+            <input
+              type="text"
+              [value]="getSharedClientPriceValue()"
+              class="input input-sm input-disabled price-input"
+              readonly
+            />
+            <span class="currency">MXN</span>
+          </div>
+        </div>
+      }
+
       <div class="variants-list">
         @for (variant of d.listing.items; track (variant.sku || variant.variant_name || i); let i = $index) {
           <div class="variant-card">
@@ -362,44 +442,46 @@
               </select>
             </div>
 
-            <div class="prices-section">
-              <label class="label">Precios</label>
-              <div class="price-row">
-                <span class="price-label">Precio costo</span>
-                <input
-                  type="text"
-                  [ngModel]="getPriceInputValue(i, 'costo')"
-                  (ngModelChange)="onPriceInputChange(i, 'costo', $event)"
-                  (blur)="onPriceInputBlur(i, 'costo')"
-                  class="input input-sm price-input"
-                  [class.input-error]="isPriceLossRisk(variant)"
-                  placeholder="0.00"
-                />
-                <span class="currency">{{ $any(variant).prices?.currency || 'MXN' }}</span>
+            @if (!useSharedPrices()) {
+              <div class="prices-section">
+                <label class="label">Precios</label>
+                <div class="price-row">
+                  <span class="price-label">Precio costo</span>
+                  <input
+                    type="text"
+                    [ngModel]="getPriceInputValue(i, 'costo')"
+                    (ngModelChange)="onPriceInputChange(i, 'costo', $event)"
+                    (blur)="onPriceInputBlur(i, 'costo')"
+                    class="input input-sm price-input"
+                    [class.input-error]="isPriceLossRisk(variant)"
+                    placeholder="0.00"
+                  />
+                  <span class="currency">{{ $any(variant).prices?.currency || 'MXN' }}</span>
+                </div>
+                <div class="price-row">
+                  <span class="price-label">Precio final</span>
+                  <input
+                    type="text"
+                    [ngModel]="getPriceInputValue(i, 'final')"
+                    (ngModelChange)="onPriceInputChange(i, 'final', $event)"
+                    (blur)="onPriceInputBlur(i, 'final')"
+                    class="input input-sm price-input"
+                    [class.input-error]="isPriceLossRisk(variant)"
+                  />
+                  <span class="currency">{{ $any(variant).prices?.currency || 'MXN' }}</span>
+                </div>
+                <div class="price-row">
+                  <span class="price-label">Precio clienta</span>
+                  <input
+                    type="text"
+                    [value]="formatMoney($any(variant).prices?.precio_clienta, $any(variant).prices?.currency || 'MXN')"
+                    class="input input-sm input-disabled price-input"
+                    readonly
+                  />
+                  <span class="currency">{{ $any(variant).prices?.currency || 'MXN' }}</span>
+                </div>
               </div>
-              <div class="price-row">
-                <span class="price-label">Precio final</span>
-                <input
-                  type="text"
-                  [ngModel]="getPriceInputValue(i, 'final')"
-                  (ngModelChange)="onPriceInputChange(i, 'final', $event)"
-                  (blur)="onPriceInputBlur(i, 'final')"
-                  class="input input-sm price-input"
-                  [class.input-error]="isPriceLossRisk(variant)"
-                />
-                <span class="currency">{{ $any(variant).prices?.currency || 'MXN' }}</span>
-              </div>
-              <div class="price-row">
-                <span class="price-label">Precio clienta</span>
-                <input
-                  type="text"
-                  [value]="formatMoney($any(variant).prices?.precio_clienta, $any(variant).prices?.currency || 'MXN')"
-                  class="input input-sm input-disabled price-input"
-                  readonly
-                />
-                <span class="currency">{{ $any(variant).prices?.currency || 'MXN' }}</span>
-              </div>
-            </div>
+            }
 
             <div class="form-group">
               <label class="label">Notas</label>

@@ -375,6 +375,28 @@ textarea.input {
   padding-left: 18px;
 }
 
+.category-proposal {
+  margin-top: 10px;
+  border: 1px solid #cfe0f3;
+  border-radius: 11px;
+  background: #f6faff;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.category-proposal-text {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #375776;
+}
+
+.category-proposal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .cover-preview-main {
   display: grid;
   gap: 10px;
@@ -617,6 +639,10 @@ textarea.input {
   border-radius: 12px;
   background: #f8fbff;
   padding: 10px;
+}
+
+.prices-section-shared {
+  margin-bottom: 2px;
 }
 
 .price-row {

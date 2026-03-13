@@ -198,7 +198,9 @@
           <select class="input" [(ngModel)]="formParentId" name="form_parent_id">
             <option value="">Sin padre (nivel 0)</option>
             @for (parent of availableParentOptions(); track parent.id) {
-              <option [value]="parent.id">{{ parent.fullPath }}</option>
+              <option [value]="parent.id" [disabled]="parent.disabled">
+                {{ parent.fullPath }}{{ parent.disabled ? " (actual)" : "" }}
+              </option>
             }
           </select>
         </label>

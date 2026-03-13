@@ -67,9 +67,7 @@
       <div class="page-head-main">
         <div class="page-head-topline">
           <button class="link-back link-back--icon" type="button" (click)="backToList()" aria-label="Volver">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path d="M15 18 9 12l6-6"></path>
-            </svg>
+            <span class="material-symbols-rounded" aria-hidden="true">arrow_back</span>
           </button>
           <div class="order-id-wrap">
             <p class="eyebrow order-id-line">Pedido {{ current.order_id }}</p>
@@ -79,10 +77,7 @@
               aria-label="Copiar ID del pedido"
               (click)="copyOrderId(current.order_id)"
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <rect x="9" y="9" width="11" height="11" rx="2"></rect>
-                <path d="M5 15V6a2 2 0 0 1 2-2h9"></path>
-              </svg>
+              <span class="material-symbols-rounded" aria-hidden="true">content_copy</span>
             </button>
             @if (copiedOrderId()) {
               <span class="copy-toast">!Copiado!</span>
@@ -92,12 +87,12 @@
         <h1>{{ vm.customerName }}</h1>
         <p class="muted page-updated">Actualizado {{ current.updated_at | date: "short" }}</p>
         <div class="title-row title-row--meta">
-          <span class="meta-dot-pill">{{ vm.statusLabel }}</span>
+          <span class="meta-dot-pill">
+            <span class="material-symbols-rounded" aria-hidden="true">monitoring</span>
+            {{ vm.statusLabel }}
+          </span>
           <span class="meta-dot-pill meta-dot-pill--location">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path d="M12 22s7-6 7-12a7 7 0 1 0-14 0c0 6 7 12 7 12z"></path>
-              <circle cx="12" cy="10" r="2.5"></circle>
-            </svg>
+            <span class="material-symbols-rounded" aria-hidden="true">location_on</span>
             {{ vm.routeName }}
           </span>
         </div>
@@ -181,10 +176,22 @@
     </section>
 
     <nav class="section-nav" aria-label="Navegacion de secciones">
-      <button type="button" (click)="scrollToSection('incidencias')">Incidencias</button>
-      <button type="button" (click)="scrollToSection('productos')">Productos</button>
-      <button type="button" (click)="scrollToSection('paquetes')">Paquetes</button>
-      <button type="button" (click)="scrollToSection('bitacora')">Bitacora</button>
+      <button type="button" (click)="scrollToSection('incidencias')">
+        <span class="material-symbols-rounded" aria-hidden="true">warning</span>
+        Incidencias
+      </button>
+      <button type="button" (click)="scrollToSection('productos')">
+        <span class="material-symbols-rounded" aria-hidden="true">inventory_2</span>
+        Productos
+      </button>
+      <button type="button" (click)="scrollToSection('paquetes')">
+        <span class="material-symbols-rounded" aria-hidden="true">deployed_code</span>
+        Paquetes
+      </button>
+      <button type="button" (click)="scrollToSection('bitacora')">
+        <span class="material-symbols-rounded" aria-hidden="true">history</span>
+        Bitacora
+      </button>
     </nav>
 
     @if (resolvedIncidents(); as resolvedIncidentsList) {
@@ -193,7 +200,7 @@
         <h2>Incidencias</h2>
         <div class="panel-actions">
           <button type="button" class="btn ghost with-icon" (click)="openIncidentModal()">
-            <span class="btn-icon" aria-hidden="true">+</span>
+            <span class="material-symbols-rounded btn-icon" aria-hidden="true">add</span>
             Nueva incidencia
           </button>
           <button type="button" class="btn link" (click)="toggleResolved()">
@@ -217,12 +224,12 @@
                 <div class="incident-head">
                   <div class="incident-title-row">
                     <p class="incident-title">{{ inc.title }}</p>
-                    <div class="incident-chips">
-                      <span class="chip incident-chip incident-chip-type">{{ inc.type }}</span>
-                      <span class="chip incident-chip incident-chip-severity">
-                        {{ inc.severity === "high" ? "Alta" : inc.severity === "medium" ? "Media" : "Baja" }}
-                      </span>
-                    </div>
+                    <p class="incident-legend">
+                      <span class="material-symbols-rounded" aria-hidden="true">category</span>
+                      {{ inc.type }}
+                      <span class="material-symbols-rounded" aria-hidden="true">priority_high</span>
+                      {{ inc.severity === "high" ? "Alta" : inc.severity === "medium" ? "Media" : "Baja" }}
+                    </p>
                   </div>
                 </div>
                 <p class="incident-reason">{{ inc.reason }}</p>
@@ -279,7 +286,7 @@
         <div class="panel-actions">
           @if (vm.canAddProducts) {
             <button type="button" class="btn primary with-icon" (click)="openAddItemModal()">
-              <span class="btn-icon" aria-hidden="true">+</span>
+              <span class="material-symbols-rounded btn-icon" aria-hidden="true">add</span>
               Agregar producto
             </button>
           }
@@ -349,11 +356,7 @@
           >
             @if (current.status === "borrador") {
               <button type="button" class="btn-close" (click)="removeItem(current, item)" [disabled]="!vm.canEditItems">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M3 6h18"></path>
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M8 6V4h8v2"></path>
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M7 6l1 14h8l1-14"></path>
-                </svg>
+                <span class="material-symbols-rounded" aria-hidden="true">delete</span>
               </button>
             }
 
@@ -366,15 +369,11 @@
                   </span>
                   @if (card.isConfirmed) {
                     <span class="pieces-state" [class.pieces-state--partial]="card.hasPartial" [class.pieces-state--ok]="!card.hasPartial">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="m5 13 4 4L19 7"></path>
-                      </svg>
+                      <span class="material-symbols-rounded" aria-hidden="true">check</span>
                     </span>
                   } @else if (card.isOutOfStock) {
                     <span class="pieces-state pieces-state--out">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M18 6L6 18M6 6l12 12"></path>
-                      </svg>
+                      <span class="material-symbols-rounded" aria-hidden="true">close</span>
                     </span>
                   }
                 </button>
@@ -386,11 +385,11 @@
 
                   <div class="specs-grid">
                     <div class="spec-item">
-                      <svg class="icon-tiny" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M7 7h10v10H7zM7 12h10M12 7v10"/></svg>
+                      <span class="material-symbols-rounded icon-tiny" aria-hidden="true">straighten</span>
                       <span>{{ item.variant || "Unica" }}</span>
                     </div>
                     <div class="spec-item">
-                      <svg class="icon-tiny" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
+                      <span class="material-symbols-rounded icon-tiny" aria-hidden="true">palette</span>
                       <span>{{ item.color || "N/A" }}</span>
                     </div>
                     <div class="spec-status-row">
@@ -425,9 +424,7 @@
                             [disabled]="card.quickConfirming"
                             (click)="decreaseConfirmedCounter(item)"
                           >
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
-                              <path stroke-linecap="round" stroke-linejoin="round" d="M6 12h12"></path>
-                            </svg>
+                            <span class="material-symbols-rounded" aria-hidden="true">remove</span>
                           </button>
                           <span class="confirmed-counter__value">{{ card.draftConfirmedQty }} / {{ item.quantity }}</span>
                           <button
@@ -436,16 +433,20 @@
                             [disabled]="card.quickConfirming"
                             (click)="increaseConfirmedCounter(item)"
                           >
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
-                              <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12M6 12h12"></path>
-                            </svg>
+                            <span class="material-symbols-rounded" aria-hidden="true">add</span>
                           </button>
                         </div>
                       } @else if (!card.isConfirmed) {
-                        <button class="btn-main btn-confirm" (click)="confirmarItem(item)">Marcar <span class="btn-confirm-word">Disponible</span></button>
+                        <button class="btn-main btn-confirm" (click)="confirmarItem(item)">
+                          <span class="material-symbols-rounded" aria-hidden="true">task_alt</span>
+                          <span class="btn-label">Marcar <span class="btn-confirm-word">Disponible</span></span>
+                        </button>
                       }
                       @if (!card.isOutOfStock) {
-                        <button class="btn-sub btn-out" (click)="marcarAgotado(item)">Marcar <span class="btn-out-word">Agotado</span></button>
+                        <button class="btn-sub btn-out" (click)="marcarAgotado(item)">
+                          <span class="material-symbols-rounded" aria-hidden="true">remove_shopping_cart</span>
+                          <span class="btn-label">Marcar <span class="btn-out-word">Agotado</span></span>
+                        </button>
                       }
                     </div>
                   } @else if (card.showSupplierReceive) {
@@ -454,6 +455,7 @@
                         <span class="btn-spinner" aria-hidden="true"></span>
                         Procesando...
                       } @else {
+                        <span class="material-symbols-rounded" aria-hidden="true">inventory_2</span>
                         Recibir proveedor
                       }
                     </button>
@@ -772,7 +774,7 @@
   @if (actionModalOpen() && actionContext()) {
     <div class="sheet-backdrop" (click)="closeActionModal()">
       <div
-        class="sheet"
+        class="sheet sheet-action-ios"
         role="dialog"
         aria-modal="true"
         [class.sheet-confirm-items]="actionContext()?.actionId === 'confirm_items'"
@@ -782,7 +784,10 @@
       >
         <div class="sheet-handle" aria-hidden="true"></div>
         @if (actionContext()?.actionId !== "confirm_items" && actionContext()?.actionId !== "pack" && actionContext()?.actionId !== "dispatch") {
-          <h2 id="action-modal-title">{{ actionContext()?.label }}</h2>
+          <h2 id="action-modal-title" class="action-modal-title">
+            <span class="material-symbols-rounded" aria-hidden="true">sync_alt</span>
+            {{ actionContext()?.label }}
+          </h2>
         }
         @if (actionError()) {
           <div class="sheet-warning">
@@ -803,9 +808,7 @@
               </div>
               @if (vm.allItemsResolved) {
                 <div class="confirm-header-state" aria-label="Resuelto">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                    <path d="m5 13 4 4L19 7"></path>
-                  </svg>
+                  <span class="material-symbols-rounded" aria-hidden="true">check_circle</span>
                 </div>
               }
 
@@ -814,15 +817,15 @@
             @if (current.items.length > 0) {
               <div class="confirm-kpis">
                 <article class="confirm-kpi kpi-confirmed">
-                  <p class="kpi-label">Confirmadas</p>
+                  <p class="kpi-label"><span class="material-symbols-rounded" aria-hidden="true">task_alt</span>Confirmadas</p>
                   <p class="kpi-value">{{ vm.confirmedPieces }}</p>
                 </article>
                 <article class="confirm-kpi kpi-out">
-                  <p class="kpi-label">Sin stock</p>
+                  <p class="kpi-label"><span class="material-symbols-rounded" aria-hidden="true">remove_shopping_cart</span>Sin stock</p>
                   <p class="kpi-value">{{ vm.outOfStockPieces }}</p>
                 </article>
                 <article class="confirm-kpi kpi-pending">
-                  <p class="kpi-label">Pendientes</p>
+                  <p class="kpi-label"><span class="material-symbols-rounded" aria-hidden="true">hourglass_top</span>Pendientes</p>
                   <p class="kpi-value">{{ vm.pendingPieces }}</p>
                 </article>
               </div>
@@ -844,13 +847,22 @@
                       <p class="supplier-title">{{ group.displayName }}</p>
                       <div class="supplier-stats">
                         @if (group.outOfStockCount > 0) {
-                          <span class="stat-chip danger">Sin Stock {{ group.outOfStockCount }}</span>
+                          <span class="supplier-stat supplier-stat-danger">
+                            <span class="material-symbols-rounded" aria-hidden="true">remove_shopping_cart</span>
+                            Sin stock {{ group.outOfStockCount }}
+                          </span>
                         }
                         @if (group.confirmedCount > 0) {
-                          <span class="stat-chip success">Confirmados {{ group.confirmedCount }}</span>
+                          <span class="supplier-stat supplier-stat-success">
+                            <span class="material-symbols-rounded" aria-hidden="true">task_alt</span>
+                            Confirmados {{ group.confirmedCount }}
+                          </span>
                         }
                         @if (group.pendingCount > 0) {
-                          <span class="stat-chip pending">Pendientes {{ group.pendingCount }}</span>
+                          <span class="supplier-stat supplier-stat-pending">
+                            <span class="material-symbols-rounded" aria-hidden="true">hourglass_top</span>
+                            Pendientes {{ group.pendingCount }}
+                          </span>
                         }
                       </div>
                     </div>
@@ -894,9 +906,7 @@
               </div>
               @if (vm.canDispatch) {
                 <div class="confirm-header-state" aria-label="Resuelto">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                    <path d="m5 13 4 4L19 7"></path>
-                  </svg>
+                  <span class="material-symbols-rounded" aria-hidden="true">check_circle</span>
                 </div>
               }
             </header>
@@ -910,15 +920,15 @@
 
             <div class="confirm-kpis">
               <article class="confirm-kpi kpi-confirmed">
-                <p class="kpi-label">Empacadas</p>
+                <p class="kpi-label"><span class="material-symbols-rounded" aria-hidden="true">inventory</span>Empacadas</p>
                 <p class="kpi-value">{{ vm.packedCount }}</p>
               </article>
               <article class="confirm-kpi kpi-pending">
-                <p class="kpi-label">Sin empacar</p>
+                <p class="kpi-label"><span class="material-symbols-rounded" aria-hidden="true">inventory_2</span>Sin empacar</p>
                 <p class="kpi-value">{{ vm.unpackedCount }}</p>
               </article>
               <article class="confirm-kpi kpi-open">
-                <p class="kpi-label">Cajas abiertas</p>
+                <p class="kpi-label"><span class="material-symbols-rounded" aria-hidden="true">deployed_code</span>Cajas abiertas</p>
                 <p class="kpi-value">{{ vm.openBoxesCount }}</p>
               </article>
             </div>
@@ -973,24 +983,22 @@
               </div>
               @if (vm.canDispatch) {
                 <div class="confirm-header-state" aria-label="Resuelto">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                    <path d="m5 13 4 4L19 7"></path>
-                  </svg>
+                  <span class="material-symbols-rounded" aria-hidden="true">check_circle</span>
                 </div>
               }
             </header>
 
             <div class="confirm-kpis">
               <article class="confirm-kpi kpi-confirmed">
-                <p class="kpi-label">Empacadas</p>
+                <p class="kpi-label"><span class="material-symbols-rounded" aria-hidden="true">inventory</span>Empacadas</p>
                 <p class="kpi-value">{{ vm.packedCount }}</p>
               </article>
               <article class="confirm-kpi kpi-pending">
-                <p class="kpi-label">Sin empacar</p>
+                <p class="kpi-label"><span class="material-symbols-rounded" aria-hidden="true">inventory_2</span>Sin empacar</p>
                 <p class="kpi-value">{{ vm.unpackedCount }}</p>
               </article>
               <article class="confirm-kpi kpi-open">
-                <p class="kpi-label">Cajas abiertas</p>
+                <p class="kpi-label"><span class="material-symbols-rounded" aria-hidden="true">deployed_code</span>Cajas abiertas</p>
                 <p class="kpi-value">{{ vm.openBoxesCount }}</p>
               </article>
             </div>
@@ -1295,8 +1303,14 @@
       <div class="sheet full" role="dialog" aria-modal="true" aria-labelledby="add-item-modal-title" (click)="$event.stopPropagation()">
         <div class="sheet-header">
           <div class="sheet-handle" aria-hidden="true"></div>
-          <h2 id="add-item-modal-title">Agregar producto</h2>
-          <button type="button" class="btn ghost" (click)="closeAddItemModal()">Cerrar</button>
+          <h2 id="add-item-modal-title">
+            <span class="material-symbols-rounded" aria-hidden="true">add_box</span>
+            Agregar producto
+          </h2>
+          <button type="button" class="btn ghost" (click)="closeAddItemModal()">
+            <span class="material-symbols-rounded" aria-hidden="true">close</span>
+            Cerrar
+          </button>
         </div>
         <div class="sheet-body">
           <div class="add-item">

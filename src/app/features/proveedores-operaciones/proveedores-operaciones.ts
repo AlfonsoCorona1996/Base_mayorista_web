@@ -1,5 +1,5 @@
 ﻿import { Component, computed, inject, signal, ChangeDetectionStrategy } from "@angular/core";
-import { Router } from "@angular/router";
+import { ActivatedRoute, Router } from "@angular/router";
 import { CustomersService } from "../../core/customers.service";
 import { OrdersService } from "../../core/orders.service";
 import {
@@ -47,6 +47,7 @@ interface SelectionModalState {
   fromStatus: SupplierOperationStatus;
   targetStatus: SupplierOperationStatus;
   groupKey: string;
+  supplierId: string;
   productName: string;
   size: string;
   color: string;
@@ -70,7 +71,9 @@ export default class ProveedoresOperacionesPage {
   private suppliers = inject(SuppliersService);
   private customers = inject(CustomersService);
   private orders = inject(OrdersService);
+  private route = inject(ActivatedRoute);
   private router = inject(Router);
+  private openGroupOnLoad: { supplierId: string; groupKey: string } | null = null;
 
   loading = signal(false);
   savingById = signal<Record<string, boolean>>({});
@@ -81,15 +84,25 @@ export default class ProveedoresOperacionesPage {
   error = signal<string | null>(null);
   success = signal<string | null>(null);
   statusFilter = signal<StatusFilter>("all");
+  hideReceived = signal(true);
 
   constructor() {
+    const from = String(this.route.snapshot.queryParamMap.get("from") || "").trim();
+    const supplierId = String(this.route.snapshot.queryParamMap.get("supplierId") || "").trim();
+    const groupKey = String(this.route.snapshot.queryParamMap.get("groupKey") || "").trim();
+    const openGroup = this.route.snapshot.queryParamMap.get("openGroup") === "1";
+    if (from === "proveedores-operaciones" && openGroup && supplierId && groupKey) {
+      this.openGroupOnLoad = { supplierId, groupKey };
+    }
     this.reload();
   }
 
   rows = computed(() => this.supplierOps.rows());
 
   supplierSections = computed(() => {
-    const groupedAllRows = this.buildGroupsBySupplier(this.rows());
+    const hideReceived = this.hideReceived();
+    const sourceRows = hideReceived ? this.rows().filter((row) => row.status !== "recibido") : this.rows();
+    const groupedAllRows = this.buildGroupsBySupplier(sourceRows);
     const filter = this.statusFilter();
 
     const sections = Array.from(groupedAllRows.entries())
@@ -97,7 +110,11 @@ export default class ProveedoresOperacionesPage {
         const supplierName = groups[0]?.supplierName || this.suppliers.getById(supplierId)?.display_name || supplierId;
         const counts = this.sumSupplierCounts(groups);
         const visibleGroups =
-          filter === "all" ? groups : groups.filter((group) => this.sumQtyByStatus(group.lines, filter) > 0);
+          filter === "all"
+            ? groups
+            : hideReceived && filter === "recibido"
+              ? []
+              : groups.filter((group) => this.sumQtyByStatus(group.lines, filter) > 0);
 
         return {
           supplierId,
@@ -120,6 +137,20 @@ export default class ProveedoresOperacionesPage {
     { id: "recibido", label: "Recibido" },
   ];
   readonly orderListStatuses: OrdersListStatus[] = ["en_camino", "levantado", "por_levantar", "recibido"];
+
+  visibleOrderListStatuses(): OrdersListStatus[] {
+    return this.hideReceived()
+      ? this.orderListStatuses.filter((status) => status !== "recibido")
+      : this.orderListStatuses;
+  }
+
+  toggleHideReceived() {
+    const next = !this.hideReceived();
+    this.hideReceived.set(next);
+    if (next && this.statusFilter() === "recibido") {
+      this.statusFilter.set("all");
+    }
+  }
 
   async reload() {
     this.loading.set(true);
@@ -182,6 +213,7 @@ export default class ProveedoresOperacionesPage {
       fromStatus,
       targetStatus,
       groupKey: group.key,
+      supplierId: group.supplierId,
       productName: group.productName,
       size: group.size,
       color: group.color,
@@ -272,12 +304,31 @@ export default class ProveedoresOperacionesPage {
     }
   }
 
-  onOrderChipClick(orderId: string) {
-    this.router.navigate(["/main/pedidos", orderId]);
+  onOrderChipClick(orderId: string, supplierId: string, groupKey: string) {
+    this.router.navigate(["/main/pedidos", orderId], {
+      queryParams: {
+        from: "proveedores-operaciones",
+        supplierId,
+        groupKey,
+        openGroup: 1,
+      },
+      state: {
+        from: "proveedores-operaciones",
+        supplierId,
+        groupKey,
+      },
+    });
   }
 
-  orderDetailHref(orderId: string): string {
-    const tree = this.router.createUrlTree(["/main/pedidos", orderId]);
+  orderDetailHref(orderId: string, supplierId: string, groupKey: string): string {
+    const tree = this.router.createUrlTree(["/main/pedidos", orderId], {
+      queryParams: {
+        from: "proveedores-operaciones",
+        supplierId,
+        groupKey,
+        openGroup: 1,
+      },
+    });
     return this.router.serializeUrl(tree);
   }
 
@@ -330,17 +381,17 @@ export default class ProveedoresOperacionesPage {
   statusClass(status: SupplierOperationStatus | "mixto"): string {
     switch (status) {
       case "por_levantar":
-        return "chip chip-neutral";
+        return "status-tone status-tone-pending";
       case "levantado":
-        return "chip chip-info";
+        return "status-tone status-tone-lifted";
       case "en_camino":
-        return "chip chip-warn";
+        return "status-tone status-tone-transit";
       case "recibido":
-        return "chip chip-ok";
+        return "status-tone status-tone-received";
       case "mixto":
-        return "chip chip-mixed";
+        return "status-tone status-tone-mixed";
       default:
-        return "chip chip-neutral";
+        return "status-tone status-tone-pending";
     }
   }
 
@@ -496,6 +547,16 @@ export default class ProveedoresOperacionesPage {
     return /^p-/i.test(raw) ? raw : `P-${raw}`;
   }
 
+  orderCustomerName(orderId: string): string {
+    const order = this.orders.getById(orderId);
+    const customerId = (order?.customer_id || "").trim();
+    if (!customerId) return this.orderChipText(orderId);
+
+    const customer = this.customers.getById(customerId);
+    const fullName = `${customer?.first_name || ""} ${customer?.last_name || ""}`.trim();
+    return fullName || this.orderChipText(orderId);
+  }
+
   orderSectionTitle(status: OrdersListStatus): string {
     if (status === "en_camino") return "EN TRANSITO";
     if (status === "levantado") return "LEVANTADOS";
@@ -622,6 +683,19 @@ export default class ProveedoresOperacionesPage {
       map[section.supplierId] = true;
     }
     this.expandedSuppliers.set(map);
+
+    const pending = this.openGroupOnLoad;
+    if (!pending) return;
+
+    this.expandedSuppliers.update((current) => ({
+      ...current,
+      [pending.supplierId]: true,
+    }));
+    this.expandedGroups.update((current) => ({
+      ...current,
+      [pending.groupKey]: true,
+    }));
+    this.openGroupOnLoad = null;
   }
 
   private fromStatusForAction(actionType: PartialActionType): SupplierOperationStatus {
