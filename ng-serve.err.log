@@ -3767,3 +3767,51 @@
            ╵                       [32m~~~~[0m
 
 [39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2430: Interface 'ListingDocLike' incorrectly extends interface 'Partial<NormalizedListingDoc>'.
+  Types of property 'cover_images' are incompatible.
+    Type 'string[] | null | undefined' is not assignable to type 'string[] | undefined'.
+      Type 'null' is not assignable to type 'string[] | undefined'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/public/public-catalog.service.ts:42:10:
+[37m      42 │ interface [32mListingDocLike[37m extends Partial<NormalizedListingDoc> {
+         ╵           [32m~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2430: Interface 'ListingDocLike' incorrectly extends interface 'Partial<NormalizedListingDoc>'.
+  Types of property 'cover_images' are incompatible.
+    Type 'string[] | null | undefined' is not assignable to type 'string[] | undefined'.
+      Type 'null' is not assignable to type 'string[] | undefined'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/public/public-catalog.service.ts:42:10:
+[37m      42 │ interface [32mListingDocLike[37m extends Partial<NormalizedListingDoc> {
+         ╵           [32m~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'cleanImageUrl' does not exist on type 'PublicCatalogService'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/public/public-catalog.service.ts:186:25:
+[37m      186 │     const preview = this.[32mcleanImageUrl[37m(doc.preview_image_url);
+          ╵                          [32m~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'cleanImageUrl' does not exist on type 'PublicCatalogService'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/public/public-catalog.service.ts:195:26:
+[37m      195 │       const direct = this.[32mcleanImageUrl[37m(item.image_url);
+          ╵                           [32m~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'cleanImageUrl' does not exist on type 'PublicCatalogService'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/public/public-catalog.service.ts:259:25:
+[37m      259 │       const value = this.[32mcleanImageUrl[37m(candidate);
+          ╵                          [32m~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[33m[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8113: All imports are unused[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/public/public-home.ts:9:2:
+[37m      9 │   [32mimports[37m: [RouterLink],
+        ╵   [32m~~~~~~~[0m
+
+[39m[22m

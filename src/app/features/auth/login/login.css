@@ -85,10 +85,10 @@
   width: 96px;
   height: 96px;
   margin: 0 auto 12px;
-  padding: 0;
+  padding: 6px;
   border-radius: 50%;
   overflow: hidden;
-  background: #f3f8fc;
+  background: #ffffff;
   border: 1px solid #dce6ee;
   box-shadow: 0 8px 22px rgba(8, 48, 70, 0.12);
 }
@@ -96,7 +96,7 @@
 .brand-logo {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .login-kicker {

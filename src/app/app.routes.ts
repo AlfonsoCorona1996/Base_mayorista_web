@@ -4,6 +4,11 @@ import { permissionGuard } from "./core/permission.guard";
 import { authzGuard } from "./core/authz.guard";
 export const routes: Routes = [
   {
+    path: "",
+    pathMatch: "full",
+    loadComponent: () => import("./features/public/public-home").then((m) => m.default),
+  },
+  {
     path: "login",
     loadComponent: () => import("./features/auth/login/login").then((m) => m.default),
   },
@@ -139,7 +144,5 @@ export const routes: Routes = [
   { path: "inbox", pathMatch: "full", redirectTo: "main/validacion" },
   { path: "validacion", pathMatch: "full", redirectTo: "main/validacion" },
   { path: "review/:id", redirectTo: "main/review/:id" },
-
-  { path: "", pathMatch: "full", redirectTo: "main/dashboard" },
-  { path: "**", redirectTo: "main/dashboard" },
+  { path: "**", redirectTo: "" },
 ];
