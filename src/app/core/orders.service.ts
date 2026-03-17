@@ -53,7 +53,7 @@ export interface OrderItem {
   color?: string | null;
   quantity: number;
   confirmed_qty?: number | null;
-  source: "catalogo" | "inventario";
+  source: "catalogo" | "inventario" | "manual";
   state: OrderItemState;
   confirmation_state?: "confirmed" | "out_of_stock" | "substitute" | "pending";
   supplier_id?: string | null;

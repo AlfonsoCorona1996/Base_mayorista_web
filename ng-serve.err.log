@@ -3724,3 +3724,94 @@
          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
 
 [39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'convertManualItem' does not exist on type 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:2708:17:
+[37m      2708 │       await this.[32mconvertManualItem[37m(order);
+           ╵                  [32m~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS7016: Could not find a declaration file for module 'qrcode'. 'C:/Users/UIE75003/OneDrive - Aumovio SE/Documents/Base Mayorista/admin-web/node_modules/qrcode/lib/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/qrcode` if it exists or add a new declaration (.d.ts) file containing `declare module 'qrcode';`[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:8:24:
+[37m      8 │ import * as QRCode from [32m"qrcode"[37m;
+        ╵                         [32m~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS7016: Could not find a declaration file for module 'qrcode'. 'C:/Users/UIE75003/OneDrive - Aumovio SE/Documents/Base Mayorista/admin-web/node_modules/qrcode/lib/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/qrcode` if it exists or add a new declaration (.d.ts) file containing `declare module 'qrcode';`[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:8:24:
+[37m      8 │ import * as QRCode from [32m"qrcode"[37m;
+        ╵                         [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'BlobPart'.
+  Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'ArrayBufferView<ArrayBuffer>'.
+    Types of property 'buffer' are incompatible.
+      Type 'ArrayBufferLike' is not assignable to type 'ArrayBuffer'.
+        Type 'SharedArrayBuffer' is not assignable to type 'ArrayBuffer'.
+          Types of property '[Symbol.toStringTag]' are incompatible.
+            Type '"SharedArrayBuffer"' is not assignable to type '"ArrayBuffer"'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:3234:27:
+[37m      3234 │     const blob = new Blob([[32mpdfBytes[37m], { type: "application/pdf" });
+           ╵                            [32m~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2304: Cannot find name 'part'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:2880:22:
+[37m      2880 │         page.drawText([32mpart[37m, {
+           ╵                       [32m~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2430: Interface 'ListingDocLike' incorrectly extends interface 'Partial<NormalizedListingDoc>'.
+  Types of property 'cover_images' are incompatible.
+    Type 'string[] | null | undefined' is not assignable to type 'string[] | undefined'.
+      Type 'null' is not assignable to type 'string[] | undefined'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/public/public-catalog.service.ts:42:10:
+[37m      42 │ interface [32mListingDocLike[37m extends Partial<NormalizedListingDoc> {
+         ╵           [32m~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2430: Interface 'ListingDocLike' incorrectly extends interface 'Partial<NormalizedListingDoc>'.
+  Types of property 'cover_images' are incompatible.
+    Type 'string[] | null | undefined' is not assignable to type 'string[] | undefined'.
+      Type 'null' is not assignable to type 'string[] | undefined'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/public/public-catalog.service.ts:42:10:
+[37m      42 │ interface [32mListingDocLike[37m extends Partial<NormalizedListingDoc> {
+         ╵           [32m~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'cleanImageUrl' does not exist on type 'PublicCatalogService'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/public/public-catalog.service.ts:186:25:
+[37m      186 │     const preview = this.[32mcleanImageUrl[37m(doc.preview_image_url);
+          ╵                          [32m~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'cleanImageUrl' does not exist on type 'PublicCatalogService'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/public/public-catalog.service.ts:195:26:
+[37m      195 │       const direct = this.[32mcleanImageUrl[37m(item.image_url);
+          ╵                           [32m~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'cleanImageUrl' does not exist on type 'PublicCatalogService'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/public/public-catalog.service.ts:259:25:
+[37m      259 │       const value = this.[32mcleanImageUrl[37m(candidate);
+          ╵                          [32m~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[33m[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8113: All imports are unused[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/public/public-home.ts:9:2:
+[37m      9 │   [32mimports[37m: [RouterLink],
+        ╵   [32m~~~~~~~[0m
+
+[39m[22m

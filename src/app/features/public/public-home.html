@@ -1,0 +1,260 @@
+<div class="public-home">
+  <div class="ambient ambient-a" aria-hidden="true"></div>
+  <div class="ambient ambient-b" aria-hidden="true"></div>
+
+  <header class="landing-header">
+    <div class="landing-header__inner">
+      <a href="#inicio" class="brand" (click)="closeMenu()">
+        <img src="/BaseMayoristaLogo.png" alt="Logo Base Mayorista" class="brand__logo" />
+        <div class="brand__copy">
+          <span class="brand__name">Base Mayorista</span>
+          <span class="brand__tag">Distribución y mayoreo confiable</span>
+        </div>
+      </a>
+
+      <nav class="desktop-nav" aria-label="Navegación principal">
+        <a href="#productos">Productos</a>
+        <a href="#como-comprar">Cómo comprar</a>
+        <a href="#beneficios">Beneficios</a>
+        <a href="#contacto">Contacto</a>
+      </nav>
+
+      <div class="header-actions">
+        <button
+          type="button"
+          class="menu-toggle"
+          (click)="toggleMenu()"
+          [attr.aria-expanded]="menuOpen()"
+          aria-controls="landing-mobile-nav"
+        >
+          <span class="material-symbols-rounded" aria-hidden="true">{{ menuOpen() ? "close" : "menu" }}</span>
+          <span class="sr-only">Abrir menú</span>
+        </button>
+      </div>
+    </div>
+
+    @if (menuOpen()) {
+      <nav id="landing-mobile-nav" class="mobile-nav" aria-label="Navegación móvil">
+        <a href="#productos" (click)="closeMenu()">Productos</a>
+        <a href="#como-comprar" (click)="closeMenu()">Cómo comprar</a>
+        <a href="#beneficios" (click)="closeMenu()">Beneficios</a>
+        <a href="#contacto" (click)="closeMenu()">Contacto</a>
+        <a class="mobile-whatsapp" [attr.href]="whatsappHref" target="_blank" rel="noopener noreferrer" (click)="closeMenu()">
+          WhatsApp {{ whatsappDisplayNumber }}
+        </a>
+      </nav>
+    }
+  </header>
+
+  <main class="landing-main">
+    <section class="hero section" id="inicio">
+      <div class="hero__copy">
+        <p class="section-kicker">Base Mayorista</p>
+        <h1>Tu aliado en distribución y venta al mayoreo</h1>
+        <p>
+          Catálogo visual, pedidos organizados y atención ágil para surtir tu negocio con confianza desde cualquier
+          dispositivo.
+        </p>
+        <div class="hero__actions">
+          <a class="btn btn-primary" href="#productos">Explorar productos</a>
+          <a class="btn btn-whatsapp" [attr.href]="whatsappHref" target="_blank" rel="noopener noreferrer">
+            Pedir informes por WhatsApp
+          </a>
+        </div>
+        <ul class="hero__highlights">
+          <li>Variedad de productos</li>
+          <li>Pedidos claros y rápidos</li>
+          <li>Seguimiento confiable</li>
+        </ul>
+      </div>
+
+      <div class="hero__visual" aria-label="Composición visual de productos">
+        @if (heroImageSlots().length > 0) {
+          <div class="hero-gallery">
+            @for (image of heroImageSlots(); track image; let idx = $index) {
+              <article class="hero-gallery__card" [class.hero-gallery__card--main]="idx === 0">
+                <img [src]="image" alt="Producto destacado de Base Mayorista" loading="lazy" />
+              </article>
+            }
+          </div>
+        } @else {
+          <div class="hero-fallback">
+            <img src="/BaseMayoristaLogo.png" alt="Base Mayorista" />
+            <p>Catálogo visual actualizado para compra al mayoreo</p>
+          </div>
+        }
+      </div>
+    </section>
+
+    <section class="section products" id="productos">
+      <div class="section-head">
+        <p class="section-kicker">Catálogo</p>
+        <h2>Productos destacados para mayoreo</h2>
+        <p>Mostramos productos reales cargados desde Firebase para que puedas explorar y pedir con rapidez.</p>
+      </div>
+
+      @if (loading()) {
+        <div class="skeleton-grid" aria-hidden="true">
+          <div class="skeleton-card"></div>
+          <div class="skeleton-card"></div>
+          <div class="skeleton-card"></div>
+          <div class="skeleton-card"></div>
+        </div>
+      } @else if (error()) {
+        <article class="state-card state-card--error" role="status">
+          <h3>Catálogo no disponible</h3>
+          <p>{{ error() }}</p>
+          <div class="state-actions">
+            <button type="button" class="btn btn-primary" (click)="reloadCatalog()">Reintentar</button>
+            <a class="btn btn-whatsapp" [attr.href]="whatsappHref" target="_blank" rel="noopener noreferrer">
+              Pedir información
+            </a>
+          </div>
+        </article>
+      } @else if (!hasProducts()) {
+        <article class="state-card" role="status">
+          <h3>Muy pronto habrá más productos aquí</h3>
+          <p>Estamos preparando el catálogo público. Escríbenos y te ayudamos a surtir tu pedido.</p>
+          <a class="btn btn-whatsapp" [attr.href]="whatsappHref" target="_blank" rel="noopener noreferrer">
+            Contactar por WhatsApp
+          </a>
+        </article>
+      } @else {
+        @for (section of sections(); track section.id) {
+          <article class="product-section">
+            <div class="product-section__head">
+              <h3>{{ section.title }}</h3>
+              <p>{{ section.items.length }} producto{{ section.items.length === 1 ? "" : "s" }} destacados</p>
+            </div>
+
+            <div class="product-grid">
+              @for (product of section.items; track product.id) {
+                <article class="product-card">
+                  <div class="product-card__media">
+                    @if (product.imageUrl) {
+                      <img [src]="product.imageUrl" alt="{{ product.name }}" loading="lazy" />
+                    } @else {
+                      <div class="product-card__placeholder">Base Mayorista</div>
+                    }
+                  </div>
+                  <div class="product-card__content">
+                    <p class="product-card__category">{{ product.category }}</p>
+                    <h4>{{ product.name }}</h4>
+                    <p class="product-card__subtitle">{{ product.subtitle }}</p>
+                    @if (product.reference) {
+                      <span class="product-card__reference">Ref: {{ product.reference }}</span>
+                    }
+                  </div>
+                </article>
+              }
+            </div>
+          </article>
+        }
+      }
+    </section>
+
+    <section class="section how-to-buy" id="como-comprar">
+      <div class="section-head">
+        <p class="section-kicker">Proceso simple</p>
+        <h2>Cómo comprar</h2>
+      </div>
+
+      <ol class="steps-grid">
+        <li class="step-card">
+          <span class="step-card__index">1</span>
+          <h3>Explora productos</h3>
+          <p>Revisa el catálogo visual y selecciona los productos que necesitas.</p>
+        </li>
+        <li class="step-card">
+          <span class="step-card__index">2</span>
+          <h3>Haz tu pedido</h3>
+          <p>Envíanos tu solicitud por WhatsApp de forma rápida y organizada.</p>
+        </li>
+        <li class="step-card">
+          <span class="step-card__index">3</span>
+          <h3>Confirmamos disponibilidad</h3>
+          <p>Validamos existencias y te confirmamos tiempos de preparación.</p>
+        </li>
+        <li class="step-card">
+          <span class="step-card__index">4</span>
+          <h3>Recibe tu mercancía</h3>
+          <p>Coordinamos entrega para que recibas tu pedido sin complicaciones.</p>
+        </li>
+      </ol>
+    </section>
+
+    <section class="section benefits" id="beneficios">
+      <div class="section-head">
+        <p class="section-kicker">Ventajas</p>
+        <h2>Una experiencia de compra profesional</h2>
+      </div>
+
+      <div class="benefits-grid">
+        <article class="benefit-card">
+          <span class="material-symbols-rounded" aria-hidden="true">bolt</span>
+          <h3>Atención rápida</h3>
+          <p>Respuestas ágiles para que avances tu pedido sin esperas largas.</p>
+        </article>
+        <article class="benefit-card">
+          <span class="material-symbols-rounded" aria-hidden="true">checklist</span>
+          <h3>Compra organizada</h3>
+          <p>Proceso claro para seleccionar productos y confirmar cantidades.</p>
+        </article>
+        <article class="benefit-card">
+          <span class="material-symbols-rounded" aria-hidden="true">local_shipping</span>
+          <h3>Seguimiento de pedidos</h3>
+          <p>Control de avance desde confirmación hasta entrega de mercancía.</p>
+        </article>
+        <article class="benefit-card">
+          <span class="material-symbols-rounded" aria-hidden="true">inventory_2</span>
+          <h3>Variedad de productos</h3>
+          <p>Colecciones en constante rotación para surtir distintos negocios.</p>
+        </article>
+        <article class="benefit-card">
+          <span class="material-symbols-rounded" aria-hidden="true">verified_user</span>
+          <h3>Experiencia confiable</h3>
+          <p>Marca enfocada en servicio serio, orden y cumplimiento.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section final-cta" id="contacto">
+      <div class="final-cta__content">
+        <p class="section-kicker">Comienza hoy</p>
+        <h2>¿Lista para surtir con Base Mayorista?</h2>
+        <p>Escríbenos y te ayudamos a armar tu pedido de forma rápida.</p>
+        <div class="final-cta__actions">
+          <a class="btn btn-whatsapp" [attr.href]="whatsappHref" target="_blank" rel="noopener noreferrer">
+            WhatsApp {{ whatsappDisplayNumber }}
+          </a>
+          <a class="btn btn-secondary" href="#productos">Ver catálogo</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="landing-footer">
+    <div class="landing-footer__brand">
+      <img src="/BaseMayoristaLogo.png" alt="Base Mayorista" />
+      <div>
+        <p class="landing-footer__name">Base Mayorista</p>
+        <p>Distribución y venta al mayoreo</p>
+      </div>
+    </div>
+
+    <div class="landing-footer__links">
+      <a href="#productos">Productos</a>
+      <a href="#como-comprar">Cómo comprar</a>
+      <a href="#contacto">Contacto</a>
+    </div>
+
+    <div class="landing-footer__contact">
+      <a [attr.href]="whatsappHref" target="_blank" rel="noopener noreferrer">WhatsApp: {{ whatsappDisplayNumber }}</a>
+    </div>
+  </footer>
+
+  <a class="floating-whatsapp" [attr.href]="whatsappHref" target="_blank" rel="noopener noreferrer">
+    <span class="material-symbols-rounded" aria-hidden="true">chat</span>
+    <span>Pedir informes</span>
+  </a>
+</div>

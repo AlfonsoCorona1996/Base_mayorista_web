@@ -293,6 +293,12 @@
           <p class="muted">Escanea o cambia el estado por producto.</p>
         </div>
       </div>
+      @if (unregisteredItemsCount(current) > 0) {
+        <p class="registration-alert">
+          Hay {{ unregisteredItemsCount(current) }} item{{ unregisteredItemsCount(current) === 1 ? "" : "s" }} pendiente{{ unregisteredItemsCount(current) === 1 ? "" : "s" }} de registro.
+          Puedes entregar la nota y despues sustituirlos por catalogo o inventario.
+        </p>
+      }
       @if (current.items.length > 0) {
         <div class="products-toolbar" role="tablist" aria-label="Filtro de productos por stock">
           <button
@@ -364,7 +370,11 @@
               <div class="main-info">
                 <button type="button" class="image-container" (click)="openImagePreview(card.imageUrl || 'https://via.placeholder.com/800?text=Producto')">
                   <img [src]="card.imageUrl || 'https://via.placeholder.com/100'" [alt]="item.title" />
-                  <span class="source-tag source-text--overlay" [class.source--catalogo]="item.source === 'catalogo'">
+                  <span
+                    class="source-tag source-text--overlay"
+                    [class.source--catalogo]="item.source === 'catalogo'"
+                    [class.source--manual]="item.source === 'manual'"
+                  >
                     {{ item.source | uppercase }}
                   </span>
                   @if (card.isConfirmed) {
@@ -381,6 +391,9 @@
                 <div class="text-content">
                   <div class="title-row">
                     <h4 class="product-name">{{ item.title }}</h4>
+                    @if (isManualItem(item)) {
+                      <span class="registration-chip">Pendiente de registro</span>
+                    }
                   </div>
 
                   <div class="specs-grid">
@@ -458,6 +471,12 @@
                         <span class="material-symbols-rounded" aria-hidden="true">inventory_2</span>
                         Recibir proveedor
                       }
+                    </button>
+                  }
+                  @if (isManualItem(item) && vm.canEditItems) {
+                    <button type="button" class="btn btn-convert" (click)="openConvertItemModal(item)">
+                      <span class="material-symbols-rounded" aria-hidden="true">sync_alt</span>
+                      Convertir
                     </button>
                   }
                 </div>
@@ -675,7 +694,7 @@
                     <button type="button" class="secondaryBtn" (click)="toggleClosedBox(pkg.pkg)"> {{ pkg.isExpanded ? "Ocultar contenido" : "Ver contenido" }} </button>
                     <button type="button" class="secondaryBtn" [disabled]="packingBusy()" (click)="printLabel(current, pkg.pkg)">
                       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V4h10v5m-10 8h10v3H7v-3Zm12 0h1a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                      Imprimir etiqueta
+                      Imprimir etiqueta 100x150
                     </button>
                     <button type="button" class="reopenBtn" [disabled]="packingBusy()" (click)="reopenPackage(current, pkg.pkg)">
                       <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -1299,14 +1318,16 @@
   }
 
   @if (addItemModalOpen()) {
-    <div class="sheet-backdrop" (click)="closeAddItemModal()">
-      <div class="sheet full" role="dialog" aria-modal="true" aria-labelledby="add-item-modal-title" (click)="$event.stopPropagation()">
+    <div class="sheet-backdrop sheet-backdrop--add-item" (click)="closeAddItemModal()">
+      <div class="sheet full sheet-add-item-ios" role="dialog" aria-modal="true" aria-labelledby="add-item-modal-title" (click)="$event.stopPropagation()">
         <div class="sheet-header">
           <div class="sheet-handle" aria-hidden="true"></div>
-          <h2 id="add-item-modal-title">
-            <span class="material-symbols-rounded" aria-hidden="true">add_box</span>
-            Agregar producto
-          </h2>
+          <div class="sheet-title-wrap">
+            <h2 id="add-item-modal-title">
+              <span class="material-symbols-rounded" aria-hidden="true">add_box</span>
+              {{ isConvertMode() ? "Convertir item manual" : "Agregar producto" }}
+            </h2>
+          </div>
           <button type="button" class="btn ghost" (click)="closeAddItemModal()">
             <span class="material-symbols-rounded" aria-hidden="true">close</span>
             Cerrar
@@ -1314,75 +1335,130 @@
         </div>
         <div class="sheet-body">
           <div class="add-item">
+          @if (isConvertMode() && convertTargetItem(); as targetItem) {
+            <p class="registration-alert">
+              Convirtiendo: <strong>{{ targetItem.title }}</strong>. Selecciona catalogo o inventario para reemplazar este item manual.
+            </p>
+          }
           <div class="section-row">
             <div class="pill source-toggle">
               <label>
-                <input type="radio" name="source" value="catalogo" [(ngModel)]="newItemSource" [disabled]="!vm.canEditItems" />
-                Catalogo
+                <input
+                  type="radio"
+                  name="source"
+                  value="catalogo"
+                  [ngModel]="newItemSource()"
+                  (ngModelChange)="onNewItemSourceChange($event)"
+                  [disabled]="!vm.canEditItems"
+                />
+                <span class="material-symbols-rounded" aria-hidden="true">storefront</span>
+                <span>Catalogo</span>
               </label>
               <label>
-                <input type="radio" name="source" value="inventario" [(ngModel)]="newItemSource" [disabled]="!vm.canEditItems" />
-                Inventario
+                <input
+                  type="radio"
+                  name="source"
+                  value="inventario"
+                  [ngModel]="newItemSource()"
+                  (ngModelChange)="onNewItemSourceChange($event)"
+                  [disabled]="!vm.canEditItems"
+                />
+                <span class="material-symbols-rounded" aria-hidden="true">inventory_2</span>
+                <span>Inventario</span>
               </label>
+              @if (!isConvertMode()) {
+                <label>
+                  <input
+                    type="radio"
+                    name="source"
+                    value="manual"
+                    [ngModel]="newItemSource()"
+                    (ngModelChange)="onNewItemSourceChange($event)"
+                    [disabled]="!vm.canEditItems"
+                  />
+                  <span class="material-symbols-rounded" aria-hidden="true">edit_note</span>
+                  <span>Manual</span>
+                </label>
+              }
             </div>
           </div>
-          <div class="product-search">
-            <div class="field">
-              <label>Buscar producto</label>
-              <input
-                #productSearchInput
-                class="input"
-                type="text"
-                placeholder="Nombre, variante o color"
-                [(ngModel)]="newItemSearch"
-              (focus)="showProductList.set(true)"
-              (keydown.escape)="showProductList.set(false)"
-                [disabled]="!vm.canEditItems"
-              />
-            </div>
-            @if (showProductList() && (inventorySuggestions().length > 0 || catalogSuggestions().length > 0)) {
-              <div class="listbox" role="listbox" aria-label="Resultados de productos">
-                @for (s of inventorySuggestions(); track s.inventory_id) {
-                  <button type="button" role="option" class="listbox-option" [attr.aria-label]="'Inventario: ' + s.title" (mousedown)="$event.preventDefault(); beginProductPick(); pickInventory(s)" (touchstart)="$event.preventDefault(); beginProductPick(); pickInventory(s)" (click)="beginProductPick(); pickInventory(s)">
-                    @if (s.image_urls[0]) {
-                      <img class="listbox-thumb" [src]="s.image_urls[0]" alt="" />
-                    } @else {
-                      <div class="photo-placeholder photo-placeholder-sm" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                          <path d="M4 7h4l2-2h4l2 2h4v12H4z"></path>
-                          <circle cx="12" cy="13" r="3"></circle>
-                        </svg>
-                      </div>
-                    }
-                    <div>
-                      <div class="card-title">{{ s.title }}</div>
-                      <div class="card-meta">{{ s.variant_name || s.size_label || "Variante" }} - {{ s.color_name || "Color" }}</div>
-                    </div>
-                    <span class="card-tag inv">Inventario - {{ s.quantity_on_hand }} pzas</span>
-                  </button>
-                }
-                @for (c of catalogSuggestions(); track c.doc.normalized_id) {
-                  <button type="button" role="option" class="listbox-option" [attr.aria-label]="'Catalogo: ' + c.doc.listing.title" (mousedown)="$event.preventDefault(); beginProductPick(); pickCatalog(c.doc, c.variant, c.color)" (touchstart)="$event.preventDefault(); beginProductPick(); pickCatalog(c.doc, c.variant, c.color)" (click)="beginProductPick(); pickCatalog(c.doc, c.variant, c.color)">
-                    @if (c.image) {
-                      <img class="listbox-thumb" [src]="c.image" alt="" />
-                    } @else {
-                      <div class="photo-placeholder photo-placeholder-sm" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                          <path d="M4 7h4l2-2h4l2 2h4v12H4z"></path>
-                          <circle cx="12" cy="13" r="3"></circle>
-                        </svg>
-                      </div>
-                    }
-                    <div>
-                      <div class="card-title">{{ c.doc.listing.title }}</div>
-                      <div class="card-meta">{{ c.doc.listing.category_hint || "Sin categoria" }}</div>
-                    </div>
-                    <span class="card-tag cat">{{ c.variant.variant_name || '-' }} - {{ c.color || 'Color' }}</span>
-                  </button>
-                }
+          @if (!isManualSource()) {
+            <div class="product-search">
+              <div class="field">
+                <label>
+                  <span class="material-symbols-rounded" aria-hidden="true">search</span>
+                  Buscar producto
+                </label>
+                <div class="search-input-wrap">
+                  <span class="material-symbols-rounded" aria-hidden="true">search</span>
+                  <input
+                    #productSearchInput
+                    class="input"
+                    type="text"
+                    placeholder="Nombre, variante o color"
+                    [(ngModel)]="newItemSearch"
+                  (focus)="showProductList.set(true)"
+                  (keydown.escape)="showProductList.set(false)"
+                    [disabled]="!vm.canEditItems"
+                  />
+                </div>
               </div>
-            }
-          </div>
+              @if (showProductList() && (inventorySuggestions().length > 0 || catalogSuggestions().length > 0)) {
+                <div class="listbox" role="listbox" aria-label="Resultados de productos">
+                  @for (s of inventorySuggestions(); track s.inventory_id) {
+                    <button type="button" role="option" class="listbox-option" [attr.aria-label]="'Inventario: ' + s.title" (mousedown)="$event.preventDefault(); beginProductPick(); pickInventory(s)" (touchstart)="$event.preventDefault(); beginProductPick(); pickInventory(s)" (click)="beginProductPick(); pickInventory(s)">
+                      @if (s.image_urls[0]) {
+                        <img class="listbox-thumb" [src]="s.image_urls[0]" alt="" />
+                      } @else {
+                        <div class="photo-placeholder photo-placeholder-sm" aria-hidden="true">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M4 7h4l2-2h4l2 2h4v12H4z"></path>
+                            <circle cx="12" cy="13" r="3"></circle>
+                          </svg>
+                        </div>
+                      }
+                      <div class="listbox-main">
+                        <div class="card-title">{{ s.title }}</div>
+                        <div class="card-meta">
+                          <span class="material-symbols-rounded" aria-hidden="true">tune</span>
+                          {{ s.variant_name || s.size_label || "Variante" }} - {{ s.color_name || "Color" }}
+                        </div>
+                      </div>
+                      <span class="card-tag inv">
+                        <span class="material-symbols-rounded" aria-hidden="true">inventory_2</span>
+                        Inventario - {{ s.quantity_on_hand }} pzas
+                      </span>
+                    </button>
+                  }
+                  @for (c of catalogSuggestions(); track c.doc.normalized_id) {
+                    <button type="button" role="option" class="listbox-option" [attr.aria-label]="'Catalogo: ' + c.doc.listing.title" (mousedown)="$event.preventDefault(); beginProductPick(); pickCatalog(c.doc, c.variant, c.color)" (touchstart)="$event.preventDefault(); beginProductPick(); pickCatalog(c.doc, c.variant, c.color)" (click)="beginProductPick(); pickCatalog(c.doc, c.variant, c.color)">
+                      @if (c.image) {
+                        <img class="listbox-thumb" [src]="c.image" alt="" />
+                      } @else {
+                        <div class="photo-placeholder photo-placeholder-sm" aria-hidden="true">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M4 7h4l2-2h4l2 2h4v12H4z"></path>
+                            <circle cx="12" cy="13" r="3"></circle>
+                          </svg>
+                        </div>
+                      }
+                      <div class="listbox-main">
+                        <div class="card-title">{{ c.doc.listing.title }}</div>
+                        <div class="card-meta">
+                          <span class="material-symbols-rounded" aria-hidden="true">category</span>
+                          {{ c.doc.listing.category_hint || "Sin categoria" }}
+                        </div>
+                      </div>
+                      <span class="card-tag cat">
+                        <span class="material-symbols-rounded" aria-hidden="true">storefront</span>
+                        {{ c.variant.variant_name || '-' }} - {{ c.color || 'Color' }}
+                      </span>
+                    </button>
+                  }
+                </div>
+              }
+            </div>
+          }
           @if (selectedPreview(); as preview) {
             <div class="preview">
               @if (preview.image) {
@@ -1395,34 +1471,55 @@
                   </svg>
                 </div>
               }
-              <div>
+              <div class="preview-content">
                 <p class="preview-title">{{ preview.title }}</p>
-                <p class="preview-meta">{{ preview.variant }} - {{ preview.color }}</p>
-                @if (!selectedPreviewHasColorImage()) {
-                  <span class="color-chip">Color: {{ preview.color }}</span>
-                }
-                <span class="preview-tag">{{ preview.source }}</span>
+                <p class="preview-meta">
+                  <span class="material-symbols-rounded" aria-hidden="true">straighten</span>
+                  {{ preview.variant || "Sin variante" }}
+                  <span class="preview-dot">•</span>
+                  <span class="material-symbols-rounded" aria-hidden="true">palette</span>
+                  {{ preview.color || "Sin color" }}
+                </p>
+                <div class="preview-chips">
+                  @if (!selectedPreviewHasColorImage()) {
+                    <span class="color-chip">
+                      <span class="material-symbols-rounded" aria-hidden="true">palette</span>
+                      {{ preview.color }}
+                    </span>
+                  }
+                  <span class="preview-tag">
+                    <span class="material-symbols-rounded" aria-hidden="true">sell</span>
+                    {{ preview.source }}
+                  </span>
+                </div>
               </div>
             </div>
           }
           <div class="field">
-            <label>Producto</label>
+            <label>
+              <span class="material-symbols-rounded" aria-hidden="true">sell</span>
+              Producto
+            </label>
             <input
               class="input"
               type="text"
               [(ngModel)]="newItemTitle"
+              [class.input-readonly]="lockItemFields()"
               [readonly]="lockItemFields()"
-              [disabled]="!selectedPreview() || !vm.canEditItems"
+              [disabled]="!canSubmitNewItem() || !vm.canEditItems"
             />
           </div>
           @if (catalogVariantOptions().length > 0) {
             <div class="field">
-              <label>Variante / talla</label>
+              <label>
+                <span class="material-symbols-rounded" aria-hidden="true">straighten</span>
+                Variante / talla
+              </label>
               <select
                 class="input"
                 [ngModel]="newItemVariant()"
                 (ngModelChange)="onVariantChange($event)"
-                [disabled]="!selectedPreview() || !vm.canEditItems"
+                [disabled]="!canSubmitNewItem() || !vm.canEditItems"
               >
                 @for (v of catalogVariantOptions(); track v) {
                   <option [value]="v">{{ v }}</option>
@@ -1431,24 +1528,31 @@
             </div>
           } @else {
             <div class="field">
-              <label>Variante / talla</label>
+              <label>
+                <span class="material-symbols-rounded" aria-hidden="true">straighten</span>
+                Variante / talla
+              </label>
               <input
                 class="input"
                 type="text"
                 [(ngModel)]="newItemVariant"
+                [class.input-readonly]="lockItemFields()"
                 [readonly]="lockItemFields()"
-                [disabled]="!selectedPreview() || !vm.canEditItems"
+                [disabled]="!canSubmitNewItem() || !vm.canEditItems"
               />
             </div>
           }
           @if (catalogColorOptions().length > 0) {
             <div class="field">
-              <label>Color</label>
+              <label>
+                <span class="material-symbols-rounded" aria-hidden="true">palette</span>
+                Color
+              </label>
               <select
                 class="input"
                 [ngModel]="newItemColor()"
                 (ngModelChange)="onColorChange($event)"
-                [disabled]="!selectedPreview() || !vm.canEditItems"
+                [disabled]="!canSubmitNewItem() || !vm.canEditItems"
               >
                 @for (c of catalogColorOptions(); track c) {
                   <option [value]="c">{{ c }}</option>
@@ -1457,28 +1561,38 @@
             </div>
           } @else {
             <div class="field">
-              <label>Color</label>
+              <label>
+                <span class="material-symbols-rounded" aria-hidden="true">palette</span>
+                Color
+              </label>
               <input
                 class="input"
                 type="text"
                 [(ngModel)]="newItemColor"
+                [class.input-readonly]="lockItemFields()"
                 [readonly]="lockItemFields()"
-                [disabled]="!selectedPreview() || !vm.canEditItems"
+                [disabled]="!canSubmitNewItem() || !vm.canEditItems"
               />
             </div>
           }
           <div class="field">
-            <label>Cantidad</label>
+            <label>
+              <span class="material-symbols-rounded" aria-hidden="true">tag</span>
+              Cantidad
+            </label>
             <input
               class="input"
               type="number"
               min="1"
               [(ngModel)]="newItemQty"
-              [disabled]="!selectedPreview() || !vm.canEditItems"
+              [disabled]="!canSubmitNewItem() || !vm.canEditItems"
             />
           </div>
           <div class="field">
-            <label>Precio final</label>
+            <label>
+              <span class="material-symbols-rounded" aria-hidden="true">payments</span>
+              Precio final
+            </label>
             <div class="money" [class.money-invalid]="priceRuleInvalid()">
               <span>MXN</span>
               <input
@@ -1488,12 +1602,15 @@
                 (focus)="onPriceInputFocus('final')"
                 (input)="onPriceInputChange('final', $any($event.target).value)"
                 (blur)="onPriceInputBlur('final')"
-                [disabled]="!selectedPreview() || !vm.canEditItems"
+                [disabled]="!canSubmitNewItem() || !vm.canEditItems"
               />
             </div>
           </div>
           <div class="field">
-            <label>Precio clienta</label>
+            <label>
+              <span class="material-symbols-rounded" aria-hidden="true">person</span>
+              Precio clienta
+            </label>
             <div class="money money-readonly" [class.money-invalid]="priceRuleInvalid()">
               <span>MXN</span>
               <input
@@ -1506,7 +1623,10 @@
             </div>
           </div>
           <div class="field">
-            <label>Precio costo</label>
+            <label>
+              <span class="material-symbols-rounded" aria-hidden="true">receipt_long</span>
+              Precio costo
+            </label>
             <div class="money money-readonly">
               <span>MXN</span>
               <input
@@ -1521,8 +1641,8 @@
         </div>
         </div>
         <div class="sheet-footer">
-          <button type="button" class="btn primary" (click)="addItem(current)" [disabled]="!selectedPreview() || !vm.canEditItems">
-            Anadir al pedido
+          <button type="button" class="btn primary" (click)="submitItemForm(current)" [disabled]="!canSubmitNewItem() || !vm.canEditItems">
+            {{ isConvertMode() ? "Convertir item" : "Anadir al pedido" }}
           </button>
           <button type="button" class="btn danger" (click)="closeAddItemModal()">Cancelar</button>
         </div>

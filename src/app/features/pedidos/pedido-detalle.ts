@@ -4,10 +4,13 @@ import { FormsModule } from "@angular/forms";
 import { ActivatedRoute, Router, RouterLink } from "@angular/router";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { collection, getDocs, limit, orderBy, query } from "firebase/firestore";
+import { PDFDocument, PDFFont, PDFPage, StandardFonts, rgb } from "pdf-lib";
+import * as QRCode from "qrcode";
 import { CustomersService } from "../../core/customers.service";
 import { SuppliersService } from "../../core/suppliers.service";
 import { OrdersService, Order, OrderEvent, OrderItem, OrderItemState, OrderStatus, PackageRecord, Incident, IncidentSeverity } from "../../core/orders.service";
 import { RoutesService } from "../../core/routes.service";
+import { LocalitiesService } from "../../core/localities.service";
 import { InventoryService, InventoryItem } from "../../core/inventory.service";
 import { NormalizedListingsService, NormalizedListingDoc } from "../../core/normalized-listings.service";
 import { SupplierOperationsService } from "../../core/supplier-operations.service";
@@ -142,6 +145,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   private customers = inject(CustomersService);
   private suppliers = inject(SuppliersService);
   private rutas = inject(RoutesService);
+  private localities = inject(LocalitiesService);
   private inventory = inject(InventoryService);
   private catalog = inject(NormalizedListingsService);
   private supplierOperations = inject(SupplierOperationsService);
@@ -243,6 +247,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   expandedClosedBoxes = signal<Record<string, boolean>>({});
   supplierEta = signal("");
   addItemModalOpen = signal(false);
+  addItemMode = signal<"add" | "convert">("add");
+  convertTargetItemId = signal<string | null>(null);
   newItemSupplierId = signal<string | null>(null);
   newItemProductId = signal<string | null>(null);
   selectedPreviewHasColorImage = signal(true);
@@ -273,7 +279,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
   newItemTitle = signal("");
   newItemSearch = signal("");
-  newItemSource = signal<"catalogo" | "inventario">("catalogo");
+  newItemSource = signal<"catalogo" | "inventario" | "manual">("catalogo");
   newItemVariant = signal("");
   newItemColor = signal("");
   newItemInventoryId = signal<string | null>(null);
@@ -292,6 +298,13 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   supplierDiscountLabel = signal<string | null>(null);
   selectedPreview = signal<{ title: string; variant: string; color: string; image: string | null; source: string } | null>(null);
   selectedCatalogDoc = signal<NormalizedListingDoc | null>(null);
+  readonly isManualSource = computed(() => this.newItemSource() === "manual");
+  readonly isConvertMode = computed(() => this.addItemMode() === "convert");
+  readonly convertTargetItem = computed(() => {
+    const id = this.convertTargetItemId();
+    if (!id) return null;
+    return (this.order()?.items || []).find((item) => item.item_id === id) || null;
+  });
   inventoryLoaded = signal(false);
   catalogLoaded = signal(false);
   showProductList = signal(false);
@@ -610,6 +623,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       this.customers.loadFromFirestore().catch(() => null),
       this.suppliers.loadFromFirestore().catch(() => null),
       this.rutas.loadFromFirestore().catch(() => null),
+      this.localities.loadFromFirestore().catch(() => null),
       this.inventory.loadFromFirestore().catch(() => null),
       this.supplierOperations.loadFromFirestore().catch(() => null),
       this.loadAssigneeOptions().catch(() => null),
@@ -1073,6 +1087,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   groupDisplayName(group: { supplierName: string; items: OrderItem[] }): string {
     const items = group.items || [];
     if (items.length > 0 && items.every((item) => item.source === "inventario")) return "Inventario";
+    if (items.length > 0 && items.every((item) => item.source === "manual")) return "Manual";
     return group.supplierName;
   }
 
@@ -1453,7 +1468,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   missingSupplierCount(order: Order): number {
-    return this.confirmedItems(order).filter((item) => item.source !== "inventario" && !item.supplier_id).length;
+    return this.confirmedItems(order).filter((item) => item.source === "catalogo" && !item.supplier_id).length;
   }
 
   canEditItems(order: Order | null): boolean {
@@ -1707,6 +1722,18 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
   isSupplierManagedItem(item: OrderItem): boolean {
     return item.source !== "inventario" && !!(item.supplier_id || "").trim();
+  }
+
+  isManualItem(item: OrderItem): boolean {
+    return item.source === "manual";
+  }
+
+  unregisteredItems(order: Order): OrderItem[] {
+    return (order.items || []).filter((item) => item.source === "manual");
+  }
+
+  unregisteredItemsCount(order: Order): number {
+    return this.unregisteredItems(order).length;
   }
 
   private supplierOpId(order: Order, item: OrderItem): string {
@@ -2603,6 +2630,25 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   openAddItemModal() {
+    this.resetAddItemForm();
+    this.addItemMode.set("add");
+    this.addItemModalOpen.set(true);
+  }
+
+  openConvertItemModal(item: OrderItem) {
+    if (item.source !== "manual") return;
+    this.resetAddItemForm();
+    this.addItemMode.set("convert");
+    this.convertTargetItemId.set(item.item_id);
+    this.newItemSource.set("catalogo");
+    this.newItemTitle.set(item.title || "");
+    this.newItemVariant.set(item.variant || "");
+    this.newItemColor.set(item.color || "");
+    this.newItemQty.set(Math.max(1, this.itemQuantity(item)));
+    this.newItemPricePublic.set(item.price_public ?? null);
+    this.newItemPriceClienta.set(item.price_clienta ?? null);
+    this.newItemPriceCost.set(item.price_cost ?? null);
+    this.updatePriceDraftFromSignals();
     this.addItemModalOpen.set(true);
   }
 
@@ -2612,6 +2658,9 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   private resetAddItemForm() {
+    this.addItemMode.set("add");
+    this.convertTargetItemId.set(null);
+    this.newItemSource.set("catalogo");
     this.newItemTitle.set("");
     this.newItemVariant.set("");
     this.newItemColor.set("");
@@ -2636,53 +2685,576 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.showProductList.set(false);
   }
 
+  onNewItemSourceChange(source: string) {
+    if (this.isConvertMode() && source === "manual") return;
+    const normalized = source === "inventario" || source === "manual" ? source : "catalogo";
+    if (normalized === this.newItemSource()) return;
+    this.newItemSource.set(normalized);
+    this.clearAddItemDraftForSourceChange();
+  }
+
+  private clearAddItemDraftForSourceChange() {
+    this.newItemTitle.set("");
+    this.newItemVariant.set("");
+    this.newItemColor.set("");
+    this.newItemQty.set(1);
+    this.newItemPricePublic.set(null);
+    this.newItemPriceCost.set(null);
+    this.newItemPriceClienta.set(null);
+    this.priceInputFocused.set(null);
+    this.priceInputDraft.set({ final: "", clienta: "", costo: "" });
+    this.supplierDiscountPct.set(null);
+    this.supplierDiscountLabel.set(null);
+    this.newItemSearch.set("");
+    this.newItemInventoryId.set(null);
+    this.newItemSupplierId.set(null);
+    this.newItemProductId.set(null);
+    this.showProductList.set(false);
+    this.lockItemFields.set(false);
+    this.catalogVariantOptions.set([]);
+    this.catalogColorOptions.set([]);
+    this.selectedPreview.set(null);
+    this.selectedCatalogDoc.set(null);
+    this.selectedPreviewHasColorImage.set(true);
+  }
+
+  canSubmitNewItem(): boolean {
+    if (this.isConvertMode()) return this.newItemSource() !== "manual" && !!this.selectedPreview();
+    return this.isManualSource() || !!this.selectedPreview();
+  }
+
+  async submitItemForm(order: Order | null) {
+    if (this.isConvertMode()) {
+      await this.convertManualItem(order);
+      return;
+    }
+    await this.addItem(order);
+  }
+
   packageDisplayLabel(order: Order, pkg: PackageRecord): string {
     if (this.packageStatus(pkg) === "closed") return this.closedBoxTitle(order, pkg);
     return "Caja abierta";
   }
 
   async printLabel(order: Order, pkg: PackageRecord) {
-    const customer = this.customerName(order);
-    const route = this.routeName(order);
-    const items = this.packingItemsInBox(order, pkg).map((row) => `${row.item.title} x${row.qty}`).join(", ") || "Sin items";
-    const amount = pkg.amount_due !== null ? this.formatCurrency(pkg.amount_due) : "Por cobrar";
-    const label = this.packageStatus(pkg) === "closed" ? this.closedBoxLabel(order, pkg) : "abierta";
-    const qr = this.qrPlaceholder(order, pkg);
-    const html = `
-      <html>
-        <head>
-          <title>Etiqueta ${order.order_id}</title>
-          <style>
-            body { font-family: Arial, sans-serif; padding: 16px; }
-            h1 { font-size: 18px; margin: 0 0 8px; }
-            .row { margin: 6px 0; }
-            .label { font-weight: 700; }
-            .qr { margin-top: 12px; padding: 8px; border: 1px dashed #999; }
-          </style>
-        </head>
-        <body>
-          <h1>Etiqueta de paquete</h1>
-          <div class="row"><span class="label">Cliente:</span> ${customer}</div>
-          <div class="row"><span class="label">Ruta:</span> ${route}</div>
-          <div class="row"><span class="label">Pedido:</span> ${order.order_id}</div>
-          <div class="row"><span class="label">Caja:</span> ${label}</div>
-          <div class="row"><span class="label">Items:</span> ${items}</div>
-          <div class="row"><span class="label">Cobranza:</span> ${amount}</div>
-          <div class="qr"><span class="label">QR:</span> ${qr}</div>
-        </body>
-      </html>
-    `;
-    const win = window.open("", "_blank");
-    if (!win) return;
-    win.document.write(html);
-    win.document.close();
-    win.focus();
-    win.print();
-    await this.orders.logEvent(order.order_id, "label_printed", "Etiqueta enviada a impresion", {
-      packageId: pkg.package_id,
+    if (this.packingBusy()) return;
+    this.packingBusy.set(true);
+    try {
+      const qrPayload = this.buildLabelQrPayload(order, pkg);
+      const pdfBytes = await this.buildPackageLabelPdf(order, pkg, qrPayload);
+      const opened = this.openLabelPdf(pdfBytes, `etiqueta-${order.order_id}-${pkg.package_id}.pdf`);
+      this.actionError.set(null);
+      this.showActionToast(opened ? "Etiqueta PDF 100x150 lista para imprimir." : "Etiqueta PDF descargada.");
+
+      try {
+        await this.orders.logEvent(order.order_id, "label_printed", "Etiqueta PDF 100x150 generada", {
+          packageId: pkg.package_id,
+          qrPayload,
+          format: "pdf_100x150mm",
+        });
+        await this.refreshEvents();
+      } catch (error) {
+        console.warn("[pedido-detalle] Etiqueta generada sin registrar evento", { orderId: order.order_id, error });
+      }
+    } catch (error) {
+      console.error("[pedido-detalle] No se pudo generar etiqueta PDF", { orderId: order.order_id, packageId: pkg.package_id, error });
+      this.actionError.set("No se pudo generar la etiqueta PDF 100x150.");
+      this.showActionToast("Error al generar etiqueta.");
+    } finally {
+      this.packingBusy.set(false);
+    }
+  }
+
+  private async buildPackageLabelPdf(order: Order, pkg: PackageRecord, qrPayload: string): Promise<Uint8Array> {
+    const pdfDoc = await PDFDocument.create();
+    const pageWidth = this.mmToPt(100);
+    const pageHeight = this.mmToPt(150);
+    const marginX = this.mmToPt(5);
+    const topMargin = this.mmToPt(5);
+    const bottomMargin = this.mmToPt(5);
+    const contentWidth = pageWidth - (marginX * 2);
+    const ink = rgb(0, 0, 0);
+    const secondary = rgb(0.28, 0.28, 0.28);
+    const meta = rgb(0.45, 0.45, 0.45);
+    const divider = rgb(0.82, 0.82, 0.82);
+    const dividerThickness = 1.4;
+
+    const page = pdfDoc.addPage([pageWidth, pageHeight]);
+    const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+    page.drawRectangle({
+      x: 0,
+      y: 0,
+      width: pageWidth,
+      height: pageHeight,
+      color: rgb(1, 1, 1),
     });
-    this.showActionToast("Etiqueta enviada a impresion.");
-    await this.refreshEvents();
+
+    let cursorTop = pageHeight - topMargin;
+    const logoSlotWidth = this.mmToPt(31);
+    const topSectionHeight = this.mmToPt(18);
+    const topSectionBottom = cursorTop - topSectionHeight;
+    const logoBytes = await this.loadLabelLogoBytes();
+    if (logoBytes) {
+      const logoImage = await pdfDoc.embedPng(logoBytes);
+      const logoBoxWidth = this.mmToPt(29);
+      const logoBoxHeight = this.mmToPt(15.5);
+      const fittedLogo = this.fitImage(logoImage.width, logoImage.height, logoBoxWidth, logoBoxHeight);
+      page.drawImage(logoImage, {
+        x: marginX + ((logoSlotWidth - fittedLogo.width) / 2),
+        y: topSectionBottom + ((topSectionHeight - fittedLogo.height) / 2),
+        width: fittedLogo.width,
+        height: fittedLogo.height,
+      });
+    } else {
+      const fallback = "BM";
+      const fallbackSize = 16;
+      const fallbackWidth = fontBold.widthOfTextAtSize(fallback, fallbackSize);
+      page.drawText(fallback, {
+        x: marginX + ((logoSlotWidth - fallbackWidth) / 2),
+        y: topSectionBottom + this.mmToPt(6),
+        font: fontBold,
+        size: fallbackSize,
+        color: ink,
+      });
+    }
+
+    const routeX = marginX + logoSlotWidth + this.mmToPt(2.5);
+    const routeWidth = pageWidth - marginX - routeX;
+    page.drawText("RUTA", {
+      x: routeX,
+      y: cursorTop - this.mmToPt(5.2),
+      font: fontBold,
+      size: 7.2,
+      color: meta,
+    });
+    const routeLines = this.splitTextByWidth((this.routeName(order) || "SIN RUTA").toUpperCase(), routeWidth, fontBold, 16).slice(0, 2);
+    let routeY = cursorTop - this.mmToPt(11.4);
+    for (const line of routeLines) {
+      page.drawText(line, {
+        x: routeX,
+        y: routeY,
+        font: fontBold,
+        size: 16,
+        color: ink,
+      });
+      routeY -= this.mmToPt(5.5);
+    }
+
+    page.drawLine({
+      start: { x: marginX, y: topSectionBottom },
+      end: { x: pageWidth - marginX, y: topSectionBottom },
+      thickness: dividerThickness,
+      color: divider,
+    });
+
+    const customerSectionTop = topSectionBottom - this.mmToPt(2.2);
+    let customerY = customerSectionTop - this.mmToPt(2.4);
+    page.drawText("CLIENTA", {
+      x: marginX,
+      y: customerY,
+      font: fontBold,
+      size: 7.2,
+      color: meta,
+    });
+    customerY -= this.mmToPt(5.2);
+
+    const customerLines = this.splitTextByWidth(this.customerName(order), contentWidth, fontBold, 13.6).slice(0, 2);
+    for (const line of customerLines) {
+      page.drawText(line, {
+        x: marginX,
+        y: customerY,
+        font: fontBold,
+        size: 13.6,
+        color: ink,
+      });
+      customerY -= this.mmToPt(5);
+    }
+
+    const addressLines = this.customerAddressLines(order);
+    for (const line of addressLines.slice(0, 1)) {
+      const wrapped = this.splitTextByWidth(line, contentWidth, fontRegular, 8.8).slice(0, 1);
+      if (wrapped.length > 0) {
+        page.drawText(wrapped[0], {
+          x: marginX,
+          y: customerY,
+          font: fontRegular,
+          size: 8.8,
+          color: secondary,
+        });
+        customerY -= this.mmToPt(4.2);
+      }
+    }
+
+    const packageSectionTop = customerY - this.mmToPt(3.5);
+    const packageSectionHeight = this.mmToPt(13.5);
+    const packageSectionBottom = packageSectionTop - packageSectionHeight;
+    const shortPackageId = this.shortPackageId(pkg);
+    const boxCountLabel = this.packageCountLabel(order, pkg);
+
+    page.drawText(shortPackageId, {
+      x: marginX,
+      y: packageSectionTop - this.mmToPt(5.8),
+      font: fontBold,
+      size: 11.2,
+      color: ink,
+    });
+    page.drawText(order.order_id, {
+      x: marginX,
+      y: packageSectionTop - this.mmToPt(10.3),
+      font: fontRegular,
+      size: 8,
+      color: secondary,
+    });
+    page.drawText("CAJA", {
+      x: marginX + (contentWidth * 0.62),
+      y: packageSectionTop - this.mmToPt(3.8),
+      font: fontBold,
+      size: 7,
+      color: meta,
+    });
+
+    const boxCountSize = 21;
+    const boxCountWidth = fontBold.widthOfTextAtSize(boxCountLabel, boxCountSize);
+    page.drawText(boxCountLabel, {
+      x: pageWidth - marginX - boxCountWidth,
+      y: packageSectionTop - this.mmToPt(11.2),
+      font: fontBold,
+      size: boxCountSize,
+      color: ink,
+    });
+
+    page.drawLine({
+      start: { x: marginX, y: packageSectionBottom },
+      end: { x: pageWidth - marginX, y: packageSectionBottom },
+      thickness: dividerThickness,
+      color: divider,
+    });
+
+    const qrTop = packageSectionBottom - this.mmToPt(1.2);
+    const qrSize = this.mmToPt(36);
+    const qrX = (pageWidth - qrSize) / 2;
+    const qrY = qrTop - qrSize;
+    const qrDataUrl = await this.buildQrDataUrl(qrPayload);
+    const qrImage = await pdfDoc.embedPng(this.dataUrlToBytes(qrDataUrl));
+    page.drawImage(qrImage, {
+      x: qrX,
+      y: qrY,
+      width: qrSize,
+      height: qrSize,
+    });
+
+    const qrCaption = "ESCANEAR PAQUETE";
+    const qrCaptionSize = 8.2;
+    const qrCaptionWidth = fontBold.widthOfTextAtSize(qrCaption, qrCaptionSize);
+    const qrCaptionY = qrY - this.mmToPt(3.2);
+    page.drawText(qrCaption, {
+      x: (pageWidth - qrCaptionWidth) / 2,
+      y: qrCaptionY,
+      font: fontBold,
+      size: qrCaptionSize,
+      color: ink,
+    });
+
+    const footerTextY = bottomMargin + this.mmToPt(0.7);
+    const footerDividerY = footerTextY + this.mmToPt(5.8);
+    page.drawLine({
+      start: { x: marginX, y: footerDividerY },
+      end: { x: pageWidth - marginX, y: footerDividerY },
+      thickness: dividerThickness,
+      color: divider,
+    });
+
+    const contentTop = qrCaptionY - this.mmToPt(6.2);
+    const contentBottom = footerDividerY + this.mmToPt(1.6);
+    let contentY = contentTop;
+    page.drawText("CONTENIDO", {
+      x: marginX,
+      y: contentY,
+      font: fontBold,
+      size: 8.2,
+      color: meta,
+    });
+    contentY -= this.mmToPt(4.8);
+
+    const packageItems = this.packingItemsInBox(order, pkg);
+    const totalPieces = packageItems.reduce((sum, row) => sum + Math.max(1, Math.trunc(row.qty || 0)), 0);
+    const summary = `${packageItems.length} producto(s) | ${totalPieces} pieza(s)`;
+    page.drawText(summary, {
+      x: marginX,
+      y: contentY,
+      font: fontRegular,
+      size: 7.5,
+      color: secondary,
+    });
+    contentY -= this.mmToPt(4.2);
+
+    const listFontSize = 7.1;
+    const listLineHeight = this.mmToPt(3.4);
+    let hiddenProducts = 0;
+    for (let index = 0; index < packageItems.length; index += 1) {
+      const row = packageItems[index];
+      const line = this.truncateTextToWidth(
+        `${Math.max(1, Math.trunc(row.qty || 0))} x ${this.itemLabelWithoutPrice(row.item)}`,
+        contentWidth,
+        fontRegular,
+        listFontSize,
+      );
+      const blockHeight = listLineHeight;
+      const remainingAfterCurrent = packageItems.length - (index + 1);
+      const reserveOverflow = remainingAfterCurrent > 0 ? (listLineHeight * 0.9) : 0;
+      if (contentY - blockHeight < (contentBottom + reserveOverflow)) {
+        hiddenProducts = packageItems.length - index;
+        break;
+      }
+      page.drawText(line, {
+        x: marginX,
+        y: contentY,
+        font: fontRegular,
+        size: listFontSize,
+        color: ink,
+      });
+      contentY -= listLineHeight;
+      contentY -= this.mmToPt(0.2);
+    }
+
+    if (packageItems.length === 0 && contentY > contentBottom) {
+      page.drawText("Sin productos en este paquete.", {
+        x: marginX,
+        y: contentY,
+        font: fontRegular,
+        size: listFontSize,
+        color: secondary,
+      });
+    } else if (hiddenProducts > 0) {
+      page.drawText(`+ ${hiddenProducts} productos`, {
+        x: marginX,
+        y: Math.max(contentBottom, contentY),
+        font: fontBold,
+        size: 8.2,
+        color: secondary,
+      });
+    }
+
+    const footerMeta = "www.base-mayorista.com   |   Tel. 33 1859 7241";
+    const footerMetaSize = 6.2;
+    const footerMetaWidth = fontRegular.widthOfTextAtSize(footerMeta, footerMetaSize);
+    page.drawText(footerMeta, {
+      x: (pageWidth - footerMetaWidth) / 2,
+      y: footerTextY,
+      font: fontRegular,
+      size: footerMetaSize,
+      color: secondary,
+    });
+
+    return pdfDoc.save();
+  }
+
+  private shortPackageId(pkg: PackageRecord): string {
+    const normalized = String(pkg.package_id || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    const shortCode = (normalized.slice(-4) || normalized || "0000").padStart(4, "0");
+    return `PKG-${shortCode}`;
+  }
+
+  private packageCountLabel(order: Order, pkg: PackageRecord): string {
+    const raw = this.packageStatus(pkg) === "closed" ? this.closedBoxLabel(order, pkg) : "1/1";
+    const parts = raw.split("/");
+    if (parts.length !== 2) return raw.replace("/", " / ");
+    return `${parts[0].trim()} / ${parts[1].trim()}`;
+  }
+
+  private customerAddressLines(order: Order): string[] {
+    const customer = this.customers.getById(order.customer_id);
+    if (!customer) return [];
+    const lines: string[] = [];
+
+    const localityId = String(customer.locality_id || "").trim();
+    if (localityId) {
+      const localityName = this.localities.getById(localityId)?.name || localityId;
+      if (localityName) lines.push(localityName);
+    }
+
+    const noteRaw = String(customer.notes || order.notes || "").replace(/\s+/g, " ").trim();
+    if (noteRaw) {
+      lines.push(noteRaw.length > 72 ? `${noteRaw.slice(0, 69).trim()}...` : noteRaw);
+    }
+
+    if (lines.length === 0) {
+      const fallbackRoute = this.routeName(order);
+      if (fallbackRoute) lines.push(fallbackRoute);
+    }
+
+    return lines.slice(0, 2);
+  }
+
+  private splitTextByWidth(text: string, maxWidth: number, font: PDFFont, fontSize: number): string[] {
+    const safe = (text || "").replace(/\s+/g, " ").trim();
+    if (!safe) return [];
+    const words = safe.split(" ");
+    const lines: string[] = [];
+    let current = "";
+
+    for (const word of words) {
+      const candidate = current ? `${current} ${word}` : word;
+      if (font.widthOfTextAtSize(candidate, fontSize) <= maxWidth) {
+        current = candidate;
+        continue;
+      }
+
+      if (current) {
+        lines.push(current);
+      }
+
+      if (font.widthOfTextAtSize(word, fontSize) <= maxWidth) {
+        current = word;
+        continue;
+      }
+
+      const chunks = this.breakLongWord(word, maxWidth, font, fontSize);
+      if (chunks.length === 0) {
+        current = "";
+      } else {
+        lines.push(...chunks.slice(0, -1));
+        current = chunks[chunks.length - 1];
+      }
+    }
+
+    if (current) lines.push(current);
+    return lines;
+  }
+
+  private truncateTextToWidth(text: string, maxWidth: number, font: PDFFont, fontSize: number): string {
+    const safe = (text || "").replace(/\s+/g, " ").trim();
+    if (!safe) return "";
+    if (font.widthOfTextAtSize(safe, fontSize) <= maxWidth) return safe;
+
+    const suffix = "...";
+    const suffixWidth = font.widthOfTextAtSize(suffix, fontSize);
+    if (suffixWidth >= maxWidth) return suffix;
+
+    let output = "";
+    for (const char of safe) {
+      const candidate = `${output}${char}`;
+      if (font.widthOfTextAtSize(candidate, fontSize) + suffixWidth > maxWidth) break;
+      output = candidate;
+    }
+
+    return `${output.trimEnd()}${suffix}`;
+  }
+
+  private breakLongWord(word: string, maxWidth: number, font: PDFFont, fontSize: number): string[] {
+    if (!word) return [];
+    const chunks: string[] = [];
+    let chunk = "";
+    for (const char of word) {
+      const candidate = `${chunk}${char}`;
+      if (chunk && font.widthOfTextAtSize(candidate, fontSize) > maxWidth) {
+        chunks.push(chunk);
+        chunk = char;
+      } else {
+        chunk = candidate;
+      }
+    }
+    if (chunk) chunks.push(chunk);
+    return chunks;
+  }
+
+  private fitImage(sourceWidth: number, sourceHeight: number, boxWidth: number, boxHeight: number): { width: number; height: number } {
+    if (!sourceWidth || !sourceHeight) return { width: boxWidth, height: boxHeight };
+    const scale = Math.min(boxWidth / sourceWidth, boxHeight / sourceHeight);
+    return {
+      width: sourceWidth * scale,
+      height: sourceHeight * scale,
+    };
+  }
+
+  private itemLabelWithoutPrice(item: OrderItem): string {
+    const title = (item.title || "").trim() || "Producto sin titulo";
+    const variant = (item.variant || "").trim();
+    const color = (item.color || "").trim();
+    return [title, variant, color].filter(Boolean).join(" - ");
+  }
+
+  private buildLabelQrPayload(order: Order, pkg: PackageRecord): string {
+    const payload = {
+      v: 1,
+      type: "BM_PACKAGE",
+      orderId: order.order_id,
+      packageId: pkg.package_id,
+      packageLabel: this.packageDisplayLabel(order, pkg),
+      packageStatus: this.packageStatus(pkg),
+      customerId: order.customer_id,
+      customerName: this.customerName(order),
+      routeId: order.route_id || null,
+      routeName: this.routeName(order),
+      qrToken: this.qrPlaceholder(order, pkg),
+      createdAt: new Date().toISOString(),
+      action: "scan_package",
+    };
+    return JSON.stringify(payload);
+  }
+
+  private async buildQrDataUrl(payload: string): Promise<string> {
+    return QRCode.toDataURL(payload, {
+      errorCorrectionLevel: "M",
+      margin: 1,
+      width: 512,
+      color: {
+        dark: "#000000",
+        light: "#FFFFFF",
+      },
+    });
+  }
+
+  private async loadLabelLogoBytes(): Promise<Uint8Array | null> {
+    const candidates = ["/BM%20_BN.png", "/BM _BN.png"];
+    for (const assetPath of candidates) {
+      try {
+        const response = await fetch(assetPath);
+        if (!response.ok) continue;
+        return new Uint8Array(await response.arrayBuffer());
+      } catch {
+        // Try next path variant.
+      }
+    }
+    return null;
+  }
+
+  private dataUrlToBytes(dataUrl: string): Uint8Array {
+    const base64 = String(dataUrl).split(",")[1] || "";
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
+  }
+
+  private openLabelPdf(pdfBytes: Uint8Array, fileName: string): boolean {
+    const safeBytes = new Uint8Array(pdfBytes.length);
+    safeBytes.set(pdfBytes);
+    const blob = new Blob([safeBytes], { type: "application/pdf" });
+    const blobUrl = URL.createObjectURL(blob);
+    const win = window.open(blobUrl, "_blank", "noopener,noreferrer");
+    if (win) {
+      win.focus();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 120000);
+      return true;
+    }
+
+    const link = document.createElement("a");
+    link.href = blobUrl;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
+    return false;
+  }
+
+  private mmToPt(mm: number): number {
+    return (mm * 72) / 25.4;
   }
 
   async deliverPackage(order: Order, pkg: PackageRecord) {
@@ -2991,7 +3563,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.actionSaving.set(true);
     try {
       const hasConfirmedSupplierItems = this.confirmedItems(order).some(
-        (item) => item.source !== "inventario" && !!(item.supplier_id || "").trim(),
+        (item) => item.source === "catalogo" && !!(item.supplier_id || "").trim(),
       );
       const createdOps = await this.supplierOperations.upsertFromConfirmedOrder(order, this.customerName(order));
       let nextStatus = await this.orders.syncDerivedStatus(order.order_id);
@@ -3263,8 +3835,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     const caps = this.allowedCapabilities(order, this.userRole());
     const canLateChange = order.status === "en_ruta" && this.lateChangeApproved();
     if (!caps.canEditItems && !canLateChange) return;
-    if (!this.selectedPreview()) {
-      this.error.set("Selecciona un producto del catálogo o inventario.");
+    if (!this.isManualSource() && !this.selectedPreview()) {
+      this.error.set("Selecciona un producto del catalogo o inventario, o usa captura manual.");
       return;
     }
     const title = this.newItemTitle().trim();
@@ -3285,24 +3857,9 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       alert("Precio clienta no puede ser menor a precio costo.");
       return;
     }
-    const item: OrderItem = {
-      item_id: `item-${Date.now()}`,
-      title,
-      variant: this.newItemVariant().trim() || null,
-      color: this.newItemColor().trim() || null,
-      quantity: qty,
-      source: this.newItemSource(),
-      state: "reservado_inventario",
-      confirmation_state: "pending",
-      supplier_id: this.newItemSupplierId(),
-      product_id: this.newItemProductId(),
-      price_clienta: this.newItemPriceClienta(),
-      price_public: this.newItemPricePublic(),
-      price_cost: this.newItemPriceCost(),
-      discount_pct: this.newItemDiscount(),
-      inventory_id: this.newItemInventoryId(),
-      image_url: this.selectedPreview()?.image || null,
-    };
+    const source = this.newItemSource();
+    const state: OrderItemState = source === "inventario" ? "reservado_inventario" : "confirmando_proveedor";
+    const item: OrderItem = this.buildOrderItemFromForm(`item-${Date.now()}`, source, state);
     const existingMatch = (order.items || []).find((row) => this.isSamePendingProduct(row, item));
     if (existingMatch) {
       const nextItems = order.items.map((row) => {
@@ -3341,6 +3898,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       await this.orders.addItem(order.order_id, item);
       await this.orders.logEvent(order.order_id, "ITEM_ADDED", `Item agregado: ${item.title}`, {
         itemId: item.item_id,
+        source: item.source,
       });
       if (item.source === "inventario" && item.inventory_id) {
         const reserveKey = this.buildInventoryMutationKey("reserve", order.order_id, item.item_id, item.inventory_id, qty);
@@ -3358,27 +3916,104 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         });
       }
     }
-    this.newItemTitle.set("");
-    this.newItemVariant.set("");
-    this.newItemColor.set("");
-    this.newItemQty.set(1);
-    this.newItemPricePublic.set(null);
-    this.newItemPriceCost.set(null);
-    this.newItemPriceClienta.set(null);
-    this.priceInputFocused.set(null);
-    this.priceInputDraft.set({ final: "", clienta: "", costo: "" });
-    this.supplierDiscountPct.set(null);
-    this.supplierDiscountLabel.set(null);
-    this.newItemSearch.set("");
-    this.newItemInventoryId.set(null);
-    this.newItemSupplierId.set(null);
-    this.newItemProductId.set(null);
-    this.lockItemFields.set(false);
-    this.catalogVariantOptions.set([]);
-    this.catalogColorOptions.set([]);
-    this.selectedPreview.set(null);
-    this.selectedCatalogDoc.set(null);
+    this.resetAddItemForm();
     await this.refreshEvents();
+  }
+
+  async convertManualItem(order: Order | null) {
+    if (!order) return;
+    const caps = this.allowedCapabilities(order, this.userRole());
+    const canLateChange = order.status === "en_ruta" && this.lateChangeApproved();
+    if (!caps.canEditItems && !canLateChange) return;
+    const targetId = this.convertTargetItemId();
+    if (!targetId) return;
+    const target = (order.items || []).find((item) => item.item_id === targetId) || null;
+    if (!target) {
+      this.error.set("No encontramos el item manual a convertir.");
+      return;
+    }
+    if (target.source !== "manual") {
+      this.error.set("Solo se pueden convertir items manuales.");
+      return;
+    }
+    if (!this.selectedPreview()) {
+      this.error.set("Selecciona un producto de catalogo o inventario para convertir.");
+      return;
+    }
+    const source = this.newItemSource();
+    if (source === "manual") {
+      this.error.set("El destino de conversion debe ser catalogo o inventario.");
+      return;
+    }
+    const title = this.newItemTitle().trim();
+    if (!title) {
+      this.error.set("Escribe el nombre del producto");
+      return;
+    }
+    const qty = Math.max(1, this.newItemQty());
+    if (source === "inventario" && this.newItemInventoryId()) {
+      const inv = this.inventoryById().get(this.newItemInventoryId()!);
+      if (inv && inv.quantity_on_hand <= 0) {
+        await this.showInventoryBlockedAlert(inv);
+        this.selectedPreview.set(null);
+        return;
+      }
+    }
+    if (this.isClientaBelowCosto()) {
+      alert("Precio clienta no puede ser menor a precio costo.");
+      return;
+    }
+    const state: OrderItemState = source === "inventario" ? "reservado_inventario" : "confirmando_proveedor";
+    const converted = this.buildOrderItemFromForm(target.item_id, source, state);
+    const nextItems = (order.items || []).map((item) => (item.item_id === target.item_id ? converted : item));
+    await this.orders.updateItems(order.order_id, nextItems);
+    if (converted.source === "inventario" && converted.inventory_id) {
+      const reserveKey = this.buildInventoryMutationKey("reserve", order.order_id, converted.item_id, converted.inventory_id, qty);
+      await this.inventory.reserveStock({
+        sku: converted.inventory_id,
+        qty,
+        orderId: order.order_id,
+        orderItemId: converted.item_id,
+        idempotencyKey: reserveKey,
+      });
+      await this.orders.logEvent(order.order_id, "INVENTORY_RESERVED", `Reserva inventario: ${converted.title}`, {
+        inventoryId: converted.inventory_id,
+        qty,
+        idempotencyKey: reserveKey,
+      });
+    }
+    await this.orders.logEvent(order.order_id, "ITEM_CONVERTED", `Item convertido: ${target.title}`, {
+      itemId: target.item_id,
+      from: "manual",
+      to: converted.source,
+      title: converted.title,
+    });
+    this.resetAddItemForm();
+    this.addItemModalOpen.set(false);
+    await this.refreshEvents();
+    this.showActionToast("Item convertido.");
+  }
+
+  private buildOrderItemFromForm(itemId: string, source: "catalogo" | "inventario" | "manual", state: OrderItemState): OrderItem {
+    return {
+      item_id: itemId,
+      title: this.newItemTitle().trim(),
+      variant: this.newItemVariant().trim() || null,
+      color: this.newItemColor().trim() || null,
+      quantity: Math.max(1, this.newItemQty()),
+      source,
+      state,
+      confirmation_state: "pending",
+      confirmed_qty: null,
+      supplier_id: source === "manual" ? null : this.newItemSupplierId(),
+      product_id: source === "manual" ? null : this.newItemProductId(),
+      price_clienta: this.newItemPriceClienta(),
+      price_public: this.newItemPricePublic(),
+      price_cost: this.newItemPriceCost(),
+      discount_pct: this.newItemDiscount(),
+      inventory_id: source === "inventario" ? this.newItemInventoryId() : null,
+      image_url: source === "manual" ? null : this.selectedPreview()?.image || null,
+    };
   }
 
   private isSamePendingProduct(existing: OrderItem, incoming: OrderItem): boolean {
@@ -3830,6 +4465,4 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     return `${action}_${orderId}_${orderItemId}_${inventoryId}_${Math.max(0, Math.trunc(qty))}`;
   }
 }
-
-
 
