@@ -5614,3 +5614,14 @@ Page reload sent to client(s).
 Application bundle generation complete. [0.432 seconds] - 2026-03-17T16:47:58.021Z
 
 Page reload sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m      [2m | [22m[1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m       [2m | [22m[36m12.02 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m      [2m | [22m[1mRaw size[22m
+[32mchunk-QZKASY6C.js[39m  [2m | [22m[2mpublic-home[22m[2m | [22m[36m88.38 kB[39m[2m | [22m
+
+Application bundle generation complete. [0.435 seconds] - 2026-03-17T16:55:09.755Z
+
+Component update sent to client(s).
