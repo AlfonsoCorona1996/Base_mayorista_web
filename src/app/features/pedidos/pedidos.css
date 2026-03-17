@@ -292,6 +292,7 @@
   font-size: 0.83rem;
   font-weight: 590;
   line-height: 1;
+  flex: 0 0 auto;
   scroll-snap-align: start;
   scroll-snap-stop: always;
   transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, padding 0.18s ease, gap 0.18s ease;
@@ -793,7 +794,13 @@
   }
 
   .intent-tabs {
-    --tab-fade-size: 10px;
+    --tab-fade-size: 0px;
     padding-bottom: 10px;
+    padding-left: 10px;
+    padding-right: 10px;
+    scroll-padding-inline-start: 10px;
+    scroll-padding-inline-end: 10px;
+    mask-image: none;
+    -webkit-mask-image: none;
   }
 }
