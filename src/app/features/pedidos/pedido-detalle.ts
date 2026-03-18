@@ -3044,9 +3044,17 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
     this.generatingSalesNote.set(true);
     try {
-      await this.ensureSalesNoteImageSourcesReady();
+      await this.withTimeout(
+        this.ensureSalesNoteImageSourcesReady(),
+        15000,
+        "Tiempo de espera agotado al preparar fuentes de imagen.",
+      );
       const fileName = `nota-${order.order_id}-${Date.now()}.png`;
-      const blob = await this.buildSalesNoteImage(order, rows);
+      const blob = await this.withTimeout(
+        this.buildSalesNoteImage(order, rows),
+        60000,
+        "Tiempo de espera agotado al generar la nota.",
+      );
       const shared = await this.tryShareSalesNote(blob, fileName, order);
       if (!shared) {
         this.downloadBlob(blob, fileName);
@@ -3212,7 +3220,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         ctx.save();
         this.drawRoundedRect(ctx, imageX, imageY, imageSize, imageSize, 14, "#ffffff");
         ctx.clip();
-        ctx.drawImage(image, imageX, imageY, imageSize, imageSize);
+        this.drawImageCover(ctx, image, imageX, imageY, imageSize, imageSize);
         ctx.restore();
       } else {
         this.drawRoundedRect(ctx, imageX, imageY, imageSize, imageSize, 14, "#edf2f9");
@@ -3301,11 +3309,54 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     return text ? `${text}…` : "…";
   }
 
+  private drawImageCover(
+    ctx: CanvasRenderingContext2D,
+    image: CanvasImageSource & { naturalWidth?: number; naturalHeight?: number; width?: number; height?: number },
+    dx: number,
+    dy: number,
+    dw: number,
+    dh: number,
+  ) {
+    const sourceWidth = Number(image.naturalWidth || image.width || 0);
+    const sourceHeight = Number(image.naturalHeight || image.height || 0);
+    if (sourceWidth <= 0 || sourceHeight <= 0) {
+      ctx.drawImage(image as CanvasImageSource, dx, dy, dw, dh);
+      return;
+    }
+
+    const scale = Math.max(dw / sourceWidth, dh / sourceHeight);
+    const cropWidth = dw / scale;
+    const cropHeight = dh / scale;
+    const sx = Math.max(0, (sourceWidth - cropWidth) / 2);
+    const sy = Math.max(0, (sourceHeight - cropHeight) / 2);
+
+    ctx.drawImage(
+      image as CanvasImageSource,
+      sx,
+      sy,
+      cropWidth,
+      cropHeight,
+      dx,
+      dy,
+      dw,
+      dh,
+    );
+  }
+
   private async loadSalesNoteRowImage(row: SalesNoteRowVm): Promise<{
     itemId: string;
     image: HTMLImageElement | null;
     hasCandidates: boolean;
   }> {
+    const loadedCardImage = this.getLoadedProductCardImageElement(row.item.item_id);
+    if (loadedCardImage) {
+      return {
+        itemId: row.item.item_id,
+        image: loadedCardImage,
+        hasCandidates: true,
+      };
+    }
+
     const candidates = this.salesNoteImageCandidates(row);
     return {
       itemId: row.item.item_id,
@@ -3315,11 +3366,17 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   private async loadSalesNoteImageCandidates(candidates: string[]): Promise<HTMLImageElement | null> {
-    for (const candidate of candidates) {
-      const image = await this.loadNoteImageWithRetries(candidate, 3);
-      if (image) return image;
+    if (candidates.length === 0) return null;
+    const attempts = candidates.map(async (candidate) => {
+      const image = await this.loadNoteImageWithRetries(candidate, 2);
+      if (!image) throw new Error("image_not_loaded");
+      return image;
+    });
+    try {
+      return await this.withTimeout(Promise.any(attempts), 20000, "Tiempo de espera agotado al descargar imagen.");
+    } catch {
+      return null;
     }
-    return null;
   }
 
   private async loadNoteImageWithRetries(url: string, maxAttempts: number): Promise<HTMLImageElement | null> {
@@ -3328,7 +3385,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       const image = await this.loadNoteImage(url);
       if (image) return image;
       if (attempt < attempts) {
-        await this.sleep(250 * attempt);
+        await this.sleep(180 * attempt);
       }
     }
     return null;
@@ -3339,9 +3396,26 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     return new Promise((resolve) => setTimeout(resolve, waitMs));
   }
 
+  private async withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+    const waitMs = Math.max(1000, Math.trunc(timeoutMs || 0));
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    try {
+      return await Promise.race([
+        promise,
+        new Promise<T>((_, reject) => {
+          timer = setTimeout(() => reject(new Error(message)), waitMs);
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
   private salesNoteImageCandidates(row: SalesNoteRowVm): string[] {
     const item = row.item;
+    const loadedCardImageUrl = this.getLoadedProductCardImageUrl(item.item_id);
     const candidates: Array<string | null | undefined> = [
+      loadedCardImageUrl,
       row.imageUrl,
       item.image_url,
       this.resolveItemImage(item),
@@ -3350,6 +3424,37 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       this.resolveSalesNoteImageByLabel(item),
     ];
     return this.uniqueNoteImageCandidates(candidates);
+  }
+
+  private getLoadedProductCardImageUrl(itemId: string): string | null {
+    const image = this.getLoadedProductCardImageElement(itemId);
+    if (!image) return null;
+    return image.currentSrc || image.src || null;
+  }
+
+  private getLoadedProductCardImageElement(itemId: string): HTMLImageElement | null {
+    const cardEl = document.getElementById(`product-card-${itemId}`);
+    if (!cardEl) return null;
+    const imageEl = cardEl.querySelector(".image-container img") as HTMLImageElement | null;
+    if (!imageEl) return null;
+    if (!imageEl.complete || imageEl.naturalWidth <= 0 || imageEl.naturalHeight <= 0) return null;
+    if (!this.canUseImageOnCanvas(imageEl)) return null;
+    return imageEl;
+  }
+
+  private canUseImageOnCanvas(image: HTMLImageElement): boolean {
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = 1;
+      canvas.height = 1;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return false;
+      ctx.drawImage(image, 0, 0, 1, 1);
+      ctx.getImageData(0, 0, 1, 1);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   private resolveSalesNoteCatalogImage(item: OrderItem): string | null {
@@ -3432,9 +3537,20 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       if (firstSlash <= 0) return null;
       const bucket = gsPath.slice(0, firstSlash);
       const objectPath = gsPath.slice(firstSlash + 1);
-      return `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodeURIComponent(objectPath)}?alt=media`;
+      const firebaseUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodeURIComponent(objectPath)}?alt=media`;
+      return this.toStorageProxyUrl(firebaseUrl);
     }
-    return raw;
+    return this.toStorageProxyUrl(raw);
+  }
+
+  private toStorageProxyUrl(url: string): string {
+    try {
+      const parsed = new URL(url, window.location.origin);
+      if (!parsed.hostname.includes("firebasestorage.googleapis.com")) return parsed.toString();
+      return `/__storage_proxy${parsed.pathname}${parsed.search}`;
+    } catch {
+      return url;
+    }
   }
 
   private async loadNoteImage(url: string | null): Promise<HTMLImageElement | null> {
@@ -3466,7 +3582,11 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   private async loadImageFromStorageBlob(url: string): Promise<HTMLImageElement | null> {
     if (!this.looksLikeFirebaseStorageUrl(url)) return null;
     try {
-      const blob = await getBlob(storageRef(STORAGE, url));
+      const blob = await this.withTimeout(
+        getBlob(storageRef(STORAGE, url)),
+        7000,
+        "Tiempo de espera agotado al descargar imagen de Storage.",
+      );
       if (!blob || blob.size <= 0) return null;
       const dataUrl = await this.blobToDataUrl(blob);
       return this.loadImageElement(dataUrl, false);
@@ -3482,11 +3602,15 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     ];
     for (const attempt of attempts) {
       try {
-        const response = await fetch(url, {
-          mode: attempt.mode,
-          credentials: attempt.credentials,
-          cache: "force-cache",
-        });
+        const response = await this.fetchWithTimeout(
+          url,
+          {
+            mode: attempt.mode,
+            credentials: attempt.credentials,
+            cache: "force-cache",
+          },
+          6500,
+        );
         if (!response.ok) continue;
         const blob = await response.blob();
         if (!blob || blob.size <= 0) continue;
@@ -3509,7 +3633,20 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     });
   }
 
-  private async loadImageElement(url: string, withCrossOrigin: boolean, timeoutMs = 12000): Promise<HTMLImageElement | null> {
+  private async fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), Math.max(1000, Math.trunc(timeoutMs || 0)));
+    try {
+      return await fetch(url, {
+        ...init,
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  private async loadImageElement(url: string, withCrossOrigin: boolean, timeoutMs = 6000): Promise<HTMLImageElement | null> {
     return new Promise((resolve) => {
       const img = new Image();
       let done = false;

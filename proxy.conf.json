@@ -1,0 +1,11 @@
+{
+  "/__storage_proxy/**": {
+    "target": "https://firebasestorage.googleapis.com",
+    "secure": true,
+    "changeOrigin": true,
+    "pathRewrite": {
+      "^/__storage_proxy": ""
+    },
+    "logLevel": "warn"
+  }
+}
