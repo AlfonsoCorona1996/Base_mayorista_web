@@ -210,19 +210,24 @@ export class SupplierOperationsService {
       idempotencyKey: `inbound_${safeRoot}`,
     });
 
-    await this.inventory.reserveStock({
-      sku: inventoryId,
-      qty,
-      orderId: row.order_id,
-      orderItemId: row.order_item_id,
-      idempotencyKey: `reserve_${safeRoot}`,
-    });
-    await this.logOrderEvent(row.order_id, "INVENTORY_RESERVED", `Reserva inventario para ${row.title}`, {
-      opId: row.op_id,
-      inventoryId,
-      qty,
-      idempotencyKey: `reserve_${safeRoot}`,
-    });
+    const reserveForOrderId = String(row.reserved_for_order_id || "").trim();
+    const canReserveForOrder = !!reserveForOrderId && !!String(row.order_item_id || "").trim() && qty > 0;
+    if (canReserveForOrder) {
+      await this.inventory.reserveStock({
+        sku: inventoryId,
+        qty,
+        orderId: reserveForOrderId,
+        orderItemId: row.order_item_id,
+        idempotencyKey: `reserve_${safeRoot}`,
+      });
+      await this.logOrderEvent(row.order_id, "INVENTORY_RESERVED", `Reserva inventario para ${row.title}`, {
+        opId: row.op_id,
+        inventoryId,
+        qty,
+        orderId: reserveForOrderId,
+        idempotencyKey: `reserve_${safeRoot}`,
+      });
+    }
 
     const finalizeKey = `final_${safeRoot}`;
     await runTransaction(FIRESTORE, async (tx) => {
@@ -236,9 +241,9 @@ export class SupplierOperationsService {
         status: "recibido",
         inventory_item_id: inventoryId,
         received_to_inventory: true,
-        reservation_applied: qty > 0,
+        reservation_applied: canReserveForOrder && qty > 0,
         received_qty: qty,
-        reserved_qty_for_order: qty,
+        reserved_qty_for_order: canReserveForOrder ? qty : 0,
         updated_at: serverTimestamp(),
         idempotency_keys: {
           ...idMap,
@@ -265,6 +270,67 @@ export class SupplierOperationsService {
     await this.loadFromFirestore();
   }
 
+  async getByOrderItem(orderId: string, orderItemId: string): Promise<SupplierOperationRow | null> {
+    const opId = this.buildOpId(orderId, orderItemId);
+    return this.getByOpId(opId);
+  }
+
+  async detachLineFromOrder(
+    opId: string,
+    options?: { releaseReservation?: boolean; clearOrderItemLink?: boolean },
+  ): Promise<void> {
+    const row = await this.getByOpId(opId);
+    if (!row) return;
+
+    const releaseReservation = options?.releaseReservation !== false;
+    if (releaseReservation) {
+      await this.releaseReservationIfNeeded(row, "detach");
+    }
+
+    await updateDoc(doc(this.colRef, opId), {
+      reserved_for_order_id: "",
+      reservation_applied: false,
+      reserved_qty_for_order: 0,
+      order_item_id: options?.clearOrderItemLink ? "" : row.order_item_id,
+      updated_at: serverTimestamp(),
+    });
+
+    await this.logOrderEvent(row.order_id, "SUPPLIER_OP_DETACHED_ORDER", `Linea proveedor separada del pedido: ${row.title}`, {
+      opId: row.op_id,
+      status: row.status,
+      supplierId: row.supplier_id,
+    });
+
+    await this.syncOrderStatus(row.order_id);
+    await this.loadFromFirestore();
+  }
+
+  async deleteLine(
+    opId: string,
+    options?: { releaseReservation?: boolean; rollbackReceivedInventory?: boolean },
+  ): Promise<void> {
+    const row = await this.getByOpId(opId);
+    if (!row) return;
+
+    const releaseReservation = options?.releaseReservation !== false;
+    if (releaseReservation) {
+      await this.releaseReservationIfNeeded(row, "delete");
+    }
+    if (options?.rollbackReceivedInventory) {
+      await this.rollbackReceivedInventoryIfNeeded(row, "delete");
+    }
+
+    await deleteDoc(doc(this.colRef, opId));
+    await this.logOrderEvent(row.order_id, "SUPPLIER_OP_DELETED", `Linea proveedor eliminada: ${row.title}`, {
+      opId: row.op_id,
+      status: row.status,
+      supplierId: row.supplier_id,
+      rollbackReceivedInventory: options?.rollbackReceivedInventory === true,
+    });
+    await this.syncOrderStatus(row.order_id);
+    await this.loadFromFirestore();
+  }
+
   private confirmedSupplierItems(order: Order): OrderItem[] {
     return (order.items || []).filter((item) => {
       if (item.source === "inventario") return false;
@@ -277,6 +343,73 @@ export class SupplierOperationsService {
     const qty = Number(value || 0);
     if (!Number.isFinite(qty)) return 0;
     return Math.max(0, Math.round(qty));
+  }
+
+  private async getByOpId(opId: string): Promise<SupplierOperationRow | null> {
+    if (!opId) return null;
+    const cached = this.rowsSignal().find((row) => row.op_id === opId) || null;
+    if (cached) return cached;
+
+    const snap = await getDoc(doc(this.colRef, opId));
+    if (!snap.exists()) return null;
+    return this.normalize(snap.id, snap.data() as Record<string, any>);
+  }
+
+  private async releaseReservationIfNeeded(row: SupplierOperationRow, reason: string): Promise<void> {
+    const inventoryId = (row.inventory_item_id || "").trim();
+    const orderId = (row.reserved_for_order_id || row.order_id || "").trim();
+    const qty = this.safeQty(row.reserved_qty_for_order || (row.reservation_applied ? row.quantity : 0));
+    if (!inventoryId || !orderId || qty <= 0) return;
+
+    const idKey = this.safeIdempotencyKey(`supplier_release_${row.op_id}_${reason}`);
+    await this.inventory.releaseReservation({
+      sku: inventoryId,
+      qty,
+      orderId,
+      orderItemId: row.order_item_id || row.op_id,
+      idempotencyKey: idKey,
+    });
+    await this.logOrderEvent(row.order_id, "INVENTORY_RESERVATION_RELEASED", `Reserva liberada por ajuste de proveedor: ${row.title}`, {
+      opId: row.op_id,
+      inventoryId,
+      qty,
+      reason,
+      idempotencyKey: idKey,
+    });
+  }
+
+  private async rollbackReceivedInventoryIfNeeded(row: SupplierOperationRow, reason: string): Promise<void> {
+    if (!row.received_to_inventory) return;
+    const inventoryId = (row.inventory_item_id || "").trim();
+    const qty = this.safeQty(row.received_qty || row.quantity);
+    if (!inventoryId || qty <= 0) return;
+
+    const adjustKey = this.safeIdempotencyKey(`supplier_rollback_inbound_${row.op_id}_${reason}`);
+    await this.inventory.adjustQuantity(inventoryId, -qty, adjustKey);
+    await this.logOrderEvent(row.order_id, "INVENTORY_INBOUND_ROLLBACK", `Recepcion revertida: ${row.title}`, {
+      opId: row.op_id,
+      inventoryId,
+      qty,
+      reason,
+      idempotencyKey: adjustKey,
+    });
+
+    const inv = this.inventory.items().find((entry) => entry.inventory_id === inventoryId) || null;
+    if (!inv) return;
+    const onHand = this.safeQty(inv.on_hand_qty ?? inv.quantity_on_hand);
+    const reserved = this.safeQty(inv.reserved_qty ?? 0);
+    const note = String(inv.notes || "");
+    const autoCreatedFromLine = note.includes(row.op_id);
+    if (autoCreatedFromLine && onHand <= 0 && reserved <= 0) {
+      const deleteKey = this.safeIdempotencyKey(`supplier_rollback_delete_${row.op_id}_${reason}`);
+      await this.inventory.delete(inventoryId, deleteKey);
+      await this.logOrderEvent(row.order_id, "INVENTORY_ITEM_DELETED", `Inventario eliminado por rollback: ${row.title}`, {
+        opId: row.op_id,
+        inventoryId,
+        reason,
+        idempotencyKey: deleteKey,
+      });
+    }
   }
 
   private buildOpId(orderId: string, orderItemId: string): string {
@@ -311,7 +444,14 @@ export class SupplierOperationsService {
   private async syncOrderStatus(orderId: string): Promise<void> {
     if (!orderId) return;
     const snap = await getDocs(query(this.colRef, where("order_id", "==", orderId)));
-    const statuses = snap.docs.map((entry) => ((entry.data() as any)["status"] || "por_levantar") as SupplierOperationStatus);
+    const statuses = snap.docs
+      .map((entry) => {
+        const data = entry.data() as any;
+        const reservedFor = String(data["reserved_for_order_id"] || data["order_id"] || "");
+        if (reservedFor !== orderId) return null;
+        return (data["status"] || "por_levantar") as SupplierOperationStatus;
+      })
+      .filter((status): status is SupplierOperationStatus => !!status);
     if (statuses.length === 0) return;
 
     let nextStatus: "supplier_processing" | "inbound_in_transit" | "recibido_qa" = "supplier_processing";

@@ -64,6 +64,12 @@ export interface OrderItem {
   discount_pct?: number | null;
   inventory_id?: string | null;
   image_url?: string | null;
+  late_addition?: boolean;
+  late_addition_note?: string | null;
+  late_addition_status?: "pending" | "arrived" | "missing" | "damaged" | null;
+  late_addition_added_at?: string | null;
+  late_addition_added_in_status?: OrderStatus | null;
+  late_addition_added_by?: string | null;
 }
 
 export interface PackageRecord {
@@ -538,11 +544,16 @@ export class OrdersService {
     const order = this.getById(orderId);
     if (!order) return null;
     const supplierOpsSnap = await getDocs(query(collection(FIRESTORE, "supplier_operations"), where("order_id", "==", orderId)));
-    const supplierOps = supplierOpsSnap.docs.map((entry) => {
-      const raw = (entry.data() as any)["status"];
-      const status: SupplierOpStatusLite = raw === "recibido" || raw === "en_camino" || raw === "levantado" ? raw : "por_levantar";
-      return { status };
-    });
+    const supplierOps = supplierOpsSnap.docs
+      .map((entry) => {
+        const data = entry.data() as any;
+        const reservedFor = String(data["reserved_for_order_id"] || data["order_id"] || "");
+        if (reservedFor !== orderId) return null;
+        const raw = data["status"];
+        const status: SupplierOpStatusLite = raw === "recibido" || raw === "en_camino" || raw === "levantado" ? raw : "por_levantar";
+        return { status };
+      })
+      .filter((row): row is { status: SupplierOpStatusLite } => !!row);
     const nextStatus = computeOrderStatus(order, order.items || [], supplierOps);
     if (nextStatus !== order.status) {
       await this.updateStatus(orderId, nextStatus);

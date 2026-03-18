@@ -188,6 +188,14 @@ export class ActivityLogComponent {
       if (normalized === "dispatch_ready") return "package_updated";
       if (normalized === "payment_registered") return "payment_registered";
       if (normalized === "late_change_requested") return "warning";
+      if (normalized === "sales_note_generated") return "note_added";
+      if (normalized === "item_pack_override") return "warning";
+      if (normalized === "dispatch_override") return "warning";
+      if (normalized === "item_marked_available") return "existence_confirmed";
+      if (normalized === "item_marked_out_of_stock") return "out_of_stock_marked";
+      if (normalized === "item_reverted_pending") return "item_updated_qty";
+      if (normalized === "item_removed_from_packages") return "package_updated";
+      if (normalized === "item_merged_qty") return "item_updated_qty";
       return normalized;
     }
 

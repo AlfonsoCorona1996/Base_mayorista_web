@@ -110,11 +110,85 @@
             {{ phase.actionId === "confirm_items" ? vm.confirmExistencesActionLabel : phase.label }}
           </button>
         }
+        @if (canGenerateSalesNote(current)) {
+          <button
+            type="button"
+            class="btn ghost with-icon"
+            [disabled]="generatingSalesNote()"
+            (click)="generateSalesNote(current)"
+          >
+            <span class="material-symbols-rounded btn-icon" aria-hidden="true">receipt_long</span>
+            {{ generatingSalesNote() ? "Generando nota..." : "Generar nota" }}
+          </button>
+        }
       </div>
     </header>
 
     @if (actionToast()) {
       <div class="action-toast" role="status" aria-live="polite">{{ actionToast() }}</div>
+    }
+
+    @if (popupAlertOpen()) {
+      <div class="sheet-backdrop sheet-backdrop--center" (click)="closeAlertPopup()">
+        <div class="sheet package-delete-sheet popup-alert-sheet" role="alertdialog" aria-modal="true" aria-labelledby="popup-alert-title" (click)="$event.stopPropagation()">
+          <div class="sheet-handle" aria-hidden="true"></div>
+          <h2 id="popup-alert-title">{{ popupAlertTitle() }}</h2>
+          <p class="muted popup-alert-message">{{ popupAlertMessage() }}</p>
+          <div class="sheet-actions">
+            <button type="button" class="btn primary" (click)="closeAlertPopup()">Entendido</button>
+          </div>
+        </div>
+      </div>
+    }
+
+    @if (popupConfirmOpen()) {
+      <div class="sheet-backdrop sheet-backdrop--center" (click)="closeConfirmPopup(false)">
+        <div class="sheet package-delete-sheet popup-confirm-sheet" role="dialog" aria-modal="true" aria-labelledby="popup-confirm-title" (click)="$event.stopPropagation()">
+          <div class="sheet-handle" aria-hidden="true"></div>
+          <h2 id="popup-confirm-title">{{ popupConfirmTitle() }}</h2>
+          <p class="muted popup-alert-message">{{ popupConfirmMessage() }}</p>
+          <div class="sheet-actions popup-confirm-actions">
+            <button type="button" class="btn ghost" (click)="closeConfirmPopup(false)">{{ popupConfirmCancelLabel() }}</button>
+            <button
+              type="button"
+              class="btn"
+              [class.primary]="!popupConfirmDanger()"
+              [class.danger]="popupConfirmDanger()"
+              (click)="closeConfirmPopup(true)"
+            >
+              {{ popupConfirmConfirmLabel() }}
+            </button>
+          </div>
+        </div>
+      </div>
+    }
+
+    @if (lateAddNoteModalOpen()) {
+      <div class="sheet-backdrop sheet-backdrop--center" (click)="cancelLateAdditionNote()">
+        <div class="sheet package-delete-sheet popup-confirm-sheet" role="dialog" aria-modal="true" aria-labelledby="late-add-note-title" (click)="$event.stopPropagation()">
+          <div class="sheet-handle" aria-hidden="true"></div>
+          <h2 id="late-add-note-title">{{ lateAddNoteTitle() }}</h2>
+          <p class="muted popup-alert-message">{{ lateAddNoteMessage() }}</p>
+          <div class="sheet-field">
+            <label>Nota para bitácora</label>
+            <textarea
+              class="input"
+              rows="4"
+              maxlength="280"
+              [ngModel]="lateAddNoteValue()"
+              (ngModelChange)="lateAddNoteValue.set($event)"
+              placeholder="Ejemplo: Clienta pidió de último minuto durante empaque."
+            ></textarea>
+          </div>
+          @if (lateAddNoteError()) {
+            <p class="field-error">{{ lateAddNoteError() }}</p>
+          }
+          <div class="sheet-actions popup-confirm-actions">
+            <button type="button" class="btn ghost" (click)="cancelLateAdditionNote()">Cancelar</button>
+            <button type="button" class="btn primary" (click)="confirmLateAdditionNote()">Guardar nota</button>
+          </div>
+        </div>
+      </div>
     }
 
     <section class="summary" [class.summary--five]="vm.isPackingWorkflowPhase" aria-label="Resumen del pedido">
@@ -220,43 +294,45 @@
               [class.medium]="inc.severity === 'medium'"
               [class.low]="inc.severity === 'low'"
             >
-              <div class="incident-main">
-                <div class="incident-head">
-                  <div class="incident-title-row">
-                    <p class="incident-title">{{ inc.title }}</p>
-                    <p class="incident-legend">
-                      <span class="material-symbols-rounded" aria-hidden="true">category</span>
-                      {{ inc.type }}
-                      <span class="material-symbols-rounded" aria-hidden="true">priority_high</span>
-                      {{ inc.severity === "high" ? "Alta" : inc.severity === "medium" ? "Media" : "Baja" }}
-                    </p>
-                  </div>
+              <div class="incident-body">
+                <div class="incident-thumb" aria-hidden="true">
+                  @if (incidentItemImage(current, inc); as imageUrl) {
+                    <img [src]="imageUrl" [alt]="'Producto reportado: ' + incidentItemTitle(current, inc)" loading="lazy" />
+                  } @else {
+                    <span class="material-symbols-rounded" aria-hidden="true">inventory_2</span>
+                  }
                 </div>
-                <p class="incident-reason">{{ inc.reason }}</p>
-                <div class="incident-meta-grid">
-                  <p class="incident-meta"><strong>Asignado a:</strong> {{ inc.assigneeId || "Sin asignar" }}</p>
-                  <p class="incident-meta"><strong>Fecha:</strong> {{ inc.createdAt | date: "short" }}</p>
-                  <p class="incident-meta"><strong>Admin:</strong> {{ inc.createdBy }}</p>
-                </div>
-                @if ((inc.evidenceUrls?.length || 0) > 0) {
-                  <div class="evidence">
-                    <p class="evidence-count">{{ (inc.evidenceUrls?.length || 0) }} evidencia{{ (inc.evidenceUrls?.length || 0) === 1 ? "" : "s" }}</p>
-                    @for (url of inc.evidenceUrls || []; track url) {
-                      <a class="evidence-thumb" [href]="url" target="_blank" rel="noreferrer">
-                        <img [src]="url" [alt]="'Evidencia de ' + inc.title" loading="lazy" />
-                      </a>
-                    }
+                <div class="incident-main">
+                  <div class="incident-head">
+                    <div class="incident-title-row">
+                      <p class="incident-title">{{ incidentTitleText(inc) }}</p>
+                      <p class="incident-legend">
+                        <span class="material-symbols-rounded" aria-hidden="true">category</span>
+                        {{ incidentTypeText(inc.type) }}
+                        <span class="material-symbols-rounded" aria-hidden="true">priority_high</span>
+                        {{ incidentSeverityText(inc.severity) }}
+                      </p>
+                    </div>
+                    <div class="incident-actions incident-actions--compact">
+                      <button type="button" class="btn primary" (click)="openResolveModal(inc)">Resolver</button>
+                    </div>
                   </div>
-                }
-              </div>
-              <div class="incident-actions">
-                <button type="button" class="btn primary" (click)="openResolveModal(inc)">Resolver</button>
-                <button type="button" class="btn ghost" (click)="openAssignModal(inc)">Asignar</button>
-                <label class="btn ghost file-btn">
-                  <input type="file" accept="image/*" (change)="attachEvidence(inc, $event)" />
-                  {{ uploadingEvidence()[inc.id] ? "Subiendo..." : "Adjuntar foto" }}
-                </label>
-                <button type="button" class="btn link incident-link" (click)="scrollToTimeline()">Ver en bitacora</button>
+                  <p class="incident-reason">{{ incidentReasonText(inc) }}</p>
+                  <div class="incident-meta-row">
+                    <p class="incident-meta"><strong>Fecha:</strong> {{ inc.createdAt | date: "short" }}</p>
+                    <p class="incident-meta"><strong>Reportado:</strong> {{ incidentReporterText(inc) }}</p>
+                  </div>
+                  @if ((inc.evidenceUrls?.length || 0) > 0) {
+                    <div class="evidence">
+                      <p class="evidence-count">{{ (inc.evidenceUrls?.length || 0) }} evidencia{{ (inc.evidenceUrls?.length || 0) === 1 ? "" : "s" }}</p>
+                      @for (url of inc.evidenceUrls || []; track url) {
+                        <a class="evidence-thumb" [href]="url" target="_blank" rel="noreferrer">
+                          <img [src]="url" [alt]="'Evidencia de ' + incidentTitleText(inc)" loading="lazy" />
+                        </a>
+                      }
+                    </div>
+                  }
+                </div>
               </div>
             </article>
           }
@@ -280,7 +356,7 @@
     </section>
     }
 
-    <section class="panel" id="productos">
+    <section class="panel" id="productos" (click)="closeProductMenus()">
       <div class="panel-head">
         <h2>Productos</h2>
         <div class="panel-actions">
@@ -336,7 +412,7 @@
           >
             Pendientes ({{ vm.pendingConfirmationItems }})
           </button>
-          @if (vm.phase?.actionId === "confirm_items" && vm.hasPendingItems) {
+          @if (isOperationalConfirmPhase(current) && vm.hasPendingItems) {
             <button
               type="button"
               class="products-batch-btn"
@@ -355,16 +431,52 @@
           <article
             class="product-card"
             [id]="card.cardId"
+            [class.menu-open]="isProductMenuOpen(item.item_id)"
             [class.status--confirmed]="card.isConfirmed"
             [class.status--partial]="card.isConfirmed && card.hasPartial"
             [class.status--out]="card.isOutOfStock"
             [class.status--alert]="card.hasInsufficientStock && !card.isOutOfStock"
           >
-            @if (current.status === "borrador") {
-              <button type="button" class="btn-close" (click)="removeItem(current, item)" [disabled]="!vm.canEditItems">
-                <span class="material-symbols-rounded" aria-hidden="true">delete</span>
+            <div class="product-menu-wrap">
+              <button
+                type="button"
+                class="product-menu-btn"
+                [attr.aria-expanded]="isProductMenuOpen(item.item_id)"
+                aria-label="Acciones del producto"
+                (click)="$event.stopPropagation(); toggleProductMenu(item.item_id)"
+              >
+                <span class="material-symbols-rounded" aria-hidden="true">more_horiz</span>
               </button>
-            }
+              @if (isProductMenuOpen(item.item_id)) {
+                <div class="product-menu-dropdown" (click)="$event.stopPropagation()">
+                  @if (canUseStockMenuActions(current) && !card.isConfirmed) {
+                    <button type="button" class="menuItem" (click)="markItemAvailableFromMenu(current, item)">Marcar disponible</button>
+                  }
+                  @if (canUseStockMenuActions(current) && !card.isOutOfStock) {
+                    <button type="button" class="menuItem" (click)="markItemOutOfStockFromMenu(current, item)">Marcar agotado</button>
+                  }
+                  @if (canConfirmLateArrival(current, item)) {
+                    <button type="button" class="menuItem" (click)="confirmLateArrivalFromMenu(current, item)">Confirmar llegada manual</button>
+                  }
+                  @if (canUsePackingMenuActions(current) && !isItemReadyForPack(current, item) && !isItemCancelledOrReturned(item)) {
+                    <button type="button" class="menuItem" (click)="forcePackWithoutStock(current, item)">Empacar sin confirmar llegada</button>
+                  }
+                  @if (canUsePackingMenuActions(current) && !isItemCancelledOrReturned(item)) {
+                    <button type="button" class="menuItem" (click)="markMissingFromMenu(current, item)">Marcar faltante</button>
+                    <button type="button" class="menuItem" (click)="markDamagedFromMenu(current, item)">Marcar dañado</button>
+                  }
+                  @if (hasLateAdditionNote(item)) {
+                    <button type="button" class="menuItem" (click)="viewLateAdditionNote(item)">Ver nota de excepción</button>
+                  }
+                  @if (canUseStockMenuActions(current) && item.confirmation_state && item.confirmation_state !== 'pending') {
+                    <button type="button" class="menuItem" (click)="revertItemToPending(current, item)">Regresar a pendiente</button>
+                  }
+                  @if (vm.canEditItems) {
+                    <button type="button" class="menuItem danger" (click)="removeItemFromMenu(current, item)">Quitar producto</button>
+                  }
+                </div>
+              }
+            </div>
 
             <div class="card-body">
               <div class="main-info">
@@ -427,7 +539,7 @@
                 </div>
 
                 <div class="action-stack">
-                  @if (vm.phase?.actionId === "confirm_items") {
+                  @if (isConfirmItemsPhase(current)) {
                     <div class="button-group">
                       @if (card.isConfirmed && item.quantity > 1) {
                         <div class="confirmed-counter" [attr.aria-label]="'Confirmados para ' + item.title">
