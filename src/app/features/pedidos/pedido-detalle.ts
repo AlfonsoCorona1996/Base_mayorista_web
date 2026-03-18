@@ -4,6 +4,7 @@ import { FormsModule } from "@angular/forms";
 import { ActivatedRoute, Router, RouterLink } from "@angular/router";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { collection, getDocs, limit, orderBy, query } from "firebase/firestore";
+import { getBlob, ref as storageRef } from "firebase/storage";
 import { PDFDocument, PDFFont, PDFPage, StandardFonts, rgb } from "pdf-lib";
 import * as QRCode from "qrcode";
 import { CustomersService } from "../../core/customers.service";
@@ -14,7 +15,7 @@ import { LocalitiesService } from "../../core/localities.service";
 import { InventoryService, InventoryItem } from "../../core/inventory.service";
 import { NormalizedListingsService, NormalizedListingDoc } from "../../core/normalized-listings.service";
 import { SupplierOperationsService } from "../../core/supplier-operations.service";
-import { FIRESTORE } from "../../core/firebase.providers";
+import { FIRESTORE, STORAGE } from "../../core/firebase.providers";
 import { ActivityLogComponent } from "../../shared/components/activity-log/activity-log.component";
 import { AuthzService } from "../../core/authz.service";
 import { DispatchOrderRow, RouteRunDoc, RouteRunsService } from "../../services/route-runs.service";
@@ -88,6 +89,14 @@ type SupplierGroupVm = {
   confirmedCount: number;
   outOfStockCount: number;
   pendingCount: number;
+};
+
+type SalesNoteRowVm = {
+  item: OrderItem;
+  qty: number;
+  unitPrice: number;
+  lineTotal: number;
+  imageUrl: string | null;
 };
 
 type OrderViewVm = {
@@ -188,6 +197,20 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   userRole = signal("admin");
   copiedOrderId = signal(false);
   actionToast = signal<string | null>(null);
+  popupAlertOpen = signal(false);
+  popupAlertTitle = signal("Aviso");
+  popupAlertMessage = signal("");
+  popupConfirmOpen = signal(false);
+  popupConfirmTitle = signal("Confirmar accion");
+  popupConfirmMessage = signal("");
+  popupConfirmConfirmLabel = signal("Aceptar");
+  popupConfirmCancelLabel = signal("Cancelar");
+  popupConfirmDanger = signal(false);
+  lateAddNoteModalOpen = signal(false);
+  lateAddNoteTitle = signal("Alta fuera de flujo");
+  lateAddNoteMessage = signal("");
+  lateAddNoteValue = signal("");
+  lateAddNoteError = signal<string | null>(null);
   showStickyFooter = signal(false);
   showStickyHeader = signal(false);
   productStockFilter = signal<"all" | "out_of_stock" | "confirmed" | "pending">("all");
@@ -196,6 +219,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   itemActionLoading = signal<Record<string, boolean>>({});
   imagePreviewUrl = signal<string | null>(null);
   imagePreviewLoading = signal(false);
+  openProductMenuId = signal<string | null>(null);
+  generatingSalesNote = signal(false);
 
   incidentModalOpen = signal(false);
   incidentType = signal("GENERAL");
@@ -309,6 +334,18 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   catalogLoaded = signal(false);
   showProductList = signal(false);
   private actionToastTimer: ReturnType<typeof setTimeout> | null = null;
+  private popupAlertQueue: Array<{ title: string; message: string; resolve: () => void }> = [];
+  private popupAlertResolver: (() => void) | null = null;
+  private popupConfirmQueue: Array<{
+    title: string;
+    message: string;
+    confirmLabel: string;
+    cancelLabel: string;
+    danger: boolean;
+    resolve: (confirmed: boolean) => void;
+  }> = [];
+  private popupConfirmResolver: ((confirmed: boolean) => void) | null = null;
+  private lateAddNoteResolver: ((note: string | null) => void) | null = null;
   suppressProductBlur = signal(false);
   lockItemFields = signal(false);
   catalogVariantOptions = signal<string[]>([]);
@@ -699,6 +736,78 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.showResolvedIncidents.update((current) => !current);
   }
 
+  incidentItem(order: Order | null, incident: Incident): OrderItem | null {
+    if (!order || !incident.itemId) return null;
+    return (order.items || []).find((item) => item.item_id === incident.itemId) || null;
+  }
+
+  incidentItemImage(order: Order | null, incident: Incident): string | null {
+    const item = this.incidentItem(order, incident);
+    return item ? this.itemImage(item) : null;
+  }
+
+  incidentItemTitle(order: Order | null, incident: Incident): string {
+    return this.incidentItem(order, incident)?.title || incident.title || "Producto";
+  }
+
+  incidentTitleText(incident: Incident): string {
+    const type = (incident.type || "").trim().toUpperCase();
+    if (type === "ITEM_MISSING") return "Producto faltante";
+    if (type === "ITEM_DAMAGED") return "Producto dañado";
+    if (type === "PACK_OVERRIDE_ITEM") return "Confirmado sin recepcion";
+    if (type === "DISPATCH_OVERRIDE") return "Salida con pendientes";
+    return incident.title || this.incidentTypeText(type);
+  }
+
+  incidentTypeText(type: string | null | undefined): string {
+    const key = String(type || "").trim().toUpperCase();
+    if (!key) return "General";
+    const map: Record<string, string> = {
+      ITEM_MISSING: "Faltante",
+      ITEM_DAMAGED: "Dañado",
+      PACK_OVERRIDE_ITEM: "Sin recepcion proveedor",
+      DISPATCH_OVERRIDE: "Salida con excepcion",
+      GENERAL: "General",
+      STOCK: "Stock",
+      CALIDAD: "Calidad",
+      LOGISTICA: "Logistica",
+      PAGO: "Pago",
+      ENTREGA: "Entrega",
+      SISTEMA: "Sistema",
+    };
+    if (map[key]) return map[key];
+    const human = key
+      .replace(/_/g, " ")
+      .toLowerCase()
+      .trim();
+    return human ? `${human[0].toUpperCase()}${human.slice(1)}` : "General";
+  }
+
+  incidentSeverityText(severity: IncidentSeverity): string {
+    if (severity === "high") return "Alta";
+    if (severity === "medium") return "Media";
+    return "Baja";
+  }
+
+  incidentReasonText(incident: Incident): string {
+    const reason = String(incident.reason || "").trim();
+    if (!reason) return "Sin detalle adicional.";
+    if ((incident.type || "").toUpperCase() === "PACK_OVERRIDE_ITEM") {
+      return reason.replace(
+        /^(Empaque con override sin recepción confirmada|Empaque sin confirmar llegada del proveedor):/i,
+        "Se confirmo sin recepcion de proveedor:",
+      );
+    }
+    return reason;
+  }
+
+  incidentReporterText(incident: Incident): string {
+    const raw = String(incident.createdBy || "").trim();
+    if (!raw) return "Sistema";
+    if (raw.toLowerCase() === "admin") return "Administrador";
+    return this.toNameAndFirstSurname(raw);
+  }
+
   async loadEvents() {
     const orderId = this.orderId();
     if (!orderId) return;
@@ -755,6 +864,11 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     return Math.max(0, (this.totals().totalClienta || 0) - (order.totals?.paid_amount || 0));
   }
 
+  isOrderClosed(order: Order | null): boolean {
+    if (!order) return true;
+    return ["entregado", "pagado", "cancelado", "devuelto", "closed", "delivered"].includes(order.status);
+  }
+
   hasPackingStarted(order: Order): boolean {
     if ((order.packages || []).length > 0) return true;
     if (order.packing?.status === "done") return true;
@@ -762,9 +876,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   canAddProducts(order: Order): boolean {
-    if (!this.canEditItems(order)) return false;
-    if (!this.hasPackingStarted(order)) return true;
-    return this.canCap("cap.orders.override_stage_lock");
+    return this.canEditItems(order);
   }
 
   statusLabel(status: OrderStatus): string {
@@ -1473,10 +1585,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
   canEditItems(order: Order | null): boolean {
     if (!order) return false;
-    const base = this.allowedCapabilities(order, this.userRole()).canEditItems;
-    const editableByFlow = base || (order.status === "en_ruta" && this.lateChangeApproved());
-    if (!editableByFlow) return false;
-    if (this.hasPackingStarted(order) && !this.canCap("cap.orders.override_stage_lock")) return false;
+    if (this.userRole() === "viewer") return false;
+    if (this.isOrderClosed(order)) return false;
     return true;
   }
 
@@ -1746,6 +1856,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
   isSupplierItemReceived(order: Order, item: OrderItem): boolean {
     if (!this.isSupplierManagedItem(item)) return true;
+    if (this.isLateAddedItem(item) && this.isLateArrivalConfirmed(item)) return true;
     const op = this.supplierOperationForItem(order, item);
     if (!op) return false;
     return op.status === "recibido" || op.received_to_inventory === true;
@@ -1820,7 +1931,152 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     }, 1800);
   }
 
+  private showPopupAlert(message: string, title = "Aviso"): Promise<void> {
+    const normalizedMessage = String(message || "").trim();
+    if (!normalizedMessage) return Promise.resolve();
+    const normalizedTitle = String(title || "").trim() || "Aviso";
+
+    if (
+      this.popupAlertOpen()
+      && this.popupAlertMessage() === normalizedMessage
+      && this.popupAlertTitle() === normalizedTitle
+    ) {
+      return Promise.resolve();
+    }
+
+    if (this.popupAlertQueue.some((row) => row.message === normalizedMessage && row.title === normalizedTitle)) {
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve) => {
+      this.popupAlertQueue.push({ title: normalizedTitle, message: normalizedMessage, resolve });
+      this.flushPopupAlertQueue();
+    });
+  }
+
+  closeAlertPopup() {
+    if (!this.popupAlertOpen()) return;
+    this.popupAlertOpen.set(false);
+    const resolver = this.popupAlertResolver;
+    this.popupAlertResolver = null;
+    if (resolver) resolver();
+  }
+
+  private flushPopupAlertQueue() {
+    if (this.popupAlertOpen()) return;
+    const next = this.popupAlertQueue.shift();
+    if (!next) return;
+    this.popupAlertTitle.set(next.title);
+    this.popupAlertMessage.set(next.message);
+    this.popupAlertOpen.set(true);
+    this.popupAlertResolver = () => {
+      next.resolve();
+      this.flushPopupAlertQueue();
+    };
+  }
+
+  private showClientaBelowCostoPopup(): Promise<void> {
+    return this.showPopupAlert("Precio clienta no puede ser menor a precio costo.", "Precio invalido");
+  }
+
+  private showPopupConfirm(
+    message: string,
+    options: {
+      title?: string;
+      confirmLabel?: string;
+      cancelLabel?: string;
+      danger?: boolean;
+    } = {},
+  ): Promise<boolean> {
+    const normalizedMessage = String(message || "").trim();
+    if (!normalizedMessage) return Promise.resolve(false);
+    const title = String(options.title || "").trim() || "Confirmar accion";
+    const confirmLabel = String(options.confirmLabel || "").trim() || "Aceptar";
+    const cancelLabel = String(options.cancelLabel || "").trim() || "Cancelar";
+    const danger = !!options.danger;
+
+    return new Promise((resolve) => {
+      this.popupConfirmQueue.push({
+        title,
+        message: normalizedMessage,
+        confirmLabel,
+        cancelLabel,
+        danger,
+        resolve,
+      });
+      this.flushPopupConfirmQueue();
+    });
+  }
+
+  closeConfirmPopup(confirmed: boolean) {
+    if (!this.popupConfirmOpen()) return;
+    this.popupConfirmOpen.set(false);
+    const resolver = this.popupConfirmResolver;
+    this.popupConfirmResolver = null;
+    if (resolver) resolver(confirmed);
+  }
+
+  private flushPopupConfirmQueue() {
+    if (this.popupConfirmOpen()) return;
+    const next = this.popupConfirmQueue.shift();
+    if (!next) return;
+    this.popupConfirmTitle.set(next.title);
+    this.popupConfirmMessage.set(next.message);
+    this.popupConfirmConfirmLabel.set(next.confirmLabel);
+    this.popupConfirmCancelLabel.set(next.cancelLabel);
+    this.popupConfirmDanger.set(next.danger);
+    this.popupConfirmOpen.set(true);
+    this.popupConfirmResolver = (confirmed: boolean) => {
+      next.resolve(confirmed);
+      this.flushPopupConfirmQueue();
+    };
+  }
+
+  private requiresLateAdditionNote(order: Order | null): boolean {
+    if (!order) return false;
+    return !this.isConfirmItemsPhase(order);
+  }
+
+  private requestLateAdditionNote(order: Order): Promise<string | null> {
+    if (!this.requiresLateAdditionNote(order)) return Promise.resolve(null);
+    const status = this.statusLabel(order.status) || order.status;
+    return new Promise((resolve) => {
+      this.lateAddNoteTitle.set("Alta fuera de flujo");
+      this.lateAddNoteMessage.set(
+        `Este pedido está en "${status}". Agregar un producto en esta etapa requiere nota breve para bitácora.`,
+      );
+      this.lateAddNoteValue.set("");
+      this.lateAddNoteError.set(null);
+      this.lateAddNoteModalOpen.set(true);
+      this.lateAddNoteResolver = resolve;
+    });
+  }
+
+  cancelLateAdditionNote() {
+    if (!this.lateAddNoteModalOpen()) return;
+    this.lateAddNoteModalOpen.set(false);
+    this.lateAddNoteError.set(null);
+    const resolver = this.lateAddNoteResolver;
+    this.lateAddNoteResolver = null;
+    if (resolver) resolver(null);
+  }
+
+  confirmLateAdditionNote() {
+    if (!this.lateAddNoteModalOpen()) return;
+    const note = String(this.lateAddNoteValue() || "").trim();
+    if (note.length < 8) {
+      this.lateAddNoteError.set("Escribe una nota breve (mínimo 8 caracteres).");
+      return;
+    }
+    this.lateAddNoteModalOpen.set(false);
+    this.lateAddNoteError.set(null);
+    const resolver = this.lateAddNoteResolver;
+    this.lateAddNoteResolver = null;
+    if (resolver) resolver(note.slice(0, 280));
+  }
+
   async markMissing(order: Order, item: OrderItem) {
+    await this.detachItemFromPackages(order, item, "mark_missing");
     await this.orders.updateItemConfirmationState(order.order_id, item.item_id, "out_of_stock");
     await this.orders.updateItemState(order.order_id, item.item_id, "cancelado");
     await this.orders.createIncident(order.order_id, {
@@ -1837,9 +2093,11 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     await this.orders.logEvent(order.order_id, "ITEM_MISSING", `Faltante: ${item.title}`, {
       itemId: item.item_id,
     });
+    this.showActionToast(`"${item.title}" marcado como faltante.`);
   }
 
   async markDamaged(order: Order, item: OrderItem) {
+    await this.detachItemFromPackages(order, item, "mark_damaged");
     await this.orders.updateItemConfirmationState(order.order_id, item.item_id, "out_of_stock");
     await this.orders.updateItemState(order.order_id, item.item_id, "devuelto");
     await this.orders.createIncident(order.order_id, {
@@ -1856,6 +2114,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     await this.orders.logEvent(order.order_id, "ITEM_DAMAGED", `Dañado: ${item.title}`, {
       itemId: item.item_id,
     });
+    this.showActionToast(`"${item.title}" marcado como dañado.`);
   }
 
   private packageStatus(pkg: PackageRecord): "open" | "closed" {
@@ -2021,6 +2280,10 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       }
     }
     return map;
+  }
+
+  private itemPackedQty(order: Order, itemId: string): number {
+    return this.packedQtyByItem(order).get(itemId) || 0;
   }
 
   unpackedItems(order: Order | null): Array<{ item: OrderItem; qty: number }> {
@@ -2736,6 +2999,565 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     return "Caja abierta";
   }
 
+  salesNoteRows(order: Order): SalesNoteRowVm[] {
+    return (order.items || [])
+      .filter((item) => !["cancelado", "devuelto"].includes(item.state))
+      .map((item) => {
+        const qty = item.confirmation_state === "confirmed" ? this.confirmedQty(item) : 0;
+        const unitPrice = item.price_clienta ?? item.price_public ?? 0;
+        return {
+          item,
+          qty,
+          unitPrice,
+          lineTotal: unitPrice * qty,
+          imageUrl: this.itemImage(item),
+        };
+      })
+      .filter((row) => row.qty > 0);
+  }
+
+  canGenerateSalesNote(order: Order | null): boolean {
+    if (!order) return false;
+    if (this.salesNoteRows(order).length <= 0) return false;
+    return [
+      "empaque",
+      "ready_for_route",
+      "assigned_to_run",
+      "en_ruta",
+      "in_transit",
+      "entregado",
+      "delivered",
+      "delivered_partial",
+      "pago_pendiente",
+      "pagado",
+      "closed",
+    ].includes(order.status) || this.closedPackagesCount(order) > 0;
+  }
+
+  async generateSalesNote(order: Order) {
+    if (this.generatingSalesNote()) return;
+    const rows = this.salesNoteRows(order);
+    if (rows.length <= 0) {
+      this.actionError.set("No hay productos confirmados para generar nota.");
+      return;
+    }
+
+    this.generatingSalesNote.set(true);
+    try {
+      await this.ensureSalesNoteImageSourcesReady();
+      const fileName = `nota-${order.order_id}-${Date.now()}.png`;
+      const blob = await this.buildSalesNoteImage(order, rows);
+      const shared = await this.tryShareSalesNote(blob, fileName, order);
+      if (!shared) {
+        this.downloadBlob(blob, fileName);
+      }
+      await this.orders.logEvent(order.order_id, "SALES_NOTE_GENERATED", "Nota de venta generada", {
+        rows: rows.length,
+        total: rows.reduce((sum, row) => sum + row.lineTotal, 0),
+        shared,
+      }).catch(() => null);
+      this.showActionToast(shared ? "Nota generada y lista para compartir." : "Nota generada.");
+      this.actionError.set(null);
+    } catch (error: any) {
+      this.actionError.set(error?.message || "No se pudo generar la nota.");
+      this.showActionToast("No se pudo generar la nota.");
+    } finally {
+      this.generatingSalesNote.set(false);
+    }
+  }
+
+  private async ensureSalesNoteImageSourcesReady(): Promise<void> {
+    const tasks: Promise<void>[] = [];
+
+    if (!this.inventoryLoaded() || this.inventory.items().length === 0) {
+      tasks.push(
+        this.inventory
+          .loadFromFirestore()
+          .catch(() => undefined)
+          .then(() => {
+            this.inventoryLoaded.set(true);
+          }),
+      );
+    }
+
+    if (!this.catalogLoaded() || this.catalogRows().length === 0) {
+      tasks.push(
+        this.catalog
+          .listValidated(120)
+          .then((page) => {
+            this.catalogRows.set(page.docs);
+            this.catalogLoaded.set(true);
+          })
+          .catch(() => undefined),
+      );
+    }
+
+    if (tasks.length > 0) {
+      await Promise.all(tasks);
+    }
+  }
+
+  private async buildSalesNoteImage(order: Order, rows: SalesNoteRowVm[]): Promise<Blob> {
+    const width = 1080;
+    const cardX = 40;
+    const cardY = 34;
+    const cardW = width - (cardX * 2);
+    const cardPaddingX = 28;
+    const cardPaddingTop = 38;
+    const cardPaddingBottom = 34;
+    const titleBlockHeight = 148;
+    const tableHeaderHeight = 56;
+    const rowHeight = 106;
+    const rowGap = 12;
+    const footerGap = 22;
+    const footerHeight = 98;
+    const rowsHeight = rows.length > 0 ? (rows.length * rowHeight) + ((rows.length - 1) * rowGap) : 0;
+    const cardH = cardPaddingTop
+      + titleBlockHeight
+      + 16
+      + tableHeaderHeight
+      + 16
+      + rowsHeight
+      + footerGap
+      + footerHeight
+      + cardPaddingBottom;
+    const height = (cardY * 2) + cardH;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("No se pudo crear el lienzo para la nota.");
+
+    ctx.fillStyle = "#f2f5fa";
+    ctx.fillRect(0, 0, width, height);
+
+    this.drawRoundedRect(ctx, cardX, cardY, cardW, cardH, 34, "#ffffff");
+    ctx.fill();
+
+    const customer = this.customerName(order);
+    const dateText = new Date().toLocaleDateString("es-MX", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    const total = rows.reduce((sum, row) => sum + row.lineTotal, 0);
+    const cardInnerX = cardX + cardPaddingX;
+    const cardInnerW = cardW - (cardPaddingX * 2);
+    const productColumnX = cardX + 136;
+    const qtyColumnX = cardX + 612;
+    const unitColumnX = cardX + 802;
+    const totalColumnX = cardX + cardW - 56;
+    const imageByItemId = new Map<string, HTMLImageElement | null>();
+    const imageResults = await Promise.all(rows.map((row) => this.loadSalesNoteRowImage(row)));
+    for (const result of imageResults) {
+      imageByItemId.set(result.itemId, result.image);
+    }
+    const missingDownloads = imageResults.filter((result) => result.hasCandidates && !result.image);
+    if (missingDownloads.length > 0) {
+      const missingTitles = rows
+        .filter((row) => missingDownloads.some((missing) => missing.itemId === row.item.item_id))
+        .map((row) => row.item.title || "Producto")
+        .slice(0, 2)
+        .join(", ");
+      throw new Error(
+        `No se pudieron descargar ${missingDownloads.length} imagen(es) (${missingTitles}). Intenta de nuevo.`,
+      );
+    }
+    const titleTop = cardY + cardPaddingTop;
+
+    ctx.fillStyle = "#0f172a";
+    ctx.font = "700 52px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    ctx.fillText("Nota de venta", cardX + 44, titleTop + 40);
+
+    ctx.fillStyle = "#5f6f85";
+    ctx.font = "500 28px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText(customer, cardX + 44, titleTop + 92);
+    ctx.fillText(dateText, cardX + 44, titleTop + 128);
+
+    ctx.textAlign = "right";
+    ctx.fillStyle = "#4f627d";
+    ctx.font = "700 30px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    ctx.fillText(`Pedido ${order.order_id}`, cardX + cardW - 44, titleTop + 44);
+
+    const tableHeaderTop = titleTop + titleBlockHeight;
+    this.drawRoundedRect(ctx, cardInnerX, tableHeaderTop, cardInnerW, tableHeaderHeight, 18, "#f5f8fd");
+    ctx.fill();
+
+    ctx.fillStyle = "#4f627d";
+    ctx.font = "600 24px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText("Producto", cardX + 64, tableHeaderTop + 36);
+    ctx.textAlign = "right";
+    ctx.fillText("Cant", qtyColumnX, tableHeaderTop + 36);
+    ctx.fillText("Unit", unitColumnX, tableHeaderTop + 36);
+    ctx.fillText("Total", totalColumnX, tableHeaderTop + 36);
+
+    let y = tableHeaderTop + tableHeaderHeight + 16;
+    for (const row of rows) {
+      this.drawRoundedRect(ctx, cardInnerX, y, cardInnerW, rowHeight, 16, "#ffffff");
+      ctx.fillStyle = "#e4ebf5";
+      ctx.fill();
+      this.drawRoundedRect(ctx, cardInnerX, y, cardInnerW, rowHeight, 16, "#ffffff");
+      ctx.strokeStyle = "#dce6f3";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      const imageX = cardX + 48;
+      const imageY = y + 12;
+      const imageSize = 70;
+      const image = imageByItemId.get(row.item.item_id) || null;
+      if (image) {
+        ctx.save();
+        this.drawRoundedRect(ctx, imageX, imageY, imageSize, imageSize, 14, "#ffffff");
+        ctx.clip();
+        ctx.drawImage(image, imageX, imageY, imageSize, imageSize);
+        ctx.restore();
+      } else {
+        this.drawRoundedRect(ctx, imageX, imageY, imageSize, imageSize, 14, "#edf2f9");
+        ctx.fillStyle = "#edf2f9";
+        ctx.fill();
+        ctx.fillStyle = "#6e8099";
+        ctx.font = "600 19px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+        const initials = (row.item.title || "?").slice(0, 2).toUpperCase();
+        ctx.fillText(initials, imageX + 20, imageY + 42);
+      }
+
+      const title = this.truncateForNote(ctx, row.item.title || "Producto", 388, "600 28px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif");
+      const variant = `${row.item.variant || "Unica"} · ${row.item.color || "N/A"}`;
+      ctx.fillStyle = "#0f172a";
+      ctx.font = "600 28px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+      ctx.textAlign = "left";
+      ctx.fillText(title, productColumnX, y + 44);
+      ctx.fillStyle = "#64748b";
+      ctx.font = "500 22px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+      ctx.fillText(this.truncateForNote(ctx, variant, 388, "500 22px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"), productColumnX, y + 76);
+
+      ctx.fillStyle = "#1f2f46";
+      ctx.font = "600 26px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+      ctx.textAlign = "right";
+      ctx.fillText(String(row.qty), qtyColumnX, y + 58);
+      ctx.fillText(this.formatCurrency(row.unitPrice), unitColumnX, y + 58);
+      ctx.fillText(this.formatCurrency(row.lineTotal), totalColumnX, y + 58);
+
+      y += rowHeight + rowGap;
+    }
+
+    const rowsBottom = (tableHeaderTop + tableHeaderHeight + 16) + rowsHeight;
+    const footerTop = rowsBottom + footerGap;
+    this.drawRoundedRect(ctx, cardInnerX, footerTop, cardInnerW, footerHeight, 18, "#f6f9ff");
+    ctx.fillStyle = "#f6f9ff";
+    ctx.fill();
+
+    ctx.fillStyle = "#5f6f85";
+    ctx.font = "600 30px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText("Total", cardX + 56, footerTop + 60);
+    ctx.fillStyle = "#0f172a";
+    ctx.font = "700 44px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    ctx.textAlign = "right";
+    ctx.fillText(this.formatCurrency(total), totalColumnX, footerTop + 64);
+    ctx.textAlign = "left";
+
+    return new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          reject(new Error("No se pudo exportar la nota."));
+          return;
+        }
+        resolve(blob);
+      }, "image/png");
+    });
+  }
+
+  private drawRoundedRect(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    radius: number,
+    fillStyle: string,
+  ) {
+    const r = Math.max(0, Math.min(radius, width / 2, height / 2));
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + width, y, x + width, y + height, r);
+    ctx.arcTo(x + width, y + height, x, y + height, r);
+    ctx.arcTo(x, y + height, x, y, r);
+    ctx.arcTo(x, y, x + width, y, r);
+    ctx.closePath();
+    ctx.fillStyle = fillStyle;
+  }
+
+  private truncateForNote(ctx: CanvasRenderingContext2D, value: string, maxWidth: number, font: string): string {
+    ctx.font = font;
+    if (ctx.measureText(value).width <= maxWidth) return value;
+    let text = value;
+    while (text.length > 0 && ctx.measureText(`${text}…`).width > maxWidth) {
+      text = text.slice(0, -1);
+    }
+    return text ? `${text}…` : "…";
+  }
+
+  private async loadSalesNoteRowImage(row: SalesNoteRowVm): Promise<{
+    itemId: string;
+    image: HTMLImageElement | null;
+    hasCandidates: boolean;
+  }> {
+    const candidates = this.salesNoteImageCandidates(row);
+    return {
+      itemId: row.item.item_id,
+      image: await this.loadSalesNoteImageCandidates(candidates),
+      hasCandidates: candidates.length > 0,
+    };
+  }
+
+  private async loadSalesNoteImageCandidates(candidates: string[]): Promise<HTMLImageElement | null> {
+    for (const candidate of candidates) {
+      const image = await this.loadNoteImageWithRetries(candidate, 3);
+      if (image) return image;
+    }
+    return null;
+  }
+
+  private async loadNoteImageWithRetries(url: string, maxAttempts: number): Promise<HTMLImageElement | null> {
+    const attempts = Math.max(1, Math.trunc(maxAttempts || 1));
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      const image = await this.loadNoteImage(url);
+      if (image) return image;
+      if (attempt < attempts) {
+        await this.sleep(250 * attempt);
+      }
+    }
+    return null;
+  }
+
+  private sleep(ms: number): Promise<void> {
+    const waitMs = Math.max(0, Math.trunc(ms || 0));
+    return new Promise((resolve) => setTimeout(resolve, waitMs));
+  }
+
+  private salesNoteImageCandidates(row: SalesNoteRowVm): string[] {
+    const item = row.item;
+    const candidates: Array<string | null | undefined> = [
+      row.imageUrl,
+      item.image_url,
+      this.resolveItemImage(item),
+      this.resolveSalesNoteCatalogImage(item),
+      this.resolveSalesNoteInventoryImage(item),
+      this.resolveSalesNoteImageByLabel(item),
+    ];
+    return this.uniqueNoteImageCandidates(candidates);
+  }
+
+  private resolveSalesNoteCatalogImage(item: OrderItem): string | null {
+    const productId = (item.product_id || "").trim();
+    if (!productId) return null;
+    const doc = this.catalogById().get(productId) || null;
+    if (!doc) return null;
+    const listing: any = doc.listing || { items: [] };
+    const targetVariant = (item.variant || "").trim().toLowerCase();
+    const variant = (listing.items || []).find((entry: any) => {
+      const variantName = String(entry?.variant_name || "").trim().toLowerCase();
+      return variantName && variantName === targetVariant;
+    }) || (listing.items || [])[0] || null;
+    const colorImage = this.resolveColorImage(doc, item.color);
+    return colorImage || variant?.image_url || doc.cover_images?.[0] || doc.preview_image_url || null;
+  }
+
+  private resolveSalesNoteInventoryImage(item: OrderItem): string | null {
+    const inventoryId = (item.inventory_id || "").trim();
+    if (!inventoryId) return null;
+    return this.inventoryById().get(inventoryId)?.image_urls?.[0] || null;
+  }
+
+  private resolveSalesNoteImageByLabel(item: OrderItem): string | null {
+    const title = String(item.title || "").trim().toLowerCase();
+    if (!title) return null;
+    const variant = String(item.variant || "").trim().toLowerCase();
+    const color = String(item.color || "").trim().toLowerCase();
+
+    const invHit = this.inventory.items().find((row) => {
+      const rowTitle = String(row.title || "").trim().toLowerCase();
+      if (!rowTitle || rowTitle !== title) return false;
+      if (variant && String(row.variant_name || row.size_label || "").trim().toLowerCase() !== variant) return false;
+      if (color && String(row.color_name || "").trim().toLowerCase() !== color) return false;
+      return true;
+    });
+    if (invHit?.image_urls?.[0]) return invHit.image_urls[0];
+
+    for (const doc of this.catalogRows()) {
+      const listing: any = doc.listing || { items: [] };
+      const listingTitle = String(listing.title || "").trim().toLowerCase();
+      if (!listingTitle || listingTitle !== title) continue;
+
+      const variantRows = Array.isArray(listing.items) ? listing.items : [];
+      const variantRow = variantRows.find((entry: any) => {
+        const variantName = String(entry?.variant_name || "").trim().toLowerCase();
+        return !variant || variantName === variant;
+      }) || variantRows[0] || null;
+      if (!variantRow) continue;
+      const colorImage = this.resolveColorImage(doc, item.color);
+      const image = colorImage || variantRow.image_url || doc.cover_images?.[0] || doc.preview_image_url || null;
+      if (image) return image;
+    }
+
+    return null;
+  }
+
+  private uniqueNoteImageCandidates(values: Array<string | null | undefined>): string[] {
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const raw of values) {
+      const normalized = this.normalizeNoteImageUrl(raw);
+      if (!normalized) continue;
+      const key = normalized.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(normalized);
+    }
+    return out;
+  }
+
+  private normalizeNoteImageUrl(value: string | null | undefined): string | null {
+    const raw = String(value || "").trim();
+    if (!raw) return null;
+    if (raw.startsWith("data:") || raw.startsWith("blob:")) return raw;
+    if (raw.startsWith("//")) return `${window.location.protocol}${raw}`;
+    if (raw.startsWith("gs://")) {
+      const gsPath = raw.slice("gs://".length);
+      const firstSlash = gsPath.indexOf("/");
+      if (firstSlash <= 0) return null;
+      const bucket = gsPath.slice(0, firstSlash);
+      const objectPath = gsPath.slice(firstSlash + 1);
+      return `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodeURIComponent(objectPath)}?alt=media`;
+    }
+    return raw;
+  }
+
+  private async loadNoteImage(url: string | null): Promise<HTMLImageElement | null> {
+    if (!url) return null;
+    const normalizedUrl = this.normalizeNoteImageUrl(url);
+    if (!normalizedUrl) return null;
+
+    const fromStorageSdk = await this.loadImageFromStorageBlob(normalizedUrl);
+    if (fromStorageSdk) return fromStorageSdk;
+
+    const fetched = await this.loadImageFromFetchBlob(normalizedUrl);
+    if (fetched) return fetched;
+
+    const directCors = await this.loadImageElement(normalizedUrl, true);
+    if (directCors) return directCors;
+
+    return null;
+  }
+
+  private looksLikeFirebaseStorageUrl(url: string): boolean {
+    if (!url) return false;
+    return (
+      url.startsWith("gs://")
+      || url.includes("firebasestorage.googleapis.com/")
+      || url.includes("storage.googleapis.com/")
+    );
+  }
+
+  private async loadImageFromStorageBlob(url: string): Promise<HTMLImageElement | null> {
+    if (!this.looksLikeFirebaseStorageUrl(url)) return null;
+    try {
+      const blob = await getBlob(storageRef(STORAGE, url));
+      if (!blob || blob.size <= 0) return null;
+      const dataUrl = await this.blobToDataUrl(blob);
+      return this.loadImageElement(dataUrl, false);
+    } catch {
+      return null;
+    }
+  }
+
+  private async loadImageFromFetchBlob(url: string): Promise<HTMLImageElement | null> {
+    const attempts: Array<{ credentials: RequestCredentials; mode: RequestMode }> = [
+      { credentials: "include", mode: "cors" },
+      { credentials: "omit", mode: "cors" },
+    ];
+    for (const attempt of attempts) {
+      try {
+        const response = await fetch(url, {
+          mode: attempt.mode,
+          credentials: attempt.credentials,
+          cache: "force-cache",
+        });
+        if (!response.ok) continue;
+        const blob = await response.blob();
+        if (!blob || blob.size <= 0) continue;
+        const dataUrl = await this.blobToDataUrl(blob);
+        const image = await this.loadImageElement(dataUrl, false);
+        if (image) return image;
+      } catch {
+        // Continue with next strategy.
+      }
+    }
+    return null;
+  }
+
+  private blobToDataUrl(blob: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error("No se pudo convertir imagen."));
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  private async loadImageElement(url: string, withCrossOrigin: boolean, timeoutMs = 12000): Promise<HTMLImageElement | null> {
+    return new Promise((resolve) => {
+      const img = new Image();
+      let done = false;
+      const finish = (value: HTMLImageElement | null) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        resolve(value);
+      };
+      const timer = setTimeout(() => finish(null), Math.max(1000, timeoutMs));
+      if (withCrossOrigin) img.crossOrigin = "anonymous";
+      img.onload = () => finish(img);
+      img.onerror = () => finish(null);
+      img.src = url;
+    });
+  }
+
+  private async tryShareSalesNote(blob: Blob, fileName: string, order: Order): Promise<boolean> {
+    const nav = navigator as Navigator & { canShare?: (data: ShareData) => boolean };
+    if (typeof nav.share !== "function") return false;
+    const file = new File([blob], fileName, { type: "image/png" });
+    const data: ShareData = {
+      title: `Nota ${order.order_id}`,
+      text: `Nota de venta del pedido ${order.order_id}`,
+      files: [file],
+    };
+    if (typeof nav.canShare === "function" && !nav.canShare({ files: [file] })) return false;
+    try {
+      await nav.share(data);
+      return true;
+    } catch (error: any) {
+      // User canceled share flow: treat as handled to avoid forced download.
+      if (error?.name === "AbortError") return true;
+      return false;
+    }
+  }
+
+  private downloadBlob(blob: Blob, fileName: string) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  }
+
   async printLabel(order: Order, pkg: PackageRecord) {
     if (this.packingBusy()) return;
     this.packingBusy.set(true);
@@ -3268,6 +4090,41 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     await this.orders.logEvent(order.order_id, "PAYMENT_REGISTERED", "Pago registrado/conciliado", {});
   }
 
+  private dispatchOverrideItems(order: Order): OrderItem[] {
+    const packedMap = this.packedQtyByItem(order);
+    return this.confirmedItems(order).filter((item) => {
+      if ((packedMap.get(item.item_id) || 0) <= 0) return false;
+      if (this.isSupplierManagedItem(item) && !this.isSupplierItemReceived(order, item)) return true;
+      if (item.source === "inventario" && this.hasInsufficientStock(item)) return true;
+      return false;
+    });
+  }
+
+  private async registerDispatchOverrideWarning(order: Order, overrideItems: OrderItem[]) {
+    if (overrideItems.length === 0) return;
+    const listed = overrideItems.slice(0, 3).map((item) => item.title).join(", ");
+    const extra = overrideItems.length > 3 ? ` +${overrideItems.length - 3} más` : "";
+    const reason = `Salida con pendientes para ${overrideItems.length} item(s): ${listed}${extra}.`;
+
+    await this.orders.createIncident(order.order_id, {
+      orderId: order.order_id,
+      packageId: null,
+      itemId: null,
+      type: "DISPATCH_OVERRIDE",
+      title: "Salida con pendientes",
+      severity: "medium",
+      reason,
+      evidenceUrls: [],
+      createdBy: "admin",
+    });
+    await this.orders.logEvent(order.order_id, "DISPATCH_OVERRIDE", "Termino de empaque con pendientes", {
+      items: overrideItems.map((item) => item.item_id),
+      qty: overrideItems.length,
+      reason,
+    });
+    this.showActionToast(`Aviso: ${overrideItems.length} item(s) saldran con pendientes.`);
+  }
+
   async dispatchOrder(order: Order) {
     if (this.actionSaving()) return;
     if (!this.canDispatch(order)) {
@@ -3286,14 +4143,23 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       this.actionError.set("No se puede terminar empaque/preparar salida: hay cajas abiertas, cajas vacias o productos sin empacar.");
       return;
     }
+    const overrideItems = this.dispatchOverrideItems(order);
+    if (overrideItems.length > 0) {
+      this.actionError.set(`Aviso: terminaras empaque con pendientes para ${overrideItems.length} item(s). Se registrara incidencia.`);
+    }
     this.actionSaving.set(true);
     try {
+      if (overrideItems.length > 0) {
+        await this.registerDispatchOverrideWarning(order, overrideItems).catch((error) => {
+          console.warn("[pedido-detalle] No se pudo registrar aviso de pendientes", { orderId: order.order_id, error });
+        });
+      }
       const packagesCount = this.closedPackagesCount(order);
       await this.orders.markReadyForRoute(order.order_id, packagesCount);
       await this.orders.logEvent(order.order_id, "DISPATCH_READY", "Pedido listo para ruta", {
         packages_count: packagesCount,
       });
-      this.actionError.set(null);
+      if (overrideItems.length <= 0) this.actionError.set(null);
       this.closeActionModal();
       const latest = this.orders.getById(order.order_id) || order;
       await this.openReadyForRouteSheet(latest);
@@ -3758,6 +4624,267 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     return this.phaseAction(order)?.actionId === "confirm_items";
   }
 
+  isOperationalConfirmPhase(order: Order | null): boolean {
+    return !!order && order.status !== "borrador" && this.isConfirmItemsPhase(order);
+  }
+
+  canUseStockMenuActions(order: Order | null): boolean {
+    if (!order) return false;
+    if (!this.canEditItems(order)) return false;
+    if (this.isOrderClosed(order)) return false;
+    return this.isConfirmItemsPhase(order);
+  }
+
+  canUsePackingMenuActions(order: Order | null): boolean {
+    if (!order) return false;
+    if (!this.canEditItems(order)) return false;
+    if (this.isOrderClosed(order)) return false;
+    return this.isPackingWorkflowPhase(order);
+  }
+
+  isLateAddedItem(item: OrderItem): boolean {
+    return item.late_addition === true || !!String(item.late_addition_note || "").trim();
+  }
+
+  lateAdditionStatus(item: OrderItem): "pending" | "arrived" | "missing" | "damaged" | null {
+    const raw = String(item.late_addition_status || "").trim().toLowerCase();
+    if (raw === "pending" || raw === "arrived" || raw === "missing" || raw === "damaged") return raw;
+    if (this.isItemCancelledOrReturned(item)) return "missing";
+    return null;
+  }
+
+  isLateArrivalConfirmed(item: OrderItem): boolean {
+    return this.lateAdditionStatus(item) === "arrived";
+  }
+
+  hasLateAdditionNote(item: OrderItem): boolean {
+    return !!String(item.late_addition_note || "").trim();
+  }
+
+  canConfirmLateArrival(order: Order | null, item: OrderItem): boolean {
+    if (!this.canUsePackingMenuActions(order)) return false;
+    if (!this.isLateAddedItem(item)) return false;
+    if (this.isItemCancelledOrReturned(item)) return false;
+    return !this.isLateArrivalConfirmed(item);
+  }
+
+  private normalizedItemState(item: OrderItem): string {
+    return String(item.state || "").trim().toLowerCase();
+  }
+
+  isItemCancelledOrReturned(item: OrderItem): boolean {
+    const state = this.normalizedItemState(item);
+    return state === "cancelado" || state === "devuelto";
+  }
+
+  async viewLateAdditionNote(item: OrderItem) {
+    const note = String(item.late_addition_note || "").trim();
+    if (!note) return;
+    await this.showPopupAlert(note, "Nota de excepción");
+  }
+
+  isProductMenuOpen(itemId: string): boolean {
+    return this.openProductMenuId() === itemId;
+  }
+
+  toggleProductMenu(itemId: string) {
+    this.openProductMenuId.update((current) => (current === itemId ? null : itemId));
+  }
+
+  closeProductMenus() {
+    this.openProductMenuId.set(null);
+  }
+
+  async markItemAvailableFromMenu(order: Order, item: OrderItem) {
+    if (!this.canUseStockMenuActions(order)) return;
+    const qty = this.itemQuantity(item);
+    await this.orders.updateItemConfirmation(order.order_id, item.item_id, {
+      confirmation_state: "confirmed",
+      confirmed_qty: qty,
+    });
+    if (["cancelado", "devuelto"].includes(item.state)) {
+      const nextState: OrderItemState = item.source === "inventario" ? "reservado_inventario" : "confirmando_proveedor";
+      await this.orders.updateItemState(order.order_id, item.item_id, nextState);
+    }
+    await this.orders.logEvent(order.order_id, "ITEM_MARKED_AVAILABLE", `Disponible (menu): ${item.title}`, {
+      itemId: item.item_id,
+      confirmedQty: qty,
+    });
+    this.closeProductMenus();
+    this.showActionToast(`"${item.title}" marcado como disponible.`);
+  }
+
+  async markItemOutOfStockFromMenu(order: Order, item: OrderItem) {
+    if (!this.canUseStockMenuActions(order)) return;
+    const packedQty = this.itemPackedQty(order, item.item_id);
+    if (packedQty > 0) {
+      this.closeProductMenus();
+      const ok = await this.showPopupConfirm(
+        `"${item.title}" tiene ${packedQty} pza en cajas. Se sacarán antes de marcar agotado. ¿Continuar?`,
+        {
+          title: "Confirmar agotado",
+          confirmLabel: "Si, marcar agotado",
+          cancelLabel: "Cancelar",
+        },
+      );
+      if (!ok) return;
+      await this.detachItemFromPackages(order, item, "mark_out_of_stock");
+    }
+    await this.orders.updateItemConfirmation(order.order_id, item.item_id, {
+      confirmation_state: "out_of_stock",
+      confirmed_qty: 0,
+    });
+    await this.orders.logEvent(order.order_id, "ITEM_MARKED_OUT_OF_STOCK", `Agotado (menu): ${item.title}`, {
+      itemId: item.item_id,
+      packedQtyRemoved: packedQty,
+    });
+    this.closeProductMenus();
+    this.showActionToast(`"${item.title}" marcado como agotado.`);
+  }
+
+  async confirmLateArrivalFromMenu(order: Order, item: OrderItem) {
+    if (!this.canConfirmLateArrival(order, item)) return;
+    this.closeProductMenus();
+    const ok = await this.showPopupConfirm(
+      `Confirmar llegada manual de "${item.title}"?\n\nSe registrará recepción y se apartará en inventario para este pedido.`,
+      {
+        title: "Confirmar llegada manual",
+        confirmLabel: "Confirmar llegada",
+        cancelLabel: "Cancelar",
+      },
+    );
+    if (!ok) return;
+
+    const qty = this.itemQuantity(item);
+    const inventoryId = await this.ensureLateArrivalReservedInInventory(order, item, qty);
+    const current = this.orders.getById(order.order_id) || order;
+    const nextItems: OrderItem[] = (current.items || []).map((row): OrderItem => {
+      if (row.item_id !== item.item_id) return row;
+      return {
+        ...row,
+        confirmation_state: "confirmed" as const,
+        confirmed_qty: qty,
+        state: row.state === "cancelado" || row.state === "devuelto" ? "recibido_qa" : row.state,
+        source: row.source === "inventario" || this.isSupplierManagedItem(row) ? row.source : "inventario",
+        inventory_id: inventoryId || row.inventory_id || null,
+        late_addition_status: "arrived",
+      };
+    });
+    await this.orders.updateItems(order.order_id, nextItems);
+    await this.orders.syncDerivedStatus(order.order_id).catch(() => null);
+    await this.orders.logEvent(order.order_id, "ITEM_LATE_ARRIVAL_CONFIRMED", `Llegada manual confirmada: ${item.title}`, {
+      itemId: item.item_id,
+      qty,
+      inventoryId,
+      lateNote: item.late_addition_note || null,
+    });
+    this.showActionToast(`"${item.title}" confirmado y apartado en inventario.`);
+  }
+
+  async forcePackWithoutStock(order: Order, item: OrderItem) {
+    if (!this.canUsePackingMenuActions(order)) return;
+    if (this.isItemCancelledOrReturned(item)) return;
+    this.closeProductMenus();
+    const ok = await this.showPopupConfirm(
+      `Se confirmara "${item.title}" para empaque sin confirmar llegada del proveedor. Se registrara aviso. ¿Continuar?`,
+      {
+        title: "Confirmar empaque sin llegada",
+        confirmLabel: "Si, confirmar",
+        cancelLabel: "Cancelar",
+      },
+    );
+    if (!ok) return;
+    const qty = this.itemQuantity(item);
+    await this.orders.updateItemConfirmation(order.order_id, item.item_id, {
+      confirmation_state: "confirmed",
+      confirmed_qty: qty,
+    });
+    await this.orders.updateItemState(order.order_id, item.item_id, "empaque");
+    await this.orders.createIncident(order.order_id, {
+      orderId: order.order_id,
+      packageId: null,
+      itemId: item.item_id,
+      type: "PACK_OVERRIDE_ITEM",
+      title: "Empaque sin llegada confirmada",
+      severity: "medium",
+      reason: `Empaque sin confirmar llegada del proveedor: ${item.title}`,
+      evidenceUrls: [],
+      createdBy: "admin",
+    });
+    await this.orders.logEvent(order.order_id, "ITEM_PACK_OVERRIDE", `Empaque sin llegada confirmada: ${item.title}`, {
+      itemId: item.item_id,
+      qty,
+    });
+    this.closeProductMenus();
+    this.showActionToast(`"${item.title}" se confirmo para empaque sin llegada.`);
+  }
+
+  async revertItemToPending(order: Order, item: OrderItem) {
+    if (!this.canUseStockMenuActions(order)) return;
+    const packedQty = this.itemPackedQty(order, item.item_id);
+    const prompt = packedQty > 0
+      ? `Regresar "${item.title}" a pendiente?\n\nSe removerán ${packedQty} pza de cajas antes de continuar.`
+      : `Regresar "${item.title}" a pendiente?`;
+    this.closeProductMenus();
+    const ok = await this.showPopupConfirm(prompt, {
+      title: "Regresar a pendiente",
+      confirmLabel: "Si, regresar",
+      cancelLabel: "Cancelar",
+    });
+    if (!ok) return;
+
+    if (packedQty > 0) {
+      await this.detachItemFromPackages(order, item, "revert_pending");
+    }
+    await this.orders.updateItemConfirmation(order.order_id, item.item_id, {
+      confirmation_state: "pending",
+      confirmed_qty: null,
+    });
+    const nextState: OrderItemState = item.source === "inventario" ? "reservado_inventario" : "confirmando_proveedor";
+    await this.orders.updateItemState(order.order_id, item.item_id, nextState);
+    await this.orders.logEvent(order.order_id, "ITEM_REVERTED_PENDING", `Regresado a pendiente: ${item.title}`, {
+      itemId: item.item_id,
+      packedQtyRemoved: packedQty,
+    });
+    this.closeProductMenus();
+    this.showActionToast(`"${item.title}" regresó a pendiente.`);
+  }
+
+  async markMissingFromMenu(order: Order, item: OrderItem) {
+    if (!this.canUsePackingMenuActions(order)) return;
+    if (this.isItemCancelledOrReturned(item)) return;
+    this.closeProductMenus();
+    const ok = await this.showPopupConfirm(`Marcar "${item.title}" como faltante?`, {
+      title: "Confirmar faltante",
+      confirmLabel: "Si, marcar faltante",
+      cancelLabel: "Cancelar",
+      danger: true,
+    });
+    if (!ok) return;
+    await this.patchLateAdditionStatus(order, item, "missing");
+    await this.markMissing(order, item);
+  }
+
+  async markDamagedFromMenu(order: Order, item: OrderItem) {
+    if (!this.canUsePackingMenuActions(order)) return;
+    if (this.isItemCancelledOrReturned(item)) return;
+    this.closeProductMenus();
+    const ok = await this.showPopupConfirm(`Marcar "${item.title}" como dañado?`, {
+      title: "Confirmar dañado",
+      confirmLabel: "Si, marcar dañado",
+      cancelLabel: "Cancelar",
+      danger: true,
+    });
+    if (!ok) return;
+    await this.patchLateAdditionStatus(order, item, "damaged");
+    await this.markDamaged(order, item);
+  }
+
+  async removeItemFromMenu(order: Order, item: OrderItem) {
+    this.closeProductMenus();
+    await this.removeItem(order, item);
+  }
+
   scrollToSection(sectionId: "incidencias" | "productos" | "paquetes" | "bitacora") {
     document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
@@ -3832,9 +4959,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
   async addItem(order: Order | null) {
     if (!order) return;
-    const caps = this.allowedCapabilities(order, this.userRole());
-    const canLateChange = order.status === "en_ruta" && this.lateChangeApproved();
-    if (!caps.canEditItems && !canLateChange) return;
+    if (!this.canEditItems(order)) return;
     if (!this.isManualSource() && !this.selectedPreview()) {
       this.error.set("Selecciona un producto del catalogo o inventario, o usa captura manual.");
       return;
@@ -3854,28 +4979,38 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       }
     }
     if (this.isClientaBelowCosto()) {
-      alert("Precio clienta no puede ser menor a precio costo.");
+      await this.showClientaBelowCostoPopup();
       return;
     }
+    const needsLateNote = this.requiresLateAdditionNote(order);
+    const lateNote = needsLateNote ? await this.requestLateAdditionNote(order) : null;
+    if (needsLateNote && !lateNote) return;
+
     const source = this.newItemSource();
     const state: OrderItemState = source === "inventario" ? "reservado_inventario" : "confirmando_proveedor";
-    const item: OrderItem = this.buildOrderItemFromForm(`item-${Date.now()}`, source, state);
+    const lateMeta: Partial<OrderItem> | undefined = lateNote
+      ? {
+          late_addition: true,
+          late_addition_note: lateNote,
+          late_addition_status: "pending",
+          late_addition_added_at: new Date().toISOString(),
+          late_addition_added_in_status: order.status,
+          late_addition_added_by: "admin",
+        }
+      : undefined;
+    const item: OrderItem = this.buildOrderItemFromForm(`item-${Date.now()}`, source, state, lateMeta);
     const existingMatch = (order.items || []).find((row) => this.isSamePendingProduct(row, item));
-    if (existingMatch) {
+    const canMergeExisting = !!existingMatch && this.canMergeIntoExistingRow(order, existingMatch) && !lateNote;
+    if (existingMatch && canMergeExisting) {
       const nextItems = order.items.map((row) => {
         if (row.item_id !== existingMatch.item_id) return row;
-        const nextQty = this.itemQuantity(row) + qty;
-        const shouldMoveToPending = !!row.confirmation_state && row.confirmation_state !== "pending";
-        const preservedConfirmedQty = row.confirmation_state === "confirmed" ? this.confirmedQty(row) : 0;
         return {
           ...row,
-          quantity: nextQty,
-          confirmation_state: shouldMoveToPending ? "pending" : row.confirmation_state,
-          confirmed_qty: shouldMoveToPending ? (preservedConfirmedQty > 0 ? preservedConfirmedQty : null) : row.confirmed_qty ?? null,
+          quantity: this.itemQuantity(row) + qty,
         };
       });
       await this.orders.updateItems(order.order_id, nextItems);
-      await this.orders.logEvent(order.order_id, "ITEM_MERGED_PENDING", `Cantidad actualizada: ${item.title}`, {
+      await this.orders.logEvent(order.order_id, "ITEM_MERGED_QTY", `Cantidad actualizada: ${item.title}`, {
         itemId: existingMatch.item_id,
         addedQty: qty,
       });
@@ -3896,10 +5031,19 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       }
     } else {
       await this.orders.addItem(order.order_id, item);
-      await this.orders.logEvent(order.order_id, "ITEM_ADDED", `Item agregado: ${item.title}`, {
-        itemId: item.item_id,
-        source: item.source,
-      });
+      if (lateNote) {
+        await this.orders.logEvent(order.order_id, "ITEM_ADDED_LATE", `Item agregado fuera de flujo: ${item.title}`, {
+          itemId: item.item_id,
+          source: item.source,
+          note: lateNote,
+          orderStatus: order.status,
+        });
+      } else {
+        await this.orders.logEvent(order.order_id, "ITEM_ADDED", `Item agregado: ${item.title}`, {
+          itemId: item.item_id,
+          source: item.source,
+        });
+      }
       if (item.source === "inventario" && item.inventory_id) {
         const reserveKey = this.buildInventoryMutationKey("reserve", order.order_id, item.item_id, item.inventory_id, qty);
         await this.inventory.reserveStock({
@@ -3917,14 +5061,15 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       }
     }
     this.resetAddItemForm();
+    if (lateNote) {
+      this.addItemModalOpen.set(false);
+    }
     await this.refreshEvents();
   }
 
   async convertManualItem(order: Order | null) {
     if (!order) return;
-    const caps = this.allowedCapabilities(order, this.userRole());
-    const canLateChange = order.status === "en_ruta" && this.lateChangeApproved();
-    if (!caps.canEditItems && !canLateChange) return;
+    if (!this.canEditItems(order)) return;
     const targetId = this.convertTargetItemId();
     if (!targetId) return;
     const target = (order.items || []).find((item) => item.item_id === targetId) || null;
@@ -3960,7 +5105,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       }
     }
     if (this.isClientaBelowCosto()) {
-      alert("Precio clienta no puede ser menor a precio costo.");
+      await this.showClientaBelowCostoPopup();
       return;
     }
     const state: OrderItemState = source === "inventario" ? "reservado_inventario" : "confirmando_proveedor";
@@ -3994,8 +5139,13 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.showActionToast("Item convertido.");
   }
 
-  private buildOrderItemFromForm(itemId: string, source: "catalogo" | "inventario" | "manual", state: OrderItemState): OrderItem {
-    return {
+  private buildOrderItemFromForm(
+    itemId: string,
+    source: "catalogo" | "inventario" | "manual",
+    state: OrderItemState,
+    extra?: Partial<OrderItem>,
+  ): OrderItem {
+    const base: OrderItem = {
       item_id: itemId,
       title: this.newItemTitle().trim(),
       variant: this.newItemVariant().trim() || null,
@@ -4014,11 +5164,19 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       inventory_id: source === "inventario" ? this.newItemInventoryId() : null,
       image_url: source === "manual" ? null : this.selectedPreview()?.image || null,
     };
+    return { ...base, ...(extra || {}) };
+  }
+
+  private canMergeIntoExistingRow(order: Order, existing: OrderItem): boolean {
+    if (existing.state === "cancelado" || existing.state === "devuelto") return false;
+    if (existing.confirmation_state && existing.confirmation_state !== "pending") return false;
+    if (this.itemPackedQty(order, existing.item_id) > 0) return false;
+    return true;
   }
 
   private isSamePendingProduct(existing: OrderItem, incoming: OrderItem): boolean {
-    // Merge with an existing row of the same product regardless of confirmation state.
-    // If the row was already resolved (e.g. confirmed/out_of_stock), addItem() will move it to pending.
+    // Detect rows that represent the same SKU/product+variant+color.
+    // Late changes decide later if we merge or keep a separate line.
     if (existing.state === "cancelado" || existing.state === "devuelto") return false;
     if (existing.inventory_id && incoming.inventory_id) {
       return existing.inventory_id === incoming.inventory_id;
@@ -4050,13 +5208,189 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     return a === b || !a || !b;
   }
 
+  private async patchLateAdditionStatus(
+    order: Order,
+    item: OrderItem,
+    status: "pending" | "arrived" | "missing" | "damaged",
+  ): Promise<void> {
+    if (!this.isLateAddedItem(item)) return;
+    const live = this.orders.getById(order.order_id) || order;
+    const nextItems = (live.items || []).map((row) =>
+      row.item_id === item.item_id ? { ...row, late_addition_status: status } : row,
+    );
+    await this.orders.updateItems(order.order_id, nextItems);
+  }
+
+  private async ensureLateArrivalReservedInInventory(order: Order, item: OrderItem, qty: number): Promise<string | null> {
+    if (qty <= 0) return item.inventory_id || null;
+    if (item.source === "inventario" && item.inventory_id) {
+      return item.inventory_id;
+    }
+
+    if (this.isSupplierManagedItem(item)) {
+      const current = this.orders.getById(order.order_id) || order;
+      const withConfirmed: OrderItem[] = (current.items || []).map((row): OrderItem =>
+        row.item_id === item.item_id
+          ? { ...row, confirmation_state: "confirmed" as const, confirmed_qty: qty }
+          : row,
+      );
+      await this.orders.updateItems(order.order_id, withConfirmed);
+      const refreshed = this.orders.getById(order.order_id) || { ...order, items: withConfirmed };
+      await this.supplierOperations.upsertFromConfirmedOrder(refreshed, this.customerName(refreshed));
+      await this.supplierOperations.updateStatus(this.supplierOpId(order, item), "recibido");
+      const latestOp = this.supplierOperationForItem(order, item);
+      return latestOp?.inventory_item_id || item.inventory_id || null;
+    }
+
+    const inventoryId = (item.inventory_id || "").trim() || this.buildLateArrivalInventoryId(item);
+    const inboundKey = `late_inbound_${order.order_id}_${item.item_id}_${inventoryId}_${qty}`;
+    await this.inventory.receiveInbound({
+      sku: inventoryId,
+      qty,
+      supplierOperationId: `late-${order.order_id}-${item.item_id}`,
+      lineId: item.item_id,
+      idempotencyKey: inboundKey,
+      title: item.title,
+      supplier_id: item.supplier_id ?? null,
+      variant_name: item.variant || null,
+      color_name: item.color || null,
+      image_url: item.image_url || null,
+    });
+    const reserveKey = this.buildInventoryMutationKey("reserve", order.order_id, item.item_id, inventoryId, qty);
+    await this.inventory.reserveStock({
+      sku: inventoryId,
+      qty,
+      orderId: order.order_id,
+      orderItemId: item.item_id,
+      idempotencyKey: reserveKey,
+    });
+    await this.orders.logEvent(order.order_id, "INVENTORY_RESERVED", `Reserva inventario (llegada manual): ${item.title}`, {
+      itemId: item.item_id,
+      inventoryId,
+      qty,
+      idempotencyKey: reserveKey,
+    });
+    return inventoryId;
+  }
+
+  private buildLateArrivalInventoryId(item: OrderItem): string {
+    const seed = [
+      item.supplier_id || "manual",
+      item.product_id || item.title || "producto",
+      item.variant || "",
+      item.color || "",
+    ].join("-");
+    const slug = this.slugifyForInventory(seed || item.item_id).slice(0, 54) || "producto";
+    return `inv-late-${slug}`;
+  }
+
+  private slugifyForInventory(value: string): string {
+    return String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+  }
+
+  private async reconcileSupplierOperationOnItemRemoval(order: Order, item: OrderItem): Promise<void> {
+    const row = await this.supplierOperations.getByOrderItem(order.order_id, item.item_id);
+    if (!row) return;
+
+    const supplierName = row.supplier_name || this.supplierNameById(row.supplier_id) || "proveedor";
+    const productName = item.title || row.title || "Este producto";
+
+    if (row.status === "por_levantar") {
+      await this.supplierOperations.deleteLine(row.op_id, { releaseReservation: true });
+      return;
+    }
+
+    if (row.status === "levantado") {
+      const canCancel = await this.showPopupConfirm(
+        `"${productName}" ya esta solicitado con ${supplierName}.\n\n` +
+        `¿Pudiste cancelarlo con proveedor?\n\n` +
+        `Aceptar: Cancelar orden con proveedor.\n` +
+        `Cancelar: No se pudo cancelar; cuando llegue entrara a inventario sin apartarse para este pedido.`,
+        {
+          title: "Confirmar cancelacion con proveedor",
+          confirmLabel: "Si, se cancelo",
+          cancelLabel: "No, sigue en camino",
+        },
+      );
+      if (canCancel) {
+        await this.supplierOperations.deleteLine(row.op_id, { releaseReservation: true });
+      } else {
+        await this.supplierOperations.detachLineFromOrder(row.op_id, { releaseReservation: true });
+      }
+      return;
+    }
+
+    if (row.status === "en_camino") {
+      const willArrive = await this.showPopupConfirm(
+        `"${productName}" esta marcado EN CAMINO con ${supplierName}.\n\n` +
+        `¿Confirmas que si va a llegar?`,
+        {
+          title: "Producto en camino",
+          confirmLabel: "Si, si llegara",
+          cancelLabel: "No, cancelar con proveedor",
+        },
+      );
+      if (willArrive) {
+        await this.supplierOperations.detachLineFromOrder(row.op_id, { releaseReservation: true });
+      } else {
+        await this.supplierOperations.deleteLine(row.op_id, { releaseReservation: true });
+      }
+      return;
+    }
+
+    if (row.status === "recibido") {
+      const wasReceived = await this.showPopupConfirm(
+        `"${productName}" esta marcado como RECIBIDO en bodega.\n\n` +
+        `¿Se recibio exitosamente?\n\n` +
+        `Aceptar: Fue recibido.\n` +
+        `Cancelar: Nunca se recibio; se revertira inventario si esta dado de alta por esta recepcion.`,
+        {
+          title: "Producto recibido en bodega",
+          confirmLabel: "Si, fue recibido",
+          cancelLabel: "No, revertir recepcion",
+        },
+      );
+      if (wasReceived) {
+        await this.supplierOperations.detachLineFromOrder(row.op_id, { releaseReservation: true });
+      } else {
+        await this.supplierOperations.deleteLine(row.op_id, {
+          releaseReservation: true,
+          rollbackReceivedInventory: true,
+        });
+      }
+      return;
+    }
+
+    await this.supplierOperations.detachLineFromOrder(row.op_id, { releaseReservation: true });
+  }
+
   async removeItem(order: Order | null, item: OrderItem) {
     if (!order) return;
-    const caps = this.allowedCapabilities(order, this.userRole());
-    const canLateChange = order.status === "en_ruta" && this.lateChangeApproved();
-    if (!caps.canEditItems && !canLateChange) return;
-    const ok = confirm(`Quitar "${item.title}" del pedido?`);
+    if (!this.canEditItems(order)) return;
+    const packedQty = this.itemPackedQty(order, item.item_id);
+    const prompt = packedQty > 0
+      ? `Quitar "${item.title}" del pedido?\n\nSe sacarán ${packedQty} pieza(s) de las cajas antes de eliminarlo.`
+      : `Quitar "${item.title}" del pedido?`;
+    const ok = await this.showPopupConfirm(prompt, {
+      title: "Quitar producto",
+      confirmLabel: "Quitar",
+      cancelLabel: "Cancelar",
+      danger: true,
+    });
     if (!ok) return;
+    this.closeProductMenus();
+
+    if (packedQty > 0) {
+      await this.detachItemFromPackages(order, item, "PRODUCT_REMOVED");
+    }
+
+    await this.reconcileSupplierOperationOnItemRemoval(order, item);
 
     if (item.source === "inventario" && item.inventory_id) {
       const releaseKey = this.buildInventoryMutationKey("release", order.order_id, item.item_id, item.inventory_id, item.quantity);
@@ -4074,10 +5408,33 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       });
     }
 
-    const nextItems = order.items.filter((row) => row.item_id !== item.item_id);
+    const live = this.orders.getById(order.order_id) || order;
+    const nextItems = (live.items || []).filter((row) => row.item_id !== item.item_id);
     await this.orders.updateItems(order.order_id, nextItems);
+    await this.orders.syncDerivedStatus(order.order_id).catch(() => null);
     await this.orders.logEvent(order.order_id, "ITEM_REMOVED", `Item removido: ${item.title}`, {
       itemId: item.item_id,
+    });
+    this.showActionToast(`"${item.title}" eliminado del pedido.`);
+  }
+
+  private async detachItemFromPackages(order: Order, item: OrderItem, reason: string): Promise<void> {
+    const packedQty = this.itemPackedQty(order, item.item_id);
+    if (packedQty <= 0) return;
+
+    const nextPackages = (order.packages || [])
+      .map((pkg) => {
+        const nextEntries = this.packageItems(pkg).filter((entry) => entry.orderItemId !== item.item_id);
+        return this.patchPackage(pkg, { items: nextEntries, item_ids: nextEntries.map((entry) => entry.orderItemId) });
+      })
+      .filter((pkg) => this.packageHasItems(pkg));
+
+    await this.orders.updatePackages(order.order_id, nextPackages);
+    this.syncActiveOpenBoxAfterPackages(nextPackages, this.activeOpenBoxId());
+    await this.orders.logEvent(order.order_id, "ITEM_REMOVED_FROM_PACKAGES", `Producto removido de cajas: ${item.title}`, {
+      itemId: item.item_id,
+      packedQty,
+      reason,
     });
   }
 
@@ -4361,7 +5718,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
   private warnIfClientaBelowCosto() {
     if (!this.isClientaBelowCosto()) return;
-    alert("Precio clienta no puede ser menor a precio costo.");
+    void this.showClientaBelowCostoPopup();
   }
 
   formatCurrency(value: number | null): string {
@@ -4390,8 +5747,9 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     if (now - this.lastInventoryBlockedAlertAt < 600) return;
     this.lastInventoryBlockedAlertAt = now;
     const blocked = await this.buildInventoryBlockedAlert(item);
-    alert(
+    await this.showPopupAlert(
       `No puedes anadir ${blocked.itemTitle} a este pedido ya que ${blocked.reservedBy} lo aparto para ${blocked.customerName} en el pedido ${blocked.orderId}.`,
+      "Inventario reservado",
     );
     if (blocked.orderId && blocked.orderId !== "otro pedido") {
       await navigator.clipboard.writeText(blocked.orderId).catch(() => null);
@@ -4449,6 +5807,39 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     return clean.split(/\s+/)[0] || "Admin";
   }
 
+  private toNameAndFirstSurname(value: string): string {
+    const raw = String(value || "").trim();
+    if (!raw) return "Sistema";
+
+    const tokensFromEmail = raw.includes("@")
+      ? raw.split("@")[0].split(/[._-]+/)
+      : raw.split(/\s+/);
+
+    const tokens = tokensFromEmail
+      .map((token) => token.replace(/[^A-Za-z0-9ÁÉÍÓÚáéíóúÑñÜü]/g, "").trim())
+      .filter(Boolean);
+
+    if (tokens.length === 0) return raw;
+
+    const particles = new Set(["de", "del", "la", "las", "los", "y"]);
+    const firstName = this.toNameTokenCase(tokens[0]);
+    const surnameRaw = tokens
+      .slice(1)
+      .find((token) => !particles.has(token.toLowerCase()))
+      || tokens[1]
+      || "";
+    const surname = this.toNameTokenCase(surnameRaw);
+
+    return `${firstName}${surname ? ` ${surname}` : ""}`.trim() || raw;
+  }
+
+  private toNameTokenCase(token: string): string {
+    const clean = String(token || "").trim();
+    if (!clean) return "";
+    if (clean.length <= 3 && clean === clean.toUpperCase()) return clean;
+    return `${clean[0].toUpperCase()}${clean.slice(1).toLowerCase()}`;
+  }
+
   itemPriceLabel(item: OrderItem): string {
     const value = item.price_clienta ?? item.price_public ?? item.price_cost ?? null;
     if (value === null || value === undefined || Number.isNaN(value)) return "Sin precio";
@@ -4465,4 +5856,3 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     return `${action}_${orderId}_${orderItemId}_${inventoryId}_${Math.max(0, Math.trunc(qty))}`;
   }
 }
-

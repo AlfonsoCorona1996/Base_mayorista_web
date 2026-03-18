@@ -400,7 +400,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
 
   incidentsLabel(order: Order): string {
     const count = order.open_incidents_count ?? 0;
-    return count === 1 ? "\u26a0 1 incidencia" : `\u26a0 ${count} incidencias`;
+    return count === 1 ? "1 incidencia" : `${count} incidencias`;
   }
 
   private normalizeSearchTerm(value: string): string {
