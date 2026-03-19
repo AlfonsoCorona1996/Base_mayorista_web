@@ -98,7 +98,8 @@ export default class MainLayoutPage {
     const role = this.access.profile()?.role;
     if (!role) return "Sin rol";
     if (role === "super_admin") return "Super admin";
-    if (role === "operativo" || role === "administrativo") return "Operativo";
+    if (role === "administrativo") return "Administrativo";
+    if (role === "operativo") return "Operativo";
     if (role === "repartidor") return "Repartidor";
     return "Administrador";
   }
@@ -119,7 +120,7 @@ export default class MainLayoutPage {
   }
 
   private loadGroupState(): Record<string, boolean> {
-    const fallback = { operaciones: true, logistica: true, catalogo: true, configuracion: true };
+    const fallback = { operaciones: true, logistica: true, catalogo: true, finanzas: true, configuracion: true };
     if (typeof window === "undefined") {
       return fallback;
     }
@@ -132,6 +133,7 @@ export default class MainLayoutPage {
         operaciones: Boolean(parsed["operaciones"] ?? parsed["operacion"]),
         logistica: Boolean(parsed["logistica"] ?? parsed["clientes"]),
         catalogo: Boolean(parsed["catalogo"]),
+        finanzas: Boolean(parsed["finanzas"] ?? parsed["administracion"]),
         configuracion: Boolean(parsed["configuracion"] ?? parsed["seguridad"]),
       };
     } catch {

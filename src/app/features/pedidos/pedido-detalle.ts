@@ -708,6 +708,39 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.incidents.set(list);
   }
 
+  private async createIncidentAndRefresh(orderId: string, incident: any): Promise<void> {
+    const now = new Date().toISOString();
+    const optimisticId = `tmp-inc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const optimisticIncident: Incident = {
+      id: optimisticId,
+      orderId,
+      packageId: incident?.packageId ?? null,
+      itemId: incident?.itemId ?? null,
+      type: String(incident?.type || "GENERAL"),
+      severity: (incident?.severity || "low") as IncidentSeverity,
+      status: "open",
+      title: String(incident?.title || incident?.type || "Incidencia"),
+      reason: String(incident?.reason || ""),
+      assigneeId: incident?.assigneeId ?? null,
+      evidenceUrls: Array.isArray(incident?.evidenceUrls) ? incident.evidenceUrls : [],
+      createdBy: String(incident?.createdBy || "admin"),
+      createdAt: now,
+      updatedAt: now,
+      resolvedBy: null,
+      resolvedAt: null,
+      resolutionNote: null,
+    };
+
+    this.incidents.update((current) => [optimisticIncident, ...current]);
+    try {
+      await this.orders.createIncident(orderId, incident);
+      await this.loadIncidents();
+    } catch (error) {
+      this.incidents.update((current) => current.filter((row) => row.id !== optimisticId));
+      throw error;
+    }
+  }
+
   async loadAssigneeOptions() {
     const snap = await getDocs(collection(FIRESTORE, "admins"));
     const names = snap.docs
@@ -2079,7 +2112,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     await this.detachItemFromPackages(order, item, "mark_missing");
     await this.orders.updateItemConfirmationState(order.order_id, item.item_id, "out_of_stock");
     await this.orders.updateItemState(order.order_id, item.item_id, "cancelado");
-    await this.orders.createIncident(order.order_id, {
+    await this.createIncidentAndRefresh(order.order_id, {
       orderId: order.order_id,
       packageId: null,
       itemId: item.item_id,
@@ -2100,7 +2133,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     await this.detachItemFromPackages(order, item, "mark_damaged");
     await this.orders.updateItemConfirmationState(order.order_id, item.item_id, "out_of_stock");
     await this.orders.updateItemState(order.order_id, item.item_id, "devuelto");
-    await this.orders.createIncident(order.order_id, {
+    await this.createIncidentAndRefresh(order.order_id, {
       orderId: order.order_id,
       packageId: null,
       itemId: item.item_id,
@@ -4243,7 +4276,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     const extra = overrideItems.length > 3 ? ` +${overrideItems.length - 3} más` : "";
     const reason = `Salida con pendientes para ${overrideItems.length} item(s): ${listed}${extra}.`;
 
-    await this.orders.createIncident(order.order_id, {
+    await this.createIncidentAndRefresh(order.order_id, {
       orderId: order.order_id,
       packageId: null,
       itemId: null,
@@ -4265,7 +4298,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   async dispatchOrder(order: Order) {
     if (this.actionSaving()) return;
     if (!this.canDispatch(order)) {
-      await this.orders.createIncident(order.order_id, {
+      await this.createIncidentAndRefresh(order.order_id, {
         orderId: order.order_id,
         packageId: null,
         itemId: null,
@@ -4426,7 +4459,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   async requestLateChange(order: Order) {
-    await this.orders.createIncident(order.order_id, {
+    await this.createIncidentAndRefresh(order.order_id, {
       orderId: order.order_id,
       packageId: null,
       itemId: null,
@@ -4639,7 +4672,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     if (!reason) return;
     this.incidentSaving.set(true);
     try {
-      await this.orders.createIncident(order.order_id, {
+      await this.createIncidentAndRefresh(order.order_id, {
         orderId: order.order_id,
         packageId: null,
         itemId: null,
@@ -4651,7 +4684,6 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         evidenceUrls: [],
         createdBy: "admin",
       });
-      await this.loadIncidents();
       await this.refreshEvents();
       this.incidentModalOpen.set(false);
     } finally {
@@ -4937,7 +4969,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       confirmed_qty: qty,
     });
     await this.orders.updateItemState(order.order_id, item.item_id, "empaque");
-    await this.orders.createIncident(order.order_id, {
+    await this.createIncidentAndRefresh(order.order_id, {
       orderId: order.order_id,
       packageId: null,
       itemId: item.item_id,

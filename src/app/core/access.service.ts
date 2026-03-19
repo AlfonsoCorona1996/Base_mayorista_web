@@ -10,6 +10,7 @@ export type AppPermission =
   | "categorias"
   | "proveedores"
   | "inventario"
+  | "administracion"
   | "clientas"
   | "rutas"
   | "localidades"
@@ -38,6 +39,7 @@ export const ALL_PERMISSIONS: AppPermission[] = [
   "categorias",
   "proveedores",
   "inventario",
+  "administracion",
   "clientas",
   "rutas",
   "localidades",
@@ -54,6 +56,7 @@ const SECTION_BY_PERMISSION: Record<AppPermission, string> = {
   categorias: "sections.categorias",
   proveedores: "sections.proveedores",
   inventario: "sections.inventario",
+  administracion: "sections.administracion",
   clientas: "sections.clientes",
   rutas: "sections.rutas",
   localidades: "sections.localidades",
@@ -74,8 +77,8 @@ export function buildDefaultPermissions(): PermissionMap {
 }
 
 export function normalizeRole(value: unknown): AppRole {
-  if (value === "super_admin" || value === "admin" || value === "operativo" || value === "repartidor") return value;
-  if (value === "administrativo") return "operativo";
+  if (value === "super_admin" || value === "admin" || value === "administrativo" || value === "operativo" || value === "repartidor")
+    return value;
   return "operativo";
 }
 
@@ -83,6 +86,14 @@ export function buildPermissionsForRole(role: AppRole, custom?: Partial<Permissi
   const out = buildEmptyPermissions();
   if (role === "super_admin" || role === "admin") {
     for (const key of ALL_PERMISSIONS) out[key] = true;
+  } else if (role === "administrativo") {
+    out.pedidos = true;
+    out.proveedores = true;
+    out.validacion = true;
+    out.clientas = true;
+    out.inventario = true;
+    out.salidas = true;
+    out.administracion = true;
   } else if (role === "repartidor") {
     out.pedidos = true;
     out.salidas = true;
@@ -156,6 +167,7 @@ export class AccessService {
       { permission: "salidas", route: "/main/salidas" },
       { permission: "validacion", route: "/main/validacion" },
       { permission: "inventario", route: "/main/inventario" },
+      { permission: "administracion", route: "/main/administracion" },
       { permission: "clientas", route: "/main/clientas" },
       { permission: "rutas", route: "/main/rutas" },
       { permission: "localidades", route: "/main/localidades" },

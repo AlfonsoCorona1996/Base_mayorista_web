@@ -17,6 +17,7 @@ export type AdminPermissionKey =
   | "categorias"
   | "proveedores"
   | "inventario"
+  | "administracion"
   | "clientas"
   | "rutas"
   | "localidades"
@@ -109,6 +110,7 @@ type BackendSectionKey =
   | "categorias"
   | "proveedores"
   | "inventario"
+  | "administracion"
   | "clientes"
   | "rutas"
   | "localidades"
@@ -123,6 +125,7 @@ const BACKEND_SECTION_KEYS: BackendSectionKey[] = [
   "categorias",
   "proveedores",
   "inventario",
+  "administracion",
   "clientes",
   "rutas",
   "localidades",
@@ -315,6 +318,7 @@ export class UserAdminApiService {
       categorias: Boolean(input.categorias),
       proveedores: Boolean(input.proveedores),
       inventario: Boolean(input.inventario),
+      administracion: Boolean(input.administracion),
       clientas: Boolean(input.clientas),
       rutas: Boolean(input.rutas),
       localidades: Boolean(input.localidades),
