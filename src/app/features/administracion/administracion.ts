@@ -1,0 +1,1459 @@
+
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from "@angular/core";
+import { FormsModule } from "@angular/forms";
+import { ActivatedRoute, Router } from "@angular/router";
+import { AuthzService } from "../../core/authz.service";
+import { CustomersService } from "../../core/customers.service";
+import { FinanceAccount, FinanceExpense, FinanceExpenseCategory, FinanceService } from "../../core/finance.service";
+import { InventoryItem, InventoryService } from "../../core/inventory.service";
+import { Order, OrderItem, OrderStatus, OrdersService } from "../../core/orders.service";
+import { RoutesService } from "../../core/routes.service";
+
+type MoneyBucketId =
+  | "openDrafts"
+  | "confirmedNeedInvestment"
+  | "investedNotDelivered"
+  | "deliveredPendingCollection"
+  | "stagnantInventory"
+  | "collectedShouldBeInAccount"
+  | "collectedByCourierPendingSettlement";
+
+type BucketOrderRow = {
+  bucketId: MoneyBucketId;
+  orderId: string;
+  routeId: string;
+  customerId: string;
+  status: OrderStatus;
+  amountClienta: number;
+  cost: number;
+  margin: number;
+  paid: number;
+  balance: number;
+  note: string;
+};
+
+type BucketInventoryRow = {
+  bucketId: MoneyBucketId;
+  inventoryId: string;
+  title: string;
+  quantity: number;
+  idleDays: number;
+  cost: number;
+  potentialSale: number;
+  potentialMargin: number;
+};
+
+type MoneyBucket = {
+  id: MoneyBucketId;
+  title: string;
+  description: string;
+  count: number;
+  amountClienta: number;
+  cost: number;
+  margin: number;
+  paid: number;
+  balance: number;
+  orderRows: BucketOrderRow[];
+  inventoryRows: BucketInventoryRow[];
+};
+
+type SummaryRow = {
+  routeId: string;
+  routeName: string;
+  ordersCount: number;
+  porCobrarReal: number;
+  pipelineClienta: number;
+  capitalRequerido: number;
+  cobradoConRepartidor: number;
+  gananciaPendiente: number;
+  customerPreview: string;
+  detailRows: BucketOrderRow[];
+};
+
+type DrilldownRow = {
+  rowId: string;
+  type: "order" | "inventory";
+  primary: string;
+  secondary: string;
+  status: string;
+  amountClienta: number;
+  cost: number;
+  margin: number;
+  paid: number;
+  balance: number;
+  orderId: string | null;
+};
+
+type DrilldownState = {
+  id: string;
+  title: string;
+  subtitle: string;
+  totalAmountClienta: number;
+  totalCost: number;
+  totalMargin: number;
+  totalPaid: number;
+  totalBalance: number;
+  rows: DrilldownRow[];
+};
+
+type FinanceSummary = {
+  ventasBrutas: number;
+  ingresosCobrados: number;
+  egresos: number;
+  utilidadBruta: number;
+  utilidadNeta: number;
+  dsoDias: number;
+  cajaActual: number;
+  porCobrar: number;
+  mercanciaTransito: number;
+  inventarioCosto: number;
+  inventoryTurnover: number;
+  inventoryDays: number;
+  potencialBorradores: number;
+  potencialPendiente: number;
+  promedioVentaDiaria: number;
+  promedioEgresoDiario: number;
+  proyeccionCaja: number;
+  estancadoPiezas: number;
+  estancadoCosto: number;
+  estancadoPotencial: number;
+  estancadoGanancia: number;
+  perdidoStock: number;
+  perdidoDano: number;
+  devolucionesMonto: number;
+  devolucionRate: number;
+  devolucionImpacto: number;
+  pedidosPendientes: number;
+  pedidosBorrador: number;
+  pendientesCobro: number;
+  pipelineClienta: number;
+  capitalPorInvertir: number;
+  cobradoConRepartidor: number;
+  cobradoPorDepositar: number;
+  gananciaPendientePipeline: number;
+  buckets: MoneyBucket[];
+  orderBucketRows: BucketOrderRow[];
+};
+
+type OrderFinancialSnapshot = {
+  order: Order;
+  status: OrderStatus;
+  routeId: string;
+  customerId: string;
+  totalClienta: number;
+  cost: number;
+  grossProfit: number;
+  paid: number;
+  balance: number;
+  remaining: number;
+  paidRatio: number;
+  remainingRatio: number;
+};
+
+const EXPENSE_CATEGORY_LABEL: Record<FinanceExpenseCategory, string> = {
+  compra_inversion: "Compra por inversion",
+  perdida: "Perdida",
+  paqueteria: "Paqueteria",
+  consumibles: "Consumibles",
+  deuda_fija: "Deuda fija",
+  deuda_meses: "Deuda a meses",
+};
+
+const MONEY_BUCKET_ORDER: MoneyBucketId[] = [
+  "openDrafts",
+  "confirmedNeedInvestment",
+  "investedNotDelivered",
+  "deliveredPendingCollection",
+  "collectedByCourierPendingSettlement",
+  "collectedShouldBeInAccount",
+  "stagnantInventory",
+];
+const MONEY_BUCKET_META: Record<MoneyBucketId, { title: string; description: string }> = {
+  openDrafts: {
+    title: "1) Borrador de pedidos",
+    description: "Aun en apertura; sin solicitud ni pago a proveedor.",
+  },
+  confirmedNeedInvestment: {
+    title: "2) Inversión en puerta",
+    description: "Confirmados para pedir; falta invertir capital.",
+  },
+  investedNotDelivered: {
+    title: "3) Pedidos por entregar",
+    description: "Mercancia pagada/en proceso que aun no llega a clienta.",
+  },
+  deliveredPendingCollection: {
+    title: "4) Cuentas pendientes",
+    description: "Pedido entregado con saldo pendiente de cobro.",
+  },
+  stagnantInventory: {
+    title: "7) Inventario estancado",
+    description: "Dinero en mercancia sin dueña y con baja rotacion.",
+  },
+  collectedShouldBeInAccount: {
+    title: "6) Cobrado",
+    description: "Cobrado y fuera de ruta; debe reflejarse en cuenta.",
+  },
+  collectedByCourierPendingSettlement: {
+    title: "5) Cobrado por repartidor",
+    description: "Cobrado en ruta y pendiente de liquidacion.",
+  },
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  borrador: "Borrador",
+  confirmando_proveedor: "Confirmando proveedor",
+  reservado_inventario: "Reservado inventario",
+  solicitado_proveedor: "Solicitado proveedor",
+  supplier_processing: "Proveedor procesando",
+  inbound_in_transit: "En transito proveedor",
+  en_transito: "En transito proveedor",
+  recibido_qa: "En transito proveedor",
+  packing: "Empacando",
+  empaque: "Empaque",
+  ready_for_route: "Listo para ruta",
+  assigned_to_run: "Asignado a salida",
+  in_transit: "En ruta",
+  en_ruta: "En ruta",
+  delivered: "Entregado",
+  delivered_partial: "Entrega parcial",
+  entregado: "Entregado",
+  pago_pendiente: "Pago pendiente",
+  pagado: "Pagado",
+  closed: "Cerrado",
+  cancelado: "Cancelado",
+  devuelto: "Devuelto",
+};
+
+const DELIVERED_STATUSES = new Set<OrderStatus>(["entregado", "delivered", "delivered_partial", "pago_pendiente", "pagado", "closed"]);
+const RETURNED_STATUSES = new Set<OrderStatus>(["devuelto"]);
+const CANCELLED_STATUSES = new Set<OrderStatus>(["cancelado"]);
+const NEED_INVEST_STATUSES = new Set<OrderStatus>(["confirmando_proveedor", "reservado_inventario", "solicitado_proveedor", "supplier_processing"]);
+const INVESTED_NOT_DELIVERED_STATUSES = new Set<OrderStatus>([
+  "inbound_in_transit",
+  "en_transito",
+  "recibido_qa",
+  "packing",
+  "empaque",
+  "ready_for_route",
+  "assigned_to_run",
+  "in_transit",
+  "en_ruta",
+]);
+const COURIER_COLLECTION_STATUSES = new Set<OrderStatus>(["in_transit", "en_ruta", "assigned_to_run"]);
+
+@Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  standalone: true,
+  selector: "app-administracion",
+  imports: [FormsModule],
+  templateUrl: "./administracion.html",
+  styleUrl: "./administracion.css",
+})
+export default class AdministracionPage {
+  private ordersService = inject(OrdersService);
+  private inventoryService = inject(InventoryService);
+  private routesService = inject(RoutesService);
+  private financeService = inject(FinanceService);
+  private customersService = inject(CustomersService);
+  private authz = inject(AuthzService);
+  private router = inject(Router);
+  private route = inject(ActivatedRoute);
+  private pendingDrilldownRestore = signal<string | null>(null);
+
+  loading = signal(false);
+  error = signal<string | null>(null);
+  success = signal<string | null>(null);
+  drilldown = signal<DrilldownState | null>(null);
+
+  routeScope = signal("general");
+  projectionDays = signal(30);
+  averageWindowDays = signal(30);
+  stagnationDays = signal(45);
+
+  cutLabel = signal("");
+  cutStart = signal(this.offsetDate(-30));
+  cutEnd = signal(this.offsetDate(0));
+
+  accountEditingId = signal<string | null>(null);
+  accountName = signal("");
+  accountBalance = signal(0);
+  accountNotes = signal("");
+
+  expenseEditingId = signal<string | null>(null);
+  expenseCategory = signal<FinanceExpenseCategory>("consumibles");
+  expenseAmount = signal(0);
+  expenseDate = signal(this.offsetDate(0));
+  expenseRouteId = signal("general");
+  expenseAccountId = signal("none");
+  expenseInstallmentTotal = signal<number | null>(null);
+  expenseInstallmentIndex = signal<number | null>(null);
+  expenseNotes = signal("");
+
+  orders = computed(() => this.ordersService.list());
+  inventoryItems = computed(() => this.inventoryService.items());
+  routes = computed(() => this.routesService.routes());
+  accounts = computed(() => this.financeService.accounts());
+  expenses = computed(() => this.financeService.expenses());
+  cuts = computed(() => this.financeService.cuts());
+  customers = computed(() => this.customersService.customers());
+
+  canViewAccounts = computed(() => this.authz.canCap("cap.finance.accounts.view"));
+  canCreateAccounts = computed(() => this.authz.canCap("cap.finance.accounts.create"));
+  canEditAccounts = computed(() => this.authz.canCap("cap.finance.accounts.edit"));
+  canDeleteAccounts = computed(() => this.authz.canCap("cap.finance.accounts.delete"));
+
+  canViewMovements = computed(() => this.authz.canCap("cap.finance.movements.view"));
+  canCreateMovements = computed(() => this.authz.canCap("cap.finance.movements.create"));
+  canEditMovements = computed(() => this.authz.canCap("cap.finance.movements.edit"));
+  canDeleteMovements = computed(() => this.authz.canCap("cap.finance.movements.delete"));
+
+  canViewReports = computed(() => this.authz.canCap("cap.finance.reports.view"));
+
+  scopeOptions = computed(() => {
+    const base = [{ id: "general", name: "General" }];
+    const routes = this.routes().map((route) => ({ id: route.route_id, name: route.name }));
+    return [...base, ...routes];
+  });
+
+  selectedRouteId = computed(() => {
+    const current = this.routeScope();
+    if (!current || current === "general") return null;
+    return current;
+  });
+
+  filteredOrders = computed(() => {
+    const routeId = this.selectedRouteId();
+    return this.orders().filter((order) => this.matchesRoute(order.route_id, routeId));
+  });
+
+  filteredExpenses = computed(() => {
+    const routeId = this.selectedRouteId();
+    if (!routeId) return this.expenses();
+    return this.expenses().filter((row) => row.route_id === routeId);
+  });
+
+  summary = computed<FinanceSummary>(() =>
+    this.buildSummary({
+      orders: this.filteredOrders(),
+      expenses: this.filteredExpenses(),
+      inventory: this.inventoryItems(),
+      accounts: this.accounts(),
+      projectionDays: this.projectionDays(),
+      averageWindowDays: this.averageWindowDays(),
+      stagnationDays: this.stagnationDays(),
+    }),
+  );
+
+  routeRows = computed(() => this.buildRouteRows(this.summary().orderBucketRows));
+
+  constructor() {
+    this.restoreReturnContextFromQuery();
+    this.reload().catch(() => null);
+  }
+
+  async reload() {
+    this.loading.set(true);
+    this.error.set(null);
+    this.success.set(null);
+    try {
+      await Promise.all([
+        this.ordersService.loadFromFirestore(),
+        this.inventoryService.loadFromFirestore().catch(() => null),
+        this.routesService.loadFromFirestore().catch(() => null),
+        this.customersService.loadFromFirestore().catch(() => null),
+        this.financeService.loadAll(),
+      ]);
+      const pending = this.pendingDrilldownRestore();
+      if (pending) {
+        this.tryRestoreDrilldown(pending);
+        this.pendingDrilldownRestore.set(null);
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "No se pudo cargar la informacion financiera.";
+      this.error.set(message);
+    } finally {
+      this.loading.set(false);
+    }
+  }
+
+  setRouteScope(value: unknown) {
+    const raw = String(value || "general").trim();
+    this.routeScope.set(raw || "general");
+    this.drilldown.set(null);
+  }
+
+  setProjectionDays(value: unknown) {
+    this.projectionDays.set(this.toPositiveInt(value, 30));
+  }
+
+  setAverageWindowDays(value: unknown) {
+    this.averageWindowDays.set(this.toPositiveInt(value, 30));
+  }
+
+  setStagnationDays(value: unknown) {
+    this.stagnationDays.set(this.toPositiveInt(value, 45));
+  }
+
+  setCutStart(value: unknown) {
+    this.cutStart.set(this.normalizeDateInput(value, this.offsetDate(-30)));
+  }
+
+  setCutEnd(value: unknown) {
+    this.cutEnd.set(this.normalizeDateInput(value, this.offsetDate(0)));
+  }
+
+  async saveCut() {
+    if (!this.canViewReports()) return;
+    this.error.set(null);
+    this.success.set(null);
+    const start = this.cutStart();
+    const end = this.cutEnd();
+    if (start > end) {
+      this.error.set("El inicio del corte no puede ser mayor que la fecha final.");
+      return;
+    }
+    const summary = this.summary();
+    try {
+      await this.financeService.saveCut({
+        label: this.cutLabel().trim() || `Corte ${start} a ${end}`,
+        route_id: this.selectedRouteId(),
+        start_at: start,
+        end_at: end,
+        snapshot: {
+          ingresos: summary.ingresosCobrados,
+          egresos: summary.egresos,
+          utilidad_bruta: summary.utilidadBruta,
+          utilidad_neta: summary.utilidadNeta,
+          por_cobrar: summary.porCobrar,
+          caja: summary.cajaActual,
+          mercancia_transito: summary.mercanciaTransito,
+          inventario: summary.inventarioCosto,
+        },
+      });
+      this.cutLabel.set("");
+      this.success.set("Corte guardado.");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "No se pudo guardar el corte.";
+      this.error.set(message);
+    }
+  }
+
+  startEditAccount(row: FinanceAccount) {
+    if (!this.canEditAccounts()) return;
+    this.accountEditingId.set(row.account_id);
+    this.accountName.set(row.name);
+    this.accountBalance.set(row.balance);
+    this.accountNotes.set(row.notes || "");
+  }
+
+  resetAccountForm() {
+    this.accountEditingId.set(null);
+    this.accountName.set("");
+    this.accountBalance.set(0);
+    this.accountNotes.set("");
+  }
+
+  async submitAccount() {
+    const editingId = this.accountEditingId();
+    const isEditing = Boolean(editingId);
+    if (isEditing && !this.canEditAccounts()) return;
+    if (!isEditing && !this.canCreateAccounts()) return;
+    const name = this.accountName().trim();
+    if (!name) {
+      this.error.set("El nombre de la cuenta es obligatorio.");
+      return;
+    }
+
+    this.error.set(null);
+    this.success.set(null);
+    try {
+      await this.financeService.saveAccount({
+        account_id: editingId || undefined,
+        name,
+        balance: this.accountBalance(),
+        notes: this.accountNotes().trim() || null,
+      });
+      this.resetAccountForm();
+      this.success.set(isEditing ? "Cuenta actualizada." : "Cuenta registrada.");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "No se pudo guardar la cuenta.";
+      this.error.set(message);
+    }
+  }
+
+  async deleteAccount(row: FinanceAccount) {
+    if (!this.canDeleteAccounts()) return;
+    const ok = confirm(`Eliminar la cuenta "${row.name}"?`);
+    if (!ok) return;
+    this.error.set(null);
+    this.success.set(null);
+    try {
+      await this.financeService.deleteAccount(row.account_id);
+      if (this.accountEditingId() === row.account_id) this.resetAccountForm();
+      this.success.set("Cuenta eliminada.");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "No se pudo eliminar la cuenta.";
+      this.error.set(message);
+    }
+  }
+
+  setAccountName(value: unknown) {
+    this.accountName.set(String(value || ""));
+  }
+
+  setAccountBalance(value: unknown) {
+    this.accountBalance.set(this.toSafeNumber(value));
+  }
+
+  setAccountNotes(value: unknown) {
+    this.accountNotes.set(String(value || ""));
+  }
+
+  startEditExpense(row: FinanceExpense) {
+    if (!this.canEditMovements()) return;
+    this.expenseEditingId.set(row.expense_id);
+    this.expenseCategory.set(row.category);
+    this.expenseAmount.set(row.amount);
+    this.expenseDate.set(this.normalizeDateInput(row.occurred_at, this.offsetDate(0)));
+    this.expenseRouteId.set(row.route_id || "general");
+    this.expenseAccountId.set(row.account_id || "none");
+    this.expenseInstallmentTotal.set(row.installment_total);
+    this.expenseInstallmentIndex.set(row.installment_index);
+    this.expenseNotes.set(row.notes || "");
+  }
+
+  resetExpenseForm() {
+    this.expenseEditingId.set(null);
+    this.expenseCategory.set("consumibles");
+    this.expenseAmount.set(0);
+    this.expenseDate.set(this.offsetDate(0));
+    this.expenseRouteId.set(this.selectedRouteId() || "general");
+    this.expenseAccountId.set("none");
+    this.expenseInstallmentTotal.set(null);
+    this.expenseInstallmentIndex.set(null);
+    this.expenseNotes.set("");
+  }
+
+  setExpenseCategory(value: unknown) {
+    const raw = String(value || "").trim();
+    if (raw === "compra_inversion" || raw === "perdida" || raw === "paqueteria" || raw === "consumibles" || raw === "deuda_fija" || raw === "deuda_meses") {
+      this.expenseCategory.set(raw);
+    }
+  }
+
+  setExpenseAmount(value: unknown) {
+    this.expenseAmount.set(this.toSafeNumber(value));
+  }
+
+  setExpenseDate(value: unknown) {
+    this.expenseDate.set(this.normalizeDateInput(value, this.offsetDate(0)));
+  }
+
+  setExpenseRouteId(value: unknown) {
+    const raw = String(value || "general").trim();
+    this.expenseRouteId.set(raw || "general");
+  }
+
+  setExpenseAccountId(value: unknown) {
+    const raw = String(value || "none").trim();
+    this.expenseAccountId.set(raw || "none");
+  }
+
+  setExpenseInstallmentTotal(value: unknown) {
+    this.expenseInstallmentTotal.set(this.toNullablePositiveInt(value));
+  }
+
+  setExpenseInstallmentIndex(value: unknown) {
+    this.expenseInstallmentIndex.set(this.toNullablePositiveInt(value));
+  }
+
+  setExpenseNotes(value: unknown) {
+    this.expenseNotes.set(String(value || ""));
+  }
+
+  async submitExpense() {
+    const editingId = this.expenseEditingId();
+    const isEditing = Boolean(editingId);
+    if (isEditing && !this.canEditMovements()) return;
+    if (!isEditing && !this.canCreateMovements()) return;
+    if (this.expenseAmount() <= 0) {
+      this.error.set("El monto del egreso debe ser mayor a 0.");
+      return;
+    }
+
+    this.error.set(null);
+    this.success.set(null);
+    try {
+      await this.financeService.saveExpense({
+        expense_id: editingId || undefined,
+        category: this.expenseCategory(),
+        amount: this.expenseAmount(),
+        occurred_at: this.expenseDate(),
+        route_id: this.expenseRouteId() === "general" ? null : this.expenseRouteId(),
+        account_id: this.expenseAccountId() === "none" ? null : this.expenseAccountId(),
+        installment_total: this.expenseInstallmentTotal(),
+        installment_index: this.expenseInstallmentIndex(),
+        notes: this.expenseNotes().trim() || null,
+      });
+      this.resetExpenseForm();
+      this.success.set(isEditing ? "Egreso actualizado." : "Egreso registrado.");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "No se pudo guardar el egreso.";
+      this.error.set(message);
+    }
+  }
+
+  async deleteExpense(row: FinanceExpense) {
+    if (!this.canDeleteMovements()) return;
+    const ok = confirm(`Eliminar egreso de ${this.formatCurrency(row.amount)}?`);
+    if (!ok) return;
+    this.error.set(null);
+    this.success.set(null);
+    try {
+      await this.financeService.deleteExpense(row.expense_id);
+      if (this.expenseEditingId() === row.expense_id) this.resetExpenseForm();
+      this.success.set("Egreso eliminado.");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "No se pudo eliminar el egreso.";
+      this.error.set(message);
+    }
+  }
+
+  openBucketById(bucketId: MoneyBucketId) {
+    const target = this.summary().buckets.find((row) => row.id === bucketId);
+    if (!target) return;
+    this.openBucketDrilldown(target);
+  }
+
+  openBucketDrilldown(bucket: MoneyBucket) {
+    const rows = this.buildDrilldownRowsFromBucket(bucket);
+    this.drilldown.set({
+      id: `bucket:${bucket.id}`,
+      title: bucket.title,
+      subtitle: `${bucket.description} | ${bucket.count} ${bucket.id === "stagnantInventory" ? "SKUs" : "pedidos"}`,
+      totalAmountClienta: this.toSafeNumber(bucket.amountClienta),
+      totalCost: this.toSafeNumber(bucket.cost),
+      totalMargin: this.toSafeNumber(bucket.margin),
+      totalPaid: this.toSafeNumber(bucket.paid),
+      totalBalance: this.toSafeNumber(bucket.balance),
+      rows,
+    });
+  }
+
+  openRouteDrilldown(row: SummaryRow) {
+    const rows: DrilldownRow[] = row.detailRows
+      .map((entry) => ({
+        rowId: `route:${row.routeId}:${entry.orderId}`,
+        type: "order" as const,
+        primary: this.customerName(entry.customerId),
+        secondary: this.routeName(entry.routeId),
+        status: this.statusLabel(entry.status),
+        amountClienta: this.toSafeNumber(entry.amountClienta),
+        cost: this.toSafeNumber(entry.cost),
+        margin: this.toSafeNumber(entry.margin),
+        paid: this.toSafeNumber(entry.paid),
+        balance: this.toSafeNumber(entry.balance),
+        orderId: entry.orderId,
+      }))
+      .sort((a, b) => b.amountClienta - a.amountClienta);
+
+    const totalAmountClienta = rows.reduce((sum, item) => sum + item.amountClienta, 0);
+    const totalCost = rows.reduce((sum, item) => sum + item.cost, 0);
+    const totalMargin = rows.reduce((sum, item) => sum + item.margin, 0);
+    const totalPaid = rows.reduce((sum, item) => sum + item.paid, 0);
+    const totalBalance = rows.reduce((sum, item) => sum + item.balance, 0);
+
+    this.drilldown.set({
+      id: `route:${row.routeId}`,
+      title: `Ruta ${row.routeName}`,
+      subtitle: `${row.ordersCount} pedidos | ${row.customerPreview}`,
+      totalAmountClienta,
+      totalCost,
+      totalMargin,
+      totalPaid,
+      totalBalance,
+      rows,
+    });
+  }
+
+  closeDrilldown() {
+    this.drilldown.set(null);
+  }
+
+  openOrder(orderId: string) {
+    const active = this.drilldown();
+    const state = {
+      from: "administracion",
+      scope: this.routeScope(),
+      drilldown: active?.id || null,
+    };
+    this.closeDrilldown();
+    this.router.navigate(["/main/pedidos", orderId], { state });
+  }
+
+  expenseCategoryLabel(key: FinanceExpenseCategory): string {
+    return EXPENSE_CATEGORY_LABEL[key];
+  }
+
+  accountLabel(accountId: string | null): string {
+    if (!accountId) return "-";
+    return this.accounts().find((row) => row.account_id === accountId)?.name || accountId;
+  }
+
+  customerName(customerId: string): string {
+    const row = this.customersService.getById(customerId);
+    if (!row) return "Clienta sin nombre";
+    return [row.first_name, row.last_name].filter(Boolean).join(" ").trim() || "Clienta sin nombre";
+  }
+
+  routeName(routeId: string | null): string {
+    const normalized = this.normalizeRouteId(routeId);
+    if (normalized === "sin_ruta") return "Sin ruta";
+    return this.routes().find((row) => row.route_id === normalized)?.name || normalized;
+  }
+
+  statusLabel(status: OrderStatus): string {
+    return STATUS_LABELS[status] || status;
+  }
+
+  bucketTitle(bucketId: MoneyBucketId): string {
+    return MONEY_BUCKET_META[bucketId].title;
+  }
+
+  formatCurrency(value: number): string {
+    return new Intl.NumberFormat("es-MX", {
+      style: "currency",
+      currency: "MXN",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    }).format(this.toSafeNumber(value));
+  }
+
+  formatPercent(value: number): string {
+    return `${(this.toSafeNumber(value) * 100).toFixed(1)}%`;
+  }
+
+  formatNumber(value: number, decimals = 1): string {
+    return this.toSafeNumber(value).toFixed(Math.max(0, Math.trunc(decimals)));
+  }
+
+  formatDate(value: unknown): string {
+    const iso = this.toIsoDate(value);
+    if (!iso) return "-";
+    return new Date(iso).toLocaleDateString("es-MX");
+  }
+
+  trackRoute = (_: number, row: SummaryRow) => row.routeId;
+  trackAccount = (_: number, row: FinanceAccount) => row.account_id;
+  trackExpense = (_: number, row: FinanceExpense) => row.expense_id;
+  trackCut = (_: number, row: { cut_id: string }) => row.cut_id;
+  trackScope = (_: number, row: { id: string }) => row.id;
+  trackBucket = (_: number, row: MoneyBucket) => row.id;
+  trackDrilldownRow = (_: number, row: DrilldownRow) => row.rowId;
+
+  private restoreReturnContextFromQuery() {
+    const scope = String(this.route.snapshot.queryParamMap.get("scope") || "").trim();
+    if (scope) {
+      this.routeScope.set(scope);
+    }
+    const drilldown = String(this.route.snapshot.queryParamMap.get("drilldown") || "").trim();
+    if (drilldown) {
+      this.pendingDrilldownRestore.set(drilldown);
+    }
+  }
+
+  private tryRestoreDrilldown(token: string) {
+    if (token.startsWith("bucket:")) {
+      const bucketId = token.slice("bucket:".length) as MoneyBucketId;
+      const bucket = this.summary().buckets.find((row) => row.id === bucketId);
+      if (bucket) this.openBucketDrilldown(bucket);
+      return;
+    }
+    if (token.startsWith("route:")) {
+      const routeId = token.slice("route:".length);
+      const route = this.routeRows().find((row) => row.routeId === routeId);
+      if (route) this.openRouteDrilldown(route);
+    }
+  }
+
+  private buildRouteRows(rows: BucketOrderRow[]): SummaryRow[] {
+    const selectedRouteId = this.selectedRouteId();
+    const map = new Map<string, SummaryRow>();
+
+    for (const entry of rows) {
+      const routeId = entry.routeId;
+      if (selectedRouteId && routeId !== selectedRouteId) continue;
+      if (!map.has(routeId)) {
+        map.set(routeId, {
+          routeId,
+          routeName: this.routeName(routeId),
+          ordersCount: 0,
+          porCobrarReal: 0,
+          pipelineClienta: 0,
+          capitalRequerido: 0,
+          cobradoConRepartidor: 0,
+          gananciaPendiente: 0,
+          customerPreview: "Sin clientas",
+          detailRows: [],
+        });
+      }
+      const target = map.get(routeId);
+      if (!target) continue;
+      target.ordersCount += 1;
+      target.detailRows.push(entry);
+
+      if (entry.bucketId === "deliveredPendingCollection") {
+        target.porCobrarReal += entry.amountClienta;
+        target.gananciaPendiente += entry.margin;
+      }
+
+      if (entry.bucketId === "confirmedNeedInvestment" || entry.bucketId === "investedNotDelivered") {
+        target.pipelineClienta += entry.amountClienta;
+        target.gananciaPendiente += entry.margin;
+      }
+
+      if (entry.bucketId === "confirmedNeedInvestment") {
+        target.capitalRequerido += entry.cost;
+      }
+
+      if (entry.bucketId === "collectedByCourierPendingSettlement") {
+        target.cobradoConRepartidor += entry.amountClienta;
+      }
+    }
+
+    const out = Array.from(map.values())
+      .map((row) => ({
+        ...row,
+        customerPreview: this.buildCustomerPreview(row.detailRows),
+        porCobrarReal: this.toSafeNumber(row.porCobrarReal),
+        pipelineClienta: this.toSafeNumber(row.pipelineClienta),
+        capitalRequerido: this.toSafeNumber(row.capitalRequerido),
+        cobradoConRepartidor: this.toSafeNumber(row.cobradoConRepartidor),
+        gananciaPendiente: this.toSafeNumber(row.gananciaPendiente),
+      }))
+      .filter((row) => row.ordersCount > 0)
+      .sort((a, b) => b.pipelineClienta + b.porCobrarReal - (a.pipelineClienta + a.porCobrarReal));
+
+    return out;
+  }
+
+  private buildCustomerPreview(rows: BucketOrderRow[]): string {
+    if (rows.length === 0) return "Sin clientas";
+    const map = new Map<string, number>();
+    for (const row of rows) {
+      const name = this.customerName(row.customerId);
+      map.set(name, (map.get(name) || 0) + 1);
+    }
+    const ordered = Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+    return ordered
+      .slice(0, 3)
+      .map(([name]) => name)
+      .join(", ");
+  }
+
+  private buildSummary(input: {
+    orders: Order[];
+    expenses: FinanceExpense[];
+    inventory: InventoryItem[];
+    accounts: FinanceAccount[];
+    projectionDays: number;
+    averageWindowDays: number;
+    stagnationDays: number;
+  }): FinanceSummary {
+    const { avgCostUnit, avgSaleUnit, markupMultiplier } = this.estimateMargins(input.orders);
+    const bucketMap = this.createBucketMap();
+    const orderBucketRows: BucketOrderRow[] = [];
+
+    let ventasBrutas = 0;
+    let ingresosCobrados = 0;
+    let utilidadBruta = 0;
+    let potencialBorradores = 0;
+    let perdidoStock = 0;
+    let perdidoDano = 0;
+    let devolucionesMonto = 0;
+    let baseVentasDevolucion = 0;
+    let pedidosBorrador = 0;
+    let recentSales = 0;
+    let costOfDelivered = 0;
+
+    for (const order of input.orders) {
+      const snapshot = this.toOrderSnapshot(order);
+      const status = snapshot.status;
+      const isCancelled = CANCELLED_STATUSES.has(status);
+      const isDelivered = DELIVERED_STATUSES.has(status);
+
+      if (!isCancelled) {
+        ventasBrutas += snapshot.totalClienta;
+      }
+
+      if (isDelivered) {
+        ingresosCobrados += snapshot.paid > 0 ? snapshot.paid : snapshot.balance <= 0 ? snapshot.totalClienta : 0;
+        utilidadBruta += snapshot.grossProfit;
+        baseVentasDevolucion += snapshot.totalClienta;
+        costOfDelivered += snapshot.cost;
+        if (this.isDateWithinWindow(order.updated_at, input.averageWindowDays)) {
+          recentSales += snapshot.totalClienta;
+        }
+      }
+
+      if (status === "borrador") {
+        pedidosBorrador += 1;
+        potencialBorradores += snapshot.remaining > 0 ? snapshot.remaining : snapshot.totalClienta;
+      }
+
+      const bucketId = this.classifyBucket(snapshot);
+      if (bucketId) {
+        const allocation = this.allocateBucket(snapshot, bucketId);
+        const row: BucketOrderRow = {
+          bucketId,
+          orderId: order.order_id,
+          routeId: snapshot.routeId,
+          customerId: snapshot.customerId,
+          status: snapshot.status,
+          amountClienta: allocation.amountClienta,
+          cost: allocation.cost,
+          margin: allocation.margin,
+          paid: allocation.paid,
+          balance: allocation.balance,
+          note: allocation.note,
+        };
+        this.pushOrderRowToBucket(bucketMap.get(bucketId), row);
+        orderBucketRows.push(row);
+      }
+
+      for (const item of order.items || []) {
+        const rowValue = this.resolveItemSaleValue(item);
+        if (rowValue <= 0) continue;
+        if (item.state === "devuelto") {
+          devolucionesMonto += rowValue;
+        }
+        const stockLoss = item.confirmation_state === "out_of_stock" || item.late_addition_status === "missing";
+        const damageLoss = item.late_addition_status === "damaged";
+        if (damageLoss) perdidoDano += rowValue;
+        else if (stockLoss) perdidoStock += rowValue;
+      }
+    }
+
+    const egresos = input.expenses.reduce((sum, row) => sum + Math.max(0, this.toSafeNumber(row.amount)), 0);
+    const perdidasRegistradas = input.expenses
+      .filter((row) => row.category === "perdida")
+      .reduce((sum, row) => sum + Math.max(0, this.toSafeNumber(row.amount)), 0);
+    const utilidadNeta = utilidadBruta - egresos;
+
+    const cajaActual = input.accounts.reduce((sum, account) => sum + this.toSafeNumber(account.balance), 0);
+    const averageWindowDays = Math.max(1, input.averageWindowDays);
+    const promedioVentaDiaria = recentSales / averageWindowDays;
+    const recentExpenses = input.expenses
+      .filter((row) => this.isDateWithinWindow(row.occurred_at, averageWindowDays))
+      .reduce((sum, row) => sum + this.toSafeNumber(row.amount), 0);
+    const promedioEgresoDiario = recentExpenses / averageWindowDays;
+
+    let inventarioCosto = 0;
+    let estancadoPiezas = 0;
+    let estancadoCosto = 0;
+    let estancadoPotencial = 0;
+    let estancadoGanancia = 0;
+    const now = new Date();
+
+    for (const row of input.inventory) {
+      const qty = this.inventoryAvailableQty(row);
+      if (qty <= 0) continue;
+      const costUnit = this.resolveInventoryCostUnit(row, avgCostUnit);
+      const value = qty * costUnit;
+      inventarioCosto += value;
+
+      const idleDays = this.daysSince(this.pickBestDate(row.updated_at, row.created_at), now);
+      if (idleDays < Math.max(1, input.stagnationDays)) continue;
+
+      const estimatedSaleUnit = costUnit > 0 ? costUnit * markupMultiplier : avgSaleUnit;
+      const potential = qty * estimatedSaleUnit;
+      const potentialMargin = Math.max(0, potential - value);
+
+      estancadoPiezas += qty;
+      estancadoCosto += value;
+      estancadoPotencial += potential;
+      estancadoGanancia += potentialMargin;
+
+      this.pushInventoryRowToBucket(bucketMap.get("stagnantInventory"), {
+        bucketId: "stagnantInventory",
+        inventoryId: (row as { inventory_id?: string }).inventory_id || (row as { sku?: string }).sku || `inv-${row.title}`,
+        title: row.title || "Producto sin nombre",
+        quantity: qty,
+        idleDays,
+        cost: value,
+        potentialSale: potential,
+        potentialMargin,
+      });
+    }
+
+    const buckets = MONEY_BUCKET_ORDER.map((id) => bucketMap.get(id)!).map((row) => ({
+      ...row,
+      amountClienta: this.toSafeNumber(row.amountClienta),
+      cost: this.toSafeNumber(row.cost),
+      margin: this.toSafeNumber(row.margin),
+      paid: this.toSafeNumber(row.paid),
+      balance: this.toSafeNumber(row.balance),
+    }));
+
+    const confirmedNeedInvestment = bucketMap.get("confirmedNeedInvestment")!;
+    const investedNotDelivered = bucketMap.get("investedNotDelivered")!;
+    const deliveredPendingCollection = bucketMap.get("deliveredPendingCollection")!;
+    const collectedShouldBeInAccount = bucketMap.get("collectedShouldBeInAccount")!;
+    const collectedByCourierPendingSettlement = bucketMap.get("collectedByCourierPendingSettlement")!;
+
+    const pipelineClienta = confirmedNeedInvestment.amountClienta + investedNotDelivered.amountClienta;
+    const capitalPorInvertir = confirmedNeedInvestment.cost;
+    const mercanciaTransito = investedNotDelivered.cost;
+    const porCobrar = deliveredPendingCollection.amountClienta;
+    const cobradoConRepartidor = collectedByCourierPendingSettlement.amountClienta;
+    const cobradoPorDepositar = collectedShouldBeInAccount.amountClienta;
+    const gananciaPendientePipeline = confirmedNeedInvestment.margin + investedNotDelivered.margin + deliveredPendingCollection.margin;
+    const potencialPendiente = gananciaPendientePipeline;
+    const pedidosPendientes = confirmedNeedInvestment.count + investedNotDelivered.count;
+    const pendientesCobro = deliveredPendingCollection.count;
+
+    const proyeccionCaja =
+      cajaActual +
+      porCobrar +
+      cobradoPorDepositar +
+      (promedioVentaDiaria - promedioEgresoDiario) * Math.max(1, input.projectionDays);
+
+    const devolucionRate = baseVentasDevolucion > 0 ? devolucionesMonto / baseVentasDevolucion : 0;
+    const devolucionImpacto = devolucionesMonto + perdidasRegistradas;
+    const dsoDias = recentSales > 0 ? (porCobrar / recentSales) * averageWindowDays : 0;
+    const inventoryTurnover = inventarioCosto > 0 ? costOfDelivered / inventarioCosto : 0;
+    const inventoryDays = inventoryTurnover > 0 ? 365 / inventoryTurnover : 0;
+
+    return {
+      ventasBrutas,
+      ingresosCobrados,
+      egresos,
+      utilidadBruta,
+      utilidadNeta,
+      dsoDias,
+      cajaActual,
+      porCobrar,
+      mercanciaTransito,
+      inventarioCosto,
+      inventoryTurnover,
+      inventoryDays,
+      potencialBorradores,
+      potencialPendiente,
+      promedioVentaDiaria,
+      promedioEgresoDiario,
+      proyeccionCaja,
+      estancadoPiezas,
+      estancadoCosto,
+      estancadoPotencial,
+      estancadoGanancia,
+      perdidoStock,
+      perdidoDano,
+      devolucionesMonto,
+      devolucionRate,
+      devolucionImpacto,
+      pedidosPendientes,
+      pedidosBorrador,
+      pendientesCobro,
+      pipelineClienta,
+      capitalPorInvertir,
+      cobradoConRepartidor,
+      cobradoPorDepositar,
+      gananciaPendientePipeline,
+      buckets,
+      orderBucketRows,
+    };
+  }
+
+  private createBucketMap(): Map<MoneyBucketId, MoneyBucket> {
+    const map = new Map<MoneyBucketId, MoneyBucket>();
+    for (const id of MONEY_BUCKET_ORDER) {
+      const meta = MONEY_BUCKET_META[id];
+      map.set(id, {
+        id,
+        title: meta.title,
+        description: meta.description,
+        count: 0,
+        amountClienta: 0,
+        cost: 0,
+        margin: 0,
+        paid: 0,
+        balance: 0,
+        orderRows: [],
+        inventoryRows: [],
+      });
+    }
+    return map;
+  }
+
+  private pushOrderRowToBucket(bucket: MoneyBucket | undefined, row: BucketOrderRow) {
+    if (!bucket) return;
+    bucket.count += 1;
+    bucket.amountClienta += row.amountClienta;
+    bucket.cost += row.cost;
+    bucket.margin += row.margin;
+    bucket.paid += row.paid;
+    bucket.balance += row.balance;
+    bucket.orderRows.push(row);
+  }
+
+  private pushInventoryRowToBucket(bucket: MoneyBucket | undefined, row: BucketInventoryRow) {
+    if (!bucket) return;
+    bucket.count += 1;
+    bucket.amountClienta += row.potentialSale;
+    bucket.cost += row.cost;
+    bucket.margin += row.potentialMargin;
+    bucket.balance += row.potentialSale;
+    bucket.inventoryRows.push(row);
+  }
+
+  private buildDrilldownRowsFromBucket(bucket: MoneyBucket): DrilldownRow[] {
+    const orderRows: DrilldownRow[] = bucket.orderRows.map((row) => ({
+      rowId: `order:${row.orderId}`,
+      type: "order",
+      primary: this.customerName(row.customerId),
+      secondary: this.routeName(row.routeId),
+      status: this.statusLabel(row.status),
+      amountClienta: this.toSafeNumber(row.amountClienta),
+      cost: this.toSafeNumber(row.cost),
+      margin: this.toSafeNumber(row.margin),
+      paid: this.toSafeNumber(row.paid),
+      balance: this.toSafeNumber(row.balance),
+      orderId: row.orderId,
+    }));
+
+    const inventoryRows: DrilldownRow[] = bucket.inventoryRows.map((row) => ({
+      rowId: `inventory:${row.inventoryId}`,
+      type: "inventory",
+      primary: row.title,
+      secondary: `${row.quantity} pzas | ${row.idleDays} dias sin salida`,
+      status: "Inventario estancado",
+      amountClienta: this.toSafeNumber(row.potentialSale),
+      cost: this.toSafeNumber(row.cost),
+      margin: this.toSafeNumber(row.potentialMargin),
+      paid: 0,
+      balance: this.toSafeNumber(row.potentialSale),
+      orderId: null,
+    }));
+
+    return [...orderRows, ...inventoryRows].sort((a, b) => b.amountClienta - a.amountClienta);
+  }
+
+  private classifyBucket(snapshot: OrderFinancialSnapshot): MoneyBucketId | null {
+    if (CANCELLED_STATUSES.has(snapshot.status) || RETURNED_STATUSES.has(snapshot.status)) return null;
+
+    if (DELIVERED_STATUSES.has(snapshot.status) && snapshot.balance > 0) {
+      return "deliveredPendingCollection";
+    }
+
+    if (COURIER_COLLECTION_STATUSES.has(snapshot.status) && snapshot.paid > 0) {
+      return "collectedByCourierPendingSettlement";
+    }
+
+    if (DELIVERED_STATUSES.has(snapshot.status) && snapshot.paid > 0 && snapshot.balance <= 0) {
+      return "collectedShouldBeInAccount";
+    }
+
+    if (snapshot.status === "borrador") {
+      return "openDrafts";
+    }
+
+    if (NEED_INVEST_STATUSES.has(snapshot.status)) {
+      return "confirmedNeedInvestment";
+    }
+
+    if (INVESTED_NOT_DELIVERED_STATUSES.has(snapshot.status)) {
+      return "investedNotDelivered";
+    }
+
+    if (snapshot.balance > 0) {
+      return "deliveredPendingCollection";
+    }
+
+    if (snapshot.paid > 0) {
+      return "collectedShouldBeInAccount";
+    }
+
+    if (snapshot.remaining > 0) {
+      return "confirmedNeedInvestment";
+    }
+
+    return null;
+  }
+
+  private allocateBucket(snapshot: OrderFinancialSnapshot, bucketId: MoneyBucketId): {
+    amountClienta: number;
+    cost: number;
+    margin: number;
+    paid: number;
+    balance: number;
+    note: string;
+  } {
+    if (bucketId === "deliveredPendingCollection") {
+      const ratio = snapshot.remainingRatio;
+      return {
+        amountClienta: snapshot.balance,
+        cost: snapshot.cost * ratio,
+        margin: snapshot.grossProfit * ratio,
+        paid: snapshot.paid,
+        balance: snapshot.balance,
+        note: "Entregado, pendiente cobrar",
+      };
+    }
+
+    if (bucketId === "collectedShouldBeInAccount") {
+      const ratio = snapshot.paidRatio;
+      return {
+        amountClienta: snapshot.paid,
+        cost: snapshot.cost * ratio,
+        margin: snapshot.grossProfit * ratio,
+        paid: snapshot.paid,
+        balance: 0,
+        note: "Cobrado, conciliar en cuenta",
+      };
+    }
+
+    if (bucketId === "collectedByCourierPendingSettlement") {
+      const ratio = snapshot.paidRatio;
+      return {
+        amountClienta: snapshot.paid,
+        cost: snapshot.cost * ratio,
+        margin: snapshot.grossProfit * ratio,
+        paid: snapshot.paid,
+        balance: 0,
+        note: "Cobrado por repartidor",
+      };
+    }
+
+    const ratio = snapshot.remainingRatio > 0 ? snapshot.remainingRatio : 1;
+    return {
+      amountClienta: snapshot.remaining > 0 ? snapshot.remaining : snapshot.totalClienta,
+      cost: snapshot.cost * ratio,
+      margin: snapshot.grossProfit * ratio,
+      paid: snapshot.paid,
+      balance: snapshot.remaining,
+      note:
+        bucketId === "openDrafts"
+          ? "Apertura sin solicitud"
+          : bucketId === "confirmedNeedInvestment"
+            ? "Por solicitar/pagar proveedor"
+            : "Invertido, pendiente entrega",
+    };
+  }
+
+  private toOrderSnapshot(order: Order): OrderFinancialSnapshot {
+    const totalClienta = this.resolveOrderTotal(order);
+    const cost = this.resolveOrderCost(order);
+    const grossProfit = Math.max(0, totalClienta - cost);
+
+    const paidRaw = Math.max(0, this.toSafeNumber(order.totals?.paid_amount));
+    const paid = Math.min(totalClienta, paidRaw);
+    const inferredBalance = Math.max(0, totalClienta - paid);
+    const reportedBalance = Math.max(0, this.toSafeNumber(order.totals?.balance_due));
+    const balance = Math.min(totalClienta, Math.max(inferredBalance, reportedBalance));
+
+    const paidRatio = totalClienta > 0 ? Math.min(1, paid / totalClienta) : 0;
+    const remainingRatio = totalClienta > 0 ? Math.min(1, balance / totalClienta) : 0;
+
+    return {
+      order,
+      status: order.status,
+      routeId: this.normalizeRouteId(order.route_id),
+      customerId: String(order.customer_id || ""),
+      totalClienta,
+      cost,
+      grossProfit,
+      paid,
+      balance,
+      remaining: balance,
+      paidRatio,
+      remainingRatio,
+    };
+  }
+
+  private estimateMargins(orders: Order[]): { avgCostUnit: number; avgSaleUnit: number; markupMultiplier: number } {
+    let saleTotal = 0;
+    let costTotal = 0;
+    let qtyTotal = 0;
+    for (const order of orders) {
+      for (const item of order.items || []) {
+        const qty = this.resolveItemQty(item);
+        if (qty <= 0) continue;
+        const saleUnit = this.resolveItemSaleUnit(item);
+        const costUnit = this.resolveItemCostUnit(item);
+        if (saleUnit > 0) saleTotal += saleUnit * qty;
+        if (costUnit > 0) costTotal += costUnit * qty;
+        qtyTotal += qty;
+      }
+    }
+    const avgSaleUnit = qtyTotal > 0 ? saleTotal / qtyTotal : 0;
+    const avgCostUnit = qtyTotal > 0 ? costTotal / qtyTotal : 0;
+    const ratio = avgCostUnit > 0 ? avgSaleUnit / avgCostUnit : 1.35;
+    const markupMultiplier = Math.min(2.5, Math.max(1.1, ratio || 1.35));
+    return {
+      avgCostUnit: avgCostUnit > 0 ? avgCostUnit : 1,
+      avgSaleUnit: avgSaleUnit > 0 ? avgSaleUnit : 1.35,
+      markupMultiplier,
+    };
+  }
+
+  private matchesRoute(orderRouteId: string | null, selectedRouteId: string | null): boolean {
+    if (!selectedRouteId) return true;
+    return this.normalizeRouteId(orderRouteId) === selectedRouteId;
+  }
+
+  private normalizeRouteId(routeId: string | null): string {
+    const raw = String(routeId || "sin_ruta").trim();
+    return raw || "sin_ruta";
+  }
+
+  private resolveOrderTotal(order: Order): number {
+    const totals = this.toSafeNumber(order.totals?.total_amount);
+    if (totals > 0) return totals;
+    return this.estimateOrderValue(order);
+  }
+
+  private estimateOrderValue(order: Order): number {
+    return (order.items || []).reduce((sum, item) => sum + this.resolveItemSaleValue(item), 0);
+  }
+
+  private resolveOrderCost(order: Order): number {
+    return (order.items || []).reduce((sum, item) => sum + this.resolveItemCostValue(item), 0);
+  }
+
+  private resolveItemQty(item: OrderItem): number {
+    const candidate = item.confirmed_qty ?? item.quantity;
+    return Math.max(1, Math.trunc(this.toSafeNumber(candidate)));
+  }
+
+  private resolveItemSaleUnit(item: OrderItem): number {
+    const direct = this.toSafeNumber(item.price_clienta);
+    if (direct > 0) return direct;
+    const publicPrice = this.toSafeNumber(item.price_public);
+    if (publicPrice > 0) return Number((publicPrice * 0.75).toFixed(2));
+    const cost = this.toSafeNumber(item.price_cost);
+    if (cost > 0) return Number((cost * 1.35).toFixed(2));
+    return 0;
+  }
+
+  private resolveItemCostUnit(item: OrderItem): number {
+    const cost = this.toSafeNumber(item.price_cost);
+    return cost > 0 ? cost : 0;
+  }
+
+  private resolveItemSaleValue(item: OrderItem): number {
+    return this.resolveItemSaleUnit(item) * this.resolveItemQty(item);
+  }
+
+  private resolveItemCostValue(item: OrderItem): number {
+    return this.resolveItemCostUnit(item) * this.resolveItemQty(item);
+  }
+
+  private resolveInventoryCostUnit(item: InventoryItem, fallback: number): number {
+    const direct = this.toSafeNumber(item.unit_price);
+    if (direct > 0) return direct;
+    return Math.max(0, fallback);
+  }
+
+  private inventoryAvailableQty(item: InventoryItem): number {
+    const hasAvailable = item.available_qty !== null && item.available_qty !== undefined;
+    if (hasAvailable) {
+      return Math.max(0, Math.trunc(this.toSafeNumber(item.available_qty)));
+    }
+
+    const hasOnHand = item.on_hand_qty !== null && item.on_hand_qty !== undefined;
+    if (!hasOnHand) {
+      // Legacy docs may only have quantity_on_hand as already-available stock.
+      return Math.max(0, Math.trunc(this.toSafeNumber(item.quantity_on_hand)));
+    }
+
+    const onHand = this.toSafeNumber(item.on_hand_qty);
+    const reservedDirect = this.toSafeNumber(item.reserved_qty ?? 0);
+    const reservedFromMap = Object.values(item.reservations || {}).reduce((sum, row) => {
+      if (!row || row.status !== "reserved") return sum;
+      return sum + this.toSafeNumber(row.qty);
+    }, 0);
+    const reserved = Math.max(reservedDirect, reservedFromMap);
+
+    return Math.max(0, Math.trunc(onHand - reserved));
+  }
+
+  private isDateWithinWindow(rawDate: unknown, days: number): boolean {
+    const date = this.toDate(rawDate);
+    if (!date) return false;
+    const now = Date.now();
+    const diff = now - date.getTime();
+    if (diff < 0) return false;
+    return diff <= Math.max(1, days) * 24 * 60 * 60 * 1000;
+  }
+
+  private toDate(value: unknown): Date | null {
+    if (!value) return null;
+    if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+    if (typeof value === "string") {
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+    if (typeof value === "object" && value !== null) {
+      const maybe = value as { toDate?: () => Date };
+      if (typeof maybe.toDate === "function") {
+        const parsed = maybe.toDate();
+        return Number.isNaN(parsed.getTime()) ? null : parsed;
+      }
+    }
+    return null;
+  }
+
+  private pickBestDate(...values: unknown[]): Date | null {
+    for (const value of values) {
+      const date = this.toDate(value);
+      if (date) return date;
+    }
+    return null;
+  }
+
+  private daysSince(value: Date | null, now: Date): number {
+    if (!value) return 9999;
+    const diff = now.getTime() - value.getTime();
+    if (diff < 0) return 0;
+    return Math.floor(diff / (24 * 60 * 60 * 1000));
+  }
+
+  private toIsoDate(value: unknown): string | null {
+    const date = this.toDate(value);
+    if (!date) return null;
+    return date.toISOString();
+  }
+
+  private normalizeDateInput(value: unknown, fallback: string): string {
+    const raw = String(value || "").trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+    const parsed = this.toDate(value);
+    if (!parsed) return fallback;
+    return parsed.toISOString().slice(0, 10);
+  }
+
+  private toSafeNumber(value: unknown): number {
+    const n = typeof value === "number" ? value : Number(value || 0);
+    if (!Number.isFinite(n)) return 0;
+    return Number(n.toFixed(2));
+  }
+
+  private toPositiveInt(value: unknown, fallback: number): number {
+    const n = typeof value === "number" ? value : Number(value || fallback);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.max(1, Math.trunc(n));
+  }
+
+  private toNullablePositiveInt(value: unknown): number | null {
+    if (value === null || value === undefined || value === "") return null;
+    const n = typeof value === "number" ? value : Number(value);
+    if (!Number.isFinite(n)) return null;
+    return Math.max(1, Math.trunc(n));
+  }
+
+  private offsetDate(offsetDays: number): string {
+    const date = new Date();
+    date.setDate(date.getDate() + offsetDays);
+    return date.toISOString().slice(0, 10);
+  }
+}

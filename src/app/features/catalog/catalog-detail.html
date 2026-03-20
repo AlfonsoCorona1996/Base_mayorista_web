@@ -1,22 +1,36 @@
 <section class="detail-page">
   <header class="detail-header surface-card">
-    <button type="button" class="btn btn-ghost" (click)="goCatalog()">
-      <span class="material-symbols-rounded" aria-hidden="true">arrow_back</span>
-      Volver al catalogo
-    </button>
+    <div class="header-leading">
+      <button type="button" class="btn btn-ghost" (click)="goCatalog()">
+        <span class="material-symbols-rounded" aria-hidden="true">arrow_back</span>
+        Volver al catalogo
+      </button>
+
+      <div class="header-copy">
+        <p class="header-kicker">Ficha de producto</p>
+        <h1>Detalle y control comercial</h1>
+      </div>
+    </div>
 
     <div class="header-actions">
+      <button type="button" class="btn btn-soft" (click)="toggleEditMode()">
+        <span class="material-symbols-rounded" aria-hidden="true">{{ editing() ? "lock" : "edit" }}</span>
+        {{ editing() ? "Bloquear edicion" : "Editar producto" }}
+      </button>
+
       <button type="button" class="btn btn-danger" (click)="markAllOutOfStock()">
         <span class="material-symbols-rounded" aria-hidden="true">block</span>
         Marcar todo agotado
       </button>
+
       <button type="button" class="btn btn-soft" (click)="markAllInStock()">
         <span class="material-symbols-rounded" aria-hidden="true">check_circle</span>
         Marcar todo disponible
       </button>
+
       <button type="button" class="btn btn-primary" (click)="saveInventory()" [disabled]="saving() || loading()">
         <span class="material-symbols-rounded" aria-hidden="true">save</span>
-        {{ saving() ? "Guardando..." : "Guardar inventario" }}
+        {{ saving() ? "Guardando..." : "Guardar cambios" }}
       </button>
     </div>
   </header>
@@ -51,22 +65,75 @@
       </div>
 
       <div class="summary-content">
-        <h1 class="summary-title">{{ d.listing.title || "(sin titulo)" }}</h1>
+        <div class="summary-title-block">
+          @if (editing()) {
+            <label class="label" for="product-title">
+              <span class="material-symbols-rounded" aria-hidden="true">title</span>
+              Titulo del producto
+            </label>
+            <label class="field" for="product-title">
+              <input
+                id="product-title"
+                type="text"
+                class="input"
+                [ngModel]="d.listing.title || ''"
+                (ngModelChange)="onListingFieldChange('title', $event)"
+                placeholder="Ej. Bolsa piel trenzada"
+              />
+            </label>
+          } @else {
+            <h2 class="summary-title">{{ d.listing.title || "(sin titulo)" }}</h2>
+          }
 
-        <ul class="summary-meta">
-          <li>
+          <p class="summary-id">ID: {{ d.normalized_id }}</p>
+        </div>
+
+        <div class="summary-meta-grid">
+          <div class="meta-pill">
             <span class="material-symbols-rounded" aria-hidden="true">storefront</span>
-            <span>{{ supplierName() }}</span>
-          </li>
-          <li>
+            <div>
+              <p class="meta-label">Proveedor</p>
+              <p class="meta-value">{{ supplierName() }}</p>
+            </div>
+          </div>
+
+          <div class="meta-pill">
             <span class="material-symbols-rounded" aria-hidden="true">category</span>
-            <span>{{ d.listing.category_hint || "Sin categoria" }}</span>
-          </li>
-          <li>
+            <div>
+              <p class="meta-label">Categoria</p>
+              @if (editing()) {
+                <label class="field field-compact" for="product-category">
+                  <input
+                    id="product-category"
+                    type="text"
+                    class="input"
+                    [ngModel]="d.listing.category_hint || ''"
+                    (ngModelChange)="onListingFieldChange('category_hint', $event)"
+                    placeholder="Ej. Bolsas"
+                  />
+                </label>
+              } @else {
+                <p class="meta-value">{{ d.listing.category_hint || "Sin categoria" }}</p>
+              }
+            </div>
+          </div>
+
+          <div class="meta-pill">
             <span class="material-symbols-rounded" aria-hidden="true">deployed_code</span>
-            <span>{{ d.listing.items.length }} variante{{ d.listing.items.length !== 1 ? 's' : '' }}</span>
-          </li>
-        </ul>
+            <div>
+              <p class="meta-label">Variantes</p>
+              <p class="meta-value">{{ d.listing.items.length }}</p>
+            </div>
+          </div>
+
+          <div class="meta-pill">
+            <span class="material-symbols-rounded" aria-hidden="true">payments</span>
+            <div>
+              <p class="meta-label">Moneda</p>
+              <p class="meta-value">{{ preferredCurrency() }}</p>
+            </div>
+          </div>
+        </div>
 
         <div class="summary-stock">
           <span class="material-symbols-rounded" aria-hidden="true">inventory</span>
@@ -78,53 +145,179 @@
       </div>
     </section>
 
+    <section class="pricing-overview surface-card">
+      <div class="section-head">
+        <h2>
+          <span class="material-symbols-rounded" aria-hidden="true">monitoring</span>
+          Resumen de precios
+        </h2>
+        <p>Visibilidad de costo, precio clienta y precio final por variante.</p>
+      </div>
+
+      <div class="pricing-grid">
+        @for (metric of priceOverview(); track metric.key) {
+          <article class="price-kpi" [class.price-kpi-empty]="!metric.hasData">
+            <p class="price-kpi-label">
+              <span class="material-symbols-rounded" aria-hidden="true">{{ metric.icon }}</span>
+              {{ metric.label }}
+            </p>
+            <p class="price-kpi-value">{{ metric.valueLabel }}</p>
+            <p class="price-kpi-help">{{ metric.helperLabel }}</p>
+          </article>
+        }
+      </div>
+    </section>
+
     <section class="variants-grid">
       @for (item of d.listing.items; track (item.sku || item.variant_name || $index); let i = $index) {
         <article class="variant-card surface-card">
           <div class="variant-head">
-            <h2>
-              <span class="material-symbols-rounded" aria-hidden="true">sell</span>
-              {{ variantLabel(item, i) }}
-            </h2>
+            <div class="variant-heading-copy">
+              @if (editing()) {
+                <label class="label" [attr.for]="'variant-name-' + i">
+                  <span class="material-symbols-rounded" aria-hidden="true">sell</span>
+                  Nombre de variante
+                </label>
+                <label class="field" [attr.for]="'variant-name-' + i">
+                  <input
+                    [id]="'variant-name-' + i"
+                    type="text"
+                    class="input"
+                    [ngModel]="item.variant_name || ''"
+                    (ngModelChange)="onVariantFieldChange(i, 'variant_name', $event)"
+                    placeholder="Ej. Talla 24"
+                  />
+                </label>
+              } @else {
+                <h3>
+                  <span class="material-symbols-rounded" aria-hidden="true">sell</span>
+                  {{ variantLabel(item, i) }}
+                </h3>
+              }
+              <p class="variant-index">Variante {{ i + 1 }}</p>
+            </div>
+
             <button type="button" class="btn btn-danger btn-xs" (click)="setVariantOutOfStock(i)">
               <span class="material-symbols-rounded" aria-hidden="true">block</span>
               Agotar variante
             </button>
           </div>
 
-          <div class="variant-row">
-            <span class="label">
-              <span class="material-symbols-rounded" aria-hidden="true">barcode</span>
-              SKU
-            </span>
-            <span class="value">{{ item.sku || "Sin SKU" }}</span>
-          </div>
+          <div class="variant-base-grid">
+            <div class="variant-row">
+              <label class="label" [attr.for]="'variant-sku-' + i">
+                <span class="material-symbols-rounded" aria-hidden="true">barcode</span>
+                SKU
+              </label>
 
-          <div class="variant-row">
-            <label class="label" [attr.for]="'variant-state-' + i">
-              <span class="material-symbols-rounded" aria-hidden="true">tune</span>
-              Estado variante
-            </label>
-            <div class="field select-field">
-              <span class="material-symbols-rounded" aria-hidden="true">inventory</span>
-              <select
-                [id]="'variant-state-' + i"
-                class="input"
-                [ngModel]="item.stock_state"
-                (ngModelChange)="onVariantStateChange(i, $event)"
-              >
-                @for (opt of stockStates; track opt.value) {
-                  <option [ngValue]="opt.value">{{ opt.label }}</option>
-                }
-              </select>
+              @if (editing()) {
+                <label class="field" [attr.for]="'variant-sku-' + i">
+                  <input
+                    [id]="'variant-sku-' + i"
+                    type="text"
+                    class="input"
+                    [ngModel]="item.sku || ''"
+                    (ngModelChange)="onVariantFieldChange(i, 'sku', $event)"
+                    placeholder="SKU opcional"
+                  />
+                </label>
+              } @else {
+                <p class="value">{{ item.sku || "Sin SKU" }}</p>
+              }
+            </div>
+
+            <div class="variant-row">
+              <label class="label" [attr.for]="'variant-state-' + i">
+                <span class="material-symbols-rounded" aria-hidden="true">tune</span>
+                Estado variante
+              </label>
+              <label class="field select-field" [attr.for]="'variant-state-' + i">
+                <span class="material-symbols-rounded" aria-hidden="true">inventory</span>
+                <select
+                  [id]="'variant-state-' + i"
+                  class="input"
+                  [ngModel]="item.stock_state"
+                  (ngModelChange)="onVariantStateChange(i, $event)"
+                >
+                  @for (opt of stockStates; track opt.value) {
+                    <option [ngValue]="opt.value">{{ opt.label }}</option>
+                  }
+                </select>
+              </label>
             </div>
           </div>
 
+          <div class="prices-section">
+            <h4>
+              <span class="material-symbols-rounded" aria-hidden="true">paid</span>
+              Bloque de precios
+            </h4>
+
+            <div class="price-fields-grid">
+              @for (field of priceFields; track field.key) {
+                <div class="price-field-card">
+                  <label class="label" [attr.for]="'price-' + field.key + '-' + i">
+                    <span class="material-symbols-rounded" aria-hidden="true">{{ field.icon }}</span>
+                    {{ field.label }}
+                  </label>
+
+                  @if (editing()) {
+                    <label class="field" [attr.for]="'price-' + field.key + '-' + i">
+                      <span class="material-symbols-rounded" aria-hidden="true">attach_money</span>
+                      <input
+                        [id]="'price-' + field.key + '-' + i"
+                        class="input"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        inputmode="decimal"
+                        [ngModel]="getPriceValue(item, field.key) ?? ''"
+                        (ngModelChange)="onVariantPriceChange(i, field.key, $event)"
+                        placeholder="0.00"
+                      />
+                    </label>
+                  } @else {
+                    <p class="price-read">{{ formatMoney(getPriceValue(item, field.key), item.prices.currency || preferredCurrency()) }}</p>
+                  }
+                </div>
+              }
+            </div>
+
+            @if (priceIssue(item); as issue) {
+              <p class="price-warning">
+                <span class="material-symbols-rounded" aria-hidden="true">warning</span>
+                {{ issue }}
+              </p>
+            }
+          </div>
+
+          <div class="notes-section">
+            <label class="label" [attr.for]="'variant-notes-' + i">
+              <span class="material-symbols-rounded" aria-hidden="true">notes</span>
+              Notas
+            </label>
+
+            @if (editing()) {
+              <label class="field field-textarea" [attr.for]="'variant-notes-' + i">
+                <textarea
+                  [id]="'variant-notes-' + i"
+                  class="input textarea"
+                  [ngModel]="item.notes || ''"
+                  (ngModelChange)="onVariantFieldChange(i, 'notes', $event)"
+                  rows="3"
+                  placeholder="Notas internas de esta variante"
+                ></textarea>
+              </label>
+            } @else {
+              <p class="value">{{ item.notes || "Sin notas" }}</p>
+            }
+          </div>
+
           <div class="colors-section">
-            <h3>
+            <h4>
               <span class="material-symbols-rounded" aria-hidden="true">palette</span>
               Stock por color
-            </h3>
+            </h4>
 
             @if ((item.color_stock || []).length === 0) {
               <p class="muted">Esta variante no tiene colores definidos.</p>
@@ -137,7 +330,7 @@
                       {{ color.color_name }}
                     </span>
 
-                    <div class="field select-field">
+                    <label class="field select-field">
                       <span class="material-symbols-rounded" aria-hidden="true">inventory</span>
                       <select
                         class="input"
@@ -148,7 +341,7 @@
                           <option [ngValue]="opt.value">{{ opt.label }}</option>
                         }
                       </select>
-                    </div>
+                    </label>
                   </div>
                 }
               </div>

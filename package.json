@@ -6,7 +6,9 @@
     "start": "ng serve",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
-    "test": "ng test"
+    "test": "ng test",
+    "firebase:migrate-finance:dry": "tsx scripts/migrate-finance-bootstrap.ts",
+    "firebase:migrate-finance:apply": "tsx scripts/migrate-finance-bootstrap.ts --apply"
   },
   "prettier": {
     "printWidth": 100,

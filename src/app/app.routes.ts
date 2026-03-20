@@ -117,6 +117,12 @@ export const routes: Routes = [
         loadComponent: () => import("./features/salidas/salida-detalle.page").then((m) => m.default),
       },
       {
+        path: "administracion",
+        canActivate: [authzGuard],
+        data: { section: "sections.administracion" },
+        loadComponent: () => import("./features/administracion/administracion").then((m) => m.default),
+      },
+      {
         path: "proveedores-operaciones",
         canActivate: [permissionGuard],
         data: { permission: "pedidos" },

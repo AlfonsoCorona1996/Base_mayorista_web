@@ -238,7 +238,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
 
   intentOptions = [
     { id: "por_confirmar" as const, label: "Por confirmar" },
-    { id: "en_transito" as const, label: "En tr\u00e1nsito/por recibir" },
+    { id: "en_transito" as const, label: "En transito proveedor" },
     { id: "en_empaque" as const, label: "En empaque" },
     { id: "listos_ruta" as const, label: "Listos para ruta" },
     { id: "en_ruta" as const, label: "En ruta" },
@@ -657,10 +657,10 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
       reservado_inventario: "Reservado",
       solicitado_proveedor: "Solicitado",
       supplier_processing: "Proveedor",
-      inbound_in_transit: "En camino proveedor",
-      en_transito: "En tr\u00e1nsito",
+      inbound_in_transit: "En transito proveedor",
+      en_transito: "En transito proveedor",
       packing: "Empacando",
-      recibido_qa: "Recibido/QA",
+      recibido_qa: "En transito proveedor",
       empaque: "Empaque",
       ready_for_route: "Listo para ruta",
       assigned_to_run: "Asignado a salida",

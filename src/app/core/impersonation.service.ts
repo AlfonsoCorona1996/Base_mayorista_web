@@ -71,6 +71,7 @@ export class ImpersonationService {
       if (
         parsed.roleId !== "super_admin" &&
         parsed.roleId !== "admin" &&
+        parsed.roleId !== "administrativo" &&
         parsed.roleId !== "operativo" &&
         parsed.roleId !== "repartidor"
       ) {

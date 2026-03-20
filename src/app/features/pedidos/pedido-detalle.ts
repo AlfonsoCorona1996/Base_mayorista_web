@@ -239,6 +239,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   assignTarget = signal<Incident | null>(null);
 
   uploadingEvidence = signal<Record<string, boolean>>({});
+  uploadingItemImage = signal<Record<string, boolean>>({});
 
   plannedModalOpen = signal(false);
   plannedPackagesInput = signal(1);
@@ -708,6 +709,39 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.incidents.set(list);
   }
 
+  private async createIncidentAndRefresh(orderId: string, incident: any): Promise<void> {
+    const now = new Date().toISOString();
+    const optimisticId = `tmp-inc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const optimisticIncident: Incident = {
+      id: optimisticId,
+      orderId,
+      packageId: incident?.packageId ?? null,
+      itemId: incident?.itemId ?? null,
+      type: String(incident?.type || "GENERAL"),
+      severity: (incident?.severity || "low") as IncidentSeverity,
+      status: "open",
+      title: String(incident?.title || incident?.type || "Incidencia"),
+      reason: String(incident?.reason || ""),
+      assigneeId: incident?.assigneeId ?? null,
+      evidenceUrls: Array.isArray(incident?.evidenceUrls) ? incident.evidenceUrls : [],
+      createdBy: String(incident?.createdBy || "admin"),
+      createdAt: now,
+      updatedAt: now,
+      resolvedBy: null,
+      resolvedAt: null,
+      resolutionNote: null,
+    };
+
+    this.incidents.update((current) => [optimisticIncident, ...current]);
+    try {
+      await this.orders.createIncident(orderId, incident);
+      await this.loadIncidents();
+    } catch (error) {
+      this.incidents.update((current) => current.filter((row) => row.id !== optimisticId));
+      throw error;
+    }
+  }
+
   async loadAssigneeOptions() {
     const snap = await getDocs(collection(FIRESTORE, "admins"));
     const names = snap.docs
@@ -886,10 +920,10 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       reservado_inventario: "Reservado",
       solicitado_proveedor: "Solicitado",
       supplier_processing: "Proveedor",
-      inbound_in_transit: "En camino proveedor",
-      en_transito: "En tránsito",
+      inbound_in_transit: "En transito proveedor",
+      en_transito: "En transito proveedor",
       packing: "Empacando",
-      recibido_qa: "Recibido/QA",
+      recibido_qa: "En transito proveedor",
       empaque: "Empaque",
       ready_for_route: "Listo para ruta",
       assigned_to_run: "Asignado a salida",
@@ -1802,7 +1836,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         return;
       }
       await this.orders.updateItemState(order.order_id, item.item_id, "recibido_qa");
-      await this.orders.logEvent(order.order_id, "ITEM_RECEIVED_QA", `Recibido/QA: ${item.title}`, {
+      await this.orders.logEvent(order.order_id, "ITEM_RECEIVED_QA", `En transito proveedor: ${item.title}`, {
         itemId: item.item_id,
       });
       this.showActionToast(`"${item.title}" recibido.`);
@@ -2079,7 +2113,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     await this.detachItemFromPackages(order, item, "mark_missing");
     await this.orders.updateItemConfirmationState(order.order_id, item.item_id, "out_of_stock");
     await this.orders.updateItemState(order.order_id, item.item_id, "cancelado");
-    await this.orders.createIncident(order.order_id, {
+    await this.createIncidentAndRefresh(order.order_id, {
       orderId: order.order_id,
       packageId: null,
       itemId: item.item_id,
@@ -2100,7 +2134,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     await this.detachItemFromPackages(order, item, "mark_damaged");
     await this.orders.updateItemConfirmationState(order.order_id, item.item_id, "out_of_stock");
     await this.orders.updateItemState(order.order_id, item.item_id, "devuelto");
-    await this.orders.createIncident(order.order_id, {
+    await this.createIncidentAndRefresh(order.order_id, {
       orderId: order.order_id,
       packageId: null,
       itemId: item.item_id,
@@ -4243,7 +4277,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     const extra = overrideItems.length > 3 ? ` +${overrideItems.length - 3} más` : "";
     const reason = `Salida con pendientes para ${overrideItems.length} item(s): ${listed}${extra}.`;
 
-    await this.orders.createIncident(order.order_id, {
+    await this.createIncidentAndRefresh(order.order_id, {
       orderId: order.order_id,
       packageId: null,
       itemId: null,
@@ -4265,7 +4299,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   async dispatchOrder(order: Order) {
     if (this.actionSaving()) return;
     if (!this.canDispatch(order)) {
-      await this.orders.createIncident(order.order_id, {
+      await this.createIncidentAndRefresh(order.order_id, {
         orderId: order.order_id,
         packageId: null,
         itemId: null,
@@ -4426,7 +4460,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   async requestLateChange(order: Order) {
-    await this.orders.createIncident(order.order_id, {
+    await this.createIncidentAndRefresh(order.order_id, {
       orderId: order.order_id,
       packageId: null,
       itemId: null,
@@ -4639,7 +4673,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     if (!reason) return;
     this.incidentSaving.set(true);
     try {
-      await this.orders.createIncident(order.order_id, {
+      await this.createIncidentAndRefresh(order.order_id, {
         orderId: order.order_id,
         packageId: null,
         itemId: null,
@@ -4651,7 +4685,6 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         evidenceUrls: [],
         createdBy: "admin",
       });
-      await this.loadIncidents();
       await this.refreshEvents();
       this.incidentModalOpen.set(false);
     } finally {
@@ -4692,6 +4725,33 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       await this.refreshEvents();
     } finally {
       this.uploadingEvidence.update((current) => ({ ...current, [incident.id]: false }));
+      input.value = "";
+    }
+  }
+
+  isUploadingItemImage(item: OrderItem): boolean {
+    return !!this.uploadingItemImage()[item.item_id];
+  }
+
+  async attachItemImage(order: Order | null, item: OrderItem, event: Event) {
+    if (!order) return;
+    if (!this.canEditItems(order)) return;
+    const input = event.target as HTMLInputElement;
+    if (!input.files || input.files.length === 0) return;
+    const file = input.files[0];
+    if (!file.type.startsWith("image/")) {
+      await this.showPopupAlert("Solo puedes cargar archivos de imagen.", "Archivo invalido");
+      input.value = "";
+      return;
+    }
+    this.uploadingItemImage.update((current) => ({ ...current, [item.item_id]: true }));
+    try {
+      await this.orders.uploadOrderItemImage(order.order_id, item.item_id, file, "admin");
+      this.showActionToast("Imagen cargada.");
+    } catch {
+      await this.showPopupAlert("No se pudo cargar la imagen. Intenta de nuevo.", "Error al cargar imagen");
+    } finally {
+      this.uploadingItemImage.update((current) => ({ ...current, [item.item_id]: false }));
       input.value = "";
     }
   }
@@ -4937,7 +4997,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       confirmed_qty: qty,
     });
     await this.orders.updateItemState(order.order_id, item.item_id, "empaque");
-    await this.orders.createIncident(order.order_id, {
+    await this.createIncidentAndRefresh(order.order_id, {
       orderId: order.order_id,
       packageId: null,
       itemId: item.item_id,
@@ -5080,7 +5140,23 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       return;
     }
 
-    const navState = (history.state || {}) as { from?: string; routeId?: string | null };
+    const navState = (history.state || {}) as {
+      from?: string;
+      routeId?: string | null;
+      scope?: string | null;
+      drilldown?: string | null;
+    };
+    if (navState.from === "administracion") {
+      const scope = String(navState.scope || "").trim();
+      const drilldown = String(navState.drilldown || "").trim();
+      this.router.navigate(["/main/administracion"], {
+        queryParams: {
+          ...(scope ? { scope } : {}),
+          ...(drilldown ? { drilldown } : {}),
+        },
+      });
+      return;
+    }
     if (navState.from === "salidas") {
       const routeId = String(navState.routeId || "").trim();
       this.router.navigate(["/main/salidas"], {

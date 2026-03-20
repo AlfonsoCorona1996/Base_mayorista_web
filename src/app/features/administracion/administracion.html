@@ -1,0 +1,551 @@
+
+<section class="finance-page">
+  <header class="page-head glass-card">
+    <div>
+      <p class="eyebrow">Finanzas operativas</p>
+      <h1>Administracion</h1>
+      <p class="muted">
+        Flujo de dinero por etapas, cuentas de dinero, egresos y cortes. Vista general o por ruta.
+      </p>
+    </div>
+    <button type="button" class="btn ghost" [disabled]="loading()" (click)="reload()">
+      {{ loading() ? "Actualizando..." : "Actualizar" }}
+    </button>
+  </header>
+
+  @if (error()) {
+    <article class="alert alert-error">{{ error() }}</article>
+  }
+
+  @if (success()) {
+    <article class="alert alert-success">{{ success() }}</article>
+  }
+
+  <section class="scope-shell glass-card">
+    <div class="scope-pills" role="tablist" aria-label="Ambito de analisis">
+      @for (scope of scopeOptions(); track trackScope($index, scope)) {
+        <button
+          type="button"
+          class="scope-pill"
+          [class.active]="routeScope() === scope.id"
+          [attr.aria-selected]="routeScope() === scope.id"
+          (click)="setRouteScope(scope.id)"
+        >
+          {{ scope.name }}
+        </button>
+      }
+    </div>
+
+    <div class="scope-inputs">
+      <label>
+        Proyeccion (dias)
+        <input type="number" min="7" [ngModel]="projectionDays()" (ngModelChange)="setProjectionDays($event)" />
+      </label>
+      <label>
+        Ventana promedio (dias)
+        <input type="number" min="7" [ngModel]="averageWindowDays()" (ngModelChange)="setAverageWindowDays($event)" />
+      </label>
+      <label>
+        Inventario estancado (dias)
+        <input type="number" min="15" [ngModel]="stagnationDays()" (ngModelChange)="setStagnationDays($event)" />
+      </label>
+    </div>
+  </section>
+
+  @if (loading()) {
+    <article class="glass-card loading-card">Cargando resumen financiero...</article>
+  } @else {
+    @if (summary(); as m) {
+      <section class="kpi-grid">
+        <article class="kpi-card glass-card kpi-card-primary">
+          <p>Caja en cuentas</p>
+          <h2>{{ formatCurrency(m.cajaActual) }}</h2>
+          <small>Suma de saldos registrados en cuentas de dinero</small>
+        </article>
+        <article class="kpi-card glass-card">
+          <p>Por cobrar real</p>
+          <h2>{{ formatCurrency(m.porCobrar) }}</h2>
+          <small>{{ m.pendientesCobro }} pedidos entregados con saldo pendiente</small>
+        </article>
+        <article class="kpi-card glass-card">
+          <p>Pipeline por entregar</p>
+          <h2>{{ formatCurrency(m.pipelineClienta) }}</h2>
+          <small>Monto clienta en etapas 2 y 3</small>
+        </article>
+        <article class="kpi-card glass-card">
+          <p>Cobrado por repartidor</p>
+          <h2>{{ formatCurrency(m.cobradoConRepartidor) }}</h2>
+          <small>Etapa 7 pendiente de liquidacion</small>
+        </article>
+        <article class="kpi-card glass-card">
+          <p>Ganancia pendiente</p>
+          <h2>{{ formatCurrency(m.gananciaPendientePipeline) }}</h2>
+          <small>Ganancia potencial entre entregar y cobrar</small>
+        </article>
+        <article class="kpi-card glass-card">
+          <p>Proyeccion de caja</p>
+          <h2>{{ formatCurrency(m.proyeccionCaja) }}</h2>
+          <small>{{ projectionDays() }} dias con tendencia actual</small>
+        </article>
+      </section>
+
+      <section class="panel-grid">
+        <article class="panel glass-card">
+          <header>
+            <h3>7 bolsas de dinero</h3>
+            <p>Cada fila es clickeable para ver ruta, clienta y pedidos.</p>
+          </header>
+
+          <div class="metric-list-header metric-row-4">
+            <span>Bolsa</span>
+            <span>Cantidad</span>
+            <span>Monto clienta</span>
+            <span>Ganancia</span>
+          </div>
+
+          <div class="metric-list">
+            @for (bucket of m.buckets; track trackBucket($index, bucket)) {
+              <button type="button" class="metric-row metric-row-button metric-row-4" (click)="openBucketDrilldown(bucket)">
+                <span class="metric-main">
+                  <strong>{{ bucket.title }}</strong>
+                  <small>{{ bucket.description }}</small>
+                </span>
+                <span class="metric-count">{{ bucket.count }} {{ bucket.id === "stagnantInventory" ? "SKUs" : "pedidos" }}</span>
+                <strong class="metric-value">{{ formatCurrency(bucket.amountClienta) }}</strong>
+                <strong class="metric-value">{{ formatCurrency(bucket.margin) }}</strong>
+              </button>
+            }
+          </div>
+        </article>
+
+        <article class="panel glass-card">
+          <header>
+            <h3>Flujo principal</h3>
+            <p>Lectura de caja, capital requerido y cobranza.</p>
+          </header>
+          <div class="metric-list">
+            <div class="metric-row metric-row-2">
+              <span>Ventas brutas</span>
+              <strong>{{ formatCurrency(m.ventasBrutas) }}</strong>
+            </div>
+            <div class="metric-row metric-row-2">
+              <span>Ingresos cobrados</span>
+              <strong>{{ formatCurrency(m.ingresosCobrados) }}</strong>
+            </div>
+            <div class="metric-row metric-row-2">
+              <span>Egresos registrados</span>
+              <strong>{{ formatCurrency(m.egresos) }}</strong>
+            </div>
+            <div class="metric-row metric-row-2">
+              <span>Capital por invertir (etapa 2)</span>
+              <strong>{{ formatCurrency(m.capitalPorInvertir) }}</strong>
+            </div>
+            <div class="metric-row metric-row-2">
+              <span>Invertido no entregado (etapa 3)</span>
+              <strong>{{ formatCurrency(m.mercanciaTransito) }}</strong>
+            </div>
+            <div class="metric-row metric-row-2">
+              <span>Cobrado por conciliar (etapa 6)</span>
+              <strong>{{ formatCurrency(m.cobradoPorDepositar) }}</strong>
+            </div>
+            <div class="metric-row metric-row-2">
+              <span>Utilidad neta</span>
+              <strong>{{ formatCurrency(m.utilidadNeta) }}</strong>
+            </div>
+            <div class="metric-row metric-row-2">
+              <span>DSO estimado</span>
+              <strong>{{ formatNumber(m.dsoDias, 1) }} dias</strong>
+            </div>
+          </div>
+        </article>
+
+        <article class="panel glass-card">
+          <header>
+            <h3>Inventario, perdida y devolucion</h3>
+            <p>Capital inmovilizado y merma monetaria.</p>
+          </header>
+          <div class="metric-list">
+            <button type="button" class="metric-row metric-row-button metric-row-2" (click)="openBucketById('stagnantInventory')">
+              <span>Inventario estancado (potencial venta)</span>
+              <strong>{{ formatCurrency(m.estancadoPotencial) }}</strong>
+            </button>
+            <div class="metric-row metric-row-2">
+              <span>Valor inventario (costo)</span>
+              <strong>{{ formatCurrency(m.inventarioCosto) }}</strong>
+            </div>
+            <div class="metric-row metric-row-2">
+              <span>Ganancia potencial estancado</span>
+              <strong>{{ formatCurrency(m.estancadoGanancia) }}</strong>
+            </div>
+            <div class="metric-row metric-row-2">
+              <span>Rotacion inventario</span>
+              <strong>{{ formatNumber(m.inventoryTurnover, 2) }}x</strong>
+            </div>
+            <div class="metric-row metric-row-2">
+              <span>Dias de inventario</span>
+              <strong>{{ formatNumber(m.inventoryDays, 1) }} dias</strong>
+            </div>
+            <div class="metric-row metric-row-2">
+              <span>Perdido por no stock</span>
+              <strong>{{ formatCurrency(m.perdidoStock) }}</strong>
+            </div>
+            <div class="metric-row metric-row-2">
+              <span>Perdido por dano</span>
+              <strong>{{ formatCurrency(m.perdidoDano) }}</strong>
+            </div>
+            <div class="metric-row metric-row-2">
+              <span>Tasa de devolucion</span>
+              <strong>{{ formatPercent(m.devolucionRate) }}</strong>
+            </div>
+            <div class="metric-row metric-row-2">
+              <span>Devoluciones en dinero</span>
+              <strong>{{ formatCurrency(m.devolucionesMonto) }}</strong>
+            </div>
+            <div class="metric-row metric-row-2">
+              <span>Impacto total devolucion</span>
+              <strong>{{ formatCurrency(m.devolucionImpacto) }}</strong>
+            </div>
+          </div>
+        </article>
+      </section>
+    }
+
+    <section class="panel glass-card">
+      <header class="panel-head">
+        <div>
+          <h3>Vista por ruta</h3>
+          <p>Cada fila abre detalle de pedidos y clientas que forman el monto.</p>
+        </div>
+      </header>
+
+      @if (routeRows().length === 0) {
+        <p class="muted">Sin datos por ruta para mostrar.</p>
+      } @else {
+        <div class="route-table">
+          <div class="route-table-head">
+            <span>Ruta</span>
+            <span>Por cobrar real</span>
+            <span>Pipeline clienta</span>
+            <span>Capital por invertir</span>
+            <span>Cobrado repartidor</span>
+            <span>Ganancia pendiente</span>
+          </div>
+          @for (row of routeRows(); track trackRoute($index, row)) {
+            <button type="button" class="route-table-row route-row-button" (click)="openRouteDrilldown(row)">
+              <span class="route-main">
+                <strong>{{ row.routeName }}</strong>
+                <small>{{ row.ordersCount }} pedidos · {{ row.customerPreview }}</small>
+              </span>
+              <span>{{ formatCurrency(row.porCobrarReal) }}</span>
+              <span>{{ formatCurrency(row.pipelineClienta) }}</span>
+              <span>{{ formatCurrency(row.capitalRequerido) }}</span>
+              <span>{{ formatCurrency(row.cobradoConRepartidor) }}</span>
+              <span>{{ formatCurrency(row.gananciaPendiente) }}</span>
+            </button>
+          }
+        </div>
+      }
+    </section>
+
+    <section class="panel glass-card">
+      <header class="panel-head">
+        <div>
+          <h3>Cuentas de dinero</h3>
+          <p>Control de saldo en caja, banco y fondos operativos.</p>
+        </div>
+      </header>
+
+      @if (!canViewAccounts()) {
+        <p class="muted">Sin permiso: <code>cap.finance.accounts.view</code></p>
+      } @else {
+        <div class="account-grid">
+          @for (row of accounts(); track trackAccount($index, row)) {
+            <article class="account-card">
+              <div>
+                <h4>{{ row.name }}</h4>
+                <p>{{ formatCurrency(row.balance) }}</p>
+                @if (row.notes) {
+                  <small>{{ row.notes }}</small>
+                }
+              </div>
+              <div class="inline-actions">
+                @if (canEditAccounts()) {
+                  <button type="button" class="btn ghost btn-small" (click)="startEditAccount(row)">Editar</button>
+                }
+                @if (canDeleteAccounts()) {
+                  <button type="button" class="btn danger btn-small" (click)="deleteAccount(row)">Eliminar</button>
+                }
+              </div>
+            </article>
+          }
+        </div>
+
+        @if (canCreateAccounts() || (accountEditingId() && canEditAccounts())) {
+          <form class="entry-form" (submit)="$event.preventDefault(); submitAccount()">
+            <h4>{{ accountEditingId() ? "Editar cuenta" : "Nueva cuenta" }}</h4>
+            <div class="entry-grid">
+              <label>
+                Nombre
+                <input type="text" [ngModel]="accountName()" (ngModelChange)="setAccountName($event)" name="account_name" />
+              </label>
+              <label>
+                Saldo
+                <input type="number" step="0.01" [ngModel]="accountBalance()" (ngModelChange)="setAccountBalance($event)" name="account_balance" />
+              </label>
+              <label class="entry-full">
+                Notas
+                <textarea rows="2" [ngModel]="accountNotes()" (ngModelChange)="setAccountNotes($event)" name="account_notes"></textarea>
+              </label>
+            </div>
+            <div class="inline-actions">
+              <button type="submit" class="btn primary">{{ accountEditingId() ? "Guardar cambios" : "Registrar cuenta" }}</button>
+              @if (accountEditingId()) {
+                <button type="button" class="btn ghost" (click)="resetAccountForm()">Cancelar</button>
+              }
+            </div>
+          </form>
+        }
+      }
+    </section>
+
+    <section class="panel glass-card">
+      <header class="panel-head">
+        <div>
+          <h3>Egresos y movimientos</h3>
+          <p>Registro de compras, perdida, paqueteria, consumibles y deudas.</p>
+        </div>
+      </header>
+
+      @if (!canViewMovements()) {
+        <p class="muted">Sin permiso: <code>cap.finance.movements.view</code></p>
+      } @else {
+        @if (canCreateMovements() || (expenseEditingId() && canEditMovements())) {
+          <form class="entry-form" (submit)="$event.preventDefault(); submitExpense()">
+            <h4>{{ expenseEditingId() ? "Editar egreso" : "Registrar egreso" }}</h4>
+            <div class="entry-grid">
+              <label>
+                Categoria
+                <select [ngModel]="expenseCategory()" (ngModelChange)="setExpenseCategory($event)" name="expense_category">
+                  <option value="compra_inversion">Compra por inversion</option>
+                  <option value="perdida">Perdida</option>
+                  <option value="paqueteria">Paqueteria</option>
+                  <option value="consumibles">Consumibles</option>
+                  <option value="deuda_fija">Deuda fija</option>
+                  <option value="deuda_meses">Deuda a meses</option>
+                </select>
+              </label>
+
+              <label>
+                Monto
+                <input type="number" step="0.01" min="0.01" [ngModel]="expenseAmount()" (ngModelChange)="setExpenseAmount($event)" name="expense_amount" />
+              </label>
+
+              <label>
+                Fecha
+                <input type="date" [ngModel]="expenseDate()" (ngModelChange)="setExpenseDate($event)" name="expense_date" />
+              </label>
+
+              <label>
+                Ruta
+                <select [ngModel]="expenseRouteId()" (ngModelChange)="setExpenseRouteId($event)" name="expense_route">
+                  <option value="general">General</option>
+                  @for (route of routes(); track route.route_id) {
+                    <option [value]="route.route_id">{{ route.name }}</option>
+                  }
+                </select>
+              </label>
+
+              <label>
+                Cuenta
+                <select [ngModel]="expenseAccountId()" (ngModelChange)="setExpenseAccountId($event)" name="expense_account">
+                  <option value="none">Sin cuenta</option>
+                  @for (account of accounts(); track account.account_id) {
+                    <option [value]="account.account_id">{{ account.name }}</option>
+                  }
+                </select>
+              </label>
+
+              <label>
+                Meses de deuda
+                <input
+                  type="number"
+                  min="1"
+                  [ngModel]="expenseInstallmentTotal()"
+                  (ngModelChange)="setExpenseInstallmentTotal($event)"
+                  name="expense_installments_total"
+                />
+              </label>
+
+              <label>
+                Mes actual
+                <input
+                  type="number"
+                  min="1"
+                  [ngModel]="expenseInstallmentIndex()"
+                  (ngModelChange)="setExpenseInstallmentIndex($event)"
+                  name="expense_installments_index"
+                />
+              </label>
+
+              <label class="entry-full">
+                Notas
+                <textarea rows="2" [ngModel]="expenseNotes()" (ngModelChange)="setExpenseNotes($event)" name="expense_notes"></textarea>
+              </label>
+            </div>
+
+            <div class="inline-actions">
+              <button type="submit" class="btn primary">{{ expenseEditingId() ? "Guardar cambios" : "Registrar egreso" }}</button>
+              @if (expenseEditingId()) {
+                <button type="button" class="btn ghost" (click)="resetExpenseForm()">Cancelar</button>
+              }
+            </div>
+          </form>
+        }
+
+        <div class="movement-table">
+          <div class="movement-head">
+            <span>Fecha</span>
+            <span>Categoria</span>
+            <span>Ruta</span>
+            <span>Monto</span>
+            <span>Cuenta</span>
+            <span>Acciones</span>
+          </div>
+          @for (row of filteredExpenses(); track trackExpense($index, row)) {
+            <div class="movement-row">
+              <span>{{ formatDate(row.occurred_at) }}</span>
+              <span>{{ expenseCategoryLabel(row.category) }}</span>
+              <span>{{ routeName(row.route_id) }}</span>
+              <span>{{ formatCurrency(row.amount) }}</span>
+              <span>{{ accountLabel(row.account_id) }}</span>
+              <span class="inline-actions">
+                @if (canEditMovements()) {
+                  <button type="button" class="btn ghost btn-small" (click)="startEditExpense(row)">Editar</button>
+                }
+                @if (canDeleteMovements()) {
+                  <button type="button" class="btn danger btn-small" (click)="deleteExpense(row)">Eliminar</button>
+                }
+              </span>
+            </div>
+          }
+        </div>
+      }
+    </section>
+
+    <section class="panel glass-card">
+      <header class="panel-head">
+        <div>
+          <h3>Cortes</h3>
+          <p>Snapshot de utilidad para cierres periodicos.</p>
+        </div>
+      </header>
+
+      @if (!canViewReports()) {
+        <p class="muted">Sin permiso: <code>cap.finance.reports.view</code></p>
+      } @else {
+        <form class="entry-form" (submit)="$event.preventDefault(); saveCut()">
+          <div class="entry-grid">
+            <label>
+              Nombre del corte
+              <input type="text" [ngModel]="cutLabel()" (ngModelChange)="cutLabel.set($event)" name="cut_label" />
+            </label>
+            <label>
+              Inicio
+              <input type="date" [ngModel]="cutStart()" (ngModelChange)="setCutStart($event)" name="cut_start" />
+            </label>
+            <label>
+              Fin
+              <input type="date" [ngModel]="cutEnd()" (ngModelChange)="setCutEnd($event)" name="cut_end" />
+            </label>
+          </div>
+          <div class="inline-actions">
+            <button type="submit" class="btn primary">Guardar corte</button>
+          </div>
+        </form>
+
+        <div class="cut-list">
+          @for (row of cuts(); track trackCut($index, row)) {
+            <article class="cut-card">
+              <div>
+                <h4>{{ row.label }}</h4>
+                <p>{{ row.start_at }} - {{ row.end_at }} · {{ routeName(row.route_id) }}</p>
+              </div>
+              <div class="cut-kpis">
+                <span>Ingresos {{ formatCurrency(row.snapshot.ingresos) }}</span>
+                <span>Egresos {{ formatCurrency(row.snapshot.egresos) }}</span>
+                <span>Utilidad neta {{ formatCurrency(row.snapshot.utilidad_neta) }}</span>
+              </div>
+            </article>
+          }
+        </div>
+      }
+    </section>
+  }
+
+  @if (drilldown(); as detail) {
+    <div class="sheet-backdrop" (click)="closeDrilldown()">
+      <aside class="detail-sheet glass-card" role="dialog" aria-modal="true" aria-labelledby="drilldown-title" (click)="$event.stopPropagation()">
+        <header class="detail-head">
+          <div>
+            <p class="eyebrow">Detalle</p>
+            <h3 id="drilldown-title">{{ detail.title }}</h3>
+            <p class="muted">{{ detail.subtitle }}</p>
+          </div>
+          <button type="button" class="btn ghost btn-small" (click)="closeDrilldown()">Cerrar</button>
+        </header>
+
+        <div class="detail-kpi-grid">
+          <article class="detail-kpi-card">
+            <span>Monto clienta</span>
+            <strong>{{ formatCurrency(detail.totalAmountClienta) }}</strong>
+          </article>
+          <article class="detail-kpi-card">
+            <span>Costo</span>
+            <strong>{{ formatCurrency(detail.totalCost) }}</strong>
+          </article>
+          <article class="detail-kpi-card">
+            <span>Ganancia</span>
+            <strong>{{ formatCurrency(detail.totalMargin) }}</strong>
+          </article>
+          <article class="detail-kpi-card">
+            <span>Cobrado</span>
+            <strong>{{ formatCurrency(detail.totalPaid) }}</strong>
+          </article>
+        </div>
+
+        @if (detail.rows.length === 0) {
+          <p class="muted">No hay filas para esta metrica.</p>
+        } @else {
+          <div class="detail-table">
+            <div class="detail-head-row">
+              <span>Pedido / SKU</span>
+              <span>Estado</span>
+              <span>Monto clienta</span>
+              <span>Costo</span>
+              <span>Ganancia</span>
+              <span>Cobrado</span>
+            </div>
+            @for (row of detail.rows; track trackDrilldownRow($index, row)) {
+              <button
+                type="button"
+                class="detail-row detail-row-button"
+                [class.is-disabled]="!row.orderId"
+                (click)="row.orderId && openOrder(row.orderId)"
+              >
+                <span class="detail-main">
+                  <strong>{{ row.primary }}</strong>
+                  <small>{{ row.secondary }}</small>
+                </span>
+                <span>{{ row.status }}</span>
+                <span>{{ formatCurrency(row.amountClienta) }}</span>
+                <span>{{ formatCurrency(row.cost) }}</span>
+                <span>{{ formatCurrency(row.margin) }}</span>
+                <span>{{ formatCurrency(row.paid) }}</span>
+              </button>
+            }
+          </div>
+        }
+      </aside>
+    </div>
+  }
+</section>

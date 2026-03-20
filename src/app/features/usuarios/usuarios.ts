@@ -77,6 +77,7 @@ const CAPABILITY_GROUPS: CapabilityGroup[] = [
   },
   { title: "Entrega", keys: CAPABILITY_KEYS.filter((key) => key.startsWith("cap.delivery.")) },
   { title: "Pagos", keys: CAPABILITY_KEYS.filter((key) => key.startsWith("cap.payments.")) },
+  { title: "Administracion financiera", keys: CAPABILITY_KEYS.filter((key) => key.startsWith("cap.finance.")) },
   { title: "Devoluciones", keys: CAPABILITY_KEYS.filter((key) => key.startsWith("cap.returns.")) },
   { title: "Incidencias y auditoria", keys: CAPABILITY_KEYS.filter((key) => key.startsWith("cap.incidents.") || key.startsWith("cap.audit.")) },
 ];
@@ -88,6 +89,7 @@ const SECTION_CAPABILITY_PREFIXES: Record<SectionKey, string[]> = {
   "sections.validacion": ["cap.validation."],
   "sections.clientes": ["cap.payments.", "cap.returns."],
   "sections.inventario": ["cap.inventory."],
+  "sections.administracion": ["cap.finance."],
   "sections.catalogo": [],
   "sections.categorias": [],
   "sections.rutas": ["cap.runs.", "cap.delivery."],
@@ -790,6 +792,7 @@ export default class UsuariosPage {
       categorias: this.resolveSectionValue(roleId, sectionOverrides, "sections.categorias"),
       proveedores: this.resolveSectionValue(roleId, sectionOverrides, "sections.proveedores"),
       inventario: this.resolveSectionValue(roleId, sectionOverrides, "sections.inventario"),
+      administracion: this.resolveSectionValue(roleId, sectionOverrides, "sections.administracion"),
       clientas: this.resolveSectionValue(roleId, sectionOverrides, "sections.clientes"),
       rutas: this.resolveSectionValue(roleId, sectionOverrides, "sections.rutas"),
       localidades: this.resolveSectionValue(roleId, sectionOverrides, "sections.localidades"),
@@ -1064,7 +1067,7 @@ export default class UsuariosPage {
   }
 
   private isRoleId(value: string): value is RoleId {
-    return value === "super_admin" || value === "admin" || value === "operativo" || value === "repartidor";
+    return value === "super_admin" || value === "admin" || value === "administrativo" || value === "operativo" || value === "repartidor";
   }
 
   private isLoginType(value: string): value is UserLoginType {

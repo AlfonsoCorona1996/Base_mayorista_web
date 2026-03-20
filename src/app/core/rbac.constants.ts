@@ -7,6 +7,7 @@ export const SECTION_KEYS = [
   "sections.validacion",
   "sections.clientes",
   "sections.inventario",
+  "sections.administracion",
   "sections.catalogo",
   "sections.categorias",
   "sections.rutas",
@@ -83,10 +84,19 @@ export const CAPABILITY_KEYS = [
   "cap.incidents.view",
   "cap.incidents.create",
   "cap.incidents.resolve",
+  "cap.finance.accounts.view",
+  "cap.finance.accounts.create",
+  "cap.finance.accounts.edit",
+  "cap.finance.accounts.delete",
+  "cap.finance.movements.view",
+  "cap.finance.movements.create",
+  "cap.finance.movements.edit",
+  "cap.finance.movements.delete",
+  "cap.finance.reports.view",
   "cap.audit.view",
 ] as const;
 
-export const ROLE_IDS = ["super_admin", "admin", "operativo", "repartidor"] as const;
+export const ROLE_IDS = ["super_admin", "admin", "administrativo", "operativo", "repartidor"] as const;
 
 export type SectionKey = (typeof SECTION_KEYS)[number];
 export type CapabilityKey = (typeof CAPABILITY_KEYS)[number];
@@ -141,10 +151,9 @@ export function buildCapabilitiesMap(defaultValue = false): CapabilitiesMap {
 }
 
 export function normalizeRoleId(value: unknown): RoleId {
-  if (value === "super_admin" || value === "admin" || value === "operativo" || value === "repartidor") {
+  if (value === "super_admin" || value === "admin" || value === "administrativo" || value === "operativo" || value === "repartidor") {
     return value;
   }
-  if (value === "administrativo") return "operativo";
   return "operativo";
 }
 
@@ -193,6 +202,7 @@ function allCapabilitiesTrue(): CapabilitiesMap {
 export function roleLabel(roleId: RoleId): string {
   if (roleId === "super_admin") return "Super admin";
   if (roleId === "admin") return "Admin";
+  if (roleId === "administrativo") return "Administrativo";
   if (roleId === "operativo") return "Operativo";
   return "Repartidor";
 }
@@ -241,6 +251,37 @@ export function buildRolePreset(roleId: RoleId): RoleDoc {
     capabilities["cap.roles.edit"] = false;
     capabilities["cap.payments.override"] = false;
     capabilities["cap.inventory.override"] = false;
+  } else if (roleId === "administrativo") {
+    applySectionKeys(sections, [
+      "sections.pedidos",
+      "sections.proveedores",
+      "sections.validacion",
+      "sections.clientes",
+      "sections.inventario",
+      "sections.salidas",
+    ]);
+    applyCapabilityKeys(capabilities, [
+      "cap.orders.view",
+      "cap.validation.confirm_stock",
+      "cap.suppliers.ops.advance_state",
+      "cap.suppliers.ops.partial_process",
+      "cap.inventory.view",
+      "cap.inventory.receive",
+      "cap.inventory.reserve",
+      "cap.inventory.release",
+      "cap.packing.view",
+      "cap.packing.box.create",
+      "cap.packing.box.edit_open",
+      "cap.packing.box.close",
+      "cap.packing.label.print",
+      "cap.packing.finish",
+      "cap.dispatch.request",
+      "cap.dispatch.cancel_request",
+      "cap.incidents.view",
+      "cap.incidents.create",
+      "cap.incidents.resolve",
+    ]);
+    capabilities["cap.packing.box.reopen"] = false;
   } else if (roleId === "operativo") {
     applySectionKeys(sections, [
       "sections.pedidos",
@@ -289,6 +330,23 @@ export function buildRolePreset(roleId: RoleId): RoleDoc {
     ]);
   }
 
+  if (roleId === "admin" || roleId === "administrativo") {
+    sections["sections.administracion"] = true;
+    applyCapabilityKeys(capabilities, [
+      "cap.finance.accounts.view",
+      "cap.finance.accounts.create",
+      "cap.finance.accounts.edit",
+      "cap.finance.accounts.delete",
+      "cap.finance.movements.view",
+      "cap.finance.movements.create",
+      "cap.finance.movements.edit",
+      "cap.finance.movements.delete",
+      "cap.finance.reports.view",
+    ]);
+  } else {
+    sections["sections.administracion"] = false;
+  }
+
   return {
     roleId,
     label: roleLabel(roleId),
@@ -301,6 +359,7 @@ export function buildRolePreset(roleId: RoleId): RoleDoc {
 export const DEFAULT_ROLE_PRESETS: Record<RoleId, RoleDoc> = {
   super_admin: buildRolePreset("super_admin"),
   admin: buildRolePreset("admin"),
+  administrativo: buildRolePreset("administrativo"),
   operativo: buildRolePreset("operativo"),
   repartidor: buildRolePreset("repartidor"),
 };

@@ -132,6 +132,28 @@
         }
       </div>
 
+      @if (can('administracion')) {
+      <div class="menu-section">
+        <button type="button" class="menu-section-header" (click)="toggleGroup('finanzas')"
+          [attr.aria-expanded]="isGroupOpen('finanzas')" aria-controls="menu-finanzas">
+          <span class="menu-section-title">
+            <span class="menu-group-icon material-symbols-rounded" aria-hidden="true">account_balance_wallet</span>
+            Administracion
+          </span>
+          <span class="menu-section-chevron material-symbols-rounded" [class.open]="isGroupOpen('finanzas')"
+            aria-hidden="true">expand_more</span>
+        </button>
+        @if (isGroupOpen('finanzas')) {
+        <div class="menu-subnav" id="menu-finanzas">
+          <a routerLink="/main/administracion" routerLinkActive="active" (click)="closeMenu()">
+            <span class="menu-item-icon material-symbols-rounded" aria-hidden="true">monitoring</span>
+            <span>Administracion</span>
+          </a>
+        </div>
+        }
+      </div>
+      }
+
       @if (can('usuarios')) {
       <div class="menu-section">
         <button type="button" class="menu-section-header" (click)="toggleGroup('configuracion')"

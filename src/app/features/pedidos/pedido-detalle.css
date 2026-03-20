@@ -4483,6 +4483,35 @@ code {
   background: #f8fafc;
 }
 
+.image-container--upload {
+  width: 64px;
+  height: 64px;
+  border: 1px dashed #c8d8eb;
+  background: #eff5ff;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.image-container--upload input {
+  display: none;
+}
+
+.image-container--upload .image-container__camera {
+  font-size: 22px;
+  line-height: 1;
+  color: #5f7ea8;
+}
+
+.image-container--upload.is-uploading {
+  pointer-events: none;
+  opacity: 0.72;
+}
+
+.image-container--readonly {
+  cursor: default;
+}
+
 .image-lightbox {
   position: fixed;
   inset: 0;
@@ -5443,6 +5472,18 @@ code {
   border-radius: 14px;
   border: 1px solid #dbe6f4;
   background: #f5f8fd;
+}
+
+.product-card .image-container--upload {
+  width: 72px;
+  height: 72px;
+  border-radius: 14px;
+  border: 1px dashed #c5d6eb;
+  background: #edf4ff;
+}
+
+.product-card .image-container--upload .image-container__camera {
+  font-size: 24px;
 }
 
 .product-card .source-tag {

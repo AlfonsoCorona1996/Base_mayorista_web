@@ -241,6 +241,7 @@ export class UsersService {
       "sections.categorias": permissions["categorias"],
       "sections.proveedores": permissions["proveedores"],
       "sections.inventario": permissions["inventario"],
+      "sections.administracion": permissions["administracion"],
       "sections.clientes": permissions["clientas"] ?? permissions["clientes"],
       "sections.rutas": permissions["rutas"],
       "sections.localidades": permissions["localidades"],
@@ -263,6 +264,7 @@ export class UsersService {
       "categorias" in map ||
       "proveedores" in map ||
       "inventario" in map ||
+      "administracion" in map ||
       "clientes" in map ||
       "rutas" in map ||
       "localidades" in map ||
@@ -278,6 +280,7 @@ export class UsersService {
       "sections.categorias": map["categorias"],
       "sections.proveedores": map["proveedores"],
       "sections.inventario": map["inventario"],
+      "sections.administracion": map["administracion"],
       "sections.clientes": map["clientes"],
       "sections.rutas": map["rutas"],
       "sections.localidades": map["localidades"],

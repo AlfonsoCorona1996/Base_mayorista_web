@@ -29,6 +29,18 @@ service cloud.firestore {
       return isActiveUser() && roleId() == "operativo";
     }
 
+    function hasSection(sectionKey) {
+      return isActiveUser()
+        && userDoc().data.sections != null
+        && userDoc().data.sections[sectionKey] == true;
+    }
+
+    function hasCapability(capabilityKey) {
+      return isActiveUser()
+        && userDoc().data.capabilities != null
+        && userDoc().data.capabilities[capabilityKey] == true;
+    }
+
     function changedKeys() {
       return request.resource.data.diff(resource.data).affectedKeys();
     }
@@ -108,6 +120,26 @@ service cloud.firestore {
         allow create: if isAdmin() || isOperativo();
         allow update, delete: if isSuperAdmin();
       }
+    }
+
+    match /finance_accounts/{accountId} {
+      allow read: if hasSection("sections.administracion") || hasCapability("cap.finance.accounts.view");
+      allow create: if hasCapability("cap.finance.accounts.create");
+      allow update: if hasCapability("cap.finance.accounts.edit");
+      allow delete: if hasCapability("cap.finance.accounts.delete");
+    }
+
+    match /finance_expenses/{expenseId} {
+      allow read: if hasSection("sections.administracion") || hasCapability("cap.finance.movements.view");
+      allow create: if hasCapability("cap.finance.movements.create");
+      allow update: if hasCapability("cap.finance.movements.edit");
+      allow delete: if hasCapability("cap.finance.movements.delete");
+    }
+
+    match /finance_cuts/{cutId} {
+      allow read: if hasSection("sections.administracion") || hasCapability("cap.finance.reports.view");
+      allow create: if hasCapability("cap.finance.reports.view");
+      allow update, delete: if isSuperAdmin();
     }
 
     // TODO: migrate these checks to full capabilities-based rules using custom claims
