@@ -480,25 +480,80 @@
 
             <div class="card-body">
               <div class="main-info">
-                <button type="button" class="image-container" (click)="openImagePreview(card.imageUrl || 'https://via.placeholder.com/800?text=Producto')">
-                  <img [src]="card.imageUrl || 'https://via.placeholder.com/100'" [alt]="item.title" />
-                  <span
-                    class="source-tag source-text--overlay"
-                    [class.source--catalogo]="item.source === 'catalogo'"
-                    [class.source--manual]="item.source === 'manual'"
+                @if (card.imageUrl) {
+                  <button type="button" class="image-container" (click)="openImagePreview(card.imageUrl)">
+                    <img [src]="card.imageUrl" [alt]="item.title" />
+                    <span
+                      class="source-tag source-text--overlay"
+                      [class.source--catalogo]="item.source === 'catalogo'"
+                      [class.source--manual]="item.source === 'manual'"
+                    >
+                      {{ item.source | uppercase }}
+                    </span>
+                    @if (card.isConfirmed) {
+                      <span class="pieces-state" [class.pieces-state--partial]="card.hasPartial" [class.pieces-state--ok]="!card.hasPartial">
+                        <span class="material-symbols-rounded" aria-hidden="true">check</span>
+                      </span>
+                    } @else if (card.isOutOfStock) {
+                      <span class="pieces-state pieces-state--out">
+                        <span class="material-symbols-rounded" aria-hidden="true">close</span>
+                      </span>
+                    }
+                  </button>
+                } @else if (vm.canEditItems) {
+                  <label
+                    class="image-container image-container--upload"
+                    [class.is-uploading]="isUploadingItemImage(item)"
+                    [attr.title]="isUploadingItemImage(item) ? 'Subiendo imagen...' : 'Agregar foto'"
+                    [attr.aria-label]="'Agregar foto de ' + item.title"
                   >
-                    {{ item.source | uppercase }}
-                  </span>
-                  @if (card.isConfirmed) {
-                    <span class="pieces-state" [class.pieces-state--partial]="card.hasPartial" [class.pieces-state--ok]="!card.hasPartial">
-                      <span class="material-symbols-rounded" aria-hidden="true">check</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      [disabled]="isUploadingItemImage(item)"
+                      (change)="attachItemImage(current, item, $event)"
+                    />
+                    <span class="material-symbols-rounded image-container__camera" aria-hidden="true">
+                      {{ isUploadingItemImage(item) ? "progress_activity" : "photo_camera" }}
                     </span>
-                  } @else if (card.isOutOfStock) {
-                    <span class="pieces-state pieces-state--out">
-                      <span class="material-symbols-rounded" aria-hidden="true">close</span>
+                    <span
+                      class="source-tag source-text--overlay"
+                      [class.source--catalogo]="item.source === 'catalogo'"
+                      [class.source--manual]="item.source === 'manual'"
+                    >
+                      {{ item.source | uppercase }}
                     </span>
-                  }
-                </button>
+                    @if (card.isConfirmed) {
+                      <span class="pieces-state" [class.pieces-state--partial]="card.hasPartial" [class.pieces-state--ok]="!card.hasPartial">
+                        <span class="material-symbols-rounded" aria-hidden="true">check</span>
+                      </span>
+                    } @else if (card.isOutOfStock) {
+                      <span class="pieces-state pieces-state--out">
+                        <span class="material-symbols-rounded" aria-hidden="true">close</span>
+                      </span>
+                    }
+                  </label>
+                } @else {
+                  <div class="image-container image-container--upload image-container--readonly" aria-hidden="true">
+                    <span class="material-symbols-rounded image-container__camera" aria-hidden="true">photo_camera</span>
+                    <span
+                      class="source-tag source-text--overlay"
+                      [class.source--catalogo]="item.source === 'catalogo'"
+                      [class.source--manual]="item.source === 'manual'"
+                    >
+                      {{ item.source | uppercase }}
+                    </span>
+                    @if (card.isConfirmed) {
+                      <span class="pieces-state" [class.pieces-state--partial]="card.hasPartial" [class.pieces-state--ok]="!card.hasPartial">
+                        <span class="material-symbols-rounded" aria-hidden="true">check</span>
+                      </span>
+                    } @else if (card.isOutOfStock) {
+                      <span class="pieces-state pieces-state--out">
+                        <span class="material-symbols-rounded" aria-hidden="true">close</span>
+                      </span>
+                    }
+                  </div>
+                }
 
                 <div class="text-content">
                   <div class="title-row">
@@ -1723,14 +1778,17 @@
               <span class="material-symbols-rounded" aria-hidden="true">person</span>
               Precio clienta
             </label>
-            <div class="money money-readonly" [class.money-invalid]="priceRuleInvalid()">
+            <div class="money" [class.money-readonly]="!isManualSource()" [class.money-invalid]="priceRuleInvalid()">
               <span>MXN</span>
               <input
                 class="input"
                 type="text"
                 [value]="priceDisplayValue('clienta')"
-                readonly
-                disabled
+                (focus)="onPriceInputFocus('clienta')"
+                (input)="onPriceInputChange('clienta', $any($event.target).value)"
+                (blur)="onPriceInputBlur('clienta')"
+                [readonly]="!isManualSource()"
+                [disabled]="!canSubmitNewItem() || !vm.canEditItems || !isManualSource()"
               />
             </div>
           </div>
@@ -1739,14 +1797,17 @@
               <span class="material-symbols-rounded" aria-hidden="true">receipt_long</span>
               Precio costo
             </label>
-            <div class="money money-readonly">
+            <div class="money" [class.money-readonly]="!isManualSource()" [class.money-invalid]="priceRuleInvalid()">
               <span>MXN</span>
               <input
                 class="input"
                 type="text"
                 [value]="priceDisplayValue('costo')"
-                readonly
-                disabled
+                (focus)="onPriceInputFocus('costo')"
+                (input)="onPriceInputChange('costo', $any($event.target).value)"
+                (blur)="onPriceInputBlur('costo')"
+                [readonly]="!isManualSource()"
+                [disabled]="!canSubmitNewItem() || !vm.canEditItems || !isManualSource()"
               />
             </div>
           </div>

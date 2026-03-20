@@ -1,20 +1,99 @@
+
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from "@angular/core";
 import { FormsModule } from "@angular/forms";
+import { ActivatedRoute, Router } from "@angular/router";
 import { AuthzService } from "../../core/authz.service";
+import { CustomersService } from "../../core/customers.service";
 import { FinanceAccount, FinanceExpense, FinanceExpenseCategory, FinanceService } from "../../core/finance.service";
 import { InventoryItem, InventoryService } from "../../core/inventory.service";
 import { Order, OrderItem, OrderStatus, OrdersService } from "../../core/orders.service";
-import { RoutePlan, RoutesService } from "../../core/routes.service";
+import { RoutesService } from "../../core/routes.service";
+
+type MoneyBucketId =
+  | "openDrafts"
+  | "confirmedNeedInvestment"
+  | "investedNotDelivered"
+  | "deliveredPendingCollection"
+  | "stagnantInventory"
+  | "collectedShouldBeInAccount"
+  | "collectedByCourierPendingSettlement";
+
+type BucketOrderRow = {
+  bucketId: MoneyBucketId;
+  orderId: string;
+  routeId: string;
+  customerId: string;
+  status: OrderStatus;
+  amountClienta: number;
+  cost: number;
+  margin: number;
+  paid: number;
+  balance: number;
+  note: string;
+};
+
+type BucketInventoryRow = {
+  bucketId: MoneyBucketId;
+  inventoryId: string;
+  title: string;
+  quantity: number;
+  idleDays: number;
+  cost: number;
+  potentialSale: number;
+  potentialMargin: number;
+};
+
+type MoneyBucket = {
+  id: MoneyBucketId;
+  title: string;
+  description: string;
+  count: number;
+  amountClienta: number;
+  cost: number;
+  margin: number;
+  paid: number;
+  balance: number;
+  orderRows: BucketOrderRow[];
+  inventoryRows: BucketInventoryRow[];
+};
 
 type SummaryRow = {
   routeId: string;
   routeName: string;
-  ventas: number;
-  porCobrar: number;
-  pedidosPendientes: number;
-  utilidadNeta: number;
-  devoluciones: number;
-  devolucionRate: number;
+  ordersCount: number;
+  porCobrarReal: number;
+  pipelineClienta: number;
+  capitalRequerido: number;
+  cobradoConRepartidor: number;
+  gananciaPendiente: number;
+  customerPreview: string;
+  detailRows: BucketOrderRow[];
+};
+
+type DrilldownRow = {
+  rowId: string;
+  type: "order" | "inventory";
+  primary: string;
+  secondary: string;
+  status: string;
+  amountClienta: number;
+  cost: number;
+  margin: number;
+  paid: number;
+  balance: number;
+  orderId: string | null;
+};
+
+type DrilldownState = {
+  id: string;
+  title: string;
+  subtitle: string;
+  totalAmountClienta: number;
+  totalCost: number;
+  totalMargin: number;
+  totalPaid: number;
+  totalBalance: number;
+  rows: DrilldownRow[];
 };
 
 type FinanceSummary = {
@@ -47,6 +126,28 @@ type FinanceSummary = {
   pedidosPendientes: number;
   pedidosBorrador: number;
   pendientesCobro: number;
+  pipelineClienta: number;
+  capitalPorInvertir: number;
+  cobradoConRepartidor: number;
+  cobradoPorDepositar: number;
+  gananciaPendientePipeline: number;
+  buckets: MoneyBucket[];
+  orderBucketRows: BucketOrderRow[];
+};
+
+type OrderFinancialSnapshot = {
+  order: Order;
+  status: OrderStatus;
+  routeId: string;
+  customerId: string;
+  totalClienta: number;
+  cost: number;
+  grossProfit: number;
+  paid: number;
+  balance: number;
+  remaining: number;
+  paidRatio: number;
+  remainingRatio: number;
 };
 
 const EXPENSE_CATEGORY_LABEL: Record<FinanceExpenseCategory, string> = {
@@ -58,15 +159,76 @@ const EXPENSE_CATEGORY_LABEL: Record<FinanceExpenseCategory, string> = {
   deuda_meses: "Deuda a meses",
 };
 
+const MONEY_BUCKET_ORDER: MoneyBucketId[] = [
+  "openDrafts",
+  "confirmedNeedInvestment",
+  "investedNotDelivered",
+  "deliveredPendingCollection",
+  "collectedByCourierPendingSettlement",
+  "collectedShouldBeInAccount",
+  "stagnantInventory",
+];
+const MONEY_BUCKET_META: Record<MoneyBucketId, { title: string; description: string }> = {
+  openDrafts: {
+    title: "1) Borrador de pedidos",
+    description: "Aun en apertura; sin solicitud ni pago a proveedor.",
+  },
+  confirmedNeedInvestment: {
+    title: "2) Inversión en puerta",
+    description: "Confirmados para pedir; falta invertir capital.",
+  },
+  investedNotDelivered: {
+    title: "3) Pedidos por entregar",
+    description: "Mercancia pagada/en proceso que aun no llega a clienta.",
+  },
+  deliveredPendingCollection: {
+    title: "4) Cuentas pendientes",
+    description: "Pedido entregado con saldo pendiente de cobro.",
+  },
+  stagnantInventory: {
+    title: "7) Inventario estancado",
+    description: "Dinero en mercancia sin dueña y con baja rotacion.",
+  },
+  collectedShouldBeInAccount: {
+    title: "6) Cobrado",
+    description: "Cobrado y fuera de ruta; debe reflejarse en cuenta.",
+  },
+  collectedByCourierPendingSettlement: {
+    title: "5) Cobrado por repartidor",
+    description: "Cobrado en ruta y pendiente de liquidacion.",
+  },
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  borrador: "Borrador",
+  confirmando_proveedor: "Confirmando proveedor",
+  reservado_inventario: "Reservado inventario",
+  solicitado_proveedor: "Solicitado proveedor",
+  supplier_processing: "Proveedor procesando",
+  inbound_in_transit: "En transito proveedor",
+  en_transito: "En transito proveedor",
+  recibido_qa: "En transito proveedor",
+  packing: "Empacando",
+  empaque: "Empaque",
+  ready_for_route: "Listo para ruta",
+  assigned_to_run: "Asignado a salida",
+  in_transit: "En ruta",
+  en_ruta: "En ruta",
+  delivered: "Entregado",
+  delivered_partial: "Entrega parcial",
+  entregado: "Entregado",
+  pago_pendiente: "Pago pendiente",
+  pagado: "Pagado",
+  closed: "Cerrado",
+  cancelado: "Cancelado",
+  devuelto: "Devuelto",
+};
+
 const DELIVERED_STATUSES = new Set<OrderStatus>(["entregado", "delivered", "delivered_partial", "pago_pendiente", "pagado", "closed"]);
-const CLOSED_STATUSES = new Set<OrderStatus>(["pagado", "closed"]);
 const RETURNED_STATUSES = new Set<OrderStatus>(["devuelto"]);
 const CANCELLED_STATUSES = new Set<OrderStatus>(["cancelado"]);
-const PIPELINE_STATUSES = new Set<OrderStatus>([
-  "confirmando_proveedor",
-  "reservado_inventario",
-  "solicitado_proveedor",
-  "supplier_processing",
+const NEED_INVEST_STATUSES = new Set<OrderStatus>(["confirmando_proveedor", "reservado_inventario", "solicitado_proveedor", "supplier_processing"]);
+const INVESTED_NOT_DELIVERED_STATUSES = new Set<OrderStatus>([
   "inbound_in_transit",
   "en_transito",
   "recibido_qa",
@@ -76,8 +238,8 @@ const PIPELINE_STATUSES = new Set<OrderStatus>([
   "assigned_to_run",
   "in_transit",
   "en_ruta",
-  "pago_pendiente",
 ]);
+const COURIER_COLLECTION_STATUSES = new Set<OrderStatus>(["in_transit", "en_ruta", "assigned_to_run"]);
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -92,11 +254,16 @@ export default class AdministracionPage {
   private inventoryService = inject(InventoryService);
   private routesService = inject(RoutesService);
   private financeService = inject(FinanceService);
+  private customersService = inject(CustomersService);
   private authz = inject(AuthzService);
+  private router = inject(Router);
+  private route = inject(ActivatedRoute);
+  private pendingDrilldownRestore = signal<string | null>(null);
 
   loading = signal(false);
   error = signal<string | null>(null);
   success = signal<string | null>(null);
+  drilldown = signal<DrilldownState | null>(null);
 
   routeScope = signal("general");
   projectionDays = signal(30);
@@ -128,6 +295,7 @@ export default class AdministracionPage {
   accounts = computed(() => this.financeService.accounts());
   expenses = computed(() => this.financeService.expenses());
   cuts = computed(() => this.financeService.cuts());
+  customers = computed(() => this.customersService.customers());
 
   canViewAccounts = computed(() => this.authz.canCap("cap.finance.accounts.view"));
   canCreateAccounts = computed(() => this.authz.canCap("cap.finance.accounts.create"));
@@ -176,9 +344,10 @@ export default class AdministracionPage {
     }),
   );
 
-  routeRows = computed(() => this.buildRouteRows());
+  routeRows = computed(() => this.buildRouteRows(this.summary().orderBucketRows));
 
   constructor() {
+    this.restoreReturnContextFromQuery();
     this.reload().catch(() => null);
   }
 
@@ -191,8 +360,14 @@ export default class AdministracionPage {
         this.ordersService.loadFromFirestore(),
         this.inventoryService.loadFromFirestore().catch(() => null),
         this.routesService.loadFromFirestore().catch(() => null),
+        this.customersService.loadFromFirestore().catch(() => null),
         this.financeService.loadAll(),
       ]);
+      const pending = this.pendingDrilldownRestore();
+      if (pending) {
+        this.tryRestoreDrilldown(pending);
+        this.pendingDrilldownRestore.set(null);
+      }
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "No se pudo cargar la informacion financiera.";
       this.error.set(message);
@@ -204,6 +379,7 @@ export default class AdministracionPage {
   setRouteScope(value: unknown) {
     const raw = String(value || "general").trim();
     this.routeScope.set(raw || "general");
+    this.drilldown.set(null);
   }
 
   setProjectionDays(value: unknown) {
@@ -443,13 +619,105 @@ export default class AdministracionPage {
     }
   }
 
+  openBucketById(bucketId: MoneyBucketId) {
+    const target = this.summary().buckets.find((row) => row.id === bucketId);
+    if (!target) return;
+    this.openBucketDrilldown(target);
+  }
+
+  openBucketDrilldown(bucket: MoneyBucket) {
+    const rows = this.buildDrilldownRowsFromBucket(bucket);
+    this.drilldown.set({
+      id: `bucket:${bucket.id}`,
+      title: bucket.title,
+      subtitle: `${bucket.description} | ${bucket.count} ${bucket.id === "stagnantInventory" ? "SKUs" : "pedidos"}`,
+      totalAmountClienta: this.toSafeNumber(bucket.amountClienta),
+      totalCost: this.toSafeNumber(bucket.cost),
+      totalMargin: this.toSafeNumber(bucket.margin),
+      totalPaid: this.toSafeNumber(bucket.paid),
+      totalBalance: this.toSafeNumber(bucket.balance),
+      rows,
+    });
+  }
+
+  openRouteDrilldown(row: SummaryRow) {
+    const rows: DrilldownRow[] = row.detailRows
+      .map((entry) => ({
+        rowId: `route:${row.routeId}:${entry.orderId}`,
+        type: "order" as const,
+        primary: this.customerName(entry.customerId),
+        secondary: this.routeName(entry.routeId),
+        status: this.statusLabel(entry.status),
+        amountClienta: this.toSafeNumber(entry.amountClienta),
+        cost: this.toSafeNumber(entry.cost),
+        margin: this.toSafeNumber(entry.margin),
+        paid: this.toSafeNumber(entry.paid),
+        balance: this.toSafeNumber(entry.balance),
+        orderId: entry.orderId,
+      }))
+      .sort((a, b) => b.amountClienta - a.amountClienta);
+
+    const totalAmountClienta = rows.reduce((sum, item) => sum + item.amountClienta, 0);
+    const totalCost = rows.reduce((sum, item) => sum + item.cost, 0);
+    const totalMargin = rows.reduce((sum, item) => sum + item.margin, 0);
+    const totalPaid = rows.reduce((sum, item) => sum + item.paid, 0);
+    const totalBalance = rows.reduce((sum, item) => sum + item.balance, 0);
+
+    this.drilldown.set({
+      id: `route:${row.routeId}`,
+      title: `Ruta ${row.routeName}`,
+      subtitle: `${row.ordersCount} pedidos | ${row.customerPreview}`,
+      totalAmountClienta,
+      totalCost,
+      totalMargin,
+      totalPaid,
+      totalBalance,
+      rows,
+    });
+  }
+
+  closeDrilldown() {
+    this.drilldown.set(null);
+  }
+
+  openOrder(orderId: string) {
+    const active = this.drilldown();
+    const state = {
+      from: "administracion",
+      scope: this.routeScope(),
+      drilldown: active?.id || null,
+    };
+    this.closeDrilldown();
+    this.router.navigate(["/main/pedidos", orderId], { state });
+  }
+
   expenseCategoryLabel(key: FinanceExpenseCategory): string {
     return EXPENSE_CATEGORY_LABEL[key];
   }
 
+  accountLabel(accountId: string | null): string {
+    if (!accountId) return "-";
+    return this.accounts().find((row) => row.account_id === accountId)?.name || accountId;
+  }
+
+  customerName(customerId: string): string {
+    const row = this.customersService.getById(customerId);
+    if (!row) return "Clienta sin nombre";
+    return [row.first_name, row.last_name].filter(Boolean).join(" ").trim() || "Clienta sin nombre";
+  }
+
   routeName(routeId: string | null): string {
-    if (!routeId || routeId === "sin_ruta") return "Sin ruta";
-    return this.routes().find((row) => row.route_id === routeId)?.name || routeId;
+    const normalized = this.normalizeRouteId(routeId);
+    if (normalized === "sin_ruta") return "Sin ruta";
+    return this.routes().find((row) => row.route_id === normalized)?.name || normalized;
+  }
+
+  statusLabel(status: OrderStatus): string {
+    return STATUS_LABELS[status] || status;
+  }
+
+  bucketTitle(bucketId: MoneyBucketId): string {
+    return MONEY_BUCKET_META[bucketId].title;
   }
 
   formatCurrency(value: number): string {
@@ -480,39 +748,107 @@ export default class AdministracionPage {
   trackExpense = (_: number, row: FinanceExpense) => row.expense_id;
   trackCut = (_: number, row: { cut_id: string }) => row.cut_id;
   trackScope = (_: number, row: { id: string }) => row.id;
+  trackBucket = (_: number, row: MoneyBucket) => row.id;
+  trackDrilldownRow = (_: number, row: DrilldownRow) => row.rowId;
 
-  private buildRouteRows(): SummaryRow[] {
+  private restoreReturnContextFromQuery() {
+    const scope = String(this.route.snapshot.queryParamMap.get("scope") || "").trim();
+    if (scope) {
+      this.routeScope.set(scope);
+    }
+    const drilldown = String(this.route.snapshot.queryParamMap.get("drilldown") || "").trim();
+    if (drilldown) {
+      this.pendingDrilldownRestore.set(drilldown);
+    }
+  }
+
+  private tryRestoreDrilldown(token: string) {
+    if (token.startsWith("bucket:")) {
+      const bucketId = token.slice("bucket:".length) as MoneyBucketId;
+      const bucket = this.summary().buckets.find((row) => row.id === bucketId);
+      if (bucket) this.openBucketDrilldown(bucket);
+      return;
+    }
+    if (token.startsWith("route:")) {
+      const routeId = token.slice("route:".length);
+      const route = this.routeRows().find((row) => row.routeId === routeId);
+      if (route) this.openRouteDrilldown(route);
+    }
+  }
+
+  private buildRouteRows(rows: BucketOrderRow[]): SummaryRow[] {
     const selectedRouteId = this.selectedRouteId();
-    const rows = this.collectRouteRows(this.routes(), this.orders());
-    const baseExpenses = this.expenses();
-    const out: SummaryRow[] = [];
+    const map = new Map<string, SummaryRow>();
 
-    for (const row of rows) {
-      if (selectedRouteId && row.routeId !== selectedRouteId) continue;
-      const routeOrders = this.orders().filter((order) => this.matchesRoute(order.route_id, row.routeId));
-      const routeExpenses = baseExpenses.filter((expense) => expense.route_id === row.routeId);
-      const summary = this.buildSummary({
-        orders: routeOrders,
-        expenses: routeExpenses,
-        inventory: [],
-        accounts: [],
-        projectionDays: this.projectionDays(),
-        averageWindowDays: this.averageWindowDays(),
-        stagnationDays: this.stagnationDays(),
-      });
-      out.push({
-        routeId: row.routeId,
-        routeName: row.routeName,
-        ventas: summary.ventasBrutas,
-        porCobrar: summary.porCobrar,
-        pedidosPendientes: summary.pedidosPendientes,
-        utilidadNeta: summary.utilidadNeta,
-        devoluciones: summary.devolucionesMonto,
-        devolucionRate: summary.devolucionRate,
-      });
+    for (const entry of rows) {
+      const routeId = entry.routeId;
+      if (selectedRouteId && routeId !== selectedRouteId) continue;
+      if (!map.has(routeId)) {
+        map.set(routeId, {
+          routeId,
+          routeName: this.routeName(routeId),
+          ordersCount: 0,
+          porCobrarReal: 0,
+          pipelineClienta: 0,
+          capitalRequerido: 0,
+          cobradoConRepartidor: 0,
+          gananciaPendiente: 0,
+          customerPreview: "Sin clientas",
+          detailRows: [],
+        });
+      }
+      const target = map.get(routeId);
+      if (!target) continue;
+      target.ordersCount += 1;
+      target.detailRows.push(entry);
+
+      if (entry.bucketId === "deliveredPendingCollection") {
+        target.porCobrarReal += entry.amountClienta;
+        target.gananciaPendiente += entry.margin;
+      }
+
+      if (entry.bucketId === "confirmedNeedInvestment" || entry.bucketId === "investedNotDelivered") {
+        target.pipelineClienta += entry.amountClienta;
+        target.gananciaPendiente += entry.margin;
+      }
+
+      if (entry.bucketId === "confirmedNeedInvestment") {
+        target.capitalRequerido += entry.cost;
+      }
+
+      if (entry.bucketId === "collectedByCourierPendingSettlement") {
+        target.cobradoConRepartidor += entry.amountClienta;
+      }
     }
 
-    return out.sort((a, b) => b.ventas - a.ventas);
+    const out = Array.from(map.values())
+      .map((row) => ({
+        ...row,
+        customerPreview: this.buildCustomerPreview(row.detailRows),
+        porCobrarReal: this.toSafeNumber(row.porCobrarReal),
+        pipelineClienta: this.toSafeNumber(row.pipelineClienta),
+        capitalRequerido: this.toSafeNumber(row.capitalRequerido),
+        cobradoConRepartidor: this.toSafeNumber(row.cobradoConRepartidor),
+        gananciaPendiente: this.toSafeNumber(row.gananciaPendiente),
+      }))
+      .filter((row) => row.ordersCount > 0)
+      .sort((a, b) => b.pipelineClienta + b.porCobrarReal - (a.pipelineClienta + a.porCobrarReal));
+
+    return out;
+  }
+
+  private buildCustomerPreview(rows: BucketOrderRow[]): string {
+    if (rows.length === 0) return "Sin clientas";
+    const map = new Map<string, number>();
+    for (const row of rows) {
+      const name = this.customerName(row.customerId);
+      map.set(name, (map.get(name) || 0) + 1);
+    }
+    const ordered = Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+    return ordered
+      .slice(0, 3)
+      .map(([name]) => name)
+      .join(", ");
   }
 
   private buildSummary(input: {
@@ -525,67 +861,64 @@ export default class AdministracionPage {
     stagnationDays: number;
   }): FinanceSummary {
     const { avgCostUnit, avgSaleUnit, markupMultiplier } = this.estimateMargins(input.orders);
+    const bucketMap = this.createBucketMap();
+    const orderBucketRows: BucketOrderRow[] = [];
+
     let ventasBrutas = 0;
     let ingresosCobrados = 0;
     let utilidadBruta = 0;
-    let porCobrar = 0;
-    let mercanciaTransito = 0;
     let potencialBorradores = 0;
-    let potencialPendiente = 0;
     let perdidoStock = 0;
     let perdidoDano = 0;
     let devolucionesMonto = 0;
     let baseVentasDevolucion = 0;
-    let pedidosPendientes = 0;
     let pedidosBorrador = 0;
-    let pendientesCobro = 0;
     let recentSales = 0;
     let costOfDelivered = 0;
 
     for (const order of input.orders) {
-      const total = this.resolveOrderTotal(order);
-      const cost = this.resolveOrderCost(order);
-      const grossProfit = Math.max(0, total - cost);
-      const paid = Math.max(0, this.toSafeNumber(order.totals?.paid_amount));
-      const balance = Math.max(0, this.toSafeNumber(order.totals?.balance_due));
-      const status = order.status;
-      const isDelivered = DELIVERED_STATUSES.has(status);
+      const snapshot = this.toOrderSnapshot(order);
+      const status = snapshot.status;
       const isCancelled = CANCELLED_STATUSES.has(status);
-      const isReturned = RETURNED_STATUSES.has(status);
-      const isPipeline = PIPELINE_STATUSES.has(status);
+      const isDelivered = DELIVERED_STATUSES.has(status);
 
       if (!isCancelled) {
-        ventasBrutas += total;
+        ventasBrutas += snapshot.totalClienta;
       }
 
       if (isDelivered) {
-        ingresosCobrados += paid > 0 ? paid : balance <= 0 ? total : 0;
-        utilidadBruta += grossProfit;
-        baseVentasDevolucion += total;
-        costOfDelivered += cost;
+        ingresosCobrados += snapshot.paid > 0 ? snapshot.paid : snapshot.balance <= 0 ? snapshot.totalClienta : 0;
+        utilidadBruta += snapshot.grossProfit;
+        baseVentasDevolucion += snapshot.totalClienta;
+        costOfDelivered += snapshot.cost;
         if (this.isDateWithinWindow(order.updated_at, input.averageWindowDays)) {
-          recentSales += total;
+          recentSales += snapshot.totalClienta;
         }
-      }
-
-      if (!isCancelled && !isReturned) {
-        porCobrar += balance;
       }
 
       if (status === "borrador") {
         pedidosBorrador += 1;
-        potencialBorradores += total > 0 ? total : this.estimateOrderValue(order);
+        potencialBorradores += snapshot.remaining > 0 ? snapshot.remaining : snapshot.totalClienta;
       }
 
-      if (isPipeline && status !== "borrador") {
-        pedidosPendientes += 1;
-        mercanciaTransito += this.resolveOrderCost(order);
-        potencialPendiente += grossProfit;
-      }
-
-      if (this.requiresCollectionFollowUp(status, balance)) {
-        pendientesCobro += 1;
-        potencialPendiente += grossProfit;
+      const bucketId = this.classifyBucket(snapshot);
+      if (bucketId) {
+        const allocation = this.allocateBucket(snapshot, bucketId);
+        const row: BucketOrderRow = {
+          bucketId,
+          orderId: order.order_id,
+          routeId: snapshot.routeId,
+          customerId: snapshot.customerId,
+          status: snapshot.status,
+          amountClienta: allocation.amountClienta,
+          cost: allocation.cost,
+          margin: allocation.margin,
+          paid: allocation.paid,
+          balance: allocation.balance,
+          note: allocation.note,
+        };
+        this.pushOrderRowToBucket(bucketMap.get(bucketId), row);
+        orderBucketRows.push(row);
       }
 
       for (const item of order.items || []) {
@@ -631,15 +964,60 @@ export default class AdministracionPage {
 
       const idleDays = this.daysSince(this.pickBestDate(row.updated_at, row.created_at), now);
       if (idleDays < Math.max(1, input.stagnationDays)) continue;
+
       const estimatedSaleUnit = costUnit > 0 ? costUnit * markupMultiplier : avgSaleUnit;
       const potential = qty * estimatedSaleUnit;
+      const potentialMargin = Math.max(0, potential - value);
+
       estancadoPiezas += qty;
       estancadoCosto += value;
       estancadoPotencial += potential;
-      estancadoGanancia += Math.max(0, potential - value);
+      estancadoGanancia += potentialMargin;
+
+      this.pushInventoryRowToBucket(bucketMap.get("stagnantInventory"), {
+        bucketId: "stagnantInventory",
+        inventoryId: (row as { inventory_id?: string }).inventory_id || (row as { sku?: string }).sku || `inv-${row.title}`,
+        title: row.title || "Producto sin nombre",
+        quantity: qty,
+        idleDays,
+        cost: value,
+        potentialSale: potential,
+        potentialMargin,
+      });
     }
 
-    const proyeccionCaja = cajaActual + porCobrar + (promedioVentaDiaria - promedioEgresoDiario) * Math.max(1, input.projectionDays);
+    const buckets = MONEY_BUCKET_ORDER.map((id) => bucketMap.get(id)!).map((row) => ({
+      ...row,
+      amountClienta: this.toSafeNumber(row.amountClienta),
+      cost: this.toSafeNumber(row.cost),
+      margin: this.toSafeNumber(row.margin),
+      paid: this.toSafeNumber(row.paid),
+      balance: this.toSafeNumber(row.balance),
+    }));
+
+    const confirmedNeedInvestment = bucketMap.get("confirmedNeedInvestment")!;
+    const investedNotDelivered = bucketMap.get("investedNotDelivered")!;
+    const deliveredPendingCollection = bucketMap.get("deliveredPendingCollection")!;
+    const collectedShouldBeInAccount = bucketMap.get("collectedShouldBeInAccount")!;
+    const collectedByCourierPendingSettlement = bucketMap.get("collectedByCourierPendingSettlement")!;
+
+    const pipelineClienta = confirmedNeedInvestment.amountClienta + investedNotDelivered.amountClienta;
+    const capitalPorInvertir = confirmedNeedInvestment.cost;
+    const mercanciaTransito = investedNotDelivered.cost;
+    const porCobrar = deliveredPendingCollection.amountClienta;
+    const cobradoConRepartidor = collectedByCourierPendingSettlement.amountClienta;
+    const cobradoPorDepositar = collectedShouldBeInAccount.amountClienta;
+    const gananciaPendientePipeline = confirmedNeedInvestment.margin + investedNotDelivered.margin + deliveredPendingCollection.margin;
+    const potencialPendiente = gananciaPendientePipeline;
+    const pedidosPendientes = confirmedNeedInvestment.count + investedNotDelivered.count;
+    const pendientesCobro = deliveredPendingCollection.count;
+
+    const proyeccionCaja =
+      cajaActual +
+      porCobrar +
+      cobradoPorDepositar +
+      (promedioVentaDiaria - promedioEgresoDiario) * Math.max(1, input.projectionDays);
+
     const devolucionRate = baseVentasDevolucion > 0 ? devolucionesMonto / baseVentasDevolucion : 0;
     const devolucionImpacto = devolucionesMonto + perdidasRegistradas;
     const dsoDias = recentSales > 0 ? (porCobrar / recentSales) * averageWindowDays : 0;
@@ -676,6 +1054,219 @@ export default class AdministracionPage {
       pedidosPendientes,
       pedidosBorrador,
       pendientesCobro,
+      pipelineClienta,
+      capitalPorInvertir,
+      cobradoConRepartidor,
+      cobradoPorDepositar,
+      gananciaPendientePipeline,
+      buckets,
+      orderBucketRows,
+    };
+  }
+
+  private createBucketMap(): Map<MoneyBucketId, MoneyBucket> {
+    const map = new Map<MoneyBucketId, MoneyBucket>();
+    for (const id of MONEY_BUCKET_ORDER) {
+      const meta = MONEY_BUCKET_META[id];
+      map.set(id, {
+        id,
+        title: meta.title,
+        description: meta.description,
+        count: 0,
+        amountClienta: 0,
+        cost: 0,
+        margin: 0,
+        paid: 0,
+        balance: 0,
+        orderRows: [],
+        inventoryRows: [],
+      });
+    }
+    return map;
+  }
+
+  private pushOrderRowToBucket(bucket: MoneyBucket | undefined, row: BucketOrderRow) {
+    if (!bucket) return;
+    bucket.count += 1;
+    bucket.amountClienta += row.amountClienta;
+    bucket.cost += row.cost;
+    bucket.margin += row.margin;
+    bucket.paid += row.paid;
+    bucket.balance += row.balance;
+    bucket.orderRows.push(row);
+  }
+
+  private pushInventoryRowToBucket(bucket: MoneyBucket | undefined, row: BucketInventoryRow) {
+    if (!bucket) return;
+    bucket.count += 1;
+    bucket.amountClienta += row.potentialSale;
+    bucket.cost += row.cost;
+    bucket.margin += row.potentialMargin;
+    bucket.balance += row.potentialSale;
+    bucket.inventoryRows.push(row);
+  }
+
+  private buildDrilldownRowsFromBucket(bucket: MoneyBucket): DrilldownRow[] {
+    const orderRows: DrilldownRow[] = bucket.orderRows.map((row) => ({
+      rowId: `order:${row.orderId}`,
+      type: "order",
+      primary: this.customerName(row.customerId),
+      secondary: this.routeName(row.routeId),
+      status: this.statusLabel(row.status),
+      amountClienta: this.toSafeNumber(row.amountClienta),
+      cost: this.toSafeNumber(row.cost),
+      margin: this.toSafeNumber(row.margin),
+      paid: this.toSafeNumber(row.paid),
+      balance: this.toSafeNumber(row.balance),
+      orderId: row.orderId,
+    }));
+
+    const inventoryRows: DrilldownRow[] = bucket.inventoryRows.map((row) => ({
+      rowId: `inventory:${row.inventoryId}`,
+      type: "inventory",
+      primary: row.title,
+      secondary: `${row.quantity} pzas | ${row.idleDays} dias sin salida`,
+      status: "Inventario estancado",
+      amountClienta: this.toSafeNumber(row.potentialSale),
+      cost: this.toSafeNumber(row.cost),
+      margin: this.toSafeNumber(row.potentialMargin),
+      paid: 0,
+      balance: this.toSafeNumber(row.potentialSale),
+      orderId: null,
+    }));
+
+    return [...orderRows, ...inventoryRows].sort((a, b) => b.amountClienta - a.amountClienta);
+  }
+
+  private classifyBucket(snapshot: OrderFinancialSnapshot): MoneyBucketId | null {
+    if (CANCELLED_STATUSES.has(snapshot.status) || RETURNED_STATUSES.has(snapshot.status)) return null;
+
+    if (DELIVERED_STATUSES.has(snapshot.status) && snapshot.balance > 0) {
+      return "deliveredPendingCollection";
+    }
+
+    if (COURIER_COLLECTION_STATUSES.has(snapshot.status) && snapshot.paid > 0) {
+      return "collectedByCourierPendingSettlement";
+    }
+
+    if (DELIVERED_STATUSES.has(snapshot.status) && snapshot.paid > 0 && snapshot.balance <= 0) {
+      return "collectedShouldBeInAccount";
+    }
+
+    if (snapshot.status === "borrador") {
+      return "openDrafts";
+    }
+
+    if (NEED_INVEST_STATUSES.has(snapshot.status)) {
+      return "confirmedNeedInvestment";
+    }
+
+    if (INVESTED_NOT_DELIVERED_STATUSES.has(snapshot.status)) {
+      return "investedNotDelivered";
+    }
+
+    if (snapshot.balance > 0) {
+      return "deliveredPendingCollection";
+    }
+
+    if (snapshot.paid > 0) {
+      return "collectedShouldBeInAccount";
+    }
+
+    if (snapshot.remaining > 0) {
+      return "confirmedNeedInvestment";
+    }
+
+    return null;
+  }
+
+  private allocateBucket(snapshot: OrderFinancialSnapshot, bucketId: MoneyBucketId): {
+    amountClienta: number;
+    cost: number;
+    margin: number;
+    paid: number;
+    balance: number;
+    note: string;
+  } {
+    if (bucketId === "deliveredPendingCollection") {
+      const ratio = snapshot.remainingRatio;
+      return {
+        amountClienta: snapshot.balance,
+        cost: snapshot.cost * ratio,
+        margin: snapshot.grossProfit * ratio,
+        paid: snapshot.paid,
+        balance: snapshot.balance,
+        note: "Entregado, pendiente cobrar",
+      };
+    }
+
+    if (bucketId === "collectedShouldBeInAccount") {
+      const ratio = snapshot.paidRatio;
+      return {
+        amountClienta: snapshot.paid,
+        cost: snapshot.cost * ratio,
+        margin: snapshot.grossProfit * ratio,
+        paid: snapshot.paid,
+        balance: 0,
+        note: "Cobrado, conciliar en cuenta",
+      };
+    }
+
+    if (bucketId === "collectedByCourierPendingSettlement") {
+      const ratio = snapshot.paidRatio;
+      return {
+        amountClienta: snapshot.paid,
+        cost: snapshot.cost * ratio,
+        margin: snapshot.grossProfit * ratio,
+        paid: snapshot.paid,
+        balance: 0,
+        note: "Cobrado por repartidor",
+      };
+    }
+
+    const ratio = snapshot.remainingRatio > 0 ? snapshot.remainingRatio : 1;
+    return {
+      amountClienta: snapshot.remaining > 0 ? snapshot.remaining : snapshot.totalClienta,
+      cost: snapshot.cost * ratio,
+      margin: snapshot.grossProfit * ratio,
+      paid: snapshot.paid,
+      balance: snapshot.remaining,
+      note:
+        bucketId === "openDrafts"
+          ? "Apertura sin solicitud"
+          : bucketId === "confirmedNeedInvestment"
+            ? "Por solicitar/pagar proveedor"
+            : "Invertido, pendiente entrega",
+    };
+  }
+
+  private toOrderSnapshot(order: Order): OrderFinancialSnapshot {
+    const totalClienta = this.resolveOrderTotal(order);
+    const cost = this.resolveOrderCost(order);
+    const grossProfit = Math.max(0, totalClienta - cost);
+
+    const paidRaw = Math.max(0, this.toSafeNumber(order.totals?.paid_amount));
+    const paid = Math.min(totalClienta, paidRaw);
+    const inferredBalance = Math.max(0, totalClienta - paid);
+    const reportedBalance = Math.max(0, this.toSafeNumber(order.totals?.balance_due));
+    const balance = Math.min(totalClienta, Math.max(inferredBalance, reportedBalance));
+
+    const paidRatio = totalClienta > 0 ? Math.min(1, paid / totalClienta) : 0;
+    const remainingRatio = totalClienta > 0 ? Math.min(1, balance / totalClienta) : 0;
+
+    return {
+      order,
+      status: order.status,
+      routeId: this.normalizeRouteId(order.route_id),
+      customerId: String(order.customer_id || ""),
+      totalClienta,
+      cost,
+      grossProfit,
+      paid,
+      balance,
+      remaining: balance,
+      paidRatio,
+      remainingRatio,
     };
   }
 
@@ -705,21 +1296,14 @@ export default class AdministracionPage {
     };
   }
 
-  private collectRouteRows(routes: RoutePlan[], orders: Order[]): Array<{ routeId: string; routeName: string }> {
-    const map = new Map<string, string>();
-    for (const route of routes) {
-      map.set(route.route_id, route.name || route.route_id);
-    }
-    for (const order of orders) {
-      const routeId = (order.route_id || "sin_ruta").trim() || "sin_ruta";
-      if (!map.has(routeId)) map.set(routeId, routeId === "sin_ruta" ? "Sin ruta" : routeId);
-    }
-    return Array.from(map.entries()).map(([routeId, routeName]) => ({ routeId, routeName }));
-  }
-
   private matchesRoute(orderRouteId: string | null, selectedRouteId: string | null): boolean {
     if (!selectedRouteId) return true;
-    return (orderRouteId || "sin_ruta") === selectedRouteId;
+    return this.normalizeRouteId(orderRouteId) === selectedRouteId;
+  }
+
+  private normalizeRouteId(routeId: string | null): string {
+    const raw = String(routeId || "sin_ruta").trim();
+    return raw || "sin_ruta";
   }
 
   private resolveOrderTotal(order: Order): number {
@@ -771,14 +1355,26 @@ export default class AdministracionPage {
   }
 
   private inventoryAvailableQty(item: InventoryItem): number {
-    const raw = item.available_qty ?? item.on_hand_qty ?? item.quantity_on_hand;
-    return Math.max(0, Math.trunc(this.toSafeNumber(raw)));
-  }
+    const hasAvailable = item.available_qty !== null && item.available_qty !== undefined;
+    if (hasAvailable) {
+      return Math.max(0, Math.trunc(this.toSafeNumber(item.available_qty)));
+    }
 
-  private requiresCollectionFollowUp(status: OrderStatus, balance: number): boolean {
-    if (balance <= 0) return false;
-    if (CLOSED_STATUSES.has(status)) return false;
-    return DELIVERED_STATUSES.has(status) || status === "en_ruta" || status === "in_transit";
+    const hasOnHand = item.on_hand_qty !== null && item.on_hand_qty !== undefined;
+    if (!hasOnHand) {
+      // Legacy docs may only have quantity_on_hand as already-available stock.
+      return Math.max(0, Math.trunc(this.toSafeNumber(item.quantity_on_hand)));
+    }
+
+    const onHand = this.toSafeNumber(item.on_hand_qty);
+    const reservedDirect = this.toSafeNumber(item.reserved_qty ?? 0);
+    const reservedFromMap = Object.values(item.reservations || {}).reduce((sum, row) => {
+      if (!row || row.status !== "reserved") return sum;
+      return sum + this.toSafeNumber(row.qty);
+    }, 0);
+    const reserved = Math.max(reservedDirect, reservedFromMap);
+
+    return Math.max(0, Math.trunc(onHand - reserved));
   }
 
   private isDateWithinWindow(rawDate: unknown, days: number): boolean {

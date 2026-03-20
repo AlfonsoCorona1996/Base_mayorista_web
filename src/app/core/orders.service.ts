@@ -741,6 +741,28 @@ export class OrdersService {
     return url;
   }
 
+  async uploadOrderItemImage(orderId: string, itemId: string, file: File, actor = "admin"): Promise<string> {
+    const path = `orders/${orderId}/items/${itemId}/photo-${Date.now()}.jpg`;
+    const storageEntry = ref(STORAGE, path);
+    await uploadBytes(storageEntry, file);
+    const url = await getDownloadURL(storageEntry);
+    const order = this.getById(orderId);
+    if (!order) throw new Error("Order not found");
+    let found = false;
+    const nextItems = (order.items || []).map((item) => {
+      if (item.item_id !== itemId) return item;
+      found = true;
+      return { ...item, image_url: url };
+    });
+    if (!found) throw new Error("Order item not found");
+    await this.updateItems(orderId, nextItems);
+    await this.logEvent(orderId, "ITEM_IMAGE_UPDATED", `Imagen actualizada para item ${itemId}`, {
+      itemId,
+      imageUrl: url,
+    }, actor);
+    return url;
+  }
+
   async listIncidents(orderId: string): Promise<Incident[]> {
     const snap = await getDocs(query(collection(FIRESTORE, "orders", orderId, "incidents"), orderBy("createdAt", "desc")));
     return snap.docs.map((docSnap) => {

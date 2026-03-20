@@ -239,6 +239,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   assignTarget = signal<Incident | null>(null);
 
   uploadingEvidence = signal<Record<string, boolean>>({});
+  uploadingItemImage = signal<Record<string, boolean>>({});
 
   plannedModalOpen = signal(false);
   plannedPackagesInput = signal(1);
@@ -919,10 +920,10 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       reservado_inventario: "Reservado",
       solicitado_proveedor: "Solicitado",
       supplier_processing: "Proveedor",
-      inbound_in_transit: "En camino proveedor",
-      en_transito: "En tránsito",
+      inbound_in_transit: "En transito proveedor",
+      en_transito: "En transito proveedor",
       packing: "Empacando",
-      recibido_qa: "Recibido/QA",
+      recibido_qa: "En transito proveedor",
       empaque: "Empaque",
       ready_for_route: "Listo para ruta",
       assigned_to_run: "Asignado a salida",
@@ -1835,7 +1836,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         return;
       }
       await this.orders.updateItemState(order.order_id, item.item_id, "recibido_qa");
-      await this.orders.logEvent(order.order_id, "ITEM_RECEIVED_QA", `Recibido/QA: ${item.title}`, {
+      await this.orders.logEvent(order.order_id, "ITEM_RECEIVED_QA", `En transito proveedor: ${item.title}`, {
         itemId: item.item_id,
       });
       this.showActionToast(`"${item.title}" recibido.`);
@@ -4728,6 +4729,33 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     }
   }
 
+  isUploadingItemImage(item: OrderItem): boolean {
+    return !!this.uploadingItemImage()[item.item_id];
+  }
+
+  async attachItemImage(order: Order | null, item: OrderItem, event: Event) {
+    if (!order) return;
+    if (!this.canEditItems(order)) return;
+    const input = event.target as HTMLInputElement;
+    if (!input.files || input.files.length === 0) return;
+    const file = input.files[0];
+    if (!file.type.startsWith("image/")) {
+      await this.showPopupAlert("Solo puedes cargar archivos de imagen.", "Archivo invalido");
+      input.value = "";
+      return;
+    }
+    this.uploadingItemImage.update((current) => ({ ...current, [item.item_id]: true }));
+    try {
+      await this.orders.uploadOrderItemImage(order.order_id, item.item_id, file, "admin");
+      this.showActionToast("Imagen cargada.");
+    } catch {
+      await this.showPopupAlert("No se pudo cargar la imagen. Intenta de nuevo.", "Error al cargar imagen");
+    } finally {
+      this.uploadingItemImage.update((current) => ({ ...current, [item.item_id]: false }));
+      input.value = "";
+    }
+  }
+
   openAssignModal(incident: Incident) {
     this.assignTarget.set(incident);
     this.incidentAssignee.set(incident.assigneeId || "");
@@ -5112,7 +5140,23 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       return;
     }
 
-    const navState = (history.state || {}) as { from?: string; routeId?: string | null };
+    const navState = (history.state || {}) as {
+      from?: string;
+      routeId?: string | null;
+      scope?: string | null;
+      drilldown?: string | null;
+    };
+    if (navState.from === "administracion") {
+      const scope = String(navState.scope || "").trim();
+      const drilldown = String(navState.drilldown || "").trim();
+      this.router.navigate(["/main/administracion"], {
+        queryParams: {
+          ...(scope ? { scope } : {}),
+          ...(drilldown ? { drilldown } : {}),
+        },
+      });
+      return;
+    }
     if (navState.from === "salidas") {
       const routeId = String(navState.routeId || "").trim();
       this.router.navigate(["/main/salidas"], {
