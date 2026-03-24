@@ -33,6 +33,14 @@ type OrderCardMeta = {
   ariaLabel: string;
 };
 
+type SalesNoteRow = {
+  title: string;
+  variant: string;
+  qty: number;
+  unitPrice: number;
+  lineTotal: number;
+};
+
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
@@ -68,6 +76,10 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   plannedPackagesInput = signal(1);
   partialReason = signal("");
   partialReasonError = signal<string | null>(null);
+  bulkNoteMode = signal(false);
+  bulkNotesLoading = signal(false);
+  bulkSelected = signal<Record<string, boolean>>({});
+  bulkNotesMessage = signal<string | null>(null);
   private visiblePillsByOrder = signal<Record<string, number>>({});
   private pillsResizeObserver: ResizeObserver | null = null;
   private pillMeasureEl: HTMLSpanElement | null = null;
@@ -142,6 +154,9 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     }
     return map;
   });
+  canBulkCreateNotes = computed(() => this.intentFilter() === "listos_ruta");
+  bulkReadyOrders = computed(() => this.filtered().filter((order) => this.isReadyForRoute(order)));
+  bulkSelectedCount = computed(() => this.bulkReadyOrders().filter((order) => this.bulkSelected()[order.order_id]).length);
 
   routeOptions = computed(() => [{ id: "todos", name: "Todas las rutas" }, ...this.routes.routes().map((r) => ({ id: r.route_id, name: r.name }))]);
   customerOptions = computed(() => this.customers.getActive());
@@ -249,6 +264,10 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
 
   setIntentFilter(id: IntentFilter) {
     this.intentFilter.set(id);
+    this.bulkNotesMessage.set(null);
+    if (id !== "listos_ruta") {
+      this.cancelBulkNoteMode();
+    }
   }
 
   orderMeta(order: Order): OrderCardMeta {
@@ -717,6 +736,104 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     return this.routes.getById(routeId)?.name || routeId;
   }
 
+  startBulkNoteMode() {
+    if (!this.canBulkCreateNotes()) {
+      this.bulkNotesMessage.set("Disponible solo en la vista Listos para ruta.");
+      return;
+    }
+    if (this.bulkReadyOrders().length === 0) {
+      this.bulkNotesMessage.set("No hay pedidos listos para ruta para generar nota.");
+      return;
+    }
+    this.bulkSelected.set({});
+    this.bulkNoteMode.set(true);
+    this.bulkNotesMessage.set("Selecciona los pedidos para generar notas.");
+  }
+
+  cancelBulkNoteMode() {
+    this.bulkNoteMode.set(false);
+    this.bulkSelected.set({});
+  }
+
+  onOrderCardActivate(order: Order, event?: Event) {
+    if (event instanceof KeyboardEvent && (event.key === " " || event.key === "Spacebar" || event.key === "Enter")) {
+      event.preventDefault();
+    }
+    if (this.bulkNoteMode()) {
+      event?.preventDefault();
+      event?.stopPropagation();
+      if (!this.canSelectForBulkNote(order)) return;
+      this.toggleOrderForBulkNote(order.order_id, !this.isSelectedForBulkNote(order.order_id));
+      return;
+    }
+    this.open(order.order_id);
+  }
+
+  toggleOrderForBulkNote(orderId: string, checked: boolean) {
+    this.bulkSelected.update((current) => ({
+      ...current,
+      [orderId]: checked,
+    }));
+  }
+
+  isSelectedForBulkNote(orderId: string): boolean {
+    return !!this.bulkSelected()[orderId];
+  }
+
+  canSelectForBulkNote(order: Order): boolean {
+    return this.canBulkCreateNotes() && this.isReadyForRoute(order);
+  }
+
+  async generateBulkNotes() {
+    if (!this.canBulkCreateNotes()) {
+      this.bulkNotesMessage.set("Filtra primero en Listos para ruta.");
+      return;
+    }
+    const selectedOrders = this.bulkReadyOrders().filter((order) => this.bulkSelected()[order.order_id]);
+    if (selectedOrders.length === 0) {
+      this.bulkNotesMessage.set("Selecciona al menos un pedido.");
+      return;
+    }
+    if (this.bulkNotesLoading()) return;
+
+    this.bulkNotesLoading.set(true);
+    this.bulkNotesMessage.set(null);
+    let generated = 0;
+    let failed = 0;
+
+    for (const order of selectedOrders) {
+      try {
+        const rows = this.salesNoteRows(order);
+        if (rows.length === 0) {
+          failed += 1;
+          continue;
+        }
+        const blob = await this.buildSalesNoteImage(order, rows);
+        this.downloadBlob(blob, `nota-${order.order_id}-${Date.now()}.png`);
+        generated += 1;
+        await this.orders.logEvent(order.order_id, "SALES_NOTE_GENERATED", "Nota de venta generada (lote)", {
+          rows: rows.length,
+          total: rows.reduce((sum, row) => sum + row.lineTotal, 0),
+          mode: "bulk",
+        }).catch(() => null);
+        await this.sleep(120);
+      } catch (error) {
+        failed += 1;
+        console.warn("[pedidos] No se pudo generar nota en lote", { orderId: order.order_id, error });
+      }
+    }
+
+    this.bulkNotesLoading.set(false);
+    this.cancelBulkNoteMode();
+    if (failed === 0) {
+      this.bulkNotesMessage.set(`Se generaron ${generated} nota(s).`);
+    } else if (generated > 0) {
+      this.bulkNotesMessage.set(`Se generaron ${generated} nota(s). ${failed} pedido(s) no se pudieron procesar.`);
+    } else {
+      this.bulkNotesMessage.set("No se pudo generar ninguna nota con la selección actual.");
+    }
+  }
+
   open(orderId: string) {
     this.router.navigate(["/main/pedidos", orderId]);
   }
@@ -738,6 +855,198 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
 
   newDraft() {
     this.createOrder();
+  }
+
+  private itemConfirmedQty(item: Order["items"][number]): number {
+    if (item.confirmation_state !== "confirmed") return 0;
+    const fallback = Math.max(0, Number(item.quantity || 0));
+    const raw = Number(item.confirmed_qty);
+    if (!Number.isFinite(raw)) return fallback;
+    return Math.max(0, Math.min(fallback, Math.trunc(raw)));
+  }
+
+  private salesNoteRows(order: Order): SalesNoteRow[] {
+    return (order.items || [])
+      .filter((item) => !["cancelado", "devuelto"].includes(item.state))
+      .map((item) => {
+        const qty = this.itemConfirmedQty(item);
+        const unitPrice = item.price_clienta ?? item.price_public ?? 0;
+        return {
+          title: item.title || "Producto",
+          variant: `${item.variant || "Unica"} · ${item.color || "N/A"}`,
+          qty,
+          unitPrice,
+          lineTotal: unitPrice * qty,
+        };
+      })
+      .filter((row) => row.qty > 0);
+  }
+
+  private async buildSalesNoteImage(order: Order, rows: SalesNoteRow[]): Promise<Blob> {
+    const width = 1080;
+    const cardX = 40;
+    const cardY = 34;
+    const cardW = width - (cardX * 2);
+    const rowHeight = 84;
+    const rowGap = 10;
+    const rowsHeight = rows.length > 0 ? (rows.length * rowHeight) + ((rows.length - 1) * rowGap) : 0;
+    const cardH = 340 + rowsHeight + 126;
+    const height = (cardY * 2) + cardH;
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("No se pudo crear el lienzo para la nota.");
+
+    const customer = this.customerName(order.customer_id);
+    const dateText = new Date().toLocaleDateString("es-MX", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    const total = rows.reduce((sum, row) => sum + row.lineTotal, 0);
+
+    ctx.fillStyle = "#f2f5fa";
+    ctx.fillRect(0, 0, width, height);
+    this.drawRoundedRect(ctx, cardX, cardY, cardW, cardH, 32, "#ffffff");
+    ctx.fill();
+
+    const titleTop = cardY + 52;
+    ctx.fillStyle = "#0f172a";
+    ctx.font = "700 50px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    ctx.fillText("Nota de venta", cardX + 44, titleTop);
+
+    ctx.fillStyle = "#5f6f85";
+    ctx.font = "500 26px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    ctx.fillText(customer, cardX + 44, titleTop + 46);
+    ctx.fillText(dateText, cardX + 44, titleTop + 82);
+
+    ctx.textAlign = "right";
+    ctx.fillStyle = "#4f627d";
+    ctx.font = "700 30px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    ctx.fillText(`Pedido ${order.order_id}`, cardX + cardW - 44, titleTop + 4);
+    ctx.textAlign = "left";
+
+    const headerTop = cardY + 150;
+    this.drawRoundedRect(ctx, cardX + 28, headerTop, cardW - 56, 56, 16, "#f5f8fd");
+    ctx.fill();
+
+    const qtyX = cardX + cardW - 360;
+    const unitX = cardX + cardW - 220;
+    const totalX = cardX + cardW - 56;
+    ctx.fillStyle = "#4f627d";
+    ctx.font = "600 24px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    ctx.fillText("Producto", cardX + 56, headerTop + 36);
+    ctx.textAlign = "right";
+    ctx.fillText("Cant", qtyX, headerTop + 36);
+    ctx.fillText("Unit", unitX, headerTop + 36);
+    ctx.fillText("Total", totalX, headerTop + 36);
+    ctx.textAlign = "left";
+
+    let y = headerTop + 72;
+    for (const row of rows) {
+      this.drawRoundedRect(ctx, cardX + 28, y, cardW - 56, rowHeight, 14, "#ffffff");
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+      this.drawRoundedRect(ctx, cardX + 28, y, cardW - 56, rowHeight, 14, "#ffffff");
+      ctx.strokeStyle = "#dce6f3";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.fillStyle = "#0f172a";
+      ctx.font = "600 26px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+      ctx.fillText(this.truncateForNote(ctx, row.title, 480, "600 26px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"), cardX + 56, y + 36);
+
+      ctx.fillStyle = "#64748b";
+      ctx.font = "500 21px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+      ctx.fillText(this.truncateForNote(ctx, row.variant, 480, "500 21px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"), cardX + 56, y + 66);
+
+      ctx.fillStyle = "#1f2f46";
+      ctx.font = "600 25px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+      ctx.textAlign = "right";
+      ctx.fillText(String(row.qty), qtyX, y + 50);
+      ctx.fillText(this.formatCurrency(row.unitPrice), unitX, y + 50);
+      ctx.fillText(this.formatCurrency(row.lineTotal), totalX, y + 50);
+      ctx.textAlign = "left";
+
+      y += rowHeight + rowGap;
+    }
+
+    const footerTop = headerTop + 72 + rowsHeight + 20;
+    this.drawRoundedRect(ctx, cardX + 28, footerTop, cardW - 56, 90, 16, "#f6f9ff");
+    ctx.fillStyle = "#f6f9ff";
+    ctx.fill();
+    ctx.fillStyle = "#5f6f85";
+    ctx.font = "600 29px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    ctx.fillText("Total", cardX + 56, footerTop + 55);
+    ctx.fillStyle = "#0f172a";
+    ctx.font = "700 42px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    ctx.textAlign = "right";
+    ctx.fillText(this.formatCurrency(total), totalX, footerTop + 58);
+    ctx.textAlign = "left";
+
+    return new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          reject(new Error("No se pudo exportar la nota."));
+          return;
+        }
+        resolve(blob);
+      }, "image/png");
+    });
+  }
+
+  private drawRoundedRect(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    radius: number,
+    fillStyle: string,
+  ) {
+    const r = Math.max(0, Math.min(radius, width / 2, height / 2));
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + width, y, x + width, y + height, r);
+    ctx.arcTo(x + width, y + height, x, y + height, r);
+    ctx.arcTo(x, y + height, x, y, r);
+    ctx.arcTo(x, y, x + width, y, r);
+    ctx.closePath();
+    ctx.fillStyle = fillStyle;
+  }
+
+  private truncateForNote(ctx: CanvasRenderingContext2D, value: string, maxWidth: number, font: string): string {
+    ctx.font = font;
+    if (ctx.measureText(value).width <= maxWidth) return value;
+    let text = value;
+    while (text.length > 0 && ctx.measureText(`${text}…`).width > maxWidth) {
+      text = text.slice(0, -1);
+    }
+    return text ? `${text}…` : "…";
+  }
+
+  private formatCurrency(value: number): string {
+    return new Intl.NumberFormat("es-MX", {
+      style: "currency",
+      currency: "MXN",
+      maximumFractionDigits: 2,
+    }).format(Number(value || 0));
+  }
+
+  private downloadBlob(blob: Blob, fileName: string) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  }
+
+  private async sleep(ms: number): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, Math.max(0, Math.trunc(ms))));
   }
 
   private observePillRows() {

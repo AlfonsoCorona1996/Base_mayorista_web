@@ -115,6 +115,34 @@
     }
   </div>
 
+  @if (canBulkCreateNotes()) {
+    <section class="bulk-note-bar surface-card">
+      @if (!bulkNoteMode()) {
+        <button type="button" class="btn primary with-icon" (click)="startBulkNoteMode()" [disabled]="bulkReadyOrders().length === 0">
+          <span class="material-symbols-rounded" aria-hidden="true">post_add</span>
+          Crear nota
+        </button>
+        <p class="muted">Disponible solo para pedidos en "Listos para ruta".</p>
+      } @else {
+        <div class="bulk-note-actions">
+          <button type="button" class="btn primary with-icon" (click)="generateBulkNotes()" [disabled]="bulkNotesLoading() || bulkSelectedCount() === 0">
+            <span class="material-symbols-rounded" aria-hidden="true">receipt_long</span>
+            {{ bulkNotesLoading() ? "Generando..." : "Generar notas (" + bulkSelectedCount() + ")" }}
+          </button>
+          <button type="button" class="btn ghost" (click)="cancelBulkNoteMode()" [disabled]="bulkNotesLoading()">Cancelar</button>
+        </div>
+        <p class="muted">Selecciona en cada card los pedidos que quieres incluir.</p>
+      }
+    </section>
+  }
+
+  @if (bulkNotesMessage()) {
+    <div class="alert" role="status">
+      <span class="material-symbols-rounded" aria-hidden="true">info</span>
+      <span>{{ bulkNotesMessage() }}</span>
+    </div>
+  }
+
   @if (loading()) {
     <article class="empty-card surface-card">
       <p>Cargando pedidos...</p>
@@ -134,13 +162,24 @@
         @if (orderMeta(order); as meta) {
           <article
             class="order-card surface-card"
-            role="link"
+            [class.order-card--bulk]="bulkNoteMode()"
+            [attr.role]="bulkNoteMode() ? 'button' : 'link'"
             tabindex="0"
             [attr.aria-label]="meta.ariaLabel"
-            (click)="open(order.order_id)"
-            (keydown.enter)="open(order.order_id)"
-            (keydown.space)="open(order.order_id); $event.preventDefault()"
+            (click)="onOrderCardActivate(order, $event)"
+            (keydown.enter)="onOrderCardActivate(order, $event)"
+            (keydown.space)="onOrderCardActivate(order, $event)"
           >
+            @if (bulkNoteMode() && canSelectForBulkNote(order)) {
+              <label class="order-select" (click)="$event.stopPropagation()">
+                <input
+                  type="checkbox"
+                  [checked]="isSelectedForBulkNote(order.order_id)"
+                  (change)="toggleOrderForBulkNote(order.order_id, $any($event.target).checked)"
+                />
+                <span>Seleccionar</span>
+              </label>
+            }
             <div class="order-head">
               <div class="title-wrap">
                 <h3>{{ meta.customerName }}</h3>

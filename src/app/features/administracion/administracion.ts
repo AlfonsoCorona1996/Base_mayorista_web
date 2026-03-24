@@ -24,6 +24,7 @@ type BucketOrderRow = {
   routeId: string;
   customerId: string;
   status: OrderStatus;
+  createdAt: string | null;
   amountClienta: number;
   cost: number;
   margin: number;
@@ -76,12 +77,28 @@ type DrilldownRow = {
   primary: string;
   secondary: string;
   status: string;
+  createdAt: string | null;
   amountClienta: number;
   cost: number;
   margin: number;
   paid: number;
   balance: number;
   orderId: string | null;
+};
+
+type DrilldownColumn = "primary" | "status" | "createdAt" | "amountClienta" | "cost" | "margin" | "paid";
+type DrilldownFilterColumn = Exclude<DrilldownColumn, "createdAt">;
+
+type DrilldownSortState = {
+  column: DrilldownColumn;
+  direction: "asc" | "desc";
+};
+
+type DrilldownFilterState = Record<DrilldownFilterColumn, string>;
+
+type DrilldownDateRange = {
+  start: string;
+  end: string;
 };
 
 type DrilldownState = {
@@ -241,6 +258,21 @@ const INVESTED_NOT_DELIVERED_STATUSES = new Set<OrderStatus>([
 ]);
 const COURIER_COLLECTION_STATUSES = new Set<OrderStatus>(["in_transit", "en_ruta", "assigned_to_run"]);
 
+const DRILLDOWN_DEFAULT_SORT: DrilldownSortState = {
+  column: "amountClienta",
+  direction: "desc",
+};
+
+const DRILLDOWN_COLUMN_DEFAULT_DIRECTION: Record<DrilldownColumn, "asc" | "desc"> = {
+  primary: "asc",
+  status: "asc",
+  createdAt: "desc",
+  amountClienta: "desc",
+  cost: "desc",
+  margin: "desc",
+  paid: "desc",
+};
+
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
@@ -264,6 +296,12 @@ export default class AdministracionPage {
   error = signal<string | null>(null);
   success = signal<string | null>(null);
   drilldown = signal<DrilldownState | null>(null);
+  drilldownSort = signal<DrilldownSortState>({ ...DRILLDOWN_DEFAULT_SORT });
+  drilldownFilters = signal<DrilldownFilterState>(this.createEmptyDrilldownFilters());
+  drilldownDateRange = signal<DrilldownDateRange>({
+    start: "",
+    end: "",
+  });
 
   routeScope = signal("general");
   projectionDays = signal(30);
@@ -345,6 +383,16 @@ export default class AdministracionPage {
   );
 
   routeRows = computed(() => this.buildRouteRows(this.summary().orderBucketRows));
+  drilldownRows = computed(() => {
+    const detail = this.drilldown();
+    if (!detail) return [];
+    const filters = this.drilldownFilters();
+    const dateRange = this.drilldownDateRange();
+    const sort = this.drilldownSort();
+    return detail.rows
+      .filter((row) => this.matchesDrilldownFilters(row, filters, dateRange))
+      .sort((a, b) => this.compareDrilldownRows(a, b, sort));
+  });
 
   constructor() {
     this.restoreReturnContextFromQuery();
@@ -626,6 +674,7 @@ export default class AdministracionPage {
   }
 
   openBucketDrilldown(bucket: MoneyBucket) {
+    this.resetDrilldownTableState();
     const rows = this.buildDrilldownRowsFromBucket(bucket);
     this.drilldown.set({
       id: `bucket:${bucket.id}`,
@@ -641,6 +690,7 @@ export default class AdministracionPage {
   }
 
   openRouteDrilldown(row: SummaryRow) {
+    this.resetDrilldownTableState();
     const rows: DrilldownRow[] = row.detailRows
       .map((entry) => ({
         rowId: `route:${row.routeId}:${entry.orderId}`,
@@ -648,6 +698,7 @@ export default class AdministracionPage {
         primary: this.customerName(entry.customerId),
         secondary: this.routeName(entry.routeId),
         status: this.statusLabel(entry.status),
+        createdAt: entry.createdAt,
         amountClienta: this.toSafeNumber(entry.amountClienta),
         cost: this.toSafeNumber(entry.cost),
         margin: this.toSafeNumber(entry.margin),
@@ -678,6 +729,59 @@ export default class AdministracionPage {
 
   closeDrilldown() {
     this.drilldown.set(null);
+  }
+
+  setDrilldownFilter(column: DrilldownFilterColumn, value: unknown) {
+    const nextValue = String(value || "");
+    this.drilldownFilters.update((current) => ({
+      ...current,
+      [column]: nextValue,
+    }));
+  }
+
+  setDrilldownDateStart(value: unknown) {
+    const next = this.normalizeDateInput(value, "");
+    this.drilldownDateRange.update((current) => ({
+      ...current,
+      start: next,
+    }));
+  }
+
+  setDrilldownDateEnd(value: unknown) {
+    const next = this.normalizeDateInput(value, "");
+    this.drilldownDateRange.update((current) => ({
+      ...current,
+      end: next,
+    }));
+  }
+
+  clearDrilldownFilters() {
+    this.drilldownFilters.set(this.createEmptyDrilldownFilters());
+    this.drilldownDateRange.set({
+      start: "",
+      end: "",
+    });
+  }
+
+  toggleDrilldownSort(column: DrilldownColumn) {
+    this.drilldownSort.update((current) => {
+      if (current.column === column) {
+        return {
+          column,
+          direction: current.direction === "asc" ? "desc" : "asc",
+        };
+      }
+      return {
+        column,
+        direction: DRILLDOWN_COLUMN_DEFAULT_DIRECTION[column],
+      };
+    });
+  }
+
+  drilldownSortArrow(column: DrilldownColumn): string {
+    const current = this.drilldownSort();
+    if (current.column !== column) return "\u2195";
+    return current.direction === "asc" ? "\u2191" : "\u2193";
   }
 
   openOrder(orderId: string) {
@@ -910,6 +1014,7 @@ export default class AdministracionPage {
           routeId: snapshot.routeId,
           customerId: snapshot.customerId,
           status: snapshot.status,
+          createdAt: this.toIsoDate(order.created_at),
           amountClienta: allocation.amountClienta,
           cost: allocation.cost,
           margin: allocation.margin,
@@ -1113,6 +1218,7 @@ export default class AdministracionPage {
       primary: this.customerName(row.customerId),
       secondary: this.routeName(row.routeId),
       status: this.statusLabel(row.status),
+      createdAt: row.createdAt,
       amountClienta: this.toSafeNumber(row.amountClienta),
       cost: this.toSafeNumber(row.cost),
       margin: this.toSafeNumber(row.margin),
@@ -1127,6 +1233,7 @@ export default class AdministracionPage {
       primary: row.title,
       secondary: `${row.quantity} pzas | ${row.idleDays} dias sin salida`,
       status: "Inventario estancado",
+      createdAt: null,
       amountClienta: this.toSafeNumber(row.potentialSale),
       cost: this.toSafeNumber(row.cost),
       margin: this.toSafeNumber(row.potentialMargin),
@@ -1438,6 +1545,143 @@ export default class AdministracionPage {
     return Number(n.toFixed(2));
   }
 
+  private createEmptyDrilldownFilters(): DrilldownFilterState {
+    return {
+      primary: "",
+      status: "",
+      amountClienta: "",
+      cost: "",
+      margin: "",
+      paid: "",
+    };
+  }
+
+  private resetDrilldownTableState() {
+    this.drilldownSort.set({ ...DRILLDOWN_DEFAULT_SORT });
+    this.drilldownFilters.set(this.createEmptyDrilldownFilters());
+    this.drilldownDateRange.set({
+      start: "",
+      end: "",
+    });
+  }
+
+  private matchesDrilldownFilters(row: DrilldownRow, filters: DrilldownFilterState, dateRange: DrilldownDateRange): boolean {
+    if (!this.textMatches(`${row.primary} ${row.secondary}`, filters.primary)) return false;
+    if (!this.textMatches(row.status, filters.status)) return false;
+    if (!this.matchesDateRange(row.createdAt, dateRange)) return false;
+    if (!this.matchesNumericFilter(row.amountClienta, filters.amountClienta)) return false;
+    if (!this.matchesNumericFilter(row.cost, filters.cost)) return false;
+    if (!this.matchesNumericFilter(row.margin, filters.margin)) return false;
+    if (!this.matchesNumericFilter(row.paid, filters.paid)) return false;
+    return true;
+  }
+
+  private matchesDateRange(value: string | null, range: DrilldownDateRange): boolean {
+    const start = this.normalizeDateInput(range.start, "");
+    const end = this.normalizeDateInput(range.end, "");
+    if (!start && !end) return true;
+
+    const dateKey = this.toLocalDateKey(value);
+    if (!dateKey) return false;
+
+    if (start && end) {
+      const min = start <= end ? start : end;
+      const max = start <= end ? end : start;
+      return dateKey >= min && dateKey <= max;
+    }
+    if (start) return dateKey >= start;
+    return dateKey <= end;
+  }
+
+  private textMatches(value: unknown, filterRaw: string): boolean {
+    const filter = this.normalizeText(filterRaw);
+    if (!filter) return true;
+    return this.normalizeText(value).includes(filter);
+  }
+
+  private matchesNumericFilter(value: number, filterRaw: string): boolean {
+    const filter = String(filterRaw || "").trim();
+    if (!filter) return true;
+    const normalized = filter.replace(/\s+/g, "").replace(/\$/g, "").replace(/,/g, "");
+    const baseValue = this.toSafeNumber(value);
+
+    const operatorMatch = normalized.match(/^(<=|>=|=|<|>)(-?\d+(?:\.\d+)?)$/);
+    if (operatorMatch) {
+      const numeric = Number(operatorMatch[2]);
+      if (!Number.isFinite(numeric)) return false;
+      if (operatorMatch[1] === "<") return baseValue < numeric;
+      if (operatorMatch[1] === "<=") return baseValue <= numeric;
+      if (operatorMatch[1] === ">") return baseValue > numeric;
+      if (operatorMatch[1] === ">=") return baseValue >= numeric;
+      return baseValue === numeric;
+    }
+
+    const dottedRange = normalized.match(/^(-?\d+(?:\.\d+)?)\.\.(-?\d+(?:\.\d+)?)$/);
+    const dashedRange = normalized.match(/^(-?\d+(?:\.\d+)?)-(-?\d+(?:\.\d+)?)$/);
+    const rangeMatch = dottedRange || dashedRange;
+    if (rangeMatch) {
+      const start = Number(rangeMatch[1]);
+      const end = Number(rangeMatch[2]);
+      if (!Number.isFinite(start) || !Number.isFinite(end)) return false;
+      const min = Math.min(start, end);
+      const max = Math.max(start, end);
+      return baseValue >= min && baseValue <= max;
+    }
+
+    const valueAsRaw = String(baseValue);
+    const valueAsCurrencyDigits = this.formatCurrency(baseValue).replace(/[^\d.-]/g, "");
+    return valueAsRaw.includes(normalized) || valueAsCurrencyDigits.includes(normalized);
+  }
+
+  private compareDrilldownRows(a: DrilldownRow, b: DrilldownRow, sort: DrilldownSortState): number {
+    let result = 0;
+    if (sort.column === "primary") {
+      result = this.compareText(a.primary, b.primary) || this.compareText(a.secondary, b.secondary);
+    } else if (sort.column === "status") {
+      result = this.compareText(a.status, b.status);
+    } else if (sort.column === "createdAt") {
+      result = this.toDateStamp(a.createdAt) - this.toDateStamp(b.createdAt);
+    } else if (sort.column === "amountClienta") {
+      result = a.amountClienta - b.amountClienta;
+    } else if (sort.column === "cost") {
+      result = a.cost - b.cost;
+    } else if (sort.column === "margin") {
+      result = a.margin - b.margin;
+    } else if (sort.column === "paid") {
+      result = a.paid - b.paid;
+    }
+    if (result === 0) {
+      result = this.compareText(a.primary, b.primary);
+    }
+    return sort.direction === "asc" ? result : -result;
+  }
+
+  private compareText(a: unknown, b: unknown): number {
+    return this.normalizeText(a).localeCompare(this.normalizeText(b), "es-MX");
+  }
+
+  private normalizeText(value: unknown): string {
+    return String(value || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim();
+  }
+
+  private toDateStamp(value: unknown): number {
+    const date = this.toDate(value);
+    return date ? date.getTime() : 0;
+  }
+
+  private toLocalDateKey(value: unknown): string | null {
+    const date = this.toDate(value);
+    if (!date) return null;
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
   private toPositiveInt(value: unknown, fallback: number): number {
     const n = typeof value === "number" ? value : Number(value || fallback);
     if (!Number.isFinite(n)) return fallback;
@@ -1457,3 +1701,4 @@ export default class AdministracionPage {
     return date.toISOString().slice(0, 10);
   }
 }
+

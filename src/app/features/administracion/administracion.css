@@ -553,12 +553,25 @@ code {
 }
 
 .detail-head-row,
+.detail-filter-row,
 .detail-row {
   display: grid;
-  grid-template-columns: 1.6fr 1.3fr repeat(4, minmax(0, 1fr));
+  grid-template-columns: 1.55fr 1.2fr 1fr repeat(4, minmax(0, 1fr));
   gap: 8px;
   align-items: center;
   text-align: center;
+}
+
+.detail-table-tools {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.detail-table-tools .muted {
+  margin: 0;
 }
 
 .detail-head-row {
@@ -567,6 +580,91 @@ code {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-weight: 700;
+}
+
+.detail-head-cell {
+  min-width: 0;
+  border: 1px solid rgba(20, 58, 98, 0.16);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.76);
+  color: #446784;
+  font: inherit;
+  padding: 8px 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+}
+
+.detail-sort-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: border-color 140ms ease, box-shadow 140ms ease, color 140ms ease;
+}
+
+.detail-sort-btn:hover {
+  border-color: rgba(12, 102, 244, 0.35);
+  color: #15426a;
+}
+
+.detail-sort-btn:focus-visible {
+  outline: none;
+  border-color: rgba(12, 102, 244, 0.48);
+  box-shadow: 0 0 0 3px rgba(12, 102, 244, 0.16);
+}
+
+.detail-sort-btn small {
+  display: inline-block;
+  min-width: 20px;
+  font-size: 0.9rem;
+  letter-spacing: 0.08em;
+  line-height: 1;
+}
+
+.detail-sort-btn .sort-arrow {
+  color: #1a4d7a;
+  font-weight: 700;
+}
+
+.detail-filter-row {
+  text-align: left;
+}
+
+.detail-filter-input {
+  width: 100%;
+  border: 1px solid rgba(19, 60, 99, 0.2);
+  border-radius: 10px;
+  padding: 7px 8px;
+  font: inherit;
+  color: #173a5c;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.detail-filter-input::placeholder {
+  color: #6b86a0;
+}
+
+.detail-filter-input:focus {
+  outline: none;
+  border-color: rgba(12, 102, 244, 0.45);
+  box-shadow: 0 0 0 3px rgba(12, 102, 244, 0.14);
+}
+
+.detail-date-filter {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.detail-date-filter label {
+  display: grid;
+  gap: 4px;
+  font-size: 0.72rem;
+  color: #5d7c97;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .detail-row {
@@ -627,7 +725,8 @@ code {
   .metric-list-header,
   .route-table-head,
   .movement-head,
-  .detail-head-row {
+  .detail-head-row,
+  .detail-filter-row {
     display: none;
   }
 

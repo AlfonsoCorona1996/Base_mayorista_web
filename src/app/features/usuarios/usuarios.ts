@@ -796,6 +796,7 @@ export default class UsuariosPage {
       clientas: this.resolveSectionValue(roleId, sectionOverrides, "sections.clientes"),
       rutas: this.resolveSectionValue(roleId, sectionOverrides, "sections.rutas"),
       localidades: this.resolveSectionValue(roleId, sectionOverrides, "sections.localidades"),
+      salidas: this.resolveSectionValue(roleId, sectionOverrides, "sections.salidas"),
       usuarios: roleId === "super_admin" ? this.resolveSectionValue(roleId, sectionOverrides, "sections.usuarios") : false,
     };
   }
