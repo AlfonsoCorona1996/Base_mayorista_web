@@ -273,8 +273,9 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   expandedClosedBoxes = signal<Record<string, boolean>>({});
   supplierEta = signal("");
   addItemModalOpen = signal(false);
-  addItemMode = signal<"add" | "convert">("add");
+  addItemMode = signal<"add" | "convert" | "edit">("add");
   convertTargetItemId = signal<string | null>(null);
+  editTargetItemId = signal<string | null>(null);
   newItemSupplierId = signal<string | null>(null);
   newItemProductId = signal<string | null>(null);
   selectedPreviewHasColorImage = signal(true);
@@ -326,8 +327,14 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   selectedCatalogDoc = signal<NormalizedListingDoc | null>(null);
   readonly isManualSource = computed(() => this.newItemSource() === "manual");
   readonly isConvertMode = computed(() => this.addItemMode() === "convert");
+  readonly isEditMode = computed(() => this.addItemMode() === "edit");
   readonly convertTargetItem = computed(() => {
     const id = this.convertTargetItemId();
+    if (!id) return null;
+    return (this.order()?.items || []).find((item) => item.item_id === id) || null;
+  });
+  readonly editTargetItem = computed(() => {
+    const id = this.editTargetItemId();
     if (!id) return null;
     return (this.order()?.items || []).find((item) => item.item_id === id) || null;
   });
@@ -2949,6 +2956,36 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.addItemModalOpen.set(true);
   }
 
+  openEditItemModal(item: OrderItem) {
+    const currentOrder = this.order();
+    if (!currentOrder || !this.canEditItems(currentOrder)) return;
+    this.closeProductMenus();
+    this.resetAddItemForm();
+    this.addItemMode.set("edit");
+    this.editTargetItemId.set(item.item_id);
+    this.newItemSource.set(item.source);
+    this.newItemTitle.set(item.title || "");
+    this.newItemVariant.set(item.variant || "");
+    this.newItemColor.set(item.color || "");
+    this.newItemQty.set(Math.max(1, this.itemQuantity(item)));
+    this.newItemPricePublic.set(item.price_public ?? null);
+    this.newItemPriceClienta.set(item.price_clienta ?? null);
+    this.newItemPriceCost.set(item.price_cost ?? null);
+    this.newItemInventoryId.set(item.inventory_id || null);
+    this.newItemSupplierId.set(item.supplier_id || null);
+    this.newItemProductId.set(item.product_id || null);
+    this.updatePriceDraftFromSignals();
+    this.selectedPreviewHasColorImage.set(Boolean(item.image_url));
+    this.selectedPreview.set({
+      title: item.title || "Producto",
+      variant: item.variant || "",
+      color: item.color || "",
+      image: item.image_url || null,
+      source: item.source === "inventario" ? "Inventario" : item.source === "catalogo" ? "Catalogo" : "Manual",
+    });
+    this.addItemModalOpen.set(true);
+  }
+
   closeAddItemModal() {
     this.resetAddItemForm();
     this.addItemModalOpen.set(false);
@@ -2957,6 +2994,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   private resetAddItemForm() {
     this.addItemMode.set("add");
     this.convertTargetItemId.set(null);
+    this.editTargetItemId.set(null);
     this.newItemSource.set("catalogo");
     this.newItemTitle.set("");
     this.newItemVariant.set("");
@@ -2983,6 +3021,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   onNewItemSourceChange(source: string) {
+    if (this.isEditMode()) return;
     if (this.isConvertMode() && source === "manual") return;
     const normalized = source === "inventario" || source === "manual" ? source : "catalogo";
     if (normalized === this.newItemSource()) return;
@@ -3016,11 +3055,16 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   canSubmitNewItem(): boolean {
+    if (this.isEditMode()) return !!this.editTargetItem();
     if (this.isConvertMode()) return this.newItemSource() !== "manual" && !!this.selectedPreview();
     return this.isManualSource() || !!this.selectedPreview();
   }
 
   async submitItemForm(order: Order | null) {
+    if (this.isEditMode()) {
+      await this.updateExistingItem(order);
+      return;
+    }
     if (this.isConvertMode()) {
       await this.convertManualItem(order);
       return;
@@ -5082,6 +5126,10 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     await this.removeItem(order, item);
   }
 
+  editItemFromMenu(item: OrderItem) {
+    this.openEditItemModal(item);
+  }
+
   scrollToSection(sectionId: "incidencias" | "productos" | "paquetes" | "bitacora") {
     document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
@@ -5350,6 +5398,106 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.addItemModalOpen.set(false);
     await this.refreshEvents();
     this.showActionToast("Item convertido.");
+  }
+
+  async updateExistingItem(order: Order | null) {
+    if (!order) return;
+    if (!this.canEditItems(order)) return;
+    const targetId = this.editTargetItemId();
+    if (!targetId) return;
+    const live = this.orders.getById(order.order_id) || order;
+    const target = (live.items || []).find((item) => item.item_id === targetId) || null;
+    if (!target) {
+      this.error.set("No encontramos el item a editar.");
+      return;
+    }
+
+    const title = this.newItemTitle().trim();
+    if (!title) {
+      this.error.set("Escribe el nombre del producto.");
+      return;
+    }
+    if (this.isClientaBelowCosto()) {
+      await this.showClientaBelowCostoPopup();
+      return;
+    }
+
+    const nextQty = Math.max(1, this.newItemQty());
+    const packedQty = this.itemPackedQty(live, target.item_id);
+    if (nextQty < packedQty) {
+      this.error.set(`No puedes dejar ${nextQty} pieza(s): hay ${packedQty} ya empacada(s).`);
+      return;
+    }
+
+    const nextState = target.confirmation_state || "pending";
+    const nextConfirmedQty =
+      nextState === "confirmed"
+        ? Math.max(0, Math.min(nextQty, Number(target.confirmed_qty ?? nextQty)))
+        : nextState === "out_of_stock"
+          ? 0
+          : null;
+
+    const updated: OrderItem = {
+      ...target,
+      title,
+      variant: this.newItemVariant().trim() || null,
+      color: this.newItemColor().trim() || null,
+      quantity: nextQty,
+      price_public: this.newItemPricePublic(),
+      price_clienta: this.newItemPriceClienta(),
+      price_cost: this.newItemPriceCost(),
+      discount_pct: this.newItemDiscount(),
+      confirmed_qty: nextConfirmedQty,
+      image_url: this.selectedPreview()?.image || target.image_url || null,
+    };
+
+    const nextItems = (live.items || []).map((item) => (item.item_id === target.item_id ? updated : item));
+    await this.orders.updateItems(order.order_id, nextItems);
+
+    if (target.source === "inventario" && target.inventory_id) {
+      const delta = nextQty - this.itemQuantity(target);
+      if (delta > 0) {
+        const reserveKey = this.buildInventoryMutationKey("reserve", order.order_id, target.item_id, target.inventory_id, delta);
+        await this.inventory.reserveStock({
+          sku: target.inventory_id,
+          qty: delta,
+          orderId: order.order_id,
+          orderItemId: target.item_id,
+          idempotencyKey: reserveKey,
+        });
+        await this.orders.logEvent(order.order_id, "INVENTORY_RESERVED", `Reserva inventario: ${updated.title}`, {
+          inventoryId: target.inventory_id,
+          qty: delta,
+          idempotencyKey: reserveKey,
+        });
+      } else if (delta < 0) {
+        const releaseQty = Math.abs(delta);
+        const releaseKey = this.buildInventoryMutationKey("release", order.order_id, target.item_id, target.inventory_id, releaseQty);
+        await this.inventory.releaseReservation({
+          sku: target.inventory_id,
+          qty: releaseQty,
+          orderId: order.order_id,
+          orderItemId: target.item_id,
+          idempotencyKey: releaseKey,
+        });
+        await this.orders.logEvent(order.order_id, "INVENTORY_RESERVATION_RELEASED", `Liberación inventario: ${updated.title}`, {
+          inventoryId: target.inventory_id,
+          qty: releaseQty,
+          idempotencyKey: releaseKey,
+        });
+      }
+    }
+
+    await this.orders.logEvent(order.order_id, "ITEM_UPDATED", `Item editado: ${updated.title}`, {
+      itemId: target.item_id,
+      prevQty: this.itemQuantity(target),
+      nextQty,
+    });
+
+    this.resetAddItemForm();
+    this.addItemModalOpen.set(false);
+    await this.refreshEvents();
+    this.showActionToast("Producto actualizado.");
   }
 
   private buildOrderItemFromForm(

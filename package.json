@@ -8,7 +8,10 @@
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "firebase:migrate-finance:dry": "tsx scripts/migrate-finance-bootstrap.ts",
-    "firebase:migrate-finance:apply": "tsx scripts/migrate-finance-bootstrap.ts --apply"
+    "firebase:migrate-finance:apply": "tsx scripts/migrate-finance-bootstrap.ts --apply",
+    "firebase:migrate-users-canonical:dry": "tsx scripts/migrate-users-canonical-fields.ts",
+    "firebase:migrate-users-canonical:apply": "tsx scripts/migrate-users-canonical-fields.ts --apply",
+    "firebase:migrate-users-canonical:cleanup": "tsx scripts/migrate-users-canonical-fields.ts --apply --delete-legacy"
   },
   "prettier": {
     "printWidth": 100,

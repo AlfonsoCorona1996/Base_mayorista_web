@@ -1,7 +1,14 @@
-import { Routes } from '@angular/router';
+import { Routes, UrlMatcher } from '@angular/router';
 import { adminGuard } from "./core/admin.guard";
 import { permissionGuard } from "./core/permission.guard";
 import { authzGuard } from "./core/authz.guard";
+
+const loginMatcher: UrlMatcher = (segments) => {
+  if (!segments.length) return null;
+  if (segments[0].path.toLowerCase() !== "login") return null;
+  return { consumed: segments };
+};
+
 export const routes: Routes = [
   {
     path: "",
@@ -9,7 +16,7 @@ export const routes: Routes = [
     loadComponent: () => import("./features/public/public-home").then((m) => m.default),
   },
   {
-    path: "login",
+    matcher: loginMatcher,
     loadComponent: () => import("./features/auth/login/login").then((m) => m.default),
   },
   {

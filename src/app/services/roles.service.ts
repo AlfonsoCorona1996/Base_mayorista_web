@@ -1,8 +1,10 @@
 import { Injectable } from "@angular/core";
 import { collection, doc, getDoc, getDocs, serverTimestamp, setDoc } from "firebase/firestore";
 import {
+  CAPABILITY_KEYS,
   DEFAULT_ROLE_PRESETS,
   ROLE_IDS,
+  SECTION_KEYS,
   RoleDoc,
   RoleId,
   buildRolePreset,
@@ -119,12 +121,66 @@ export class RolesService {
 
   private normalizeRoleDoc(rawId: string, data: Record<string, any>): RoleDoc {
     const roleId = normalizeRoleId(data["roleId"] || rawId);
+    const preset = buildRolePreset(roleId);
+    const sections =
+      this.normalizeSectionsFromAny(data["sections"]) ?? this.normalizeSectionsFromAny(data["permissions"]) ?? { ...preset.sections };
+    const capabilities = this.normalizeCapabilitiesFromAny(data["capabilities"]) ?? { ...preset.capabilities };
     return {
       roleId,
       label: (data["label"] || roleLabel(roleId)).toString(),
-      sections: normalizeSectionsMap(data["sections"] || null),
-      capabilities: normalizeCapabilitiesMap(data["capabilities"] || null),
+      sections,
+      capabilities,
       updatedAt: data["updatedAt"] ?? null,
     };
+  }
+
+  private normalizeSectionsFromAny(raw: unknown): RoleDoc["sections"] | null {
+    if (!raw || typeof raw !== "object") return null;
+    const map = raw as Record<string, unknown>;
+
+    const hasCanonical = SECTION_KEYS.some((key) => key in map);
+    if (hasCanonical) {
+      return normalizeSectionsMap(map);
+    }
+
+    const hasShort =
+      "dashboard" in map ||
+      "validacion" in map ||
+      "pedidos" in map ||
+      "catalogo" in map ||
+      "categorias" in map ||
+      "proveedores" in map ||
+      "inventario" in map ||
+      "administracion" in map ||
+      "clientes" in map ||
+      "rutas" in map ||
+      "localidades" in map ||
+      "salidas" in map ||
+      "usuarios" in map;
+    if (!hasShort) return null;
+
+    return normalizeSectionsMap({
+      "sections.dashboard": map["dashboard"],
+      "sections.validacion": map["validacion"],
+      "sections.pedidos": map["pedidos"],
+      "sections.catalogo": map["catalogo"],
+      "sections.categorias": map["categorias"],
+      "sections.proveedores": map["proveedores"],
+      "sections.inventario": map["inventario"],
+      "sections.administracion": map["administracion"],
+      "sections.clientes": map["clientes"] ?? map["clientas"],
+      "sections.rutas": map["rutas"],
+      "sections.localidades": map["localidades"],
+      "sections.salidas": map["salidas"],
+      "sections.usuarios": map["usuarios"],
+    });
+  }
+
+  private normalizeCapabilitiesFromAny(raw: unknown): RoleDoc["capabilities"] | null {
+    if (!raw || typeof raw !== "object") return null;
+    const map = raw as Record<string, unknown>;
+    const hasCanonical = CAPABILITY_KEYS.some((key) => key in map);
+    if (!hasCanonical) return null;
+    return normalizeCapabilitiesMap(map);
   }
 }

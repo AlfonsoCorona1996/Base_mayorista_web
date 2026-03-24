@@ -517,31 +517,126 @@
           <p class="muted">No hay filas para esta metrica.</p>
         } @else {
           <div class="detail-table">
-            <div class="detail-head-row">
-              <span>Pedido / SKU</span>
-              <span>Estado</span>
-              <span>Monto clienta</span>
-              <span>Costo</span>
-              <span>Ganancia</span>
-              <span>Cobrado</span>
+            <div class="detail-table-tools">
+              <p class="muted">Ordena por columna con flechas y filtra campos. En montos puedes usar operadores como &gt;500, &lt;=1000 o rango 500..1500.</p>
+              <button type="button" class="btn ghost btn-small" (click)="clearDrilldownFilters()">Limpiar filtros</button>
             </div>
-            @for (row of detail.rows; track trackDrilldownRow($index, row)) {
-              <button
-                type="button"
-                class="detail-row detail-row-button"
-                [class.is-disabled]="!row.orderId"
-                (click)="row.orderId && openOrder(row.orderId)"
-              >
-                <span class="detail-main">
-                  <strong>{{ row.primary }}</strong>
-                  <small>{{ row.secondary }}</small>
-                </span>
-                <span>{{ row.status }}</span>
-                <span>{{ formatCurrency(row.amountClienta) }}</span>
-                <span>{{ formatCurrency(row.cost) }}</span>
-                <span>{{ formatCurrency(row.margin) }}</span>
-                <span>{{ formatCurrency(row.paid) }}</span>
+            <div class="detail-head-row">
+              <button type="button" class="detail-head-cell detail-sort-btn" (click)="toggleDrilldownSort('primary')">
+                <span>Pedido / SKU</span>
+                <small class="sort-arrow">{{ drilldownSortArrow("primary") }}</small>
               </button>
+              <button type="button" class="detail-head-cell detail-sort-btn" (click)="toggleDrilldownSort('status')">
+                <span>Estado</span>
+                <small class="sort-arrow">{{ drilldownSortArrow("status") }}</small>
+              </button>
+              <button type="button" class="detail-head-cell detail-sort-btn" (click)="toggleDrilldownSort('createdAt')">
+                <span>Fecha creacion</span>
+                <small class="sort-arrow">{{ drilldownSortArrow("createdAt") }}</small>
+              </button>
+              <button type="button" class="detail-head-cell detail-sort-btn" (click)="toggleDrilldownSort('amountClienta')">
+                <span>Monto clienta</span>
+                <small class="sort-arrow">{{ drilldownSortArrow("amountClienta") }}</small>
+              </button>
+              <button type="button" class="detail-head-cell detail-sort-btn" (click)="toggleDrilldownSort('cost')">
+                <span>Costo</span>
+                <small class="sort-arrow">{{ drilldownSortArrow("cost") }}</small>
+              </button>
+              <button type="button" class="detail-head-cell detail-sort-btn" (click)="toggleDrilldownSort('margin')">
+                <span>Ganancia</span>
+                <small class="sort-arrow">{{ drilldownSortArrow("margin") }}</small>
+              </button>
+              <button type="button" class="detail-head-cell detail-sort-btn" (click)="toggleDrilldownSort('paid')">
+                <span>Cobrado</span>
+                <small class="sort-arrow">{{ drilldownSortArrow("paid") }}</small>
+              </button>
+            </div>
+            <div class="detail-filter-row">
+              <input
+                type="text"
+                class="detail-filter-input"
+                placeholder="Buscar pedido o SKU"
+                [value]="drilldownFilters().primary"
+                (input)="setDrilldownFilter('primary', $any($event.target).value)"
+              />
+              <input
+                type="text"
+                class="detail-filter-input"
+                placeholder="Filtrar estado"
+                [value]="drilldownFilters().status"
+                (input)="setDrilldownFilter('status', $any($event.target).value)"
+              />
+              <div class="detail-date-filter">
+                <label>
+                  <span>Desde</span>
+                  <input
+                    type="date"
+                    class="detail-filter-input"
+                    [value]="drilldownDateRange().start"
+                    (input)="setDrilldownDateStart($any($event.target).value)"
+                  />
+                </label>
+                <label>
+                  <span>Hasta</span>
+                  <input
+                    type="date"
+                    class="detail-filter-input"
+                    [value]="drilldownDateRange().end"
+                    (input)="setDrilldownDateEnd($any($event.target).value)"
+                  />
+                </label>
+              </div>
+              <input
+                type="text"
+                class="detail-filter-input"
+                placeholder="Monto"
+                [value]="drilldownFilters().amountClienta"
+                (input)="setDrilldownFilter('amountClienta', $any($event.target).value)"
+              />
+              <input
+                type="text"
+                class="detail-filter-input"
+                placeholder="Costo"
+                [value]="drilldownFilters().cost"
+                (input)="setDrilldownFilter('cost', $any($event.target).value)"
+              />
+              <input
+                type="text"
+                class="detail-filter-input"
+                placeholder="Ganancia"
+                [value]="drilldownFilters().margin"
+                (input)="setDrilldownFilter('margin', $any($event.target).value)"
+              />
+              <input
+                type="text"
+                class="detail-filter-input"
+                placeholder="Cobrado"
+                [value]="drilldownFilters().paid"
+                (input)="setDrilldownFilter('paid', $any($event.target).value)"
+              />
+            </div>
+            @if (drilldownRows().length === 0) {
+              <p class="muted">No hay filas que coincidan con los filtros.</p>
+            } @else {
+              @for (row of drilldownRows(); track trackDrilldownRow($index, row)) {
+                <button
+                  type="button"
+                  class="detail-row detail-row-button"
+                  [class.is-disabled]="!row.orderId"
+                  (click)="row.orderId && openOrder(row.orderId)"
+                >
+                  <span class="detail-main">
+                    <strong>{{ row.primary }}</strong>
+                    <small>{{ row.secondary }}</small>
+                  </span>
+                  <span>{{ row.status }}</span>
+                  <span>{{ formatDate(row.createdAt) }}</span>
+                  <span>{{ formatCurrency(row.amountClienta) }}</span>
+                  <span>{{ formatCurrency(row.cost) }}</span>
+                  <span>{{ formatCurrency(row.margin) }}</span>
+                  <span>{{ formatCurrency(row.paid) }}</span>
+                </button>
+              }
             }
           </div>
         }

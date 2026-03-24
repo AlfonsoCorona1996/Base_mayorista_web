@@ -21,6 +21,7 @@ export type AdminPermissionKey =
   | "clientas"
   | "rutas"
   | "localidades"
+  | "salidas"
   | "usuarios";
 
 export type AdminPermissionsPayload = Record<AdminPermissionKey, boolean>;
@@ -309,20 +310,22 @@ export class UserAdminApiService {
   }
 
   private normalizePermissions(input: AdminPermissionsPayload, roleId: RoleId): AdminPermissionsPayload {
+    const rawInput = input as Record<string, unknown>;
     return {
-      dashboard: Boolean(input.dashboard),
-      validacion: Boolean(input.validacion),
-      pedidos: Boolean(input.pedidos),
-      catalogo: Boolean(input.catalogo),
-      edicion_productos: Boolean(input.edicion_productos),
-      categorias: Boolean(input.categorias),
-      proveedores: Boolean(input.proveedores),
-      inventario: Boolean(input.inventario),
-      administracion: Boolean(input.administracion),
-      clientas: Boolean(input.clientas),
-      rutas: Boolean(input.rutas),
-      localidades: Boolean(input.localidades),
-      usuarios: roleId === "super_admin" ? Boolean(input.usuarios) : false,
+      dashboard: Boolean(rawInput["dashboard"]),
+      validacion: Boolean(rawInput["validacion"]),
+      pedidos: Boolean(rawInput["pedidos"]),
+      catalogo: Boolean(rawInput["catalogo"]),
+      edicion_productos: Boolean(rawInput["edicion_productos"] ?? rawInput["catalogo"]),
+      categorias: Boolean(rawInput["categorias"]),
+      proveedores: Boolean(rawInput["proveedores"]),
+      inventario: Boolean(rawInput["inventario"]),
+      administracion: Boolean(rawInput["administracion"]),
+      clientas: Boolean(rawInput["clientas"] ?? rawInput["clientes"]),
+      rutas: Boolean(rawInput["rutas"]),
+      localidades: Boolean(rawInput["localidades"]),
+      salidas: Boolean(rawInput["salidas"]),
+      usuarios: roleId === "super_admin" ? Boolean(rawInput["usuarios"]) : false,
     };
   }
 
@@ -361,7 +364,8 @@ export class UserAdminApiService {
   private async request<T>(path: string, init: RequestInit): Promise<T> {
     const current = FIREBASE_AUTH.currentUser;
     if (!current) throw new Error("Sesion no valida para operaciones administrativas.");
-    const token = await current.getIdToken();
+    const method = (init.method || "GET").toUpperCase();
+    const token = await current.getIdToken(method !== "GET");
     const response = await fetch(`${this.baseUrl}${path}`, {
       ...init,
       headers: {
@@ -372,11 +376,21 @@ export class UserAdminApiService {
     });
 
     const text = await response.text();
-    const parsed = text ? (JSON.parse(text) as { ok?: boolean } & T) : ({} as { ok?: boolean } & T);
+    let parsed = {} as { ok?: boolean } & T;
+    if (text) {
+      try {
+        parsed = JSON.parse(text) as { ok?: boolean } & T;
+      } catch {
+        parsed = {} as { ok?: boolean } & T;
+      }
+    }
 
     if (!response.ok || ("ok" in parsed && parsed.ok === false)) {
       const message = this.extractErrorMessage(response.status, text);
-      throw new Error(message);
+      const error = new Error(message) as Error & { status?: number; path?: string };
+      error.status = response.status;
+      error.path = path;
+      throw error;
     }
 
     return parsed as T;
