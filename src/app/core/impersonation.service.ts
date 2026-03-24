@@ -64,7 +64,7 @@ export class ImpersonationService {
   private load(): ImpersonationSnapshot | null {
     if (typeof window === "undefined") return null;
     try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
+      const raw = window.sessionStorage.getItem(STORAGE_KEY);
       if (!raw) return null;
       const parsed = JSON.parse(raw) as Partial<ImpersonationSnapshot>;
       if (!parsed || typeof parsed !== "object" || typeof parsed.uid !== "string" || typeof parsed.roleId !== "string") return null;
@@ -100,11 +100,11 @@ export class ImpersonationService {
 
   private persist(snapshot: ImpersonationSnapshot) {
     if (typeof window === "undefined") return;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+    window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
   }
 
   private clearPersisted() {
     if (typeof window === "undefined") return;
-    window.localStorage.removeItem(STORAGE_KEY);
+    window.sessionStorage.removeItem(STORAGE_KEY);
   }
 }
