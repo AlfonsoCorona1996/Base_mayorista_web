@@ -79,41 +79,69 @@
       }
     </div>
 
+    @if (actionError()) {
+      <div class="alert-action-error">
+        <span class="material-symbols-rounded">warning</span>
+        {{ actionError() }}
+      </div>
+    }
+
     @if (visibleAlerts().length === 0) {
       <div class="alerts-empty">
         <span class="material-symbols-rounded alerts-empty-icon">check_circle</span>
         <p>No hay alertas pendientes. ¡Todo en orden!</p>
       </div>
     } @else {
-      <ul class="alerts-list">
-        @for (alert of visibleAlerts(); track alert.id) {
-          <li class="alert-item" [ngClass]="'alert-' + alert.severity">
-            <div class="alert-left">
-              <span class="alert-severity-dot"></span>
-              <span class="alert-icon material-symbols-rounded">{{ alert.icon }}</span>
+      <div class="alerts-columns">
+        @for (group of alertGroups(); track group.category) {
+          <div class="alert-column">
+            <div class="alert-column-header">
+              <span class="material-symbols-rounded alert-column-icon">{{ group.icon }}</span>
+              <span class="alert-column-label">{{ group.label }}</span>
+              <span class="alert-column-count">{{ group.alerts.length }}</span>
             </div>
-            <div class="alert-content">
-              <div class="alert-top-row">
-                <span class="alert-severity-label">{{ severityLabel(alert.severity) }}</span>
-                <span class="alert-category">{{ alert.category === 'routes' ? 'Rutas' : alert.category === 'orders' ? 'Pedidos' : alert.category === 'finance' ? 'Finanzas' : alert.category === 'customers' ? 'Clientas' : alert.category === 'products' ? 'Catálogo' : alert.category === 'data_quality' ? 'Calidad de datos' : 'Insight IA' }}</span>
-              </div>
-              <p class="alert-title">{{ alert.title }}</p>
-              <p class="alert-body">{{ alert.body }}</p>
-            </div>
-            <div class="alert-actions">
-              @if (alert.actionUrl) {
-                <a class="alert-btn alert-btn-primary" [routerLink]="alert.actionUrl">
-                  {{ alert.actionLabel ?? 'Ver' }}
-                  <span class="material-symbols-rounded">arrow_forward</span>
-                </a>
+
+            <ul class="alerts-list">
+              @for (alert of group.alerts; track alert.id) {
+                <li class="alert-item" [ngClass]="'alert-' + alert.severity">
+                  <div class="alert-left">
+                    <span class="alert-severity-dot"></span>
+                    <span class="alert-icon material-symbols-rounded">{{ alert.icon }}</span>
+                  </div>
+                  <div class="alert-content">
+                    <div class="alert-top-row">
+                      <span class="alert-severity-label">{{ severityLabel(alert.severity) }}</span>
+                    </div>
+                    <p class="alert-title">{{ alert.title }}</p>
+                    <p class="alert-body">{{ alert.body }}</p>
+                  </div>
+                  <div class="alert-actions">
+                    @if (hasCustomAction(alert)) {
+                      <button
+                        type="button"
+                        class="alert-btn alert-btn-primary"
+                        [disabled]="isSchedulingRoute(alert)"
+                        (click)="handleSmartAction(alert)"
+                      >
+                        {{ isSchedulingRoute(alert) ? 'Creando...' : smartActionLabel(alert) }}
+                        <span class="material-symbols-rounded">{{ isSchedulingRoute(alert) ? 'hourglass_top' : smartActionIcon(alert) }}</span>
+                      </button>
+                    } @else if (alert.actionUrl) {
+                      <a class="alert-btn alert-btn-primary" [routerLink]="alert.actionUrl">
+                        {{ alert.actionLabel ?? 'Ver' }}
+                        <span class="material-symbols-rounded">arrow_forward</span>
+                      </a>
+                    }
+                    <button type="button" class="alert-btn-dismiss" (click)="dismiss(alert.id)" aria-label="Descartar alerta">
+                      <span class="material-symbols-rounded">close</span>
+                    </button>
+                  </div>
+                </li>
               }
-              <button type="button" class="alert-btn-dismiss" (click)="dismiss(alert.id)" aria-label="Descartar alerta">
-                <span class="material-symbols-rounded">close</span>
-              </button>
-            </div>
-          </li>
+            </ul>
+          </div>
         }
-      </ul>
+      </div>
     }
   </section>
 

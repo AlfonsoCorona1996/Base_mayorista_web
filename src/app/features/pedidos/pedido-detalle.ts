@@ -3198,58 +3198,67 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   private async buildSalesNoteImage(order: Order, rows: SalesNoteRowVm[]): Promise<Blob> {
-    const width = 1080;
-    const cardX = 40;
-    const cardY = 34;
-    const cardW = width - (cardX * 2);
-    const cardPaddingX = 28;
-    const cardPaddingTop = 38;
-    const cardPaddingBottom = 34;
-    const titleBlockHeight = 148;
-    const tableHeaderHeight = 56;
-    const rowHeight = 106;
-    const rowGap = 12;
-    const footerGap = 22;
-    const footerHeight = 98;
-    const rowsHeight = rows.length > 0 ? (rows.length * rowHeight) + ((rows.length - 1) * rowGap) : 0;
-    const cardH = cardPaddingTop
-      + titleBlockHeight
-      + 16
-      + tableHeaderHeight
-      + 16
-      + rowsHeight
-      + footerGap
-      + footerHeight
-      + cardPaddingBottom;
-    const height = (cardY * 2) + cardH;
+    // ── Layout ──────────────────────────────────────────────────────────────
+    const W       = 1080;
+    const CARD_X  = 32;
+    const CARD_Y  = 34;
+    const CARD_W  = W - CARD_X * 2;
+    const PAD_H   = 52;   // horizontal inner padding
+    const PAD_TOP = 48;
+    const PAD_BOT = 52;
+    const IX      = CARD_X + PAD_H;     // inner left edge
+    const IW      = CARD_W - PAD_H * 2; // inner width
+    const IR      = IX + IW;            // inner right edge
 
+    // Section heights
+    const HDR_H    = 230;  // header row — tall enough para logo grande
+    const HDR_GAP  = 8;
+    const DATE_H   = 72;  // fila 2 del header: "Nota de venta" (60px) + fecha
+    const DIV1_PRE = 28;   // gap before 1st divider
+    const LBL_H    = 26;   // "CLIENTE" label height
+    const LBL_GAP  = 8;
+    const CNAME_H  = 88;   // 72px font needs 88px vertical space
+    const DIV2_PRE = 28;   // gap before 2nd divider
+    const ITEMS_PRE= 24;   // gap after 2nd divider
+    const ITEM_H   = 114;  // per-row height
+    const ITEM_GAP = 14;
+    const TOTL_PRE = 30;   // gap before 3rd divider
+    const TOTL_H   = 96;   // total amount block
+
+    const itemsH = rows.length > 0
+      ? rows.length * ITEM_H + (rows.length - 1) * ITEM_GAP
+      : 0;
+
+    const CARD_H = PAD_TOP
+      + HDR_H + HDR_GAP + DATE_H
+      + DIV1_PRE + 1 + 22       // divider 1
+      + LBL_H + LBL_GAP + CNAME_H
+      + DIV2_PRE + 1 + ITEMS_PRE // divider 2
+      + itemsH
+      + TOTL_PRE + 1 + 26       // divider 3
+      + TOTL_H
+      + PAD_BOT;
+
+    const H = CARD_Y * 2 + CARD_H;
+
+    // ── Canvas ───────────────────────────────────────────────────────────────
     const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
+    canvas.width  = W;
+    canvas.height = H;
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("No se pudo crear el lienzo para la nota.");
 
-    ctx.fillStyle = "#f2f5fa";
-    ctx.fillRect(0, 0, width, height);
+    // Background
+    ctx.fillStyle = "#eef2f7";
+    ctx.fillRect(0, 0, W, H);
 
-    this.drawRoundedRect(ctx, cardX, cardY, cardW, cardH, 34, "#ffffff");
+    // White card
+    this.drawRoundedRect(ctx, CARD_X, CARD_Y, CARD_W, CARD_H, 32, "#ffffff");
     ctx.fill();
 
-    const customer = this.customerName(order);
-    const dateText = new Date().toLocaleDateString("es-MX", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    });
-    const total = rows.reduce((sum, row) => sum + row.lineTotal, 0);
-    const cardInnerX = cardX + cardPaddingX;
-    const cardInnerW = cardW - (cardPaddingX * 2);
-    const productColumnX = cardX + 136;
-    const qtyColumnX = cardX + 612;
-    const unitColumnX = cardX + 802;
-    const totalColumnX = cardX + cardW - 56;
-    const imageByItemId = new Map<string, HTMLImageElement | null>();
+    // ── Load product images & logo in parallel ───────────────────────────────
     const imageResults = await Promise.all(rows.map((row) => this.loadSalesNoteRowImage(row)));
+    const imageByItemId = new Map<string, HTMLImageElement | null>();
     for (const result of imageResults) {
       imageByItemId.set(result.itemId, result.image);
     }
@@ -3264,101 +3273,174 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         `No se pudieron descargar ${missingDownloads.length} imagen(es) (${missingTitles}). Intenta de nuevo.`,
       );
     }
-    const titleTop = cardY + cardPaddingTop;
 
-    ctx.fillStyle = "#0f172a";
-    ctx.font = "700 52px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-    ctx.fillText("Nota de venta", cardX + 44, titleTop + 40);
+    let logoImage: HTMLImageElement | null = null;
+    try {
+      logoImage = await this.loadImageElement("/BaseMayoristaLogo.png", false, 4000);
+    } catch { /* skip logo gracefully */ }
 
-    ctx.fillStyle = "#5f6f85";
-    ctx.font = "500 28px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-    ctx.textAlign = "left";
-    ctx.fillText(customer, cardX + 44, titleTop + 92);
-    ctx.fillText(dateText, cardX + 44, titleTop + 128);
+    // ── Drawing cursor ───────────────────────────────────────────────────────
+    let y = CARD_Y + PAD_TOP;
 
-    ctx.textAlign = "right";
-    ctx.fillStyle = "#4f627d";
-    ctx.font = "700 30px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-    ctx.fillText(`Pedido ${order.order_id}`, cardX + cardW - 44, titleTop + 44);
-
-    const tableHeaderTop = titleTop + titleBlockHeight;
-    this.drawRoundedRect(ctx, cardInnerX, tableHeaderTop, cardInnerW, tableHeaderHeight, 18, "#f5f8fd");
-    ctx.fill();
-
-    ctx.fillStyle = "#4f627d";
-    ctx.font = "600 24px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-    ctx.textAlign = "left";
-    ctx.fillText("Producto", cardX + 64, tableHeaderTop + 36);
-    ctx.textAlign = "right";
-    ctx.fillText("Cant", qtyColumnX, tableHeaderTop + 36);
-    ctx.fillText("Unit", unitColumnX, tableHeaderTop + 36);
-    ctx.fillText("Total", totalColumnX, tableHeaderTop + 36);
-
-    let y = tableHeaderTop + tableHeaderHeight + 16;
-    for (const row of rows) {
-      this.drawRoundedRect(ctx, cardInnerX, y, cardInnerW, rowHeight, 16, "#ffffff");
-      ctx.fillStyle = "#e4ebf5";
-      ctx.fill();
-      this.drawRoundedRect(ctx, cardInnerX, y, cardInnerW, rowHeight, 16, "#ffffff");
-      ctx.strokeStyle = "#dce6f3";
-      ctx.lineWidth = 2;
-      ctx.stroke();
-
-      const imageX = cardX + 48;
-      const imageY = y + 12;
-      const imageSize = 70;
-      const image = imageByItemId.get(row.item.item_id) || null;
-      if (image) {
-        ctx.save();
-        this.drawRoundedRect(ctx, imageX, imageY, imageSize, imageSize, 14, "#ffffff");
-        ctx.clip();
-        this.drawImageCover(ctx, image, imageX, imageY, imageSize, imageSize);
-        ctx.restore();
-      } else {
-        this.drawRoundedRect(ctx, imageX, imageY, imageSize, imageSize, 14, "#edf2f9");
-        ctx.fillStyle = "#edf2f9";
-        ctx.fill();
-        ctx.fillStyle = "#6e8099";
-        ctx.font = "600 19px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-        const initials = (row.item.title || "?").slice(0, 2).toUpperCase();
-        ctx.fillText(initials, imageX + 20, imageY + 42);
-      }
-
-      const title = this.truncateForNote(ctx, row.item.title || "Producto", 388, "600 28px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif");
-      const variant = `${row.item.variant || "Unica"} · ${row.item.color || "N/A"}`;
-      ctx.fillStyle = "#0f172a";
-      ctx.font = "600 28px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-      ctx.textAlign = "left";
-      ctx.fillText(title, productColumnX, y + 44);
-      ctx.fillStyle = "#64748b";
-      ctx.font = "500 22px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-      ctx.fillText(this.truncateForNote(ctx, variant, 388, "500 22px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"), productColumnX, y + 76);
-
-      ctx.fillStyle = "#1f2f46";
-      ctx.font = "600 26px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-      ctx.textAlign = "right";
-      ctx.fillText(String(row.qty), qtyColumnX, y + 58);
-      ctx.fillText(this.formatCurrency(row.unitPrice), unitColumnX, y + 58);
-      ctx.fillText(this.formatCurrency(row.lineTotal), totalColumnX, y + 58);
-
-      y += rowHeight + rowGap;
+    // ── FILA 1: Logo (izquierda) · Número de pedido (derecha) ───────────────
+    const LOGO_SIZE = 216;
+    const logoY = y + (HDR_H - LOGO_SIZE) / 2;
+    if (logoImage) {
+      ctx.save();
+      this.drawRoundedRect(ctx, IX, logoY, LOGO_SIZE, LOGO_SIZE, 20, "#f5f8fc");
+      ctx.clip();
+      this.drawImageCover(ctx, logoImage, IX, logoY, LOGO_SIZE, LOGO_SIZE);
+      ctx.restore();
     }
 
-    const rowsBottom = (tableHeaderTop + tableHeaderHeight + 16) + rowsHeight;
-    const footerTop = rowsBottom + footerGap;
-    this.drawRoundedRect(ctx, cardInnerX, footerTop, cardInnerW, footerHeight, 18, "#f6f9ff");
-    ctx.fillStyle = "#f6f9ff";
-    ctx.fill();
+    // Número de pedido: derecha, centrado verticalmente en la fila del logo
+    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = "#7a94ae";
+    ctx.font = "500 21px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    ctx.textAlign = "right";
+    ctx.fillText(`#${order.order_id}`, IR, y + Math.round(HDR_H / 2) + 8);
+    ctx.globalAlpha = 1;
 
-    ctx.fillStyle = "#5f6f85";
+    y += HDR_H + HDR_GAP;
+
+    // ── FILA 2: "Nota de venta" (izquierda) · Fecha (derecha) ────────────────
+    const dateText = new Date().toLocaleDateString("es-MX", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+    const row2Baseline = y + 62; // baseline para 60px font (ascender ~50px + margen)
+
+    ctx.fillStyle = "#6b87a4";
+    ctx.font = "600 60px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText("Nota de venta", IX, row2Baseline);
+
+    ctx.fillStyle = "#9badc5";
+    ctx.font = "400 26px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    ctx.textAlign = "right";
+    ctx.fillText(dateText, IR, row2Baseline);
+
+    y += DATE_H;
+
+    // ── Divider 1 ────────────────────────────────────────────────────────────
+    y += DIV1_PRE;
+    ctx.fillStyle = "#e8eef6";
+    ctx.fillRect(IX, y, IW, 1);
+    y += 1 + 22;
+
+    // ── CLIENT SECTION ───────────────────────────────────────────────────────
+    ctx.fillStyle = "#b0c4d8";
+    ctx.font = "600 21px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText("CLIENTE", IX, y + LBL_H);
+    y += LBL_H + LBL_GAP;
+
+    const customer = this.customerName(order);
+    const CNAME_FONT = "700 72px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    ctx.fillStyle = "#0f172a";
+    ctx.font = CNAME_FONT;
+    ctx.fillText(this.truncateForNote(ctx, customer, IW, CNAME_FONT), IX, y + 72);
+    y += CNAME_H;
+
+    // ── Divider 2 ────────────────────────────────────────────────────────────
+    y += DIV2_PRE;
+    ctx.fillStyle = "#e8eef6";
+    ctx.fillRect(IX, y, IW, 1);
+    y += 1 + ITEMS_PRE;
+
+    // ── ITEMS ────────────────────────────────────────────────────────────────
+    const IMG_SIZE   = 80;
+    const TEXT_X     = IX + IMG_SIZE + 20;
+    const TEXT_W     = IW - IMG_SIZE - 20 - 220; // space reserved for price column
+
+    for (const row of rows) {
+      const imgY = y + (ITEM_H - IMG_SIZE) / 2;
+      const image = imageByItemId.get(row.item.item_id) ?? null;
+
+      if (image) {
+        ctx.save();
+        this.drawRoundedRect(ctx, IX, imgY, IMG_SIZE, IMG_SIZE, 14, "#f5f8fc");
+        ctx.clip();
+        this.drawImageCover(ctx, image, IX, imgY, IMG_SIZE, IMG_SIZE);
+        ctx.restore();
+      } else {
+        this.drawRoundedRect(ctx, IX, imgY, IMG_SIZE, IMG_SIZE, 14, "#f0f4fa");
+        ctx.fillStyle = "#f0f4fa";
+        ctx.fill();
+        ctx.fillStyle = "#a8bed4";
+        ctx.font = "600 22px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText((row.item.title || "?").slice(0, 2).toUpperCase(), IX + IMG_SIZE / 2, imgY + IMG_SIZE / 2 + 8);
+        ctx.textAlign = "left";
+      }
+
+      // Product name
+      const TITLE_FONT = "600 29px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+      ctx.fillStyle = "#0f172a";
+      ctx.font = TITLE_FONT;
+      ctx.textAlign = "left";
+      ctx.fillText(this.truncateForNote(ctx, row.item.title || "Producto", TEXT_W, TITLE_FONT), TEXT_X, y + 42);
+
+      // Variant · Color
+      const variant = [row.item.variant, row.item.color].filter(Boolean).join(" · ");
+      if (variant) {
+        const VAR_FONT = "400 23px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+        ctx.fillStyle = "#7a94ae";
+        ctx.font = VAR_FONT;
+        ctx.fillText(this.truncateForNote(ctx, variant, TEXT_W, VAR_FONT), TEXT_X, y + 74);
+      }
+
+      // Qty × unit price (secondary, right)
+      ctx.fillStyle = "#8fabbe";
+      ctx.font = "400 24px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+      ctx.textAlign = "right";
+      ctx.fillText(`${row.qty} × ${this.formatCurrency(row.unitPrice)}`, IR, y + 50);
+
+      // Line total (bold, right)
+      ctx.fillStyle = "#1a2e44";
+      ctx.font = "700 32px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+      ctx.fillText(this.formatCurrency(row.lineTotal), IR, y + 86);
+
+      y += ITEM_H + ITEM_GAP;
+    }
+    y -= ITEM_GAP;
+
+    // ── Divider 3 ────────────────────────────────────────────────────────────
+    y += TOTL_PRE;
+    ctx.fillStyle = "#e8eef6";
+    ctx.fillRect(IX, y, IW, 1);
+    y += 1 + 26;
+
+    // ── TOTAL / POR PAGAR ────────────────────────────────────────────────────
+    const total       = rows.reduce((s, r) => s + r.lineTotal, 0);
+    const paidAmount  = order.totals?.paid_amount ?? 0;
+    const balanceDue  = Math.max(0, total - paidAmount);
+
+    // "Por pagar" label (left, muted)
+    ctx.fillStyle = "#7a94ae";
     ctx.font = "600 30px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
     ctx.textAlign = "left";
-    ctx.fillText("Total", cardX + 56, footerTop + 60);
+    ctx.fillText("Por pagar", IX, y + 42);
+
+    // Amount (right, LARGE)
     ctx.fillStyle = "#0f172a";
-    ctx.font = "700 44px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    ctx.font = "700 66px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
     ctx.textAlign = "right";
-    ctx.fillText(this.formatCurrency(total), totalColumnX, footerTop + 64);
-    ctx.textAlign = "left";
+    ctx.fillText(this.formatCurrency(balanceDue), IR, y + 68);
+
+    // If partial payment: show subtotal below in muted text
+    if (paidAmount > 0) {
+      ctx.fillStyle = "#9badc5";
+      ctx.font = "400 22px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+      ctx.textAlign = "right";
+      ctx.fillText(
+        `Total ${this.formatCurrency(total)} · Pagado ${this.formatCurrency(paidAmount)}`,
+        IR,
+        y + 96,
+      );
+    }
+    y += TOTL_H;
 
     return new Promise<Blob>((resolve, reject) => {
       canvas.toBlob((blob) => {
@@ -4416,9 +4498,54 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.sendingWaNote.set(true);
     this.waNoteSent.set(null);
     try {
-      await lastValueFrom(
-        this.api.post("/api/wa/send-sales-note", { customer_id: customerId, order })
-      );
+      const rows = this.salesNoteRows(order);
+      if (rows.length <= 0) {
+        this.waNoteSent.set({ ok: false, msg: "No hay productos confirmados para generar nota." });
+        return;
+      }
+
+      const computedTotal = rows.reduce((s, r) => s + r.lineTotal, 0);
+      const paidAmount  = order.totals?.paid_amount ?? 0;
+      const totalAmount = computedTotal || order.totals?.total_amount || 0;
+      const balanceDue  = Math.max(0, totalAmount - paidAmount);
+
+      // Generamos la imagen en el frontend para que el backend use el diseño
+      // actualizado en lugar de generar el suyo. Si falla, el backend fallback.
+      let notaImageBase64: string | undefined;
+      try {
+        await this.withTimeout(
+          this.ensureSalesNoteImageSourcesReady(),
+          12000,
+          "Tiempo de espera al preparar imágenes.",
+        );
+        const pngBlob = await this.withTimeout(
+          this.buildSalesNoteImage(order, rows),
+          45000,
+          "Tiempo de espera al generar la nota.",
+        );
+        notaImageBase64 = await this.blobToJpegBase64(pngBlob, 0.88);
+      } catch { /* backend genera su propia imagen como fallback */ }
+
+      const payload: Record<string, unknown> = {
+        customer_id: customerId,
+        ...(notaImageBase64 ? { nota_image_base64: notaImageBase64 } : {}),
+        order: {
+          order_id: order.order_id,
+          status: order.status,
+          created_at: order.created_at,
+          totals: { total_amount: totalAmount, paid_amount: paidAmount, balance_due: balanceDue },
+          items: rows.map((r) => ({
+            title: r.item.title || "",
+            variant: r.item.variant || "",
+            color_name: r.item.color || "",
+            quantity: r.qty,
+            price_clienta: r.unitPrice,
+            state: "confirmed",
+          })),
+        },
+      };
+
+      await lastValueFrom(this.api.post("/api/wa/send-sales-note", payload));
       this.waNoteSent.set({ ok: true });
     } catch (err: any) {
       const msg = err?.error?.message ?? "No se pudo enviar la nota por WhatsApp.";
@@ -4427,6 +4554,35 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       this.sendingWaNote.set(false);
       setTimeout(() => this.waNoteSent.set(null), 5000);
     }
+  }
+
+  /**
+   * Convierte un PNG Blob al string base64 de un JPEG (sin el prefijo data URL).
+   * El JPEG reducido es ideal para enviar en payloads HTTP.
+   */
+  private blobToJpegBase64(pngBlob: Blob, quality = 0.88): Promise<string> {
+    return new Promise<string>((resolve, reject) => {
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(pngBlob);
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        const canvas = document.createElement("canvas");
+        canvas.width  = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { reject(new Error("No canvas context")); return; }
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0);
+        const dataUrl = canvas.toDataURL("image/jpeg", quality);
+        resolve(dataUrl.split(",")[1] ?? "");
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error("Failed to load PNG blob"));
+      };
+      img.src = objectUrl;
+    });
   }
 
   // ─────────────────────────────────────────────────────────────────────────

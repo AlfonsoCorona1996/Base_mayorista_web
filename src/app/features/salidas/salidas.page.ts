@@ -48,6 +48,7 @@ export default class SalidasPage {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private openRouteOnLoad: string | null = null;
+  private scheduleOrderOnLoad: string | null = null;
 
   loading = signal(false);
   saving = signal(false);
@@ -166,10 +167,12 @@ export default class SalidasPage {
   constructor() {
     const routeId = String(this.route.snapshot.queryParamMap.get("routeId") || "").trim();
     const shouldOpenRoute = this.route.snapshot.queryParamMap.get("openRoute") === "1";
+    const scheduleOrderId = String(this.route.snapshot.queryParamMap.get("scheduleOrderId") || "").trim();
     if (routeId && routeId !== "all") {
       this.selectedRouteId.set(routeId);
       if (shouldOpenRoute) this.openRouteOnLoad = routeId;
     }
+    if (scheduleOrderId) this.scheduleOrderOnLoad = scheduleOrderId;
     this.refresh().catch(() => null);
   }
 
@@ -214,6 +217,15 @@ export default class SalidasPage {
           }));
         }
         this.openRouteOnLoad = null;
+      }
+
+      if (this.scheduleOrderOnLoad) {
+        const targetOrderId = this.scheduleOrderOnLoad;
+        this.scheduleOrderOnLoad = null;
+        const targetCard = cards.find((c) => c.order_id === targetOrderId);
+        if (targetCard) {
+          this.openScheduleSheet(targetCard, "programar");
+        }
       }
     } catch (error: any) {
       this.error.set(error?.message || "No se pudo cargar salidas.");

@@ -137,6 +137,12 @@ export class SmartAlertsService {
     );
   }
 
+  private getCustomerDisplayName(customerId: string): string {
+    const customer = this.customers.getById(customerId);
+    const fullName = `${customer?.first_name ?? ""} ${customer?.last_name ?? ""}`.trim();
+    return fullName || "Clienta";
+  }
+
   // ── Alertas de PEDIDOS ──────────────────────────────────────────────────
 
   /** Pedidos que llevan más de THRESHOLD horas en el mismo estado no terminal */
@@ -168,10 +174,10 @@ export class SmartAlertsService {
         category: "orders",
         icon: "schedule",
         title: "Pedido sin movimiento",
-        body: `El pedido ${order.order_id} lleva ${timeLabel} ${statusText}. ¿Necesita atención?`,
+        body: `${this.getCustomerDisplayName(order.customer_id)} lleva ${timeLabel} ${statusText}. ¿Necesita atención?`,
         actionUrl: `/main/pedidos/${order.order_id}`,
         actionLabel: "Ver pedido",
-        meta: { orderId: order.order_id, staleHours },
+        meta: { orderId: order.order_id, customerId: order.customer_id, staleHours, status: order.status, routeId: order.route_id ?? null },
         createdAt: Date.now(),
       });
     }
@@ -193,10 +199,10 @@ export class SmartAlertsService {
         category: "finance",
         icon: "payments",
         title: "Adeudo vencido",
-        body: `Pedido ${order.order_id} tiene $${balance.toFixed(2)} pendiente hace ${Math.floor(days)} días.`,
+        body: `${this.getCustomerDisplayName(order.customer_id)} tiene $${balance.toFixed(2)} pendiente hace ${Math.floor(days)} días.`,
         actionUrl: `/main/pedidos/${order.order_id}`,
         actionLabel: "Ver pedido",
-        meta: { orderId: order.order_id, balance, days },
+        meta: { orderId: order.order_id, customerId: order.customer_id, balance, days },
         createdAt: Date.now(),
       });
     }
