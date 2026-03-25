@@ -1,9 +1,13 @@
-﻿import { Component, computed, inject, signal, ChangeDetectionStrategy } from "@angular/core";
+import { Component, computed, inject, signal, ChangeDetectionStrategy } from "@angular/core";
 import { FormsModule } from "@angular/forms";
 import { Router } from "@angular/router";
 import type { DocumentData, QueryDocumentSnapshot } from "firebase/firestore";
+import { collection, doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { NormalizedListingsService } from "../../core/normalized-listings.service";
 import { SuppliersService } from "../../core/suppliers.service";
+import { ManualProductHistoryService, ManualProductEntry } from "../../core/manual-product-history.service";
+import { FIRESTORE } from "../../core/firebase.providers";
+import { CurrencyPipe, DatePipe } from "@angular/common";
 import type {
   NormalizedItemV3,
   NormalizedListingDocV3,
@@ -15,7 +19,7 @@ import { isNormalizedListingDocV3 } from "../../core/firestore-contracts";
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   selector: "app-catalog",
-  imports: [FormsModule],
+  imports: [FormsModule, CurrencyPipe, DatePipe],
   templateUrl: "./catalog.html",
   styleUrl: "./catalog.css",
 })
@@ -46,12 +50,38 @@ export default class CatalogPage {
 
   private cursor: QueryDocumentSnapshot<DocumentData> | null | undefined;
 
-  private svc = inject(NormalizedListingsService);
+  private svc       = inject(NormalizedListingsService);
   private suppliers = inject(SuppliersService);
-  private router = inject(Router);
+  private router    = inject(Router);
+  readonly manualSvc = inject(ManualProductHistoryService);
+  private firestore = FIRESTORE;
+
+  // ── Vista activa ─────────────────────────────────────────
+  activeTab = signal<"catalog" | "manuales">("catalog");
+
+  // ── Productos manuales ───────────────────────────────────
+  manualSearch = signal("");
+  manualBusy   = signal<Record<string, boolean>>({});
+  manualError  = signal<string | null>(null);
+
+  manualFiltered = computed(() => {
+    const q = this.manualSearch().trim().toLowerCase();
+    return this.manualSvc.entries().filter(e =>
+      !q || e.title.toLowerCase().includes(q) ||
+            e.variant.toLowerCase().includes(q) ||
+            e.color.toLowerCase().includes(q)
+    );
+  });
 
   constructor() {
     this.reload();
+    this.manualSvc.load().catch(() => null);
+  }
+
+  // ── Cambio de tab ─────────────────────────────────────────
+  setTab(tab: "catalog" | "manuales"): void {
+    this.activeTab.set(tab);
+    if (tab === "manuales") this.manualSvc.load().catch(() => null);
   }
 
   suppliersOptions = computed(() => {
@@ -377,5 +407,78 @@ export default class CatalogPage {
       return value as StockState;
     }
     return null;
+  }
+
+  // ── Acciones productos manuales ──────────────────────────
+
+  async deleteManual(entry: ManualProductEntry): Promise<void> {
+    if (!confirm(`¿Eliminar "${entry.title}" del historial manual?`)) return;
+    this.setManualBusy(entry.id, true);
+    try {
+      await this.manualSvc.delete(entry.id);
+    } catch (e: any) {
+      this.manualError.set(e?.message ?? "No se pudo eliminar");
+    } finally {
+      this.setManualBusy(entry.id, false);
+    }
+  }
+
+  /**
+   * Crea un listing provisional en `normalized_listings` con status "needs_review"
+   * para que aparezca en la cola de revisión y el admin pueda completarlo.
+   */
+  async promoteToReview(entry: ManualProductEntry): Promise<void> {
+    if (this.isManualBusy(entry.id)) return;
+    this.setManualBusy(entry.id, true);
+    this.manualError.set(null);
+    try {
+      const id = `manual_${entry.id}`;
+      const listingDoc: Record<string, unknown> = {
+        normalized_id: id,
+        schema_version: "normalized_v3.0",
+        status: "needs_review",
+        source: "manual_history",
+        supplier_id: null,
+        cover_images: [],
+        preview_image_url: null,
+        product_colors: [],
+        listing: {
+          title: entry.title,
+          category_hint: "",
+          items: [
+            {
+              size: entry.variant || "Único",
+              stock_state: "unknown_qty",
+              price_clienta: entry.price_clienta ?? 0,
+              price_cost: entry.price_cost ?? 0,
+              color_stock: entry.color
+                ? [{ color_name: entry.color, stock_state: "unknown_qty" }]
+                : [],
+            },
+          ],
+        },
+        created_at: serverTimestamp(),
+        manual_entry_id: entry.id,
+      };
+
+      await setDoc(
+        doc(collection(this.firestore, "normalized_listings"), id),
+        listingDoc
+      );
+
+      alert(`"${entry.title}" enviado a la cola de revisión. Puedes completarlo en Revisión.`);
+    } catch (e: any) {
+      this.manualError.set(e?.message ?? "No se pudo promover el producto");
+    } finally {
+      this.setManualBusy(entry.id, false);
+    }
+  }
+
+  isManualBusy(id: string): boolean {
+    return Boolean(this.manualBusy()[id]);
+  }
+
+  private setManualBusy(id: string, val: boolean): void {
+    this.manualBusy.update(m => ({ ...m, [id]: val }));
   }
 }

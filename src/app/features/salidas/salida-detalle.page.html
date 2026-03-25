@@ -1,151 +1,322 @@
-﻿<section class="run-page">
-  <header class="page-head">
-    <a class="back-link" routerLink="/main/salidas">Volver a salidas</a>
-    <button type="button" class="btn secondary refresh-btn" [disabled]="loading()" (click)="refresh()">Actualizar</button>
+<div class="sd-page">
+
+  <!-- ── Cabecera ── -->
+  <header class="sd-header">
+    <a routerLink="/main/salidas" class="sd-back">
+      <span class="material-symbols-rounded">arrow_back_ios</span>
+    </a>
+    @if (run(); as r) {
+      <div class="sd-header-info">
+        <h1 class="sd-title">{{ r.route_name_snapshot }}</h1>
+        <div class="sd-header-meta">
+          <span class="sd-meta-item">
+            <span class="material-symbols-rounded">calendar_today</span>
+            {{ r.scheduled_at | date:'EEE d MMM':'':'es-MX' }}
+          </span>
+          @if (r.driver?.name) {
+            <span class="sd-meta-item">
+              <span class="material-symbols-rounded">person</span>
+              {{ r.driver?.name }}
+            </span>
+          }
+        </div>
+      </div>
+      <span class="sd-status-pill" [ngClass]="'sd-pill-' + r.status">
+        {{ statusLabel(r.status) }}
+      </span>
+    }
+    <button type="button" class="sd-refresh-btn" [disabled]="loading()" (click)="refresh()" aria-label="Actualizar">
+      <span class="material-symbols-rounded">refresh</span>
+    </button>
   </header>
 
+  <!-- Alertas -->
   @if (error()) {
-    <div class="alert error">{{ error() }}</div>
+    <div class="sd-alert sd-alert-error">
+      <span class="material-symbols-rounded">error</span>
+      {{ error() }}
+    </div>
   }
-
   @if (toast()) {
-    <div class="alert ok">{{ toast() }}</div>
+    <div class="sd-alert sd-alert-ok">
+      <span class="material-symbols-rounded">check_circle</span>
+      {{ toast() }}
+    </div>
   }
 
   @if (loading()) {
-    <article class="detail-card empty-card">
+    <div class="sd-loading">
+      <div class="sd-spinner"></div>
       <p>Cargando salida...</p>
-    </article>
+    </div>
   } @else if (run(); as current) {
-    <article class="detail-card run-head-card">
-      <div class="run-head-top">
-        <div class="run-title-wrap">
-          <h1>{{ current.route_name_snapshot }}</h1>
-          <div class="counts">
-            <span class="chip">
-              <span class="chip-label">Programada</span>
-              <span class="chip-value">{{ current.scheduled_at | date: "dd/MM/yyyy" }}</span>
-            </span>
-            <span class="chip">
-              <span class="chip-label">Estado</span>
-              <span class="chip-value chip-value-accent">{{ statusLabel(current.status) }}</span>
-            </span>
+
+    <!-- ── Timeline de estados ── -->
+    <div class="sd-timeline">
+      @for (step of [
+        {id:'scheduled', label:'Programada', icon:'event'},
+        {id:'in_transit', label:'En ruta', icon:'local_shipping'},
+        {id:'completed', label:'Completada', icon:'check_circle'}
+      ]; track step.id) {
+        <div class="sd-step"
+          [class.active]="current.status === step.id"
+          [class.done]="
+            (step.id === 'scheduled' && ['in_transit','completed'].includes(current.status)) ||
+            (step.id === 'in_transit' && current.status === 'completed')
+          "
+          [class.cancelled]="current.status === 'cancelled'"
+        >
+          <span class="step-icon material-symbols-rounded">{{ step.icon }}</span>
+          <span class="step-label">{{ step.label }}</span>
+        </div>
+        @if (!$last) {
+          <div class="sd-step-line" [class.done-line]="
+            (step.id === 'scheduled' && ['in_transit','completed'].includes(current.status)) ||
+            (step.id === 'in_transit' && current.status === 'completed')
+          "></div>
+        }
+      }
+    </div>
+
+    <!-- ── Configuración (solo cuando no está en tránsito/completada) ── -->
+    @if (['draft','scheduled'].includes(current.status)) {
+      <section class="sd-card">
+        <button type="button" class="sd-card-toggle" (click)="setupOpen.set(!setupOpen())">
+          <span class="sd-card-toggle-title">
+            <span class="material-symbols-rounded">settings</span>
+            Configuración de la salida
+          </span>
+          <span class="material-symbols-rounded sd-chevron">{{ setupOpen() ? 'expand_less' : 'expand_more' }}</span>
+        </button>
+
+        @if (setupOpen()) {
+          <div class="sd-card-body">
+            <div class="sd-field-row">
+              <div class="sd-field">
+                <label class="sd-label">
+                  <span class="material-symbols-rounded">calendar_today</span>
+                  Fecha programada
+                </label>
+                <input
+                  class="input"
+                  type="date"
+                  [value]="scheduleInput()"
+                  (input)="scheduleInput.set($any($event.target).value)"
+                />
+              </div>
+              <button
+                type="button"
+                class="btn-action btn-secondary"
+                [disabled]="!canSchedule() || saving()"
+                (click)="saveSchedule()"
+              >
+                Guardar fecha
+              </button>
+            </div>
+
+            <div class="sd-field-row sd-field-row--3">
+              <div class="sd-field">
+                <label class="sd-label">
+                  <span class="material-symbols-rounded">badge</span>
+                  ID repartidor
+                </label>
+                <input class="input" type="text" [value]="driverUid()" (input)="driverUid.set($any($event.target).value)" placeholder="UID del repartidor" />
+              </div>
+              <div class="sd-field">
+                <label class="sd-label">
+                  <span class="material-symbols-rounded">person</span>
+                  Nombre repartidor
+                </label>
+                <input class="input" type="text" [value]="driverName()" (input)="driverName.set($any($event.target).value)" placeholder="Nombre visible" />
+              </div>
+              <button
+                type="button"
+                class="btn-action btn-secondary"
+                [disabled]="!canAssignDriver() || saving()"
+                (click)="saveDriver()"
+              >
+                Asignar
+              </button>
+            </div>
           </div>
-        </div>
-        <span class="status-pill">{{ statusLabel(current.status) }}</span>
-      </div>
+        }
+      </section>
+    }
 
-      <div class="run-meta">
-        <span class="meta-item">
-          <span class="meta-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-              <rect x="3" y="5" width="18" height="16" rx="3"></rect>
-              <path d="M16 3v4M8 3v4M3 10h18"></path>
-            </svg>
-          </span>
-          {{ current.scheduled_at | date: "dd/MM/yyyy" }}
-        </span>
-        <span class="meta-item">
-          <span class="meta-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-              <path d="M2 12h13l2 4h5v-5h-2.5"></path>
-              <path d="M5 12V7h10v5"></path>
-              <circle cx="7" cy="17" r="2"></circle>
-              <circle cx="17" cy="17" r="2"></circle>
-            </svg>
-          </span>
-          {{ current.driver?.name || "Sin repartidor" }}
-        </span>
-        <span class="meta-item">
-          <span class="meta-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-              <path d="M3 7.5L12 3l9 4.5-9 4.5-9-4.5z"></path>
-              <path d="M3 7.5V16.5L12 21l9-4.5V7.5"></path>
-            </svg>
-          </span>
-          Pedidos: {{ current.counts.orders_total }}
-        </span>
-        <span class="meta-item">
-          <span class="meta-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-              <path d="M3 7.5L12 3l9 4.5-9 4.5-9-4.5z"></path>
-              <path d="M3 7.5V16.5L12 21l9-4.5V7.5"></path>
-            </svg>
-          </span>
-          Paquetes: {{ current.counts.packages_total }}
-        </span>
-        <span class="meta-item">
-          <span class="meta-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-              <path d="M7 6h10v4a5 5 0 0 1-10 0V6z"></path>
-              <path d="M8 3h8"></path>
-              <path d="M5 20h14"></path>
-            </svg>
-          </span>
-          Saldo: {{ money(current.counts.balance_total) }}
-        </span>
-      </div>
-    </article>
-
-    <section class="detail-section">
-      <h3>Gestión de salida</h3>
-      <article class="detail-card actions-card">
-        <div class="action-grid">
-          <label>
-            Programar fecha
-            <input class="input" type="date" [value]="scheduleInput()" (input)="scheduleInput.set($any($event.target).value)" />
-          </label>
-          <button type="button" class="btn secondary" [disabled]="!canSchedule() || saving()" (click)="saveSchedule()">Guardar fecha</button>
-        </div>
-
-        <div class="action-grid two-inputs">
-          <label>
-            UID repartidor
-            <input class="input" type="text" [value]="driverUid()" (input)="driverUid.set($any($event.target).value)" />
-          </label>
-          <label>
-            Nombre repartidor
-            <input class="input" type="text" [value]="driverName()" (input)="driverName.set($any($event.target).value)" />
-          </label>
-          <button type="button" class="btn secondary" [disabled]="!canAssignDriver() || saving()" (click)="saveDriver()">Asignar repartidor</button>
-        </div>
-
-        <div class="actions-row">
-          <button type="button" class="btn primary" [disabled]="!canStart() || saving()" (click)="startRun()">Iniciar salida</button>
-          <button type="button" class="btn primary" [disabled]="!canComplete() || saving()" (click)="completeRun()">Completar salida</button>
-          <button type="button" class="btn danger" [disabled]="!canCancel() || !canCancelRun(current) || saving()" (click)="cancelRun()">Cancelar salida</button>
-          <button type="button" class="btn secondary" (click)="copyDeliveryList()">Copiar lista de entregas</button>
-          <button type="button" class="btn secondary" (click)="copyAddresses()">Copiar direcciones</button>
-        </div>
-      </article>
-    </section>
-
-    <section class="detail-section">
-      <h3>Paradas</h3>
-      <article class="detail-card">
-        @if (stops().length === 0) {
-          <p class="empty">Sin pedidos asignados.</p>
-        } @else {
-          <div class="stops">
-            @for (stop of stops(); track stop.order_id) {
-              <article class="stop-row">
-                <div>
-                  <p class="code">{{ stop.customer_name }}</p>
-                  <p class="sub">Pedido {{ stop.order_number }}</p>
-                  <p class="sub">ID {{ stop.order_id }}</p>
-                  <p class="sub">{{ stop.packages_count }} paquetes - {{ money(stop.balance_due) }}</p>
-                </div>
-                <span class="stop-status">{{ stop.stop_status }}</span>
-              </article>
+    <!-- ── Acción principal contextual ── -->
+    <section class="sd-primary-action">
+      @switch (current.status) {
+        @case ('draft') {
+          <div class="sd-action-hint">
+            <span class="material-symbols-rounded">info</span>
+            Asigna una fecha y repartidor, luego programa la salida.
+          </div>
+          <button type="button" class="btn-cta btn-cta--blue" [disabled]="!canSchedule() || saving()" (click)="saveSchedule()">
+            <span class="material-symbols-rounded">event</span>
+            Programar salida
+          </button>
+        }
+        @case ('scheduled') {
+          <div class="sd-action-hint">
+            <span class="material-symbols-rounded">info</span>
+            Salida programada para {{ current.scheduled_at | date:'dd/MM/yy' }}.
+            Cuando el repartidor salga, inicia la ruta.
+          </div>
+          <div class="sd-action-row">
+            <button type="button" class="btn-cta btn-cta--green" [disabled]="!canStart() || saving()" (click)="startRun()">
+              <span class="material-symbols-rounded">play_arrow</span>
+              {{ saving() ? 'Iniciando...' : 'Iniciar ruta' }}
+            </button>
+            @if (canCancel() && canCancelRun(current)) {
+              <button type="button" class="btn-cta btn-cta--ghost-danger" [disabled]="saving()" (click)="cancelRun()">
+                <span class="material-symbols-rounded">cancel</span>
+                Cancelar salida
+              </button>
             }
           </div>
         }
-      </article>
+        @case ('in_transit') {
+          <!-- Progreso de paradas -->
+          <div class="sd-progress-row">
+            <div class="sd-progress-bar">
+              <div class="sd-progress-fill" [style.width.%]="stops().length > 0 ? (deliveredCount() / stops().length * 100) : 0"></div>
+            </div>
+            <span class="sd-progress-label">{{ deliveredCount() }}/{{ stops().length }} entregados</span>
+          </div>
+          <div class="sd-progress-chips">
+            <span class="sd-chip sd-chip--green">{{ deliveredCount() }} entregados</span>
+            @if (failedCount() > 0) {
+              <span class="sd-chip sd-chip--red">{{ failedCount() }} no entregados</span>
+            }
+            <span class="sd-chip sd-chip--gray">{{ pendingCount() }} pendientes</span>
+          </div>
+          <div class="sd-action-row">
+            <button type="button" class="btn-cta btn-cta--green" [disabled]="!canComplete() || saving() || pendingCount() > 0" (click)="completeRun()">
+              <span class="material-symbols-rounded">check_circle</span>
+              {{ saving() ? 'Completando...' : 'Completar ruta' }}
+            </button>
+            @if (pendingCount() > 0) {
+              <p class="sd-action-warn">Aún hay {{ pendingCount() }} paradas sin marcar.</p>
+            }
+          </div>
+        }
+        @case ('completed') {
+          <div class="sd-status-done">
+            <span class="material-symbols-rounded">check_circle</span>
+            <p>Ruta completada el {{ current.updatedAt | date:'dd/MM/yy HH:mm' }}</p>
+          </div>
+        }
+        @case ('cancelled') {
+          <div class="sd-status-cancelled">
+            <span class="material-symbols-rounded">cancel</span>
+            <p>Esta salida fue cancelada.</p>
+          </div>
+        }
+      }
     </section>
-  } @else {
-    <article class="detail-card empty-card">
-      <p>No encontramos esta salida.</p>
-    </article>
-  }
-</section>
 
+    <!-- ── Acciones secundarias ── -->
+    @if (current.status !== 'cancelled') {
+      <div class="sd-secondary-actions">
+        <button type="button" class="btn-ghost-sm" (click)="copyDeliveryList()">
+          <span class="material-symbols-rounded">content_copy</span>
+          Lista de entregas
+        </button>
+        <button type="button" class="btn-ghost-sm" (click)="copyAddresses()">
+          <span class="material-symbols-rounded">location_on</span>
+          Copiar direcciones
+        </button>
+      </div>
+    }
+
+    <!-- ── Paradas ── -->
+    <section class="sd-stops-section">
+      <div class="sd-section-head">
+        <h2 class="sd-section-title">
+          <span class="material-symbols-rounded">pin_drop</span>
+          Paradas ({{ stops().length }})
+        </h2>
+      </div>
+
+      @if (stops().length === 0) {
+        <div class="sd-empty">
+          <span class="material-symbols-rounded">location_off</span>
+          <p>Sin pedidos asignados a esta salida.</p>
+        </div>
+      } @else {
+        <ul class="sd-stops-list">
+          @for (stop of stops(); track stop.order_id) {
+            <li class="sd-stop-card" [class.sd-stop-delivered]="stop.stop_status === 'delivered'" [class.sd-stop-failed]="stop.stop_status === 'failed'">
+              <div class="sd-stop-top">
+                <div class="sd-stop-info">
+                  <p class="stop-name">{{ stop.customer_name }}</p>
+                  <p class="stop-sub">
+                    Pedido {{ stop.order_number }}
+                    · {{ stop.packages_count }} paquete{{ stop.packages_count !== 1 ? 's' : '' }}
+                    @if (stop.balance_due > 0) {
+                      · <strong>{{ money(stop.balance_due) }}</strong> por cobrar
+                    }
+                  </p>
+                </div>
+                <span class="sd-stop-badge" [ngClass]="stopStatusClass(stop.stop_status)">
+                  {{ stopStatusLabel(stop.stop_status) }}
+                </span>
+              </div>
+
+              <!-- Botones de acción por parada (solo en tránsito) -->
+              @if (current.status === 'in_transit' && stop.stop_status === 'pending') {
+                <div class="sd-stop-actions">
+                  <button
+                    type="button"
+                    class="stop-btn stop-btn--green"
+                    [disabled]="markingStopId() === stop.order_id"
+                    (click)="markStop(stop.order_id, 'delivered')"
+                  >
+                    <span class="material-symbols-rounded">check</span>
+                    Entregado
+                  </button>
+                  <button
+                    type="button"
+                    class="stop-btn stop-btn--amber"
+                    [disabled]="markingStopId() === stop.order_id"
+                    (click)="markStop(stop.order_id, 'partial')"
+                  >
+                    <span class="material-symbols-rounded">rule</span>
+                    Parcial
+                  </button>
+                  <button
+                    type="button"
+                    class="stop-btn stop-btn--red"
+                    [disabled]="markingStopId() === stop.order_id"
+                    (click)="markStop(stop.order_id, 'failed')"
+                  >
+                    <span class="material-symbols-rounded">close</span>
+                    No entregado
+                  </button>
+                </div>
+              }
+              @if (current.status === 'in_transit' && stop.stop_status !== 'pending') {
+                <button
+                  type="button"
+                  class="stop-btn-undo"
+                  [disabled]="markingStopId() === stop.order_id"
+                  (click)="markStop(stop.order_id, 'pending')"
+                >
+                  <span class="material-symbols-rounded">undo</span>
+                  Deshacer
+                </button>
+              }
+            </li>
+          }
+        </ul>
+      }
+    </section>
+
+  } @else {
+    <div class="sd-empty">
+      <span class="material-symbols-rounded">search_off</span>
+      <p>No se encontró esta salida.</p>
+    </div>
+  }
+
+</div>

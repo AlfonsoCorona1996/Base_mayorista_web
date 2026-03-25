@@ -358,6 +358,17 @@ export class RouteRunsService {
     });
   }
 
+  /** Marca el estado de entrega de una parada */
+  async markStop(runId: string, orderId: string, status: StopStatus): Promise<void> {
+    const stopRef = doc(FIRESTORE, "route_runs", runId, "stops", orderId);
+    await updateDoc(stopRef, {
+      stop_status: status,
+      delivered_at: status === "delivered" || status === "partial"
+        ? serverTimestamp()
+        : null,
+    });
+  }
+
   private async findOpenRunForDate(routeId: string | null, scheduledDate: Date): Promise<RouteRunDoc | null> {
     if (!routeId) return null;
     const start = new Date(scheduledDate);

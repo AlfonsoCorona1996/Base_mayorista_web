@@ -5,15 +5,41 @@
         <span class="material-symbols-rounded" aria-hidden="true">inventory_2</span>
         Gestion de catalogo
       </p>
-      <h1 class="catalog-title">Catalogo publicado</h1>
-      <p class="catalog-subtitle">Aqui aparecen los productos en estado validated.</p>
+      <h1 class="catalog-title">Catalogo</h1>
+      <p class="catalog-subtitle">
+        {{ activeTab() === 'catalog' ? 'Productos publicados y validados.' : 'Productos ingresados manualmente en pedidos.' }}
+      </p>
     </div>
 
-    <button type="button" class="btn btn-ghost" (click)="reload()" [disabled]="loading()">
-      <span class="material-symbols-rounded" aria-hidden="true">refresh</span>
-      {{ loading() ? "Actualizando..." : "Actualizar" }}
-    </button>
+    @if (activeTab() === 'catalog') {
+      <button type="button" class="btn btn-ghost" (click)="reload()" [disabled]="loading()">
+        <span class="material-symbols-rounded" aria-hidden="true">refresh</span>
+        {{ loading() ? "Actualizando..." : "Actualizar" }}
+      </button>
+    } @else {
+      <button type="button" class="btn btn-ghost" (click)="manualSvc.load()">
+        <span class="material-symbols-rounded">refresh</span>
+        Actualizar
+      </button>
+    }
   </header>
+
+  <!-- ── Tabs ────────────────────────────────────────────── -->
+  <nav class="catalog-tabs">
+    <button type="button" class="catalog-tab" [class.active]="activeTab() === 'catalog'" (click)="setTab('catalog')">
+      <span class="material-symbols-rounded">inventory_2</span>
+      Catálogo oficial
+    </button>
+    <button type="button" class="catalog-tab" [class.active]="activeTab() === 'manuales'" (click)="setTab('manuales')">
+      <span class="material-symbols-rounded">edit_note</span>
+      Manuales
+      @if (manualSvc.entries().length) {
+        <span class="tab-badge">{{ manualSvc.entries().length }}</span>
+      }
+    </button>
+  </nav>
+
+  @if (activeTab() === 'catalog') {
 
   @if (error()) {
     <div class="notice notice-error">
@@ -197,4 +223,118 @@
       }
     }
   }
+
+  } <!-- /catalog tab -->
+
+  <!-- ────────────────────────────────────────────────────────
+       PESTAÑA: PRODUCTOS MANUALES
+  ──────────────────────────────────────────────────────────── -->
+  @if (activeTab() === 'manuales') {
+
+    @if (manualError()) {
+      <div class="notice notice-error">
+        <span class="material-symbols-rounded">error</span>
+        <p>{{ manualError() }}</p>
+      </div>
+    }
+
+    <!-- Buscador -->
+    <div class="filters-card surface-card">
+      <label class="field search-field" for="manual-search">
+        <span class="material-symbols-rounded">search</span>
+        <input
+          id="manual-search"
+          type="text"
+          class="input"
+          [ngModel]="manualSearch()"
+          (ngModelChange)="manualSearch.set($event)"
+          placeholder="Buscar por nombre, talla o color…"
+        />
+      </label>
+      <p class="manual-count-hint">
+        {{ manualFiltered().length }} productos manuales
+        @if (manualSearch()) { · filtrado de {{ manualSvc.entries().length }} }
+      </p>
+    </div>
+
+    @if (manualSvc.loading()) {
+      <div class="loading-state surface-card">
+        <div class="spinner"></div>
+        <p>Cargando historial manual…</p>
+      </div>
+    } @else if (manualFiltered().length === 0) {
+      <div class="empty-state surface-card">
+        <span class="material-symbols-rounded empty-icon">edit_note</span>
+        <p>No hay productos en el historial manual.</p>
+        <p class="empty-hint">Aparecen aquí los productos que agregas manualmente al hacer un pedido.</p>
+      </div>
+    } @else {
+      <section class="manual-grid">
+        @for (entry of manualFiltered(); track entry.id) {
+          <article class="manual-card surface-card" [class.busy]="isManualBusy(entry.id)">
+            <div class="mc-body">
+              <h3 class="mc-title">{{ entry.title }}</h3>
+              <div class="mc-meta">
+                @if (entry.variant) {
+                  <span class="mc-chip">
+                    <span class="material-symbols-rounded">straighten</span>
+                    {{ entry.variant }}
+                  </span>
+                }
+                @if (entry.color) {
+                  <span class="mc-chip">
+                    <span class="material-symbols-rounded">palette</span>
+                    {{ entry.color }}
+                  </span>
+                }
+              </div>
+              <div class="mc-prices">
+                @if (entry.price_clienta) {
+                  <span class="mc-price">
+                    Precio clienta: <strong>{{ entry.price_clienta | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong>
+                  </span>
+                }
+                @if (entry.price_cost) {
+                  <span class="mc-price mc-price-cost">
+                    Costo: <strong>{{ entry.price_cost | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong>
+                  </span>
+                }
+              </div>
+              <div class="mc-stats">
+                <span class="mc-stat">
+                  <span class="material-symbols-rounded">repeat</span>
+                  Usado {{ entry.used_count }}x
+                </span>
+                @if (entry.last_used_at) {
+                  <span class="mc-stat">
+                    <span class="material-symbols-rounded">schedule</span>
+                    {{ entry.last_used_at | date:'d MMM yy' }}
+                  </span>
+                }
+              </div>
+            </div>
+            <div class="mc-actions">
+              <button type="button"
+                class="btn btn-primary btn-sm"
+                [disabled]="isManualBusy(entry.id)"
+                (click)="promoteToReview(entry)"
+                title="Enviar a la cola de revisión para completar y publicar en catálogo">
+                <span class="material-symbols-rounded">upload</span>
+                Promover
+              </button>
+              <button type="button"
+                class="btn btn-ghost btn-sm btn-danger"
+                [disabled]="isManualBusy(entry.id)"
+                (click)="deleteManual(entry)"
+                title="Eliminar del historial">
+                <span class="material-symbols-rounded">delete</span>
+              </button>
+            </div>
+          </article>
+        }
+      </section>
+    }
+
+  } <!-- /manuales tab -->
+
 </section>

@@ -306,20 +306,27 @@
 
                     <div class="permission-list">
                       @for (group of userPermissionGroups; track group.sectionKey) {
-                        <details class="permission-group">
+                        <details class="permission-group" [class.permission-group-active]="group.sectionKey !== 'general' && userSectionGroupValue(group.sectionKey)">
                           <summary class="permission-summary">
                             <div class="permission-summary-main">
                               <span class="permission-icon" aria-hidden="true">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                                  <rect x="3" y="4" width="18" height="16" rx="3"></rect>
-                                  <path d="M3 9h18"></path>
-                                  <path d="M8 14h3"></path>
-                                  <path d="M14 14h3"></path>
-                                </svg>
+                                @if (group.sectionKey !== "general" && userSectionGroupValue(group.sectionKey)) {
+                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                    <path d="M12 2l8 4v6c0 5.2-3.4 9.6-8 10-4.6-.4-8-4.8-8-10V6l8-4z"></path>
+                                    <path d="M9 12l2 2 4-4"></path>
+                                  </svg>
+                                } @else {
+                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                    <rect x="3" y="4" width="18" height="16" rx="3"></rect>
+                                    <path d="M3 9h18"></path>
+                                    <path d="M8 14h3"></path>
+                                    <path d="M14 14h3"></path>
+                                  </svg>
+                                }
                               </span>
                               <div>
                                 <h5>{{ group.title }}</h5>
-                                <p>{{ group.keys.length }} capabilities</p>
+                                <p>{{ group.keys.length }} permisos disponibles</p>
                               </div>
                             </div>
                             <div class="permission-summary-tools">
@@ -331,7 +338,7 @@
                                     [disabled]="isSectionGroupToggleDisabled(group.sectionKey)"
                                     (change)="setUserSectionGroupValue(group.sectionKey, $any($event.target).checked)"
                                   />
-                                  Activa
+                                  Sección activa
                                 </label>
                               }
                               <span class="summary-caret" aria-hidden="true"></span>
@@ -340,12 +347,12 @@
 
                           <div class="permission-body">
                             @if (group.keys.length === 0) {
-                              <p class="empty">Sin capabilities asociadas a esta sección.</p>
+                              <p class="empty">Esta sección no tiene permisos individuales configurables.</p>
                             } @else {
                               <div class="permission-cap-list">
                                 @for (key of group.keys; track key) {
-                                  <label class="permission-cap-row">
-                                    <span>{{ capabilityLabel(key) }}</span>
+                                  <label class="permission-cap-row" [class.cap-row-active]="userCapValue(key)" [class.cap-row-disabled]="isCapabilityToggleDisabled(key)">
+                                    <span class="cap-label">{{ capabilityLabel(key) }}</span>
                                     <input
                                       type="checkbox"
                                       [checked]="userCapValue(key)"
@@ -512,20 +519,27 @@
 
           <div class="permission-list">
             @for (group of userPermissionGroups; track group.sectionKey) {
-              <details class="permission-group">
+              <details class="permission-group" [class.permission-group-active]="group.sectionKey !== 'general' && roleSectionGroupValue(group.sectionKey)">
                 <summary class="permission-summary">
                   <div class="permission-summary-main">
                     <span class="permission-icon" aria-hidden="true">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                        <rect x="3" y="4" width="18" height="16" rx="3"></rect>
-                        <path d="M3 9h18"></path>
-                        <path d="M8 14h3"></path>
-                        <path d="M14 14h3"></path>
-                      </svg>
+                      @if (group.sectionKey !== "general" && roleSectionGroupValue(group.sectionKey)) {
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                          <path d="M12 2l8 4v6c0 5.2-3.4 9.6-8 10-4.6-.4-8-4.8-8-10V6l8-4z"></path>
+                          <path d="M9 12l2 2 4-4"></path>
+                        </svg>
+                      } @else {
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                          <rect x="3" y="4" width="18" height="16" rx="3"></rect>
+                          <path d="M3 9h18"></path>
+                          <path d="M8 14h3"></path>
+                          <path d="M14 14h3"></path>
+                        </svg>
+                      }
                     </span>
                     <div>
                       <h5>{{ group.title }}</h5>
-                      <p>{{ roleGroupEnabledCount(group.keys) }} activas de {{ group.keys.length }}</p>
+                      <p>{{ roleGroupEnabledCount(group.keys) }} de {{ group.keys.length }} permisos activos</p>
                     </div>
                   </div>
 
@@ -538,7 +552,7 @@
                           [disabled]="isRoleSectionGroupToggleDisabled(group.sectionKey)"
                           (change)="setRoleSectionGroupValue(group.sectionKey, $any($event.target).checked)"
                         />
-                        Activa
+                        Sección activa
                       </label>
                     }
                     <span class="summary-caret" aria-hidden="true"></span>
@@ -547,12 +561,12 @@
 
                 <div class="permission-body">
                   @if (group.keys.length === 0) {
-                    <p class="empty">Sin capabilities asociadas a esta sección.</p>
+                    <p class="empty">Esta sección no tiene permisos individuales configurables.</p>
                   } @else {
                     <div class="permission-cap-list">
                       @for (key of group.keys; track key) {
-                        <label class="permission-cap-row">
-                          <span>{{ capabilityLabel(key) }}</span>
+                        <label class="permission-cap-row" [class.cap-row-active]="roleDraft().capabilities[key]" [class.cap-row-disabled]="isRoleCapabilityToggleDisabled(key)">
+                          <span class="cap-label">{{ capabilityLabel(key) }}</span>
                           <input
                             type="checkbox"
                             [checked]="roleDraft().capabilities[key]"

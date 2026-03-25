@@ -1,4 +1,4 @@
-﻿@if (initialHydration()) {
+@if (initialHydration()) {
   <section class="page page-skeleton" aria-label="Cargando detalle del pedido" aria-busy="true">
     <header class="page-head skeleton-head">
       <div class="skeleton-bone skeleton-line skeleton-line--sm"></div>
@@ -118,7 +118,33 @@
             (click)="generateSalesNote(current)"
           >
             <span class="material-symbols-rounded btn-icon" aria-hidden="true">receipt_long</span>
-            {{ generatingSalesNote() ? "Generando nota..." : "Generar nota" }}
+            {{ generatingSalesNote() ? "Generando..." : "Generar nota" }}
+          </button>
+          <button
+            type="button"
+            class="btn ghost with-icon"
+            [disabled]="sendingWaNote()"
+            (click)="sendSalesNoteWa(current)"
+            title="Enviar nota de venta por WhatsApp"
+          >
+            <span class="material-symbols-rounded btn-icon">chat</span>
+            {{ sendingWaNote() ? "Enviando…" : "Nota por WA" }}
+          </button>
+          @if (waNoteSent(); as r) {
+            <span class="wa-note-result" [class.ok]="r.ok" [class.err]="!r.ok">
+              <span class="material-symbols-rounded">{{ r.ok ? 'check_circle' : 'error' }}</span>
+              {{ r.ok ? 'Enviada ✓' : r.msg }}
+            </span>
+          }
+        }
+        @if (canCloseOrder(current)) {
+          <button
+            type="button"
+            class="btn payment-close-btn with-icon"
+            (click)="openPaymentModal()"
+          >
+            <span class="material-symbols-rounded btn-icon" aria-hidden="true">payments</span>
+            Cerrar pedido
           </button>
         }
       </div>
@@ -1668,19 +1694,50 @@
               </div>
             </div>
           }
-          <div class="field">
+          <div class="field manual-title-field">
             <label>
               <span class="material-symbols-rounded" aria-hidden="true">sell</span>
               Producto
+              @if (isManualSource() && manualHistory.entries().length > 0) {
+                <span class="manual-history-hint">· {{ manualHistory.entries().length }} en historial</span>
+              }
             </label>
-            <input
-              class="input"
-              type="text"
-              [(ngModel)]="newItemTitle"
-              [class.input-readonly]="lockItemFields()"
-              [readonly]="lockItemFields()"
-              [disabled]="!canSubmitNewItem() || !vm.canEditItems"
-            />
+            <div class="manual-autocomplete-wrap">
+              <input
+                class="input"
+                type="text"
+                [(ngModel)]="newItemTitle"
+                [class.input-readonly]="lockItemFields()"
+                [readonly]="lockItemFields()"
+                [disabled]="!canSubmitNewItem() || !vm.canEditItems"
+                (focus)="manualSuggestionsOpen.set(isManualSource())"
+                (input)="manualSuggestionsOpen.set(isManualSource() && newItemTitle().length >= 2)"
+                autocomplete="off"
+              />
+              @if (isManualSource() && manualSuggestionsOpen() && manualSuggestions().length > 0) {
+                <ul class="manual-suggestions-dropdown" role="listbox">
+                  @for (entry of manualSuggestions(); track entry.id) {
+                    <li
+                      class="manual-suggestion-item"
+                      role="option"
+                      (click)="applyManualSuggestion(entry)"
+                    >
+                      <div class="msug-top">
+                        <span class="msug-title">{{ entry.title }}</span>
+                        <span class="msug-uses">{{ entry.used_count }}x</span>
+                      </div>
+                      @if (entry.variant || entry.color) {
+                        <div class="msug-meta">
+                          @if (entry.variant) { <span>{{ entry.variant }}</span> }
+                          @if (entry.color) { <span>· {{ entry.color }}</span> }
+                          @if (entry.price_clienta) { <span>· ${{ entry.price_clienta }}</span> }
+                        </div>
+                      }
+                    </li>
+                  }
+                </ul>
+              }
+            </div>
           </div>
           @if (catalogVariantOptions().length > 0) {
             <div class="field">
@@ -1846,6 +1903,100 @@
         <div class="sheet-actions">
           <button type="button" class="btn primary" (click)="confirmAssign()">Confirmar</button>
           <button type="button" class="btn ghost" (click)="closeAssignModal()">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (paymentModalOpen() && order(); as current) {
+    <div class="sheet-backdrop sheet-backdrop--center" (click)="closePaymentModal()">
+      <div class="sheet payment-sheet" role="dialog" aria-modal="true" aria-labelledby="payment-modal-title" (click)="$event.stopPropagation()">
+        <div class="sheet-handle" aria-hidden="true"></div>
+
+        <div class="payment-sheet-header">
+          <span class="material-symbols-rounded payment-sheet-icon" aria-hidden="true">payments</span>
+          <h2 id="payment-modal-title">Cerrar pedido</h2>
+        </div>
+
+        @if (!['en_ruta','entregado','delivered','delivered_partial','pago_pendiente','pagado_parcial'].includes(current.status)) {
+          <div class="payment-context-note">
+            <span class="material-symbols-rounded" style="font-size:16px;flex-shrink:0">info</span>
+            El pedido está en estado <strong>{{ statusLabel(current.status) }}</strong>. Al cerrar se marcará como entregado y pagado (o con saldo pendiente según el monto).
+          </div>
+        }
+
+        <div class="payment-summary-row">
+          <div class="payment-summary-item">
+            <span class="payment-summary-label">Total del pedido</span>
+            <span class="payment-summary-value">${{ totals().totalClienta | number:'1.2-2' }}</span>
+          </div>
+          @if ((current.totals.paid_amount || 0) > 0) {
+            <div class="payment-summary-item">
+              <span class="payment-summary-label">Ya pagado</span>
+              <span class="payment-summary-value payment-summary-value--paid">${{ (current.totals.paid_amount || 0) | number:'1.2-2' }}</span>
+            </div>
+          }
+          <div class="payment-summary-item">
+            <span class="payment-summary-label">Saldo pendiente</span>
+            <span class="payment-summary-value payment-summary-value--balance">${{ orderBalanceDue(current) | number:'1.2-2' }}</span>
+          </div>
+        </div>
+
+        <div class="sheet-field">
+          <label class="sheet-label" for="payment-amount-input">
+            <span class="material-symbols-rounded" aria-hidden="true" style="font-size:16px;vertical-align:-3px">attach_money</span>
+            Monto recibido
+          </label>
+          <input
+            id="payment-amount-input"
+            class="input payment-amount-input"
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="0.00"
+            [ngModel]="paymentAmount()"
+            (ngModelChange)="paymentAmount.set($event)"
+            (keyup.enter)="confirmPayment(current)"
+            autofocus
+          />
+          <div class="payment-quick-btns">
+            <button
+              type="button"
+              class="btn ghost payment-quick-btn"
+              (click)="markFullyPaid(current)"
+            >
+              Pago completo (${{ totals().totalClienta | number:'1.2-2' }})
+            </button>
+            <button
+              type="button"
+              class="btn ghost payment-quick-btn"
+              (click)="paymentAmount.set('0')"
+            >
+              Sin pago por ahora
+            </button>
+          </div>
+        </div>
+
+        @if (paymentError()) {
+          <p class="payment-error">{{ paymentError() }}</p>
+        }
+
+        <div class="sheet-actions">
+          <button
+            type="button"
+            class="btn primary"
+            [disabled]="paymentSaving()"
+            (click)="confirmPayment(current)"
+          >
+            @if (paymentSaving()) {
+              Guardando...
+            } @else {
+              Confirmar y cerrar pedido
+            }
+          </button>
+          <button type="button" class="btn ghost" [disabled]="paymentSaving()" (click)="closePaymentModal()">
+            Cancelar
+          </button>
         </div>
       </div>
     </div>

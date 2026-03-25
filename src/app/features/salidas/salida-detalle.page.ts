@@ -1,14 +1,14 @@
 import { Component, computed, inject, signal, ChangeDetectionStrategy } from "@angular/core";
-import { DatePipe } from "@angular/common";
+import { DatePipe, NgClass } from "@angular/common";
 import { ActivatedRoute, Router, RouterLink } from "@angular/router";
 import { AuthzService } from "../../core/authz.service";
-import { RouteRunDoc, RouteRunStopDoc, RouteRunsService } from "../../services/route-runs.service";
+import { RouteRunDoc, RouteRunStopDoc, RouteRunsService, StopStatus } from "../../services/route-runs.service";
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   selector: "app-salida-detalle-page",
-  imports: [RouterLink, DatePipe],
+  imports: [RouterLink, DatePipe, NgClass],
   templateUrl: "./salida-detalle.page.html",
   styleUrl: "./salida-detalle.page.css",
 })
@@ -34,6 +34,14 @@ export default class SalidaDetallePage {
   canStart = computed(() => this.authz.canCap("cap.runs.start"));
   canComplete = computed(() => this.authz.canCap("cap.runs.complete"));
   canCancel = computed(() => this.authz.canCap("cap.runs.cancel"));
+
+  setupOpen = signal(true);
+  markingStopId = signal<string | null>(null);
+
+  // Progreso de paradas
+  deliveredCount = computed(() => this.stops().filter(s => s.stop_status === "delivered" || s.stop_status === "partial").length);
+  failedCount    = computed(() => this.stops().filter(s => s.stop_status === "failed").length);
+  pendingCount   = computed(() => this.stops().filter(s => s.stop_status === "pending").length);
 
   constructor() {
     this.runId.set(this.route.snapshot.paramMap.get("runId") || "");
@@ -169,6 +177,31 @@ export default class SalidaDetallePage {
       .join("\n");
     await navigator.clipboard.writeText(text || "Sin direcciones.");
     this.toast.set("Direcciones copiadas.");
+  }
+
+  async markStop(orderId: string, status: StopStatus): Promise<void> {
+    const run = this.run();
+    if (!run || this.markingStopId()) return;
+    this.markingStopId.set(orderId);
+    this.error.set(null);
+    try {
+      await this.routeRuns.markStop(run.runId, orderId, status);
+      this.stops.update(rows => rows.map(s =>
+        s.order_id === orderId ? { ...s, stop_status: status } : s
+      ));
+    } catch (err: any) {
+      this.error.set(err?.message || "No se pudo actualizar la parada.");
+    } finally {
+      this.markingStopId.set(null);
+    }
+  }
+
+  stopStatusLabel(s: StopStatus): string {
+    return { pending: "Pendiente", delivered: "Entregado", partial: "Parcial", failed: "No entregado" }[s];
+  }
+
+  stopStatusClass(s: StopStatus): string {
+    return { pending: "stop-pending", delivered: "stop-delivered", partial: "stop-partial", failed: "stop-failed" }[s];
   }
 
   money(value: number): string {

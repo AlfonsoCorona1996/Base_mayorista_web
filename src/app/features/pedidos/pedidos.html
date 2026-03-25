@@ -1,4 +1,4 @@
-﻿<section class="orders-page">
+<section class="orders-page">
   <header class="page-head surface-card">
     <div class="head-copy">
       <p class="kicker">
@@ -81,6 +81,30 @@
         }
       </select>
     </label>
+
+    <!-- Toggle de vista -->
+    <div class="view-toggle" role="group" aria-label="Cambiar vista">
+      <button
+        type="button"
+        class="view-toggle-btn"
+        [class.active]="viewMode() === 'cards'"
+        (click)="viewMode.set('cards')"
+        title="Vista tarjetas"
+        aria-label="Vista tarjetas"
+      >
+        <span class="material-symbols-rounded">grid_view</span>
+      </button>
+      <button
+        type="button"
+        class="view-toggle-btn"
+        [class.active]="viewMode() === 'table'"
+        (click)="viewMode.set('table')"
+        title="Vista tabla"
+        aria-label="Vista tabla"
+      >
+        <span class="material-symbols-rounded">table_rows</span>
+      </button>
+    </div>
   </section>
 
   <div class="intent-tabs surface-card" role="tablist" aria-label="Filtros por intencion">
@@ -342,5 +366,125 @@
       </div>
     </div>
   }
+
+  <!-- ── Vista tabla ─────────────────────────────────────────────────── -->
+  @if (viewMode() === 'table') {
+    <section class="table-view surface-card">
+
+      <!-- Filtros de tabla -->
+      <div class="table-filters">
+        <div class="tfilter-group">
+          <label class="tfilter-label" for="tf-from">
+            <span class="material-symbols-rounded">calendar_today</span>
+            Desde
+          </label>
+          <input id="tf-from" type="date" class="input tfilter-input" [(ngModel)]="tableDateFrom" />
+        </div>
+        <div class="tfilter-group">
+          <label class="tfilter-label" for="tf-to">
+            <span class="material-symbols-rounded">event</span>
+            Hasta
+          </label>
+          <input id="tf-to" type="date" class="input tfilter-input" [(ngModel)]="tableDateTo" />
+        </div>
+        <div class="tfilter-count">
+          <span class="material-symbols-rounded">format_list_numbered</span>
+          {{ tableRows().length }} pedidos
+        </div>
+        @if (tableDateFrom() || tableDateTo()) {
+          <button type="button" class="tfilter-clear" (click)="tableDateFrom.set(''); tableDateTo.set('')">
+            <span class="material-symbols-rounded">close</span>
+            Limpiar fechas
+          </button>
+        }
+      </div>
+
+      <!-- Tabla -->
+      <div class="table-scroll">
+        <table class="orders-table">
+          <thead>
+            <tr>
+              <th class="th-sortable" (click)="toggleTableSort('created_at')">
+                Fecha
+                @if (tableSortCol() === 'created_at') {
+                  <span class="material-symbols-rounded sort-icon">{{ tableSortDir() === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
+                }
+              </th>
+              <th class="th-sortable" (click)="toggleTableSort('customer')">
+                Clienta
+                @if (tableSortCol() === 'customer') {
+                  <span class="material-symbols-rounded sort-icon">{{ tableSortDir() === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
+                }
+              </th>
+              <th class="th-sortable" (click)="toggleTableSort('route')">
+                Ruta
+                @if (tableSortCol() === 'route') {
+                  <span class="material-symbols-rounded sort-icon">{{ tableSortDir() === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
+                }
+              </th>
+              <th class="th-sortable" (click)="toggleTableSort('status')">
+                Estado
+                @if (tableSortCol() === 'status') {
+                  <span class="material-symbols-rounded sort-icon">{{ tableSortDir() === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
+                }
+              </th>
+              <th>Productos</th>
+              <th class="th-sortable th-right" (click)="toggleTableSort('total')">
+                Total
+                @if (tableSortCol() === 'total') {
+                  <span class="material-symbols-rounded sort-icon">{{ tableSortDir() === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
+                }
+              </th>
+              <th class="th-sortable" (click)="toggleTableSort('updated_at')">
+                Últ. cambio
+                @if (tableSortCol() === 'updated_at') {
+                  <span class="material-symbols-rounded sort-icon">{{ tableSortDir() === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
+                }
+              </th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (order of tableRows(); track order.order_id) {
+              <tr class="trow" (click)="open(order.order_id)">
+                <td class="td-date">{{ order.created_at | date:'dd/MM/yy' }}</td>
+                <td class="td-customer">
+                  <span class="tc-name">{{ customerName(order.customer_id) }}</span>
+                </td>
+                <td class="td-route">
+                  <span class="tc-route">{{ routeName(order.route_id) }}</span>
+                </td>
+                <td class="td-status">
+                  <span class="trow-status" [ngClass]="tableStatusClass(order.status)">
+                    {{ tableStatusLabel(order.status) }}
+                  </span>
+                </td>
+                <td class="td-items">{{ (order.items || []).length }}</td>
+                <td class="td-total">
+                  @if (order.totals.total_amount > 0) {
+                    {{ order.totals.total_amount | currency:'MXN':'symbol-narrow':'1.0-0' }}
+                  } @else {
+                    <span class="tc-empty">—</span>
+                  }
+                </td>
+                <td class="td-updated">{{ order.updated_at | date:'dd/MM HH:mm' }}</td>
+                <td class="td-action">
+                  <span class="material-symbols-rounded tc-arrow">chevron_right</span>
+                </td>
+              </tr>
+            } @empty {
+              <tr>
+                <td colspan="8" class="trow-empty">
+                  <span class="material-symbols-rounded">search_off</span>
+                  No hay pedidos con los filtros actuales
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+
 </section>
 

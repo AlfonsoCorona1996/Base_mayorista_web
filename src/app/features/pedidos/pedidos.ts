@@ -1,6 +1,6 @@
 import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, QueryList, ViewChildren, computed, inject, signal, ChangeDetectionStrategy, DestroyRef } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
-import { DatePipe } from "@angular/common";
+import { CurrencyPipe, DatePipe, NgClass } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { Router } from "@angular/router";
 import { CustomersService } from "../../core/customers.service";
@@ -45,7 +45,7 @@ type SalesNoteRow = {
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   selector: "app-pedidos",
-  imports: [FormsModule, DatePipe],
+  imports: [FormsModule, DatePipe, CurrencyPipe, NgClass],
   templateUrl: "./pedidos.html",
   styleUrl: "./pedidos.css",
 })
@@ -80,6 +80,13 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   bulkNotesLoading = signal(false);
   bulkSelected = signal<Record<string, boolean>>({});
   bulkNotesMessage = signal<string | null>(null);
+
+  // ── Vista tabla ────────────────────────────────────────────────────
+  viewMode = signal<"cards" | "table">("cards");
+  tableSortCol = signal<"updated_at" | "created_at" | "status" | "customer" | "route" | "total">("updated_at");
+  tableSortDir = signal<"asc" | "desc">("desc");
+  tableDateFrom = signal<string>("");
+  tableDateTo   = signal<string>("");
   private visiblePillsByOrder = signal<Record<string, number>>({});
   private pillsResizeObserver: ResizeObserver | null = null;
   private pillMeasureEl: HTMLSpanElement | null = null;
@@ -154,6 +161,86 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     }
     return map;
   });
+
+  /** Filas de la vista tabla: aplica filtro de fechas y ordenamiento */
+  tableRows = computed(() => {
+    const col  = this.tableSortCol();
+    const dir  = this.tableSortDir();
+    const from = this.tableDateFrom();
+    const to   = this.tableDateTo();
+    const term = this.normalizeSearchTerm(this.search());
+    const route = this.routeFilter();
+
+    let rows = this.list().filter(order => {
+      if (route !== "todos" && order.route_id !== route) return false;
+      if (!this.matchesSearchTerm(order, term)) return false;
+      if (from && order.created_at < from) return false;
+      if (to   && order.created_at > to + "T23:59:59") return false;
+      return true;
+    });
+
+    rows = [...rows].sort((a, b) => {
+      let va: string | number = "";
+      let vb: string | number = "";
+      switch (col) {
+        case "updated_at":  va = a.updated_at  || ""; vb = b.updated_at  || ""; break;
+        case "created_at":  va = a.created_at  || ""; vb = b.created_at  || ""; break;
+        case "status":      va = a.status      || ""; vb = b.status      || ""; break;
+        case "customer":    va = this.customers.getById(a.customer_id)?.first_name || ""; vb = this.customers.getById(b.customer_id)?.first_name || ""; break;
+        case "route":       va = this.routes.getById(a.route_id || "")?.name || ""; vb = this.routes.getById(b.route_id || "")?.name || ""; break;
+        case "total":       va = a.totals?.total_amount ?? 0; vb = b.totals?.total_amount ?? 0; break;
+      }
+      if (va < vb) return dir === "asc" ? -1 : 1;
+      if (va > vb) return dir === "asc" ?  1 : -1;
+      return 0;
+    });
+
+    return rows;
+  });
+
+  toggleTableSort(col: "updated_at" | "created_at" | "status" | "customer" | "route" | "total"): void {
+    if (this.tableSortCol() === col) {
+      this.tableSortDir.update(d => d === "asc" ? "desc" : "asc");
+    } else {
+      this.tableSortCol.set(col);
+      this.tableSortDir.set("desc");
+    }
+  }
+
+  tableStatusLabel(status: string): string {
+    const map: Record<string, string> = {
+      borrador: "Borrador",
+      confirmando_proveedor: "Confirmando",
+      en_transito: "En tránsito",
+      packing: "Empaque",
+      empaque: "Empaque",
+      ready_for_route: "Listo ruta",
+      assigned_to_run: "Asignado",
+      in_transit: "En ruta",
+      en_ruta: "En ruta",
+      pago_pendiente: "Pago pend.",
+      pagado_parcial: "Pago parcial",
+      pagado: "Pagado",
+      entregado: "Entregado",
+      cancelado: "Cancelado",
+    };
+    return map[status] ?? status;
+  }
+
+  tableStatusClass(status: string): string {
+    const map: Record<string, string> = {
+      borrador: "trow-status--draft",
+      pago_pendiente: "trow-status--pay",
+      pagado_parcial: "trow-status--partial",
+      pagado: "trow-status--paid",
+      cancelado: "trow-status--cancel",
+      en_ruta: "trow-status--route",
+      in_transit: "trow-status--route",
+      ready_for_route: "trow-status--ready",
+      assigned_to_run: "trow-status--ready",
+    };
+    return map[status] ?? "trow-status--default";
+  }
   canBulkCreateNotes = computed(() => this.intentFilter() === "listos_ruta");
   bulkReadyOrders = computed(() => this.filtered().filter((order) => this.isReadyForRoute(order)));
   bulkSelectedCount = computed(() => this.bulkReadyOrders().filter((order) => this.bulkSelected()[order.order_id]).length);
@@ -690,6 +777,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
       entregado: "Entregado",
       closed: "Cerrado",
       pago_pendiente: "Pago pendiente",
+      pagado_parcial: "Pago parcial",
       pagado: "Pagado",
       cancelado: "Cancelado",
       devuelto: "Devuelto",

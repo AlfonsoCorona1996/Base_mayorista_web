@@ -100,19 +100,74 @@
             </div>
           }
         </div>
-        @if (!d.listing.category_hint && d.listing.category_proposed) {
-          <div class="category-proposal">
-            <p class="category-proposal-text">
-              Propuesta IA: <strong>{{ d.listing.category_proposed }}</strong>
+        @if (!d.listing.category_hint && editableCategoryProposal()) {
+          <div class="cat-proposal-panel">
+            <div class="cat-proposal-header">
+              <span class="cat-proposal-badge">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                  <circle cx="12" cy="12" r="9"/>
+                  <path d="M12 8.5v.01M12 11.5v5"/>
+                </svg>
+                Categoría sugerida por IA
+              </span>
+              <button
+                type="button"
+                class="cat-proposal-dismiss"
+                (click)="dismissCategoryProposal()"
+                aria-label="Descartar propuesta"
+                title="Descartar y buscar manualmente"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                  <path d="M18 6 6 18M6 6l12 12"/>
+                </svg>
+              </button>
+            </div>
+
+            <p class="cat-proposal-hint">
+              Esta categoría no existe aún. Puedes editarla, crearla o buscar una existente.
             </p>
-            <div class="category-proposal-actions">
+
+            <!-- Breadcrumb visual de los segmentos -->
+            @if (categoryProposalSegments().length > 0) {
+              <div class="cat-proposal-breadcrumb">
+                @for (seg of categoryProposalSegments(); track seg; let last = $last) {
+                  <span class="cat-seg">{{ seg }}</span>
+                  @if (!last) {
+                    <span class="cat-sep" aria-hidden="true">›</span>
+                  }
+                }
+              </div>
+            }
+
+            <!-- Input editable para modificar la ruta -->
+            <div class="cat-proposal-edit">
+              <label class="cat-proposal-edit-label">Editar ruta de la nueva categoría</label>
+              <input
+                type="text"
+                class="input"
+                [ngModel]="editableCategoryProposal()"
+                (ngModelChange)="editableCategoryProposal.set($event)"
+                placeholder="Ej: Calzado > Tenis > Sneakers"
+              />
+              <small class="hint">Usa " > " para separar niveles. Ej: <em>Ropa > Mujer > Overall</em></small>
+            </div>
+
+            <div class="cat-proposal-actions">
               <button
                 type="button"
                 class="btn btn-sm btn-primary"
-                [disabled]="categoryProposalSaving()"
+                [disabled]="categoryProposalSaving() || !editableCategoryProposal().trim()"
                 (click)="acceptCategoryProposal()"
               >
-                {{ categoryProposalSaving() ? "Registrando..." : "Aceptar y registrar" }}
+                @if (categoryProposalSaving()) {
+                  <span class="btn-spinner" aria-hidden="true"></span>
+                  Creando categoría...
+                } @else {
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                    <path d="M12 5v14M5 12h14"/>
+                  </svg>
+                  Crear y usar esta categoría
+                }
               </button>
               <button
                 type="button"
@@ -120,7 +175,7 @@
                 [disabled]="categoryProposalSaving()"
                 (click)="chooseExistingCategoryFromProposal()"
               >
-                Elegir existente
+                Buscar categoría existente
               </button>
             </div>
           </div>
