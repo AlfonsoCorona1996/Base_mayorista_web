@@ -65,6 +65,12 @@ export const routes: Routes = [
         loadComponent: () => import("./features/clientas/clientas").then((m) => m.default),
       },
       {
+        path: "clientas/:id",
+        canActivate: [permissionGuard],
+        data: { permission: "clientas" },
+        loadComponent: () => import("./features/clientas/clienta-detalle").then((m) => m.default),
+      },
+      {
         path: "rutas",
         canActivate: [permissionGuard],
         data: { permission: "rutas" },
@@ -151,6 +157,12 @@ export const routes: Routes = [
       { path: "inbox", pathMatch: "full", redirectTo: "validacion" },
       { path: "", pathMatch: "full", redirectTo: "dashboard" },
     ],
+  },
+
+  // Portal público de seguimiento para clientas (sin auth)
+  {
+    path: "track/:token",
+    loadComponent: () => import("./features/public/order-tracker/order-tracker").then((m) => m.default),
   },
 
   // Compatibilidad con rutas antiguas

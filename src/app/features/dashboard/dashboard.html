@@ -1,23 +1,151 @@
 <div class="dashboard-page">
-  <section class="hero">
-    <h2>Dashboard</h2>
-    <p>
-      Aqui vivira el resumen de pendientes, alertas e informacion general. Por ahora queda
-      como base.
-    </p>
+
+  <!-- ── Encabezado ── -->
+  <header class="dash-header">
+    <div class="dash-header-text">
+      <h1 class="dash-title">Panel de control</h1>
+      <p class="dash-subtitle">{{ now() | date:'EEEE d \'de\' MMMM, HH:mm' : '' : 'es-MX' }}</p>
+    </div>
+    @if (criticalCount() > 0) {
+      <div class="dash-badge-critical">
+        <span class="material-symbols-rounded">error</span>
+        {{ criticalCount() }} crítico{{ criticalCount() > 1 ? 's' : '' }}
+      </div>
+    }
+  </header>
+
+  <!-- ── KPIs ── -->
+  <section class="kpi-grid">
+    <a class="kpi-card kpi-blue" routerLink="/main/pedidos">
+      <span class="kpi-icon material-symbols-rounded">inventory</span>
+      <div class="kpi-body">
+        <span class="kpi-value">{{ kpis().byPacking }}</span>
+        <span class="kpi-label">En empaque</span>
+      </div>
+    </a>
+
+    <a class="kpi-card kpi-teal" routerLink="/main/pedidos">
+      <span class="kpi-icon material-symbols-rounded">local_shipping</span>
+      <div class="kpi-body">
+        <span class="kpi-value">{{ kpis().readyForRoute }}</span>
+        <span class="kpi-label">Listos para ruta</span>
+      </div>
+    </a>
+
+    <a class="kpi-card kpi-indigo" routerLink="/main/salidas">
+      <span class="kpi-icon material-symbols-rounded">route</span>
+      <div class="kpi-body">
+        <span class="kpi-value">{{ kpis().inRoute }}</span>
+        <span class="kpi-label">En ruta ahora</span>
+      </div>
+    </a>
+
+    <a class="kpi-card" [class.kpi-red]="kpis().totalBalance > 0" [class.kpi-gray]="kpis().totalBalance === 0" routerLink="/main/pedidos">
+      <span class="kpi-icon material-symbols-rounded">payments</span>
+      <div class="kpi-body">
+        <span class="kpi-value">{{ kpis().totalBalance | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+        <span class="kpi-label">Por cobrar ({{ kpis().pendingPayment }} pedidos)</span>
+      </div>
+    </a>
+
+    <a class="kpi-card kpi-green" routerLink="/main/clientas">
+      <span class="kpi-icon material-symbols-rounded">group</span>
+      <div class="kpi-body">
+        <span class="kpi-value">{{ kpis().activeCustomers }}</span>
+        <span class="kpi-label">Clientas activas</span>
+      </div>
+    </a>
+
+    @if (kpis().churnRisk > 0) {
+      <a class="kpi-card kpi-amber" routerLink="/main/clientas">
+        <span class="kpi-icon material-symbols-rounded">person_off</span>
+        <div class="kpi-body">
+          <span class="kpi-value">{{ kpis().churnRisk }}</span>
+          <span class="kpi-label">Clientas ausentes</span>
+        </div>
+      </a>
+    }
   </section>
 
-  <section class="cards">
-    <article class="card">
-      <h3>Pendientes</h3>
-      <p>Proximamente: conteo de productos por validar y tareas rapidas.</p>
-      <a routerLink="/main/validacion">Ir a Validacion</a>
-    </article>
+  <!-- ── Alertas ── -->
+  <section class="alerts-section">
+    <div class="alerts-header">
+      <h2 class="alerts-title">
+        <span class="material-symbols-rounded">notifications_active</span>
+        Alertas inteligentes
+      </h2>
+      @if (visibleAlerts().length === 0) {
+        <span class="alerts-empty-badge">Todo al día</span>
+      }
+    </div>
 
-    <article class="card">
-      <h3>Catalogo</h3>
-      <p>Proximamente: busqueda por proveedor, categoria, color y talla.</p>
-      <a routerLink="/main/catalogo">Ir a Catalogo</a>
-    </article>
+    @if (visibleAlerts().length === 0) {
+      <div class="alerts-empty">
+        <span class="material-symbols-rounded alerts-empty-icon">check_circle</span>
+        <p>No hay alertas pendientes. ¡Todo en orden!</p>
+      </div>
+    } @else {
+      <ul class="alerts-list">
+        @for (alert of visibleAlerts(); track alert.id) {
+          <li class="alert-item" [ngClass]="'alert-' + alert.severity">
+            <div class="alert-left">
+              <span class="alert-severity-dot"></span>
+              <span class="alert-icon material-symbols-rounded">{{ alert.icon }}</span>
+            </div>
+            <div class="alert-content">
+              <div class="alert-top-row">
+                <span class="alert-severity-label">{{ severityLabel(alert.severity) }}</span>
+                <span class="alert-category">{{ alert.category === 'routes' ? 'Rutas' : alert.category === 'orders' ? 'Pedidos' : alert.category === 'finance' ? 'Finanzas' : alert.category === 'customers' ? 'Clientas' : alert.category === 'products' ? 'Catálogo' : alert.category === 'data_quality' ? 'Calidad de datos' : 'Insight IA' }}</span>
+              </div>
+              <p class="alert-title">{{ alert.title }}</p>
+              <p class="alert-body">{{ alert.body }}</p>
+            </div>
+            <div class="alert-actions">
+              @if (alert.actionUrl) {
+                <a class="alert-btn alert-btn-primary" [routerLink]="alert.actionUrl">
+                  {{ alert.actionLabel ?? 'Ver' }}
+                  <span class="material-symbols-rounded">arrow_forward</span>
+                </a>
+              }
+              <button type="button" class="alert-btn-dismiss" (click)="dismiss(alert.id)" aria-label="Descartar alerta">
+                <span class="material-symbols-rounded">close</span>
+              </button>
+            </div>
+          </li>
+        }
+      </ul>
+    }
   </section>
+
+  <!-- ── Accesos rápidos ── -->
+  <section class="quicklinks-section">
+    <h2 class="section-title">Accesos rápidos</h2>
+    <div class="quicklinks-grid">
+      <a class="quicklink" routerLink="/main/pedidos">
+        <span class="material-symbols-rounded">receipt_long</span>
+        <span>Pedidos</span>
+      </a>
+      <a class="quicklink" routerLink="/main/validacion">
+        <span class="material-symbols-rounded">fact_check</span>
+        <span>Validar productos</span>
+      </a>
+      <a class="quicklink" routerLink="/main/catalogo">
+        <span class="material-symbols-rounded">category</span>
+        <span>Catálogo</span>
+      </a>
+      <a class="quicklink" routerLink="/main/clientas">
+        <span class="material-symbols-rounded">group</span>
+        <span>Clientas</span>
+      </a>
+      <a class="quicklink" routerLink="/main/salidas">
+        <span class="material-symbols-rounded">local_shipping</span>
+        <span>Salidas / Rutas</span>
+      </a>
+      <a class="quicklink" routerLink="/main/usuarios">
+        <span class="material-symbols-rounded">manage_accounts</span>
+        <span>Usuarios</span>
+      </a>
+    </div>
+  </section>
+
 </div>

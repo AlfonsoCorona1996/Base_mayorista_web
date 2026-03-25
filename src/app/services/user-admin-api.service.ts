@@ -141,6 +141,17 @@ export class UserAdminApiService {
   private readonly baseUrl = environment.adminApiBaseUrl.replace(/\/+$/, "");
   private readonly http = inject(HttpClient);
 
+  // ── Métodos HTTP genéricos (usan el interceptor de auth automáticamente) ──
+  get<T>(path: string) {
+    return this.http.get<T>(`${this.baseUrl}${path}`);
+  }
+  post<T>(path: string, body: unknown) {
+    return this.http.post<T>(`${this.baseUrl}${path}`, body);
+  }
+  put<T>(path: string, body: unknown) {
+    return this.http.put<T>(`${this.baseUrl}${path}`, body);
+  }
+
   async createManagedUser(input: CreateManagedUserInput): Promise<CreateManagedUserResult> {
     const email = (input.email || "").trim().toLowerCase();
     const loginMode = input.loginType === "username" ? "username_only" : "email";

@@ -5,6 +5,7 @@ import { AuthzService } from "../../core/authz.service";
 import {
   CAPABILITY_KEYS,
   CAPABILITY_KEYS as ALL_CAPABILITY_KEYS,
+  CAPABILITY_LABELS,
   CapabilityKey,
   CapabilityOverridesMap,
   RoleDoc,
@@ -12,6 +13,7 @@ import {
   RoleId,
   SECTION_KEYS,
   SECTION_KEYS as ALL_SECTION_KEYS,
+  SECTION_LABELS,
   SectionKey,
   SectionsMap,
   SectionOverridesMap,
@@ -64,9 +66,9 @@ type UserDraft = {
 
 const CAPABILITY_GROUPS: CapabilityGroup[] = [
   { title: "Usuarios y roles", keys: CAPABILITY_KEYS.filter((key) => key.startsWith("cap.users.") || key.startsWith("cap.roles.")) },
-  { title: "Pedidos e items", keys: CAPABILITY_KEYS.filter((key) => key.startsWith("cap.orders.")) },
-  { title: "Validacion", keys: CAPABILITY_KEYS.filter((key) => key.startsWith("cap.validation.")) },
-  { title: "Operaciones proveedor", keys: CAPABILITY_KEYS.filter((key) => key.startsWith("cap.suppliers.ops.")) },
+  { title: "Pedidos y artículos", keys: CAPABILITY_KEYS.filter((key) => key.startsWith("cap.orders.")) },
+  { title: "Validación de catálogo", keys: CAPABILITY_KEYS.filter((key) => key.startsWith("cap.validation.")) },
+  { title: "Operaciones de proveedores", keys: CAPABILITY_KEYS.filter((key) => key.startsWith("cap.suppliers.ops.")) },
   { title: "Inventario", keys: CAPABILITY_KEYS.filter((key) => key.startsWith("cap.inventory.")) },
   { title: "Empaque", keys: CAPABILITY_KEYS.filter((key) => key.startsWith("cap.packing.")) },
   {
@@ -75,11 +77,11 @@ const CAPABILITY_GROUPS: CapabilityGroup[] = [
       (key) => key.startsWith("cap.dispatch.") || key.startsWith("cap.runs.") || key.startsWith("cap.transfers."),
     ),
   },
-  { title: "Entrega", keys: CAPABILITY_KEYS.filter((key) => key.startsWith("cap.delivery.")) },
+  { title: "Entregas", keys: CAPABILITY_KEYS.filter((key) => key.startsWith("cap.delivery.")) },
   { title: "Pagos", keys: CAPABILITY_KEYS.filter((key) => key.startsWith("cap.payments.")) },
-  { title: "Administracion financiera", keys: CAPABILITY_KEYS.filter((key) => key.startsWith("cap.finance.")) },
+  { title: "Administración financiera", keys: CAPABILITY_KEYS.filter((key) => key.startsWith("cap.finance.")) },
   { title: "Devoluciones", keys: CAPABILITY_KEYS.filter((key) => key.startsWith("cap.returns.")) },
-  { title: "Incidencias y auditoria", keys: CAPABILITY_KEYS.filter((key) => key.startsWith("cap.incidents.") || key.startsWith("cap.audit.")) },
+  { title: "Incidencias y auditoría", keys: CAPABILITY_KEYS.filter((key) => key.startsWith("cap.incidents.") || key.startsWith("cap.audit.")) },
 ];
 
 const SECTION_CAPABILITY_PREFIXES: Record<SectionKey, string[]> = {
@@ -229,11 +231,11 @@ export default class UsuariosPage {
   }
 
   sectionLabel(key: SectionKey): string {
-    return key.replace("sections.", "").replaceAll("_", " ");
+    return SECTION_LABELS[key] ?? key.replace("sections.", "").replaceAll("_", " ");
   }
 
   capabilityLabel(key: CapabilityKey): string {
-    return key.replace("cap.", "").replaceAll(".", " / ").replaceAll("_", " ");
+    return CAPABILITY_LABELS[key] ?? key.replace("cap.", "").replaceAll(".", " / ").replaceAll("_", " ");
   }
 
   userLoginLabel(row: UserDoc): string {
@@ -1017,7 +1019,7 @@ export default class UsuariosPage {
       for (const key of keys) assigned.add(key);
       return {
         sectionKey,
-        title: this.sectionLabel(sectionKey),
+        title: SECTION_LABELS[sectionKey] ?? sectionKey.replace("sections.", ""),
         keys,
       };
     });

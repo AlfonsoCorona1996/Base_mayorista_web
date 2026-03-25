@@ -364,6 +364,120 @@ export const DEFAULT_ROLE_PRESETS: Record<RoleId, RoleDoc> = {
   repartidor: buildRolePreset("repartidor"),
 };
 
+/** Etiquetas en español para cada sección del sistema. */
+export const SECTION_LABELS: Record<SectionKey, string> = {
+  "sections.dashboard": "Dashboard",
+  "sections.pedidos": "Pedidos",
+  "sections.proveedores": "Proveedores",
+  "sections.validacion": "Validación de catálogo",
+  "sections.clientes": "Clientas",
+  "sections.inventario": "Inventario",
+  "sections.administracion": "Administración financiera",
+  "sections.catalogo": "Catálogo de productos",
+  "sections.categorias": "Categorías",
+  "sections.rutas": "Rutas y entregas",
+  "sections.localidades": "Localidades",
+  "sections.salidas": "Salidas y empaque",
+  "sections.usuarios": "Usuarios y roles",
+};
+
+/** Etiquetas en español para cada capability del sistema. */
+export const CAPABILITY_LABELS: Record<CapabilityKey, string> = {
+  // Usuarios
+  "cap.users.view": "Ver usuarios",
+  "cap.users.invite": "Invitar usuarios",
+  "cap.users.edit": "Editar usuarios",
+  "cap.users.disable": "Desactivar usuarios",
+  // Roles
+  "cap.roles.view": "Ver roles",
+  "cap.roles.edit": "Editar roles",
+  // Pedidos
+  "cap.orders.view": "Ver pedidos",
+  "cap.orders.create": "Crear pedidos",
+  "cap.orders.edit": "Editar pedidos",
+  "cap.orders.delete": "Eliminar pedidos",
+  "cap.orders.items.add": "Agregar artículos al pedido",
+  "cap.orders.items.edit": "Editar artículos del pedido",
+  "cap.orders.items.remove": "Quitar artículos del pedido",
+  "cap.orders.override_stage_lock": "Forzar cambio de etapa",
+  // Validación
+  "cap.validation.view": "Ver validaciones pendientes",
+  "cap.validation.confirm_stock": "Confirmar stock disponible",
+  "cap.validation.override_stock": "Forzar confirmación de stock",
+  // Operaciones proveedor
+  "cap.suppliers.ops.view": "Ver operaciones de proveedores",
+  "cap.suppliers.ops.advance_state": "Avanzar estado de operación",
+  "cap.suppliers.ops.partial_process": "Procesar operación parcial",
+  "cap.suppliers.ops.override": "Forzar operación de proveedor",
+  // Inventario
+  "cap.inventory.view": "Ver inventario",
+  "cap.inventory.adjust": "Ajustar inventario",
+  "cap.inventory.receive": "Recibir mercancía",
+  "cap.inventory.reserve": "Reservar stock",
+  "cap.inventory.release": "Liberar stock reservado",
+  "cap.inventory.transfer": "Transferir stock entre ubicaciones",
+  "cap.inventory.override": "Forzar operación de inventario",
+  // Empaque
+  "cap.packing.view": "Ver empaque",
+  "cap.packing.box.create": "Crear caja",
+  "cap.packing.box.edit_open": "Editar caja abierta",
+  "cap.packing.box.close": "Cerrar caja",
+  "cap.packing.box.reopen": "Reabrir caja cerrada",
+  "cap.packing.label.print": "Imprimir etiquetas",
+  "cap.packing.finish": "Finalizar empaque del pedido",
+  // Despacho
+  "cap.dispatch.request": "Solicitar despacho",
+  "cap.dispatch.cancel_request": "Cancelar solicitud de despacho",
+  "cap.dispatch.accept_request": "Aceptar solicitud de despacho",
+  "cap.dispatch.reject_request": "Rechazar solicitud de despacho",
+  // Rutas
+  "cap.runs.view": "Ver rutas",
+  "cap.runs.create": "Crear ruta",
+  "cap.runs.schedule": "Programar ruta",
+  "cap.runs.assign_driver": "Asignar repartidor",
+  "cap.runs.add_order": "Agregar pedido a ruta",
+  "cap.runs.remove_order": "Quitar pedido de ruta",
+  "cap.runs.start": "Iniciar ruta",
+  "cap.runs.complete": "Completar ruta",
+  "cap.runs.cancel": "Cancelar ruta",
+  // Transferencias
+  "cap.transfers.create": "Crear transferencia",
+  "cap.transfers.execute": "Ejecutar transferencia",
+  // Entregas
+  "cap.delivery.view": "Ver entregas",
+  "cap.delivery.mark_delivered": "Marcar como entregado",
+  "cap.delivery.mark_partial": "Marcar entrega parcial",
+  "cap.delivery.report_incident": "Reportar incidencia en entrega",
+  "cap.delivery.capture_proof": "Capturar comprobante de entrega",
+  // Pagos
+  "cap.payments.view": "Ver pagos",
+  "cap.payments.register": "Registrar pago",
+  "cap.payments.refund": "Reembolsar pago",
+  "cap.payments.override": "Forzar pago",
+  // Devoluciones
+  "cap.returns.view": "Ver devoluciones",
+  "cap.returns.create": "Crear devolución",
+  "cap.returns.approve": "Aprobar devolución",
+  "cap.returns.restock": "Restituir mercancía a inventario",
+  "cap.returns.close": "Cerrar devolución",
+  // Incidencias
+  "cap.incidents.view": "Ver incidencias",
+  "cap.incidents.create": "Crear incidencia",
+  "cap.incidents.resolve": "Resolver incidencia",
+  // Finanzas
+  "cap.finance.accounts.view": "Ver cuentas financieras",
+  "cap.finance.accounts.create": "Crear cuenta financiera",
+  "cap.finance.accounts.edit": "Editar cuenta financiera",
+  "cap.finance.accounts.delete": "Eliminar cuenta financiera",
+  "cap.finance.movements.view": "Ver movimientos financieros",
+  "cap.finance.movements.create": "Registrar movimiento financiero",
+  "cap.finance.movements.edit": "Editar movimiento financiero",
+  "cap.finance.movements.delete": "Eliminar movimiento financiero",
+  "cap.finance.reports.view": "Ver reportes financieros",
+  // Auditoría
+  "cap.audit.view": "Ver auditoría del sistema",
+};
+
 export function normalizeSectionsMap(raw: Partial<Record<string, unknown>> | null | undefined): SectionsMap {
   const out = buildSectionsMap(false);
   for (const key of SECTION_KEYS) {

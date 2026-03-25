@@ -69,6 +69,8 @@ export default class ReviewPage {
   filteredCategories = signal<Category[]>([]);
   showCategoryDropdown = signal(false);
   categoryProposalSaving = signal(false);
+  // Propuesta IA: el usuario puede editar la ruta antes de crearla
+  editableCategoryProposal = signal<string>("");
 
   // Proveedores
   activeSuppliers = computed(() => this.suppliersService.getActive());
@@ -190,6 +192,11 @@ export default class ReviewPage {
         this.categorySearch = clone.listing.category_proposed;
       }
 
+      // Inicializar propuesta editable de la IA
+      this.editableCategoryProposal.set(
+        String(clone.listing.category_proposed || "").trim()
+      );
+
     } catch (e: any) {
       this.error.set(e?.message || String(e));
     } finally {
@@ -281,13 +288,22 @@ export default class ReviewPage {
     this.draft.set({ ...d });
   }
 
+  /** Segmentos del breadcrumb de la propuesta editable */
+  categoryProposalSegments(): string[] {
+    return this.editableCategoryProposal()
+      .split(">")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+
   async acceptCategoryProposal() {
     const d = this.draft();
     if (!d) return;
 
-    const proposedPath = String(d.listing.category_proposed || "").trim();
+    // Usar la ruta editable (el usuario pudo haberla modificado)
+    const proposedPath = this.editableCategoryProposal().trim();
     if (!proposedPath) {
-      this.showInfoPopup("No hay categoria propuesta por IA.", "Categoria", "warning");
+      this.showInfoPopup("Escribe la ruta de la nueva categoría antes de crearla.", "Categoría requerida", "warning");
       return;
     }
 
@@ -297,22 +313,33 @@ export default class ReviewPage {
       d.listing.category_hint = finalPath;
       d.listing.category_proposed = null;
       this.categorySearch = finalPath;
+      this.editableCategoryProposal.set("");
       this.showCategoryDropdown.set(false);
       this.draft.set({ ...d });
-      this.showInfoPopup("Categoria propuesta aceptada y registrada.", "Categoria", "success");
+      this.showInfoPopup(
+        `Categoría "${finalPath}" creada y asignada correctamente.`,
+        "Categoría registrada",
+        "success"
+      );
     } catch (error: any) {
-      this.showInfoPopup(error?.message || "No se pudo registrar la categoria propuesta.", "Categoria", "error");
+      this.showInfoPopup(error?.message || "No se pudo registrar la categoria propuesta.", "Error al crear categoría", "error");
     } finally {
       this.categoryProposalSaving.set(false);
     }
   }
 
-  chooseExistingCategoryFromProposal() {
+  dismissCategoryProposal() {
     const d = this.draft();
     if (!d) return;
-    const proposedPath = String(d.listing.category_proposed || "").trim();
-    const proposedLeaf = proposedPath.split(">").map((segment) => segment.trim()).filter(Boolean).pop() || proposedPath;
-    this.categorySearch = proposedLeaf || this.categorySearch;
+    d.listing.category_proposed = null;
+    this.editableCategoryProposal.set("");
+    this.draft.set({ ...d });
+  }
+
+  chooseExistingCategoryFromProposal() {
+    const proposal = this.editableCategoryProposal().trim();
+    const leaf = proposal.split(">").map((s) => s.trim()).filter(Boolean).pop() || proposal;
+    this.categorySearch = leaf || this.categorySearch;
     this.onCategorySearch();
     this.showCategoryDropdown.set(true);
   }

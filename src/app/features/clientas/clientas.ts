@@ -1,5 +1,6 @@
 import { Component, computed, inject, signal, ChangeDetectionStrategy } from "@angular/core";
 import { FormsModule } from "@angular/forms";
+import { RouterLink } from "@angular/router";
 import { Customer, CustomersService, OptInStatus } from "../../core/customers.service";
 import { LocalitiesService } from "../../core/localities.service";
 import { RoutesService } from "../../core/routes.service";
@@ -29,7 +30,7 @@ interface CustomerDraft {
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   selector: "app-clientas",
-  imports: [FormsModule],
+  imports: [FormsModule, RouterLink],
   templateUrl: "./clientas.html",
   styleUrl: "./clientas.css",
 })

@@ -1,0 +1,147 @@
+<!-- ─────────────────────────────────────────────────────── -->
+<!-- Portal de seguimiento público para clientas            -->
+<!-- ─────────────────────────────────────────────────────── -->
+
+<div class="tracker-root">
+
+  <!-- ── Loading ─────────────────────────────────────────── -->
+  @if (loading()) {
+    <div class="tracker-loading">
+      <span class="spinner"></span>
+      <p>Cargando tu pedido…</p>
+    </div>
+  }
+
+  <!-- ── Error ────────────────────────────────────────────── -->
+  @if (!loading() && error()) {
+    <div class="tracker-error">
+      <span class="err-icon">😕</span>
+      <h2>El enlace no está disponible</h2>
+      <p>{{ error() }}</p>
+      <p class="err-hint">Si crees que esto es un error, contacta a tu vendedora.</p>
+    </div>
+  }
+
+  <!-- ── Contenido ─────────────────────────────────────────── -->
+  @if (!loading() && data(); as d) {
+
+    <!-- Encabezado -->
+    <header class="tk-header">
+      <div class="tk-logo">Base Mayorista</div>
+      <div class="tk-hello">
+        Hola, <strong>{{ d.customer.first_name }}</strong> 👋
+      </div>
+    </header>
+
+    <!-- ── PEDIDO ACTIVO ───────────────────────────────────── -->
+    @if (mainOrder(); as order) {
+      <section class="tk-card active-order">
+        <div class="ao-top">
+          <span class="ao-emoji">{{ statusEmoji(order.status) }}</span>
+          <div class="ao-text">
+            <h2 class="ao-label">{{ order.status_label }}</h2>
+            <p class="ao-date">Actualizado: {{ order.updated_at | date:'d MMM y, H:mm' }}</p>
+          </div>
+        </div>
+
+        <!-- Barra de progreso -->
+        <div class="ao-progress-track">
+          <div class="ao-progress-fill" [style.width.%]="progress()"></div>
+        </div>
+
+        <!-- Productos -->
+        <div class="ao-items">
+          @for (item of order.items; track item.title) {
+            <div class="ao-item">
+              <span class="ao-item-name">{{ item.title }}</span>
+              @if (item.variant || item.color) {
+                <span class="ao-item-sub">
+                  {{ item.variant }}{{ item.variant && item.color ? ' · ' : '' }}{{ item.color }}
+                </span>
+              }
+              <span class="ao-item-qty">×{{ item.quantity }}</span>
+            </div>
+          }
+        </div>
+
+        <!-- Productos cancelados -->
+        @if (order.cancelled_items.length) {
+          <div class="ao-cancelled">
+            <p class="ao-cancelled-title">Productos no disponibles</p>
+            @for (c of order.cancelled_items; track c.title) {
+              <div class="ao-cancelled-item">
+                <span class="cc-icon">✗</span>
+                <span>{{ c.title }} — {{ c.reason }}</span>
+              </div>
+            }
+          </div>
+        }
+
+        <!-- Totales -->
+        <div class="ao-totals">
+          <div class="ao-total-row">
+            <span>Total</span>
+            <strong>{{ order.totals.total_amount | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong>
+          </div>
+          @if (order.totals.paid_amount > 0) {
+            <div class="ao-total-row paid">
+              <span>Pagado</span>
+              <strong>{{ order.totals.paid_amount | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong>
+            </div>
+          }
+          @if (order.totals.balance_due > 0) {
+            <div class="ao-total-row debt">
+              <span>Por pagar</span>
+              <strong>{{ order.totals.balance_due | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong>
+            </div>
+          }
+        </div>
+      </section>
+    }
+
+    <!-- ── SIN PEDIDO ACTIVO ─────────────────────────────── -->
+    @if (!mainOrder()) {
+      <div class="tk-empty">
+        <span>📭</span>
+        <p>No tienes pedidos activos en este momento.</p>
+      </div>
+    }
+
+    <!-- ── ADEUDO TOTAL ─────────────────────────────────── -->
+    @if (d.total_debt > 0) {
+      <div class="tk-debt-banner">
+        💰 Tienes un saldo pendiente de
+        <strong>{{ d.total_debt | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong>.
+        Coordina el pago con tu vendedora.
+      </div>
+    }
+
+    <!-- ── HISTORIAL ─────────────────────────────────────── -->
+    @if (d.history_orders.length) {
+      <section class="tk-card history">
+        <h3 class="tk-section-title">Historial de pedidos</h3>
+
+        @for (order of d.history_orders; track order.order_id) {
+          <div class="hist-row" [ngClass]="{ 'hist-row--terminal': isTerminal(order.status) }">
+            <div class="hist-left">
+              <span class="hist-emoji">{{ statusEmoji(order.status) }}</span>
+              <div class="hist-text">
+                <span class="hist-status">{{ order.status_label }}</span>
+                <span class="hist-date">{{ order.created_at | date:'d MMM y' }}</span>
+              </div>
+            </div>
+            <span class="hist-total">
+              {{ order.totals.total_amount | currency:'MXN':'symbol-narrow':'1.0-0' }}
+            </span>
+          </div>
+        }
+      </section>
+    }
+
+    <!-- Footer -->
+    <footer class="tk-footer">
+      <p>Base Mayorista · Enlace personal, no lo compartas</p>
+    </footer>
+
+  }
+</div>

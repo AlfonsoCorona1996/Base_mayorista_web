@@ -1,0 +1,279 @@
+@if (loading()) {
+  <div class="cd-loading">
+    <div class="cd-spinner"></div>
+    <p>Cargando perfil...</p>
+  </div>
+} @else if (error()) {
+  <div class="cd-error">
+    <span class="material-symbols-rounded">error</span>
+    <p>{{ error() }}</p>
+    <button type="button" class="btn btn-ghost" (click)="goBack()">Volver</button>
+  </div>
+} @else if (customer(); as c) {
+<div class="cd-page">
+
+  <!-- ── Cabecera ── -->
+  <header class="cd-header">
+    <button type="button" class="cd-back-btn" (click)="goBack()" aria-label="Volver a clientas">
+      <span class="material-symbols-rounded">arrow_back_ios</span>
+    </button>
+    <div class="cd-avatar">
+      {{ (c.first_name[0] || '') + (c.last_name[0] || '') | uppercase }}
+    </div>
+    <div class="cd-header-info">
+      <h1 class="cd-name">{{ c.first_name }} {{ c.last_name }}</h1>
+      <div class="cd-meta-row">
+        <span class="cd-meta-item">
+          <span class="material-symbols-rounded">phone</span>
+          {{ c.whatsapp || 'Sin teléfono' }}
+        </span>
+        <span class="cd-meta-item">
+          <span class="material-symbols-rounded">route</span>
+          {{ routeName() }}
+        </span>
+        <span class="cd-status-badge" [class.badge-active]="c.active" [class.badge-inactive]="!c.active">
+          {{ c.active ? 'Activa' : 'Inactiva' }}
+        </span>
+      </div>
+    </div>
+    <a [routerLink]="['/main/clientas']" [queryParams]="{edit: c.customer_id}" class="cd-edit-btn" title="Editar clienta">
+      <span class="material-symbols-rounded">edit</span>
+    </a>
+  </header>
+
+  <!-- ── Segmento RFM ── -->
+  <div class="cd-rfm-banner" [ngClass]="'rfm-' + rfmSegment()">
+    <span class="rfm-icon material-symbols-rounded">
+      {{ rfmSegment() === 'champions' ? 'emoji_events' : rfmSegment() === 'loyal' ? 'favorite' : rfmSegment() === 'at_risk' ? 'warning' : rfmSegment() === 'needs_attention' ? 'person_alert' : rfmSegment() === 'new' ? 'new_releases' : 'bedtime' }}
+    </span>
+    <div class="rfm-text">
+      <span class="rfm-label">{{ rfmLabel(rfmSegment()) }}</span>
+      <span class="rfm-desc">{{ rfmDescription(rfmSegment()) }}</span>
+    </div>
+  </div>
+
+  <!-- ── KPIs ── -->
+  <div class="cd-kpis">
+    <div class="cd-kpi">
+      <span class="kpi-value">{{ paidOrders().length }}</span>
+      <span class="kpi-label">Pedidos pagados</span>
+    </div>
+    <div class="cd-kpi">
+      <span class="kpi-value">{{ totalSpent() | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+      <span class="kpi-label">Total gastado</span>
+    </div>
+    <div class="cd-kpi">
+      <span class="kpi-value">{{ avgOrderValue() | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+      <span class="kpi-label">Promedio por pedido</span>
+    </div>
+    <div class="cd-kpi">
+      <span class="kpi-value">{{ monthlyAvg() | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+      <span class="kpi-label">Promedio mensual</span>
+    </div>
+    @if (avgFrequencyDays()) {
+      <div class="cd-kpi">
+        <span class="kpi-value">{{ avgFrequencyDays() }}d</span>
+        <span class="kpi-label">Frecuencia de compra</span>
+      </div>
+    }
+    @if (daysSinceLastOrder() !== null) {
+      <div class="cd-kpi" [class.kpi-warn]="(daysSinceLastOrder() ?? 0) > 21">
+        <span class="kpi-value">{{ daysSinceLastOrder() }}d</span>
+        <span class="kpi-label">Desde último pedido</span>
+      </div>
+    }
+  </div>
+
+  <!-- ── Adeudo activo ── -->
+  @if (totalDebt() > 0) {
+    <div class="cd-debt-banner">
+      <span class="material-symbols-rounded">payments</span>
+      <div>
+        <p class="debt-amount">{{ totalDebt() | currency:'MXN':'symbol-narrow':'1.2-2' }}</p>
+        <p class="debt-label">Adeudo pendiente de cobro</p>
+      </div>
+    </div>
+  }
+
+  <!-- ── Pedidos activos ── -->
+  @if (activeOrders().length > 0) {
+    <section class="cd-section">
+      <h2 class="cd-section-title">
+        <span class="material-symbols-rounded">pending_actions</span>
+        Pedidos activos ({{ activeOrders().length }})
+      </h2>
+      <ul class="cd-order-list">
+        @for (order of activeOrders(); track order.order_id) {
+          <li class="cd-order-row" (click)="openOrder(order.order_id)">
+            <div class="order-row-left">
+              <span class="order-id">{{ order.order_id }}</span>
+              <span class="order-date">{{ order.created_at | date:'dd/MM/yy' }}</span>
+            </div>
+            <span class="badge" [ngClass]="statusClass(order.status)">{{ statusLabel(order.status) }}</span>
+            <span class="material-symbols-rounded order-arrow">chevron_right</span>
+          </li>
+        }
+      </ul>
+    </section>
+  }
+
+  <!-- ── Productos frecuentes ── -->
+  @if (topProducts().length > 0) {
+    <section class="cd-section">
+      <h2 class="cd-section-title">
+        <span class="material-symbols-rounded">favorite</span>
+        Productos frecuentes
+      </h2>
+      <ul class="cd-top-products">
+        @for (p of topProducts(); track p.title; let i = $index) {
+          <li class="cd-product-row">
+            <span class="product-rank">{{ i + 1 }}</span>
+            <span class="product-title">{{ p.title }}</span>
+            <span class="product-count">{{ p.count }}x</span>
+            <span class="product-total">{{ p.totalSpent | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+          </li>
+        }
+      </ul>
+    </section>
+  }
+
+  <!-- ── Historial completo ── -->
+  <section class="cd-section">
+    <h2 class="cd-section-title">
+      <span class="material-symbols-rounded">history</span>
+      Historial de pedidos ({{ orders().length }})
+    </h2>
+    @if (orders().length === 0) {
+      <p class="cd-empty">No tiene pedidos registrados.</p>
+    } @else {
+      <ul class="cd-order-list">
+        @for (order of orders(); track order.order_id) {
+          <li class="cd-order-row" (click)="openOrder(order.order_id)">
+            <div class="order-row-left">
+              <span class="order-id">{{ order.order_id }}</span>
+              <span class="order-date">{{ order.created_at | date:'dd MMM yy' }}</span>
+            </div>
+            <div class="order-row-center">
+              <span class="badge" [ngClass]="statusClass(order.status)">{{ statusLabel(order.status) }}</span>
+              @if (order.totals.total_amount > 0) {
+                <span class="order-total">{{ order.totals.total_amount | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+              }
+            </div>
+            <span class="material-symbols-rounded order-arrow">chevron_right</span>
+          </li>
+        }
+      </ul>
+    }
+  </section>
+
+  @if (c.notes) {
+    <section class="cd-section">
+      <h2 class="cd-section-title">
+        <span class="material-symbols-rounded">notes</span>
+        Notas
+      </h2>
+      <p class="cd-notes">{{ c.notes }}</p>
+    </section>
+  }
+
+  <!-- ── Portal de seguimiento ── -->
+  <section class="cd-section cd-track-section">
+    <h2 class="cd-section-title">
+      <span class="material-symbols-rounded">share_location</span>
+      Link de seguimiento
+    </h2>
+    <p class="cd-track-hint">
+      Genera un enlace personal para que la clienta pueda ver sus pedidos sin iniciar sesión.
+    </p>
+
+    @if (trackLink()) {
+      <div class="cd-track-box">
+        <span class="cd-track-url">{{ trackLink() }}</span>
+        <button type="button" class="btn btn-ghost cd-track-copy" (click)="copyTrackLink()">
+          <span class="material-symbols-rounded">
+            {{ trackLinkCopied() ? 'check_circle' : 'content_copy' }}
+          </span>
+          {{ trackLinkCopied() ? 'Copiado' : 'Copiar' }}
+        </button>
+      </div>
+    }
+
+    <button type="button"
+      class="btn btn-secondary cd-track-gen"
+      [disabled]="trackLinkLoading()"
+      (click)="generateTrackLink()">
+      <span class="material-symbols-rounded">{{ trackLink() ? 'refresh' : 'link' }}</span>
+      {{ trackLinkLoading() ? 'Generando…' : trackLink() ? 'Regenerar link' : 'Generar link' }}
+    </button>
+  </section>
+
+  <!-- ── Notificaciones WhatsApp ── -->
+  <section class="cd-section cd-wa-section">
+    <h2 class="cd-section-title">
+      <span class="material-symbols-rounded">chat</span>
+      Notificaciones WhatsApp
+    </h2>
+
+    @if (!c.whatsapp) {
+      <p class="cd-wa-no-phone">
+        <span class="material-symbols-rounded">info</span>
+        Esta clienta no tiene número de WhatsApp registrado.
+      </p>
+    } @else {
+
+      <p class="cd-wa-hint">Activa qué mensajes automáticos recibe esta clienta.</p>
+
+      @if (waTypes().length === 0) {
+        <p class="cd-empty">Cargando tipos de notificación…</p>
+      } @else {
+        <ul class="cd-wa-list">
+          @for (t of waTypes(); track t.id) {
+            <li class="cd-wa-item">
+              <div class="wa-item-info">
+                <span class="wa-item-label">{{ t.label }}</span>
+                <span class="wa-item-desc">{{ t.description }}</span>
+              </div>
+              <div class="wa-item-actions">
+                <!-- Toggle opt-in -->
+                <button type="button"
+                  class="cd-wa-toggle"
+                  [class.active]="waPrefs()[t.id]"
+                  (click)="toggleWaPref(t.id)"
+                  [title]="waPrefs()[t.id] ? 'Desactivar' : 'Activar'">
+                </button>
+                <!-- Enviar ahora -->
+                <button type="button"
+                  class="btn btn-ghost btn-xs"
+                  [disabled]="waSendLoading() === t.id"
+                  (click)="sendWaNotif(t.id)"
+                  title="Enviar ahora (forzado)">
+                  <span class="material-symbols-rounded">send</span>
+                </button>
+              </div>
+            </li>
+          }
+        </ul>
+
+        <!-- Resultado del último envío -->
+        @if (waSendResult(); as r) {
+          <div class="cd-wa-result" [class.ok]="r.ok" [class.err]="!r.ok">
+            <span class="material-symbols-rounded">{{ r.ok ? 'check_circle' : 'error' }}</span>
+            {{ r.ok ? 'Mensaje enviado correctamente' : r.msg }}
+          </div>
+        }
+
+        <!-- Guardar preferencias -->
+        @if (waPrefsDirty()) {
+          <button type="button"
+            class="btn btn-primary cd-wa-save"
+            [disabled]="waPrefsSaving()"
+            (click)="saveWaPrefs()">
+            {{ waPrefsSaving() ? 'Guardando…' : 'Guardar preferencias' }}
+          </button>
+        }
+      }
+    }
+  </section>
+
+</div>
+}

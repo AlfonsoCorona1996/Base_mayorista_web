@@ -41,6 +41,7 @@ export type OrderStatus =
   | "en_ruta"
   | "entregado"
   | "pago_pendiente"
+  | "pagado_parcial"
   | "pagado"
   | "cancelado"
   | "devuelto"
@@ -217,6 +218,7 @@ export function computeOrderStatus(
     "delivered",
     "delivered_partial",
     "pago_pendiente",
+    "pagado_parcial",
     "pagado",
     "closed",
     "cancelado",
@@ -570,6 +572,51 @@ export class OrdersService {
     await updateDoc(doc(this.colRef, orderId), {
       planned_packages: plannedPackages,
       updated_at: serverTimestamp(),
+    });
+  }
+
+  /** Cierra el pedido registrando el pago total o parcial. */
+  async closeWithPayment(orderId: string, paidAmount: number, totalAmount: number): Promise<void> {
+    const safePaid = Math.max(0, Number.isFinite(paidAmount) ? paidAmount : 0);
+    const safeTotal = Math.max(0, Number.isFinite(totalAmount) ? totalAmount : 0);
+    const balanceDue = Math.max(0, safeTotal - safePaid);
+
+    let nextStatus: OrderStatus;
+    if (safePaid <= 0) {
+      nextStatus = "pago_pendiente";
+    } else if (balanceDue <= 0) {
+      nextStatus = "pagado";
+    } else {
+      nextStatus = "pagado_parcial";
+    }
+
+    const now = new Date().toISOString();
+    this.rows.update((current) =>
+      current.map((order) => {
+        if (order.order_id !== orderId) return order;
+        return {
+          ...order,
+          status: nextStatus,
+          updated_at: now,
+          totals: {
+            total_amount: safeTotal,
+            paid_amount: safePaid,
+            balance_due: balanceDue,
+          },
+          timeline: [
+            ...order.timeline,
+            { id: `t-${Date.now()}`, label: `Pago registrado: $${safePaid}`, created_at: now },
+          ],
+        };
+      }),
+    );
+
+    await updateDoc(doc(this.colRef, orderId), {
+      status: nextStatus,
+      updated_at: serverTimestamp(),
+      "totals.total_amount": safeTotal,
+      "totals.paid_amount": safePaid,
+      "totals.balance_due": balanceDue,
     });
   }
 

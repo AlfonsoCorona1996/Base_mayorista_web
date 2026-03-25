@@ -1,8 +1,9 @@
-﻿import { Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild, computed, inject, signal, ChangeDetectionStrategy, DestroyRef } from "@angular/core";
-import { DatePipe, UpperCasePipe } from "@angular/common";
+import { Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild, computed, inject, signal, ChangeDetectionStrategy, DestroyRef } from "@angular/core";
+import { DatePipe, DecimalPipe, UpperCasePipe } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { ActivatedRoute, Router, RouterLink } from "@angular/router";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
+import { lastValueFrom } from "rxjs";
 import { collection, getDocs, limit, orderBy, query } from "firebase/firestore";
 import { getBlob, ref as storageRef } from "firebase/storage";
 import { PDFDocument, PDFFont, PDFPage, StandardFonts, rgb } from "pdf-lib";
@@ -15,6 +16,8 @@ import { LocalitiesService } from "../../core/localities.service";
 import { InventoryService, InventoryItem } from "../../core/inventory.service";
 import { NormalizedListingsService, NormalizedListingDoc } from "../../core/normalized-listings.service";
 import { SupplierOperationsService } from "../../core/supplier-operations.service";
+import { ManualProductHistoryService, ManualProductEntry } from "../../core/manual-product-history.service";
+import { UserAdminApiService } from "../../services/user-admin-api.service";
 import { FIRESTORE, STORAGE } from "../../core/firebase.providers";
 import { ActivityLogComponent } from "../../shared/components/activity-log/activity-log.component";
 import { AuthzService } from "../../core/authz.service";
@@ -143,7 +146,7 @@ type OrderViewVm = {
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   selector: "app-pedido-detalle",
-  imports: [FormsModule, RouterLink, DatePipe, UpperCasePipe, ActivityLogComponent],
+  imports: [FormsModule, RouterLink, DatePipe, DecimalPipe, UpperCasePipe, ActivityLogComponent],
   templateUrl: "./pedido-detalle.html",
   styleUrls: ["./pedido-detalle.css"],
 })
@@ -158,9 +161,11 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   private inventory = inject(InventoryService);
   private catalog = inject(NormalizedListingsService);
   private supplierOperations = inject(SupplierOperationsService);
+  readonly manualHistory = inject(ManualProductHistoryService);
   private authz = inject(AuthzService);
   private routeRuns = inject(RouteRunsService);
   private destroyRef = inject(DestroyRef);
+  private api = inject(UserAdminApiService);
 
   @ViewChild("incidentsSection") incidentsSection?: ElementRef<HTMLElement>;
   @ViewChild("packagesSection") packagesSection?: ElementRef<HTMLElement>;
@@ -221,6 +226,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   imagePreviewLoading = signal(false);
   openProductMenuId = signal<string | null>(null);
   generatingSalesNote = signal(false);
+  sendingWaNote       = signal(false);
+  waNoteSent          = signal<{ ok: boolean; msg?: string } | null>(null);
 
   incidentModalOpen = signal(false);
   incidentType = signal("GENERAL");
@@ -272,6 +279,13 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   moveSheetQty = signal(1);
   expandedClosedBoxes = signal<Record<string, boolean>>({});
   supplierEta = signal("");
+  // ── Cierre de pedido / Registro de pago ──────────────────────────────────
+  paymentModalOpen = signal(false);
+  paymentAmount = signal("");
+  paymentSaving = signal(false);
+  paymentError = signal<string | null>(null);
+  // ─────────────────────────────────────────────────────────────────────────
+
   addItemModalOpen = signal(false);
   addItemMode = signal<"add" | "convert" | "edit">("add");
   convertTargetItemId = signal<string | null>(null);
@@ -307,6 +321,13 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   newItemTitle = signal("");
   newItemSearch = signal("");
   newItemSource = signal<"catalogo" | "inventario" | "manual">("catalogo");
+
+  // ── Historial / autocomplete de productos manuales ──────────────────
+  manualSuggestionsOpen = signal(false);
+  readonly manualSuggestions = computed<ManualProductEntry[]>(() => {
+    if (!this.isManualSource()) return [];
+    return this.manualHistory.search(this.newItemTitle());
+  });
   newItemVariant = signal("");
   newItemColor = signal("");
   newItemInventoryId = signal<string | null>(null);
@@ -676,6 +697,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         this.catalogRows.set(page.docs);
         this.catalogLoaded.set(true);
       }).catch(() => null),
+      this.manualHistory.load().catch(() => null),
     ]).then(() => {
       this.inventoryLoaded.set(true);
       if (!this.orders.getById(this.orderId())) {
@@ -941,6 +963,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       entregado: "Entregado",
       closed: "Cerrado",
       pago_pendiente: "Pago pendiente",
+      pagado_parcial: "Pago parcial",
       pagado: "Pagado",
       cancelado: "Cancelado",
       devuelto: "Devuelto",
@@ -958,6 +981,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       case "cancelado":
       case "devuelto":
         return "chip danger";
+      case "pagado_parcial":
+        return "chip warning";
       case "pago_pendiente":
         return "chip warning";
       case "empaque":
@@ -3096,20 +3121,9 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
   canGenerateSalesNote(order: Order | null): boolean {
     if (!order) return false;
-    if (this.salesNoteRows(order).length <= 0) return false;
-    return [
-      "empaque",
-      "ready_for_route",
-      "assigned_to_run",
-      "en_ruta",
-      "in_transit",
-      "entregado",
-      "delivered",
-      "delivered_partial",
-      "pago_pendiente",
-      "pagado",
-      "closed",
-    ].includes(order.status) || this.closedPackagesCount(order) > 0;
+    // Disponible en cualquier estado desde que hay ítems confirmados con cantidad > 0.
+    // No esperamos a empaque ni a ruta — el usuario puede necesitarla al cerrar caja.
+    return this.salesNoteRows(order).length > 0;
   }
 
   async generateSalesNote(order: Order) {
@@ -4305,6 +4319,118 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     await this.orders.logEvent(order.order_id, "PAYMENT_REGISTERED", "Pago registrado/conciliado", {});
   }
 
+  // ── Cierre de pedido ─────────────────────────────────────────────────────
+
+  canCloseOrder(order: Order | null): boolean {
+    if (!order) return false;
+    // Disponible desde que se tiene algo empacado hasta estados de pago pendiente.
+    // Excluimos borrador/confirmando (aún no hay productos listos) y terminales (pagado/cancelado).
+    const TERMINAL = new Set(["pagado", "cancelado", "devuelto", "closed"]);
+    const TOO_EARLY = new Set(["borrador", "confirmando_proveedor", "reservado_inventario", "solicitado_proveedor", "supplier_processing", "inbound_in_transit"]);
+    return !TERMINAL.has(order.status) && !TOO_EARLY.has(order.status);
+  }
+
+  // ── Historial / autocomplete de productos manuales ──────────────────
+
+  /** Rellena todos los campos del formulario con la sugerencia seleccionada */
+  applyManualSuggestion(entry: ManualProductEntry): void {
+    this.newItemTitle.set(entry.title);
+    this.newItemVariant.set(entry.variant || "");
+    this.newItemColor.set(entry.color || "");
+    if (entry.price_clienta != null) {
+      this.newItemPriceClienta.set(entry.price_clienta);
+      this.priceInputDraft.update(d => ({ ...d, clienta: String(entry.price_clienta) }));
+    }
+    if (entry.price_cost != null) {
+      this.newItemPriceCost.set(entry.price_cost);
+      this.priceInputDraft.update(d => ({ ...d, costo: String(entry.price_cost) }));
+    }
+    this.manualSuggestionsOpen.set(false);
+  }
+
+  openPaymentModal() {
+    const order = this.order();
+    if (!order) return;
+    const balance = this.orderBalanceDue(order);
+    this.paymentAmount.set(balance > 0 ? String(balance) : "");
+    this.paymentError.set(null);
+    this.paymentModalOpen.set(true);
+  }
+
+  closePaymentModal() {
+    this.paymentModalOpen.set(false);
+    this.paymentError.set(null);
+  }
+
+  async confirmPayment(order: Order) {
+    if (this.paymentSaving()) return;
+
+    const rawAmount = this.paymentAmount().replace(/,/g, "").trim();
+    const paidAmount = rawAmount === "" ? 0 : parseFloat(rawAmount);
+
+    if (!Number.isFinite(paidAmount) || paidAmount < 0) {
+      this.paymentError.set("Ingresa un monto válido.");
+      return;
+    }
+
+    const totalAmount = this.totals().totalClienta || 0;
+
+    this.paymentSaving.set(true);
+    this.paymentError.set(null);
+    try {
+      await this.orders.closeWithPayment(order.order_id, paidAmount, totalAmount);
+      await this.orders.logEvent(
+        order.order_id,
+        "PAYMENT_CLOSED",
+        `Pedido cerrado. Pago: $${paidAmount}. Total: $${totalAmount}.`,
+        { paid_amount: paidAmount, total_amount: totalAmount },
+      );
+      this.paymentModalOpen.set(false);
+      this.showActionToast(
+        paidAmount >= totalAmount
+          ? "Pedido marcado como Pagado ✓"
+          : paidAmount > 0
+            ? `Pago parcial registrado. Saldo: $${(totalAmount - paidAmount).toFixed(2)}`
+            : "Pedido marcado con pago pendiente.",
+      );
+    } catch (err: any) {
+      this.paymentError.set(err?.message || "No se pudo registrar el pago.");
+    } finally {
+      this.paymentSaving.set(false);
+    }
+  }
+
+  markFullyPaid(order: Order) {
+    const total = this.totals().totalClienta || 0;
+    this.paymentAmount.set(String(total));
+    this.confirmPayment(order);
+  }
+
+  async sendSalesNoteWa(order: Order): Promise<void> {
+    if (this.sendingWaNote()) return;
+    const customerId = order.customer_id;
+    if (!customerId) {
+      this.waNoteSent.set({ ok: false, msg: "El pedido no tiene clienta asignada." });
+      return;
+    }
+    this.sendingWaNote.set(true);
+    this.waNoteSent.set(null);
+    try {
+      await lastValueFrom(
+        this.api.post("/api/wa/send-sales-note", { customer_id: customerId, order })
+      );
+      this.waNoteSent.set({ ok: true });
+    } catch (err: any) {
+      const msg = err?.error?.message ?? "No se pudo enviar la nota por WhatsApp.";
+      this.waNoteSent.set({ ok: false, msg });
+    } finally {
+      this.sendingWaNote.set(false);
+      setTimeout(() => this.waNoteSent.set(null), 5000);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+
   private dispatchOverrideItems(order: Order): OrderItem[] {
     const packedMap = this.packedQtyByItem(order);
     return this.confirmedItems(order).filter((item) => {
@@ -5321,6 +5447,17 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         });
       }
     }
+    // Guardar al historial si es un item manual
+    if (source === "manual") {
+      void this.manualHistory.record({
+        title: item.title,
+        variant: item.variant || "",
+        color: item.color || "",
+        price_clienta: item.price_clienta ?? null,
+        price_cost: item.price_cost ?? null,
+      });
+    }
+
     this.resetAddItemForm();
     if (lateNote) {
       this.addItemModalOpen.set(false);

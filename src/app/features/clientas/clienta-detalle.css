@@ -1,0 +1,509 @@
+:host {
+  display: block;
+}
+
+/* ── Loading / Error ── */
+.cd-loading, .cd-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 60vh;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.cd-spinner {
+  width: 32px; height: 32px;
+  border: 3px solid #e2e8f0;
+  border-top-color: #0ea5e9;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.cd-error .material-symbols-rounded { font-size: 2.5rem; color: #ef4444; }
+
+/* ── Layout ── */
+.cd-page {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 16px;
+  display: grid;
+  gap: 16px;
+}
+
+/* ── Cabecera ── */
+.cd-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  padding: 16px 18px;
+}
+
+.cd-back-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #0ea5e9;
+  padding: 4px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.cd-back-btn .material-symbols-rounded { font-size: 1.1rem; }
+
+.cd-avatar {
+  width: 52px; height: 52px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #0ea5e9, #6366f1);
+  color: #ffffff;
+  font-size: 1.2rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.cd-header-info { flex: 1; min-width: 0; }
+
+.cd-name {
+  margin: 0 0 4px;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.cd-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.cd-meta-item {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+.cd-meta-item .material-symbols-rounded { font-size: 0.9rem; }
+
+.cd-status-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 2px 9px;
+}
+
+.badge-active   { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+.badge-inactive { background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; }
+
+.cd-edit-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px; height: 36px;
+  border-radius: 10px;
+  background: #f1f5f9;
+  color: #475569;
+  text-decoration: none;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.cd-edit-btn:hover { background: #e2e8f0; }
+.cd-edit-btn .material-symbols-rounded { font-size: 1.1rem; }
+
+/* ── RFM Banner ── */
+.cd-rfm-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border-radius: 14px;
+  padding: 14px 18px;
+  border: 1px solid transparent;
+}
+
+.rfm-icon { font-size: 1.6rem; flex-shrink: 0; }
+
+.rfm-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rfm-label { font-weight: 700; font-size: 0.9rem; }
+.rfm-desc  { font-size: 0.78rem; opacity: 0.8; }
+
+.rfm-champions      { background: #fefce8; color: #854d0e; border-color: #fef08a; }
+.rfm-loyal          { background: #fdf2f8; color: #86198f; border-color: #f0abfc; }
+.rfm-at_risk        { background: #fef2f2; color: #dc2626; border-color: #fecaca; }
+.rfm-needs_attention { background: #fff7ed; color: #c2410c; border-color: #fed7aa; }
+.rfm-new            { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+.rfm-dormant        { background: #f8fafc; color: #94a3b8; border-color: #e2e8f0; }
+
+/* ── KPIs ── */
+.cd-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.cd-kpi {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cd-kpi.kpi-warn { border-color: #fca5a5; background: #fef2f2; }
+
+.kpi-value {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1;
+}
+
+.cd-kpi.kpi-warn .kpi-value { color: #dc2626; }
+
+.kpi-label {
+  font-size: 0.72rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+/* ── Deuda ── */
+.cd-debt-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 14px;
+  padding: 14px 18px;
+  color: #dc2626;
+}
+
+.cd-debt-banner .material-symbols-rounded { font-size: 1.6rem; flex-shrink: 0; }
+
+.debt-amount {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.debt-label {
+  margin: 2px 0 0;
+  font-size: 0.78rem;
+  opacity: 0.8;
+}
+
+/* ── Secciones ── */
+.cd-section {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.cd-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 14px 18px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #0f172a;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.cd-section-title .material-symbols-rounded { font-size: 1.1rem; color: #0ea5e9; }
+
+.cd-empty {
+  padding: 24px 18px;
+  color: #94a3b8;
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+/* ── Lista de pedidos ── */
+.cd-order-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.cd-order-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  cursor: pointer;
+  border-bottom: 1px solid #f1f5f9;
+  transition: background 0.12s;
+}
+
+.cd-order-row:last-child { border-bottom: none; }
+.cd-order-row:hover { background: #f8fafc; }
+
+.order-row-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.order-id   { font-size: 0.78rem; font-weight: 600; color: #0f172a; }
+.order-date { font-size: 0.72rem; color: #94a3b8; }
+
+.order-row-center {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.order-total { font-size: 0.82rem; font-weight: 600; color: #0f172a; }
+
+.order-arrow { font-size: 1.1rem; color: #cbd5e1; flex-shrink: 0; }
+
+/* Status badges */
+.badge {
+  display: inline-block;
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.badge-default  { background: #f1f5f9; color: #475569; }
+.badge-paid     { background: #f0fdf4; color: #15803d; }
+.badge-partial  { background: #fff7ed; color: #ea580c; }
+.badge-warn     { background: #fef9c3; color: #ca8a04; }
+.badge-cancel   { background: #fef2f2; color: #dc2626; }
+.badge-route    { background: #eff6ff; color: #2563eb; }
+.badge-ready    { background: #f0fdf4; color: #16a34a; }
+
+/* ── Top productos ── */
+.cd-top-products {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.cd-product-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 18px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.cd-product-row:last-child { border-bottom: none; }
+
+.product-rank {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.product-title { flex: 1; font-size: 0.84rem; color: #0f172a; }
+.product-count { font-size: 0.75rem; color: #94a3b8; }
+.product-total { font-size: 0.82rem; font-weight: 600; color: #0f172a; }
+
+/* ── Notas ── */
+.cd-notes {
+  padding: 14px 18px;
+  margin: 0;
+  font-size: 0.85rem;
+  color: #475569;
+  line-height: 1.5;
+}
+
+/* ─────────────────────────────────────────────────────────
+   Link de seguimiento
+   ───────────────────────────────────────────────────────── */
+
+.cd-track-hint {
+  font-size: 0.83rem;
+  color: #64748b;
+  padding: 0 18px 12px;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.cd-track-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px;
+  margin: 0 18px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+
+.cd-track-url {
+  flex: 1;
+  font-size: 0.78rem;
+  color: #334155;
+  word-break: break-all;
+  font-family: monospace;
+}
+
+.cd-track-copy {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  color: #007aff;
+}
+.cd-track-copy .material-symbols-rounded { font-size: 18px; }
+
+.cd-track-gen {
+  margin: 0 18px 18px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+}
+.cd-track-gen .material-symbols-rounded { font-size: 18px; }
+
+/* ─────────────────────────────────────────────────────────
+   Notificaciones WhatsApp
+   ───────────────────────────────────────────────────────── */
+
+.cd-wa-hint {
+  font-size: 0.83rem;
+  color: #64748b;
+  padding: 0 18px 12px;
+  margin: 0;
+}
+
+.cd-wa-no-phone {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.83rem;
+  color: #64748b;
+  padding: 8px 18px 16px;
+  margin: 0;
+}
+.cd-wa-no-phone .material-symbols-rounded { font-size: 18px; }
+
+.cd-wa-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.cd-wa-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 18px;
+  border-top: 1px solid #f1f5f9;
+}
+.cd-wa-item:last-child { border-bottom: 1px solid #f1f5f9; }
+
+.wa-item-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.wa-item-label { font-size: 0.87rem; font-weight: 500; color: #0f172a; }
+.wa-item-desc  { font-size: 0.75rem; color: #94a3b8; }
+
+.wa-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* Toggle pill */
+.cd-wa-toggle {
+  width: 44px;
+  height: 26px;
+  border-radius: 13px;
+  border: none;
+  cursor: pointer;
+  background: #d1d5db;
+  position: relative;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+.cd-wa-toggle::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.2s;
+  box-shadow: 0 1px 3px rgba(0,0,0,.2);
+}
+.cd-wa-toggle.active {
+  background: #34c759;
+}
+.cd-wa-toggle.active::after {
+  transform: translateX(18px);
+}
+
+/* Botón xs */
+.btn-xs {
+  padding: 4px 6px !important;
+  font-size: 0.75rem !important;
+}
+.btn-xs .material-symbols-rounded { font-size: 16px; }
+
+/* Resultado envío */
+.cd-wa-result {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 18px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 0.83rem;
+}
+.cd-wa-result.ok  { background: #f0fdf4; color: #16a34a; }
+.cd-wa-result.err { background: #fef2f2; color: #dc2626; }
+.cd-wa-result .material-symbols-rounded { font-size: 18px; }
+
+/* Guardar prefs */
+.cd-wa-save {
+  margin: 12px 18px 18px;
+  font-size: 0.85rem;
+}

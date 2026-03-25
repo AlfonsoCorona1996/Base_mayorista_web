@@ -1,0 +1,227 @@
+/* ─────────────────────────────────────────────────────────
+   Portal Público de Seguimiento – iOS-inspired, clean
+   ───────────────────────────────────────────────────────── */
+
+:host { display: block; }
+
+/* ── Fondo general ────────────────────────────────────────── */
+.tracker-root {
+  min-height: 100dvh;
+  background: #f2f2f7;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Loading ──────────────────────────────────────────────── */
+.tracker-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 24px;
+  gap: 16px;
+  color: #8e8e93;
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #e5e5ea;
+  border-top-color: #007aff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Error ────────────────────────────────────────────────── */
+.tracker-error {
+  max-width: 400px;
+  margin: 80px auto;
+  padding: 32px 24px;
+  text-align: center;
+}
+.err-icon { font-size: 48px; display: block; margin-bottom: 16px; }
+.tracker-error h2 { font-size: 20px; font-weight: 600; color: #1c1c1e; margin: 0 0 8px; }
+.tracker-error p  { font-size: 15px; color: #6d6d72; margin: 0 0 8px; }
+.err-hint { font-size: 13px; color: #aeaeb2; }
+
+/* ── Header ───────────────────────────────────────────────── */
+.tk-header {
+  background: #fff;
+  padding: 20px 20px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(0,0,0,.06);
+}
+.tk-logo {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -.3px;
+  color: #007aff;
+}
+.tk-hello {
+  font-size: 15px;
+  color: #3a3a3c;
+}
+
+/* ── Cards genéricas ─────────────────────────────────────── */
+.tk-card {
+  background: #fff;
+  margin: 16px 16px 0;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0,0,0,.06);
+}
+
+/* ── Pedido activo ───────────────────────────────────────── */
+.ao-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 20px 20px 0;
+}
+.ao-emoji { font-size: 32px; line-height: 1; }
+.ao-text  { flex: 1; }
+.ao-label {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1c1c1e;
+  margin: 0 0 4px;
+  line-height: 1.2;
+}
+.ao-date { font-size: 13px; color: #8e8e93; margin: 0; }
+
+/* Barra de progreso */
+.ao-progress-track {
+  height: 6px;
+  background: #f2f2f7;
+  margin: 16px 20px 0;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.ao-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #34c759, #007aff);
+  border-radius: 3px;
+  transition: width 0.6s ease;
+}
+
+/* Productos */
+.ao-items {
+  padding: 16px 20px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ao-item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.ao-item-name { font-size: 15px; color: #1c1c1e; font-weight: 500; flex: 1; }
+.ao-item-sub  { font-size: 12px; color: #8e8e93; }
+.ao-item-qty  { font-size: 14px; font-weight: 600; color: #3a3a3c; white-space: nowrap; }
+
+/* Cancelados */
+.ao-cancelled {
+  margin: 12px 20px 0;
+  background: #fff3f3;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.ao-cancelled-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #ff3b30;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  margin: 0 0 6px;
+}
+.ao-cancelled-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: #6d6d72;
+  margin-bottom: 4px;
+}
+.cc-icon { color: #ff3b30; font-size: 12px; font-weight: 700; }
+
+/* Totales */
+.ao-totals {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid #f2f2f7;
+  margin-top: 16px;
+}
+.ao-total-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 15px;
+  color: #3a3a3c;
+}
+.ao-total-row.paid   strong { color: #34c759; }
+.ao-total-row.debt   strong { color: #ff3b30; }
+
+/* ── Sin pedido activo ───────────────────────────────────── */
+.tk-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: #8e8e93;
+}
+.tk-empty span { font-size: 40px; display: block; margin-bottom: 12px; }
+.tk-empty p    { font-size: 15px; margin: 0; }
+
+/* ── Adeudo banner ───────────────────────────────────────── */
+.tk-debt-banner {
+  margin: 12px 16px 0;
+  background: #fff9e6;
+  border: 1px solid #ffcc00;
+  border-radius: 12px;
+  padding: 14px 16px;
+  font-size: 14px;
+  color: #3a3a3c;
+  line-height: 1.5;
+}
+
+/* ── Historial ───────────────────────────────────────────── */
+.history { margin-bottom: 0; }
+.tk-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: #8e8e93;
+  padding: 16px 20px 10px;
+  margin: 0;
+}
+.hist-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-top: 1px solid #f2f2f7;
+  gap: 12px;
+}
+.hist-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+.hist-emoji { font-size: 22px; }
+.hist-text  { display: flex; flex-direction: column; }
+.hist-status { font-size: 14px; color: #1c1c1e; font-weight: 500; }
+.hist-date   { font-size: 12px; color: #8e8e93; }
+.hist-total  { font-size: 15px; font-weight: 600; color: #1c1c1e; white-space: nowrap; }
+
+/* ── Footer ───────────────────────────────────────────────── */
+.tk-footer {
+  padding: 24px 20px 40px;
+  text-align: center;
+  font-size: 12px;
+  color: #aeaeb2;
+}

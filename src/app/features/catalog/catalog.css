@@ -635,3 +635,160 @@
     justify-self: start;
   }
 }
+
+/* ─────────────────────────────────────────────────────────
+   Tabs del catálogo
+   ───────────────────────────────────────────────────────── */
+
+.catalog-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 12px 20px 0;
+  border-bottom: 1px solid #e2e8f0;
+  background: #fff;
+}
+
+.catalog-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: none;
+  background: none;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #64748b;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color 0.15s, border-color 0.15s;
+  border-radius: 6px 6px 0 0;
+}
+.catalog-tab:hover { color: #334155; background: #f8fafc; }
+.catalog-tab.active { color: #007aff; border-bottom-color: #007aff; }
+.catalog-tab .material-symbols-rounded { font-size: 18px; }
+
+.tab-badge {
+  background: #e2e8f0;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 10px;
+  min-width: 18px;
+  text-align: center;
+}
+.catalog-tab.active .tab-badge {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+/* ─────────────────────────────────────────────────────────
+   Sección productos manuales
+   ───────────────────────────────────────────────────────── */
+
+.manual-count-hint {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  margin: 8px 0 0;
+}
+
+.manual-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+  padding: 20px;
+}
+
+.manual-card {
+  border-radius: 14px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: opacity 0.2s;
+}
+.manual-card.busy { opacity: 0.6; pointer-events: none; }
+
+.mc-body {
+  padding: 16px 16px 12px;
+  flex: 1;
+}
+
+.mc-title {
+  font-size: 0.97rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 10px;
+  line-height: 1.3;
+}
+
+.mc-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.mc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: #f1f5f9;
+  color: #475569;
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+.mc-chip .material-symbols-rounded { font-size: 14px; color: #94a3b8; }
+
+.mc-prices {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 10px;
+}
+
+.mc-price {
+  font-size: 0.82rem;
+  color: #475569;
+}
+.mc-price strong { color: #0f172a; }
+.mc-price-cost { color: #94a3b8; }
+.mc-price-cost strong { color: #64748b; }
+
+.mc-stats {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.mc-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+.mc-stat .material-symbols-rounded { font-size: 14px; }
+
+.mc-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px 14px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.btn-sm {
+  padding: 6px 12px !important;
+  font-size: 0.8rem !important;
+}
+.btn-sm .material-symbols-rounded { font-size: 16px !important; }
+
+.btn-danger {
+  color: #ef4444 !important;
+}
+.btn-danger:hover {
+  background: #fef2f2 !important;
+}

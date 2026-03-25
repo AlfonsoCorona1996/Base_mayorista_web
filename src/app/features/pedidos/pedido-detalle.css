@@ -5989,3 +5989,200 @@ code {
   background: linear-gradient(120deg, #094f43, #0a6d5b) !important;
   border-color: #064b3f !important;
 }
+
+/* ── Botón cerrar pedido / pago ── */
+.payment-context-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 20px 14px;
+  padding: 10px 12px;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  color: #92400e;
+  line-height: 1.4;
+}
+
+.payment-close-btn {
+  background: linear-gradient(135deg, #16a34a, #15803d) !important;
+  border: 1px solid #166534 !important;
+  color: #ffffff !important;
+  font-weight: 600;
+}
+.payment-close-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #15803d, #14532d) !important;
+}
+
+.wa-note-result {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 8px;
+  transition: opacity 0.3s;
+}
+.wa-note-result.ok  { background: #f0fdf4; color: #16a34a; }
+.wa-note-result.err { background: #fef2f2; color: #dc2626; }
+.wa-note-result .material-symbols-rounded { font-size: 15px; }
+
+/* ── Sheet de pago ── */
+.payment-sheet {
+  max-width: 440px;
+  width: 100%;
+}
+
+.payment-sheet-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.payment-sheet-icon {
+  font-size: 26px;
+  color: #16a34a;
+}
+
+.payment-summary-row {
+  display: grid;
+  gap: 6px;
+  background: #f8fafc;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+
+.payment-summary-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.payment-summary-label {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.payment-summary-value {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.payment-summary-value--paid {
+  color: #16a34a;
+}
+
+.payment-summary-value--balance {
+  color: #dc2626;
+}
+
+.payment-amount-input {
+  font-size: 1.4rem;
+  font-weight: 700;
+  text-align: right;
+  letter-spacing: -0.02em;
+}
+
+.payment-quick-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.payment-quick-btn {
+  font-size: 0.76rem;
+  padding: 4px 10px;
+  border-radius: 20px;
+  height: auto;
+}
+
+.payment-error {
+  font-size: 0.82rem;
+  color: var(--danger);
+  margin: 0;
+  padding: 6px 10px;
+  background: var(--danger-soft);
+  border-radius: 8px;
+}
+
+/* ── Historial / autocomplete de productos manuales ────────────────── */
+.manual-title-field { position: relative; }
+
+.manual-history-hint {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  font-weight: 400;
+  margin-left: 4px;
+}
+
+.manual-autocomplete-wrap {
+  position: relative;
+}
+
+.manual-suggestions-dropdown {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 4px;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 200;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.manual-suggestion-item {
+  padding: 9px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: grid;
+  gap: 2px;
+  transition: background 0.12s;
+}
+
+.manual-suggestion-item:hover {
+  background: #f1f5f9;
+}
+
+.msug-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.msug-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.msug-uses {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  background: #f1f5f9;
+  border-radius: 999px;
+  padding: 1px 7px;
+  white-space: nowrap;
+}
+
+.msug-meta {
+  font-size: 0.75rem;
+  color: #64748b;
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
