@@ -6,11 +6,13 @@ import {
   doc,
   getDocs,
   limit,
+  onSnapshot,
   orderBy,
   query,
   serverTimestamp,
   setDoc,
   startAfter,
+  Unsubscribe,
   updateDoc,
   where,
 } from "firebase/firestore";
@@ -244,16 +246,47 @@ export class OrdersService {
   private rows = signal<Order[]>([]);
   private supplierOperations = inject(SupplierOperationsService);
   loading = signal(false);
+  private unsubscribeOrders?: Unsubscribe;
 
   list = computed(() => this.rows());
 
+  /** Inicia un listener en tiempo real. Seguro llamarlo múltiples veces: solo abre un listener. */
   async loadFromFirestore(): Promise<void> {
+    if (this.unsubscribeOrders) return;
+
     this.loading.set(true);
     const q = query(this.colRef, orderBy("updated_at", "desc"));
-    const snap = await getDocs(q);
-    const rows: Order[] = snap.docs.map((d) => this.normalize(d.id, d.data() as any));
-    this.rows.set(rows);
-    this.loading.set(false);
+
+    return new Promise<void>((resolve) => {
+      let resolved = false;
+
+      this.unsubscribeOrders = onSnapshot(
+        q,
+        (snap) => {
+          const rows: Order[] = snap.docs.map((d) => this.normalize(d.id, d.data() as any));
+          this.rows.set(rows);
+          this.loading.set(false);
+          if (!resolved) {
+            resolved = true;
+            resolve();
+          }
+        },
+        (error) => {
+          console.error("[OrdersService] onSnapshot error:", error);
+          this.loading.set(false);
+          if (!resolved) {
+            resolved = true;
+            resolve();
+          }
+        },
+      );
+    });
+  }
+
+  /** Detiene el listener activo (usar al destruir contextos de prueba). */
+  stopListening(): void {
+    this.unsubscribeOrders?.();
+    this.unsubscribeOrders = undefined;
   }
 
   async createDraft(customerId: string, routeId: string | null, notes?: string): Promise<string> {

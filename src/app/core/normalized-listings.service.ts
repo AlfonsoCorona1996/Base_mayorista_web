@@ -1,4 +1,4 @@
-﻿import { Injectable } from "@angular/core";
+import { Injectable, signal } from "@angular/core";
 import { FIRESTORE } from "./firebase.providers";
 import {
   collection,
@@ -7,6 +7,7 @@ import {
   orderBy,
   limit,
   getDocs,
+  onSnapshot,
   startAfter,
   QueryDocumentSnapshot,
   DocumentData,
@@ -15,6 +16,7 @@ import {
   updateDoc,
   serverTimestamp,
   setDoc,
+  Unsubscribe,
 } from "firebase/firestore";
 import type {
   NormalizedListingDoc,
@@ -37,6 +39,45 @@ export type {
 @Injectable({ providedIn: "root" })
 export class NormalizedListingsService {
   private colRef = collection(FIRESTORE, "normalized_listings");
+
+  /** Primera página de listings pendientes de revisión, actualizada en tiempo real. */
+  readonly liveFirstPage = signal<NormalizedListingDoc[]>([]);
+  readonly liveFirstPageLoading = signal(false);
+  private firstPageUnsub?: Unsubscribe;
+
+  /**
+   * Inicia un listener en tiempo real sobre la primera página de `needs_review`.
+   * Útil para el badge de pendientes y la vista inicial del inbox.
+   * Seguro llamarlo múltiples veces: solo abre un listener.
+   */
+  startListeningFirstPage(pageSize = 20): void {
+    if (this.firstPageUnsub) return;
+
+    this.liveFirstPageLoading.set(true);
+    const q = query(
+      this.colRef,
+      where("workflow.status", "==", "needs_review"),
+      orderBy("created_at", "desc"),
+      limit(pageSize),
+    );
+
+    this.firstPageUnsub = onSnapshot(
+      q,
+      (snap) => {
+        this.liveFirstPage.set(snap.docs.map((d) => d.data() as NormalizedListingDoc));
+        this.liveFirstPageLoading.set(false);
+      },
+      (error) => {
+        console.error("[NormalizedListingsService] onSnapshot error:", error);
+        this.liveFirstPageLoading.set(false);
+      },
+    );
+  }
+
+  stopListeningFirstPage(): void {
+    this.firstPageUnsub?.();
+    this.firstPageUnsub = undefined;
+  }
 
   private async listByWorkflowStatus(
     status: WorkflowStatus,

@@ -1,4 +1,6 @@
-import { Injectable } from "@angular/core";
+import { Injectable, inject } from "@angular/core";
+import { HttpClient, HttpErrorResponse } from "@angular/common/http";
+import { lastValueFrom } from "rxjs";
 import { FIREBASE_AUTH } from "../core/firebase.providers";
 import {
   RoleId,
@@ -137,6 +139,7 @@ const BACKEND_SECTION_KEYS: BackendSectionKey[] = [
 @Injectable({ providedIn: "root" })
 export class UserAdminApiService {
   private readonly baseUrl = environment.adminApiBaseUrl.replace(/\/+$/, "");
+  private readonly http = inject(HttpClient);
 
   async createManagedUser(input: CreateManagedUserInput): Promise<CreateManagedUserResult> {
     const email = (input.email || "").trim().toLowerCase();
@@ -362,38 +365,51 @@ export class UserAdminApiService {
   }
 
   private async request<T>(path: string, init: RequestInit): Promise<T> {
-    const current = FIREBASE_AUTH.currentUser;
-    if (!current) throw new Error("Sesion no valida para operaciones administrativas.");
+    if (!FIREBASE_AUTH.currentUser) {
+      throw new Error("Sesion no valida para operaciones administrativas.");
+    }
+
     const method = (init.method || "GET").toUpperCase();
-    const token = await current.getIdToken(method !== "GET");
-    const response = await fetch(`${this.baseUrl}${path}`, {
-      ...init,
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-        ...(init.headers || {}),
-      },
-    });
+    const url = `${this.baseUrl}${path}`;
 
-    const text = await response.text();
-    let parsed = {} as { ok?: boolean } & T;
-    if (text) {
-      try {
-        parsed = JSON.parse(text) as { ok?: boolean } & T;
-      } catch {
-        parsed = {} as { ok?: boolean } & T;
+    const obs =
+      method === "GET"
+        ? this.http.get(url, { responseType: "text", observe: "response" })
+        : this.http.post(url, init.body, { responseType: "text", observe: "response" });
+
+    try {
+      const response = await lastValueFrom(obs);
+      const text = response.body ?? "";
+
+      let parsed = {} as { ok?: boolean } & T;
+      if (text) {
+        try {
+          parsed = JSON.parse(text) as { ok?: boolean } & T;
+        } catch {
+          parsed = {} as { ok?: boolean } & T;
+        }
       }
-    }
 
-    if (!response.ok || ("ok" in parsed && parsed.ok === false)) {
-      const message = this.extractErrorMessage(response.status, text);
-      const error = new Error(message) as Error & { status?: number; path?: string };
-      error.status = response.status;
-      error.path = path;
-      throw error;
-    }
+      if ("ok" in parsed && parsed.ok === false) {
+        const message = this.extractErrorMessage(response.status, text);
+        const error = new Error(message) as Error & { status?: number; path?: string };
+        error.status = response.status;
+        error.path = path;
+        throw error;
+      }
 
-    return parsed as T;
+      return parsed as T;
+    } catch (err) {
+      if (err instanceof HttpErrorResponse) {
+        const text = typeof err.error === "string" ? err.error : "";
+        const message = this.extractErrorMessage(err.status, text);
+        const apiError = new Error(message) as Error & { status?: number; path?: string };
+        apiError.status = err.status;
+        apiError.path = path;
+        throw apiError;
+      }
+      throw err;
+    }
   }
 
   private extractErrorMessage(status: number, text: string): string {
