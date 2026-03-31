@@ -161,6 +161,11 @@ export const routes: Routes = [
 
   // Portal público de seguimiento para clientas (sin auth)
   {
+    path: "privacy",
+    loadComponent: () => import("./features/public/privacy").then((m) => m.default),
+  },
+
+  {
     path: "track/:token",
     loadComponent: () => import("./features/public/order-tracker/order-tracker").then((m) => m.default),
   },
@@ -171,3 +176,4 @@ export const routes: Routes = [
   { path: "review/:id", redirectTo: "main/review/:id" },
   { path: "**", redirectTo: "" },
 ];
+

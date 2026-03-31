@@ -1,0 +1,45 @@
+.privacy-page {
+  min-height: 100dvh;
+  padding: 40px 20px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  background:
+    radial-gradient(1200px 480px at 10% -10%, rgba(2, 132, 199, 0.12), transparent 55%),
+    radial-gradient(1000px 460px at 100% 0%, rgba(15, 23, 42, 0.1), transparent 55%),
+    #f8fafc;
+}
+
+.privacy-card {
+  width: min(760px, 100%);
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 28px 24px;
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.08);
+  color: #0f172a;
+  font-family: "Inter", "Segoe UI", sans-serif;
+}
+
+.privacy-card h1 {
+  margin: 0 0 16px;
+  font-size: clamp(1.35rem, 2vw, 1.75rem);
+  line-height: 1.2;
+}
+
+.privacy-card p {
+  margin: 0 0 12px;
+  line-height: 1.6;
+  color: #334155;
+}
+
+.privacy-card a {
+  color: #0369a1;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.privacy-card a:hover {
+  text-decoration: underline;
+}
+

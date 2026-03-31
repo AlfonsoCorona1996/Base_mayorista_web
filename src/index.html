@@ -16,8 +16,23 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
     rel="stylesheet"
-    href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block"
+    href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded&display=block"
   >
+  <script>
+    document.documentElement.classList.add("ms-icons-loading");
+    (function () {
+      if (!("fonts" in document)) {
+        document.documentElement.classList.remove("ms-icons-loading");
+        return;
+      }
+      Promise.race([
+        document.fonts.load('24px "Material Symbols Rounded"'),
+        new Promise((resolve) => setTimeout(resolve, 2500)),
+      ]).finally(() => {
+        document.documentElement.classList.remove("ms-icons-loading");
+      });
+    })();
+  </script>
 </head>
 <body>
   <app-root></app-root>

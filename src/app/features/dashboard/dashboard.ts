@@ -37,6 +37,11 @@ export default class DashboardPage implements OnInit {
   readonly criticalCount = this.alertsSvc.criticalCount;
   readonly schedulingRouteId = signal<string | null>(null);
   readonly actionError = signal<string | null>(null);
+  readonly loading = signal(true);
+  readonly skeletonKpiCards = [0, 1, 2, 3, 4];
+  readonly skeletonAlertColumns = [0, 1];
+  readonly skeletonAlertItems = [0, 1];
+  readonly skeletonQuicklinks = [0, 1, 2, 3, 4, 5];
 
   dismissed = new Set<string>();
 
@@ -51,11 +56,16 @@ export default class DashboardPage implements OnInit {
   };
 
   async ngOnInit(): Promise<void> {
-    await Promise.all([
-      this.ordersSvc.loadFromFirestore(),
-      this.customersSvc.loadFromFirestore(),
-      this.routesSvc.loadFromFirestore(),
-    ]);
+    this.loading.set(true);
+    try {
+      await Promise.all([
+        this.ordersSvc.loadFromFirestore(),
+        this.customersSvc.loadFromFirestore(),
+        this.routesSvc.loadFromFirestore(),
+      ]);
+    } finally {
+      this.loading.set(false);
+    }
   }
 
   visibleAlerts(): SmartAlert[] {
