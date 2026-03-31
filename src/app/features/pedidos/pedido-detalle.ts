@@ -1,5 +1,6 @@
 import { Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild, computed, inject, signal, ChangeDetectionStrategy, DestroyRef } from "@angular/core";
 import { DatePipe, DecimalPipe, UpperCasePipe } from "@angular/common";
+import { HttpErrorResponse } from "@angular/common/http";
 import { FormsModule } from "@angular/forms";
 import { ActivatedRoute, Router, RouterLink } from "@angular/router";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
@@ -21,6 +22,7 @@ import { UserAdminApiService } from "../../services/user-admin-api.service";
 import { FIRESTORE, STORAGE } from "../../core/firebase.providers";
 import { ActivityLogComponent } from "../../shared/components/activity-log/activity-log.component";
 import { AuthzService } from "../../core/authz.service";
+import { AuthService } from "../../core/auth.service";
 import { DispatchOrderRow, RouteRunDoc, RouteRunsService } from "../../services/route-runs.service";
 
 type EstadoConfirmacion = "pendiente" | "confirmado" | "sin_stock";
@@ -163,6 +165,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   private supplierOperations = inject(SupplierOperationsService);
   readonly manualHistory = inject(ManualProductHistoryService);
   private authz = inject(AuthzService);
+  private auth = inject(AuthService);
   private routeRuns = inject(RouteRunsService);
   private destroyRef = inject(DestroyRef);
   private api = inject(UserAdminApiService);
@@ -4495,22 +4498,34 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       this.waNoteSent.set({ ok: false, msg: "El pedido no tiene clienta asignada." });
       return;
     }
+
+    const customer = this.customers.getById(customerId);
+    const whatsappRaw = String(customer?.whatsapp || "").trim();
+    const whatsappDigits = this.normalizeWhatsappDigits(whatsappRaw);
+    if (!whatsappDigits) {
+      this.waNoteSent.set({ ok: false, msg: "La clienta no tiene WhatsApp configurado." });
+      return;
+    }
+    if (whatsappDigits.length < 10) {
+      this.waNoteSent.set({ ok: false, msg: "El WhatsApp de la clienta parece incompleto. Revísalo en Clientas." });
+      return;
+    }
+    const rows = this.salesNoteRows(order);
+    if (rows.length <= 0) {
+      this.waNoteSent.set({ ok: false, msg: "No hay productos confirmados para generar nota." });
+      return;
+    }
+
+    const computedTotal = rows.reduce((s, r) => s + r.lineTotal, 0);
+    const paidAmount = order.totals?.paid_amount ?? 0;
+    const totalAmount = computedTotal || order.totals?.total_amount || 0;
+    const balanceDue = Math.max(0, totalAmount - paidAmount);
+    const lastInboundCustomerMessageAt = this.resolveLastInboundCustomerMessageAt(order);
+
     this.sendingWaNote.set(true);
     this.waNoteSent.set(null);
     try {
-      const rows = this.salesNoteRows(order);
-      if (rows.length <= 0) {
-        this.waNoteSent.set({ ok: false, msg: "No hay productos confirmados para generar nota." });
-        return;
-      }
-
-      const computedTotal = rows.reduce((s, r) => s + r.lineTotal, 0);
-      const paidAmount  = order.totals?.paid_amount ?? 0;
-      const totalAmount = computedTotal || order.totals?.total_amount || 0;
-      const balanceDue  = Math.max(0, totalAmount - paidAmount);
-
-      // Generamos la imagen en el frontend para que el backend use el diseño
-      // actualizado en lugar de generar el suyo. Si falla, el backend fallback.
+      // Generamos la imagen en el frontend; si falla enviamos solo payload minimo.
       let notaImageBase64: string | undefined;
       try {
         await this.withTimeout(
@@ -4524,36 +4539,210 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
           "Tiempo de espera al generar la nota.",
         );
         notaImageBase64 = await this.blobToJpegBase64(pngBlob, 0.88);
-      } catch { /* backend genera su propia imagen como fallback */ }
+      } catch {
+        // No bloqueamos el envio si no se pudo crear la imagen local.
+      }
 
       const payload: Record<string, unknown> = {
         customer_id: customerId,
+        lastInboundCustomerMessageAt,
+        last_inbound_customer_message_at: lastInboundCustomerMessageAt,
         ...(notaImageBase64 ? { nota_image_base64: notaImageBase64 } : {}),
         order: {
           order_id: order.order_id,
-          status: order.status,
-          created_at: order.created_at,
-          totals: { total_amount: totalAmount, paid_amount: paidAmount, balance_due: balanceDue },
-          items: rows.map((r) => ({
-            title: r.item.title || "",
-            variant: r.item.variant || "",
-            color_name: r.item.color || "",
-            quantity: r.qty,
-            price_clienta: r.unitPrice,
-            state: "confirmed",
-          })),
+          totals: {
+            total_amount: totalAmount,
+            balance_due: balanceDue,
+          },
         },
       };
 
-      await lastValueFrom(this.api.post("/api/wa/send-sales-note", payload));
-      this.waNoteSent.set({ ok: true });
-    } catch (err: any) {
-      const msg = err?.error?.message ?? "No se pudo enviar la nota por WhatsApp.";
-      this.waNoteSent.set({ ok: false, msg });
+      const response = await this.withTimeout(
+        lastValueFrom(this.api.post<Record<string, unknown>>("/api/wa/send-sales-note", payload)),
+        30000,
+        "No se pudo conectar, intenta de nuevo",
+      );
+      this.assertWaSendAccepted(response);
+
+      this.logWaSendSupport({
+        customerId,
+        orderId: order.order_id,
+        status: 200,
+        reason: null,
+      });
+      this.waNoteSent.set({ ok: true, msg: "Nota enviada por WhatsApp." });
+      this.showActionToast("Nota enviada por WhatsApp.");
+    } catch (error: unknown) {
+      const mapped = await this.mapWaSendError(error, customerId, order.order_id);
+      this.waNoteSent.set({ ok: false, msg: mapped.message });
+      if (mapped.isNetwork) {
+        this.showActionToast("No se pudo conectar, intenta de nuevo.");
+      }
     } finally {
       this.sendingWaNote.set(false);
       setTimeout(() => this.waNoteSent.set(null), 5000);
     }
+  }
+
+  private normalizeWhatsappDigits(value: string): string {
+    return String(value || "").replace(/\D/g, "");
+  }
+
+  private resolveLastInboundCustomerMessageAt(order: Order): string {
+    const fromEvents = this.findLastInboundCustomerMessageAtFromEvents();
+    if (fromEvents) return fromEvents;
+    return this.coerceIsoDate(order.last_event_at) || this.coerceIsoDate(order.updated_at) || new Date().toISOString();
+  }
+
+  private findLastInboundCustomerMessageAtFromEvents(): string | null {
+    let latestAt: string | null = null;
+    let latestTs = -1;
+
+    for (const event of this.events()) {
+      const isInboundEvent = this.looksLikeInboundCustomerWaEvent(event);
+      const meta = (event.meta && typeof event.meta === "object") ? (event.meta as Record<string, unknown>) : null;
+      const candidates = [
+        meta?.["lastInboundCustomerMessageAt"],
+        meta?.["last_inbound_customer_message_at"],
+        meta?.["inboundAt"],
+        meta?.["inbound_at"],
+        meta?.["customerMessageAt"],
+        meta?.["customer_message_at"],
+        isInboundEvent ? event.createdAt : null,
+      ];
+
+      for (const candidate of candidates) {
+        const iso = this.coerceIsoDate(candidate);
+        if (!iso) continue;
+        const ts = Date.parse(iso);
+        if (!Number.isFinite(ts)) continue;
+        if (ts > latestTs) {
+          latestTs = ts;
+          latestAt = iso;
+        }
+      }
+    }
+
+    return latestAt;
+  }
+
+  private looksLikeInboundCustomerWaEvent(event: OrderEvent): boolean {
+    const type = String(event.type || "").toLowerCase();
+    const message = String(event.message || "").toLowerCase();
+    if (type.includes("wa_inbound") || type.includes("whatsapp_inbound")) return true;
+    if (type.includes("customer_message") && type.includes("inbound")) return true;
+    if (message.includes("mensaje entrante") && message.includes("whatsapp")) return true;
+    return false;
+  }
+
+  private coerceIsoDate(value: unknown): string | null {
+    if (!value) return null;
+    if (typeof value === "string") {
+      const iso = value.trim();
+      if (!iso) return null;
+      const parsed = Date.parse(iso);
+      return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+    }
+    if (value instanceof Date) {
+      const parsed = value.getTime();
+      return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+    }
+    if (typeof value === "number") {
+      return Number.isFinite(value) ? new Date(value).toISOString() : null;
+    }
+    return null;
+  }
+
+  private assertWaSendAccepted(response: unknown): void {
+    if (!response || typeof response !== "object") return;
+    const payload = response as Record<string, unknown>;
+    const status = String(payload["status"] || "").trim().toLowerCase();
+    const explicitFailure =
+      payload["ok"] === false ||
+      payload["sent"] === false ||
+      payload["queued"] === false ||
+      status === "error" ||
+      status === "failed";
+    if (explicitFailure) {
+      throw new Error(this.extractWaSendMessage(payload) || "No se pudo enviar la nota por WhatsApp.");
+    }
+  }
+
+  private extractWaSendMessage(payload: Record<string, unknown>): string | null {
+    const candidates = [payload["message"], payload["error"], payload["detail"], payload["reason"], payload["statusText"]];
+    for (const candidate of candidates) {
+      if (typeof candidate !== "string") continue;
+      const message = candidate.trim();
+      if (message) return message;
+    }
+    return null;
+  }
+
+  private async mapWaSendError(
+    error: unknown,
+    customerId: string,
+    orderId: string,
+  ): Promise<{ message: string; isNetwork: boolean }> {
+    const http = error instanceof HttpErrorResponse ? error : null;
+    const status = http?.status ?? null;
+    const payload =
+      (http?.error && typeof http.error === "object" ? (http.error as Record<string, unknown>) : null) ||
+      ((error as any)?.error && typeof (error as any).error === "object" ? ((error as any).error as Record<string, unknown>) : null);
+    const reason =
+      (typeof payload?.["reason"] === "string" ? payload["reason"] : null) ||
+      (typeof payload?.["code"] === "string" ? payload["code"] : null) ||
+      null;
+    const backendMessage = this.extractWaSendMessage(payload || {});
+
+    this.logWaSendSupport({
+      customerId,
+      orderId,
+      status,
+      reason,
+    });
+
+    if (status === 401) {
+      await this.auth.logout().catch(() => null);
+      await this.router.navigateByUrl("/login?reason=UNAUTHENTICATED").catch(() => null);
+      return { message: "Tu sesión expiró. Inicia sesión de nuevo.", isNetwork: false };
+    }
+    if (status === 400) {
+      return { message: backendMessage || "Solicitud inválida. Revisa los datos de la nota.", isNetwork: false };
+    }
+    if (status === 422) {
+      return { message: this.mapWaBusinessReason(reason, backendMessage), isNetwork: false };
+    }
+    if (status !== null && status >= 500) {
+      return { message: "Error interno al enviar la nota. Intenta de nuevo.", isNetwork: false };
+    }
+    if (status === 0 || /conectar|timeout|tiempo de espera/i.test(String((error as any)?.message || ""))) {
+      return { message: "No se pudo conectar, intenta de nuevo", isNetwork: true };
+    }
+
+    const fallback = backendMessage || (typeof (error as any)?.message === "string" ? (error as any).message : "");
+    return { message: fallback || "No se pudo enviar la nota por WhatsApp.", isNetwork: false };
+  }
+
+  private mapWaBusinessReason(reason: string | null, backendMessage: string | null): string {
+    const normalized = String(reason || "").trim().toLowerCase();
+    if (normalized === "no_phone") return "La clienta no tiene WhatsApp registrado.";
+    if (normalized === "customer_not_found") return "No se encontró la clienta.";
+    if (normalized === "opted_out") return "La clienta no tiene notificaciones activadas.";
+    return backendMessage || "No se pudo enviar la nota por WhatsApp.";
+  }
+
+  private logWaSendSupport(input: {
+    customerId: string;
+    orderId: string;
+    status: number | null;
+    reason: string | null;
+  }): void {
+    console.info("[WA_NOTE_SEND]", {
+      customer_id: input.customerId,
+      order_id: input.orderId,
+      status: input.status,
+      reason: input.reason,
+    });
   }
 
   /**

@@ -153,6 +153,46 @@ export default class LoginPage {
     return shouldValidate && !this.getPasswordError();
   }
 
+  private mapLoginError(error: unknown): string {
+    const code = String((error as any)?.code || "").toLowerCase();
+    const message = String((error as any)?.message || "");
+    const normalizedMessage = message.toLowerCase();
+    const looksLikeFirebaseAuthError =
+      code.startsWith("auth/") || normalizedMessage.includes("firebase: error (auth/");
+
+    if (looksLikeFirebaseAuthError) {
+      if (
+        code.includes("auth/invalid-credential") ||
+        code.includes("auth/wrong-password") ||
+        code.includes("auth/user-not-found") ||
+        normalizedMessage.includes("auth/invalid-credential") ||
+        normalizedMessage.includes("auth/wrong-password") ||
+        normalizedMessage.includes("auth/user-not-found")
+      ) {
+        return "Correo/usuario o contrasena incorrectos.";
+      }
+      if (code.includes("auth/invalid-email") || normalizedMessage.includes("auth/invalid-email")) {
+        return "El correo no tiene un formato valido.";
+      }
+      if (code.includes("auth/too-many-requests") || normalizedMessage.includes("auth/too-many-requests")) {
+        return "Demasiados intentos fallidos. Espera unos minutos e intenta de nuevo.";
+      }
+      if (code.includes("auth/user-disabled") || normalizedMessage.includes("auth/user-disabled")) {
+        return "Tu cuenta esta deshabilitada. Contacta al administrador.";
+      }
+      if (
+        code.includes("auth/network-request-failed") ||
+        normalizedMessage.includes("auth/network-request-failed")
+      ) {
+        return "No pudimos conectar con el servidor. Revisa tu conexion a internet.";
+      }
+      return "No pudimos iniciar sesion. Verifica tus datos e intenta de nuevo.";
+    }
+
+    if (message) return message;
+    return "Error al iniciar sesion.";
+  }
+
   async onLogin() {
     this.markSubmitAttempt();
     this.error.set(null);
@@ -217,7 +257,7 @@ export default class LoginPage {
       }
     } catch (e: any) {
       console.error("[LOGIN] Failed", e);
-      this.error.set(e?.message || "Error al iniciar sesion");
+      this.error.set(this.mapLoginError(e));
     } finally {
       this.loading.set(false);
     }

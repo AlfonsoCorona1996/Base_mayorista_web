@@ -1,95 +1,143 @@
 <div class="dashboard-page">
-
-  <!-- ── Encabezado ── -->
   <header class="dash-header">
     <div class="dash-header-text">
       <h1 class="dash-title">Panel de control</h1>
-      <p class="dash-subtitle">{{ now() | date:'EEEE d \'de\' MMMM, HH:mm' : '' : 'es-MX' }}</p>
+      @if (loading()) {
+        <span class="skeleton-line skeleton-subtitle" aria-hidden="true"></span>
+      } @else {
+        <p class="dash-subtitle">{{ now() | date:'EEEE d \'de\' MMMM, HH:mm' : '' : 'es-MX' }}</p>
+      }
     </div>
-    @if (criticalCount() > 0) {
+    @if (loading()) {
+      <div class="dash-badge-skeleton" aria-hidden="true">
+        <span class="skeleton-line skeleton-pill"></span>
+      </div>
+    } @else if (criticalCount() > 0) {
       <div class="dash-badge-critical">
         <span class="material-symbols-rounded">error</span>
-        {{ criticalCount() }} crítico{{ criticalCount() > 1 ? 's' : '' }}
+        {{ criticalCount() }} critico{{ criticalCount() > 1 ? "s" : "" }}
       </div>
     }
   </header>
 
-  <!-- ── KPIs ── -->
   <section class="kpi-grid">
-    <a class="kpi-card kpi-blue" routerLink="/main/pedidos">
-      <span class="kpi-icon material-symbols-rounded">inventory</span>
-      <div class="kpi-body">
-        <span class="kpi-value">{{ kpis().byPacking }}</span>
-        <span class="kpi-label">En empaque</span>
-      </div>
-    </a>
-
-    <a class="kpi-card kpi-teal" routerLink="/main/pedidos">
-      <span class="kpi-icon material-symbols-rounded">local_shipping</span>
-      <div class="kpi-body">
-        <span class="kpi-value">{{ kpis().readyForRoute }}</span>
-        <span class="kpi-label">Listos para ruta</span>
-      </div>
-    </a>
-
-    <a class="kpi-card kpi-indigo" routerLink="/main/salidas">
-      <span class="kpi-icon material-symbols-rounded">route</span>
-      <div class="kpi-body">
-        <span class="kpi-value">{{ kpis().inRoute }}</span>
-        <span class="kpi-label">En ruta ahora</span>
-      </div>
-    </a>
-
-    <a class="kpi-card" [class.kpi-red]="kpis().totalBalance > 0" [class.kpi-gray]="kpis().totalBalance === 0" routerLink="/main/pedidos">
-      <span class="kpi-icon material-symbols-rounded">payments</span>
-      <div class="kpi-body">
-        <span class="kpi-value">{{ kpis().totalBalance | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
-        <span class="kpi-label">Por cobrar ({{ kpis().pendingPayment }} pedidos)</span>
-      </div>
-    </a>
-
-    <a class="kpi-card kpi-green" routerLink="/main/clientas">
-      <span class="kpi-icon material-symbols-rounded">group</span>
-      <div class="kpi-body">
-        <span class="kpi-value">{{ kpis().activeCustomers }}</span>
-        <span class="kpi-label">Clientas activas</span>
-      </div>
-    </a>
-
-    @if (kpis().churnRisk > 0) {
-      <a class="kpi-card kpi-amber" routerLink="/main/clientas">
-        <span class="kpi-icon material-symbols-rounded">person_off</span>
+    @if (loading()) {
+      @for (card of skeletonKpiCards; track card) {
+        <div class="kpi-card kpi-card-skeleton" aria-hidden="true">
+          <span class="kpi-icon kpi-icon-skeleton"></span>
+          <div class="kpi-body">
+            <span class="skeleton-line skeleton-kpi-value"></span>
+            <span class="skeleton-line skeleton-kpi-label"></span>
+          </div>
+        </div>
+      }
+    } @else {
+      <a class="kpi-card kpi-blue" routerLink="/main/pedidos">
+        <span class="kpi-icon material-symbols-rounded">inventory</span>
         <div class="kpi-body">
-          <span class="kpi-value">{{ kpis().churnRisk }}</span>
-          <span class="kpi-label">Clientas ausentes</span>
+          <span class="kpi-value">{{ kpis().byPacking }}</span>
+          <span class="kpi-label">En empaque</span>
         </div>
       </a>
+
+      <a class="kpi-card kpi-teal" routerLink="/main/pedidos">
+        <span class="kpi-icon material-symbols-rounded">local_shipping</span>
+        <div class="kpi-body">
+          <span class="kpi-value">{{ kpis().readyForRoute }}</span>
+          <span class="kpi-label">Listos para ruta</span>
+        </div>
+      </a>
+
+      <a class="kpi-card kpi-indigo" routerLink="/main/salidas">
+        <span class="kpi-icon material-symbols-rounded">route</span>
+        <div class="kpi-body">
+          <span class="kpi-value">{{ kpis().inRoute }}</span>
+          <span class="kpi-label">En ruta ahora</span>
+        </div>
+      </a>
+
+      <a class="kpi-card" [class.kpi-red]="kpis().totalBalance > 0" [class.kpi-gray]="kpis().totalBalance === 0" routerLink="/main/pedidos">
+        <span class="kpi-icon material-symbols-rounded">payments</span>
+        <div class="kpi-body">
+          <span class="kpi-value">{{ kpis().totalBalance | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+          <span class="kpi-label">Por cobrar ({{ kpis().pendingPayment }} pedidos)</span>
+        </div>
+      </a>
+
+      <a class="kpi-card kpi-green" routerLink="/main/clientas">
+        <span class="kpi-icon material-symbols-rounded">group</span>
+        <div class="kpi-body">
+          <span class="kpi-value">{{ kpis().activeCustomers }}</span>
+          <span class="kpi-label">Clientas activas</span>
+        </div>
+      </a>
+
+      @if (kpis().churnRisk > 0) {
+        <a class="kpi-card kpi-amber" routerLink="/main/clientas">
+          <span class="kpi-icon material-symbols-rounded">person_off</span>
+          <div class="kpi-body">
+            <span class="kpi-value">{{ kpis().churnRisk }}</span>
+            <span class="kpi-label">Clientas ausentes</span>
+          </div>
+        </a>
+      }
     }
   </section>
 
-  <!-- ── Alertas ── -->
   <section class="alerts-section">
     <div class="alerts-header">
       <h2 class="alerts-title">
         <span class="material-symbols-rounded">notifications_active</span>
         Alertas inteligentes
       </h2>
-      @if (visibleAlerts().length === 0) {
-        <span class="alerts-empty-badge">Todo al día</span>
+      @if (!loading() && visibleAlerts().length === 0) {
+        <span class="alerts-empty-badge">Todo al dia</span>
       }
     </div>
 
-    @if (actionError()) {
+    @if (!loading() && actionError()) {
       <div class="alert-action-error">
         <span class="material-symbols-rounded">warning</span>
         {{ actionError() }}
       </div>
     }
 
-    @if (visibleAlerts().length === 0) {
+    @if (loading()) {
+      <div class="alerts-columns" aria-hidden="true">
+        @for (column of skeletonAlertColumns; track column) {
+          <div class="alert-column">
+            <div class="alert-column-header">
+              <span class="skeleton-dot"></span>
+              <span class="skeleton-line skeleton-col-title"></span>
+              <span class="skeleton-line skeleton-col-count"></span>
+            </div>
+            <ul class="alerts-list">
+              @for (item of skeletonAlertItems; track item) {
+                <li class="alert-item alert-item-skeleton">
+                  <div class="alert-left">
+                    <span class="skeleton-dot"></span>
+                    <span class="skeleton-line skeleton-alert-icon"></span>
+                  </div>
+                  <div class="alert-content">
+                    <span class="skeleton-line skeleton-severity"></span>
+                    <span class="skeleton-line skeleton-alert-title"></span>
+                    <span class="skeleton-line skeleton-alert-body"></span>
+                    <span class="skeleton-line skeleton-alert-body short"></span>
+                  </div>
+                  <div class="alert-actions">
+                    <span class="skeleton-line skeleton-btn"></span>
+                    <span class="skeleton-line skeleton-btn-icon"></span>
+                  </div>
+                </li>
+              }
+            </ul>
+          </div>
+        }
+      </div>
+    } @else if (visibleAlerts().length === 0) {
       <div class="alerts-empty">
         <span class="material-symbols-rounded alerts-empty-icon">check_circle</span>
-        <p>No hay alertas pendientes. ¡Todo en orden!</p>
+        <p>No hay alertas pendientes. Todo en orden.</p>
       </div>
     } @else {
       <div class="alerts-columns">
@@ -123,12 +171,12 @@
                         [disabled]="isSchedulingRoute(alert)"
                         (click)="handleSmartAction(alert)"
                       >
-                        {{ isSchedulingRoute(alert) ? 'Creando...' : smartActionLabel(alert) }}
-                        <span class="material-symbols-rounded">{{ isSchedulingRoute(alert) ? 'hourglass_top' : smartActionIcon(alert) }}</span>
+                        {{ isSchedulingRoute(alert) ? "Creando..." : smartActionLabel(alert) }}
+                        <span class="material-symbols-rounded">{{ isSchedulingRoute(alert) ? "hourglass_top" : smartActionIcon(alert) }}</span>
                       </button>
                     } @else if (alert.actionUrl) {
                       <a class="alert-btn alert-btn-primary" [routerLink]="alert.actionUrl">
-                        {{ alert.actionLabel ?? 'Ver' }}
+                        {{ alert.actionLabel ?? "Ver" }}
                         <span class="material-symbols-rounded">arrow_forward</span>
                       </a>
                     }
@@ -145,35 +193,42 @@
     }
   </section>
 
-  <!-- ── Accesos rápidos ── -->
   <section class="quicklinks-section">
-    <h2 class="section-title">Accesos rápidos</h2>
+    <h2 class="section-title">Accesos rapidos</h2>
     <div class="quicklinks-grid">
-      <a class="quicklink" routerLink="/main/pedidos">
-        <span class="material-symbols-rounded">receipt_long</span>
-        <span>Pedidos</span>
-      </a>
-      <a class="quicklink" routerLink="/main/validacion">
-        <span class="material-symbols-rounded">fact_check</span>
-        <span>Validar productos</span>
-      </a>
-      <a class="quicklink" routerLink="/main/catalogo">
-        <span class="material-symbols-rounded">category</span>
-        <span>Catálogo</span>
-      </a>
-      <a class="quicklink" routerLink="/main/clientas">
-        <span class="material-symbols-rounded">group</span>
-        <span>Clientas</span>
-      </a>
-      <a class="quicklink" routerLink="/main/salidas">
-        <span class="material-symbols-rounded">local_shipping</span>
-        <span>Salidas / Rutas</span>
-      </a>
-      <a class="quicklink" routerLink="/main/usuarios">
-        <span class="material-symbols-rounded">manage_accounts</span>
-        <span>Usuarios</span>
-      </a>
+      @if (loading()) {
+        @for (item of skeletonQuicklinks; track item) {
+          <div class="quicklink quicklink-skeleton" aria-hidden="true">
+            <span class="skeleton-line skeleton-quicklink-icon"></span>
+            <span class="skeleton-line skeleton-quicklink-label"></span>
+          </div>
+        }
+      } @else {
+        <a class="quicklink" routerLink="/main/pedidos">
+          <span class="material-symbols-rounded">receipt_long</span>
+          <span>Pedidos</span>
+        </a>
+        <a class="quicklink" routerLink="/main/validacion">
+          <span class="material-symbols-rounded">fact_check</span>
+          <span>Validar productos</span>
+        </a>
+        <a class="quicklink" routerLink="/main/catalogo">
+          <span class="material-symbols-rounded">category</span>
+          <span>Catalogo</span>
+        </a>
+        <a class="quicklink" routerLink="/main/clientas">
+          <span class="material-symbols-rounded">group</span>
+          <span>Clientas</span>
+        </a>
+        <a class="quicklink" routerLink="/main/salidas">
+          <span class="material-symbols-rounded">local_shipping</span>
+          <span>Salidas / Rutas</span>
+        </a>
+        <a class="quicklink" routerLink="/main/usuarios">
+          <span class="material-symbols-rounded">manage_accounts</span>
+          <span>Usuarios</span>
+        </a>
+      }
     </div>
   </section>
-
 </div>

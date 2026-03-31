@@ -133,7 +133,7 @@
           @if (waNoteSent(); as r) {
             <span class="wa-note-result" [class.ok]="r.ok" [class.err]="!r.ok">
               <span class="material-symbols-rounded">{{ r.ok ? 'check_circle' : 'error' }}</span>
-              {{ r.ok ? 'Enviada ✓' : r.msg }}
+              {{ r.ok ? (r.msg || 'Enviada') : r.msg }}
             </span>
           }
         }
@@ -2008,4 +2008,6 @@
     <button type="button" class="btn" routerLink="/main/pedidos">Volver a la lista</button>
   </section>
 }
+
+
 

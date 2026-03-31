@@ -1,5 +1,4 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block');
 
 /* Configuración de la variable font para iconos rellenos (estilo iOS) */
 .material-symbols-rounded {
@@ -17,6 +16,13 @@
   direction: ltr;
   -webkit-font-smoothing: antialiased;
   user-select: none;
+}
+
+html.ms-icons-loading .material-symbols-rounded {
+  color: transparent;
+  width: 1em;
+  height: 1em;
+  overflow: hidden;
 }
 
 :root {
