@@ -4511,11 +4511,6 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       return;
     }
     const rows = this.salesNoteRows(order);
-    if (rows.length <= 0) {
-      this.waNoteSent.set({ ok: false, msg: "No hay productos confirmados para generar nota." });
-      return;
-    }
-
     const computedTotal = rows.reduce((s, r) => s + r.lineTotal, 0);
     const paidAmount = order.totals?.paid_amount ?? 0;
     const totalAmount = computedTotal || order.totals?.total_amount || 0;
@@ -4550,10 +4545,19 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         ...(notaImageBase64 ? { nota_image_base64: notaImageBase64 } : {}),
         order: {
           order_id: order.order_id,
+          created_at: order.created_at || new Date().toISOString(),
           totals: {
             total_amount: totalAmount,
             balance_due: balanceDue,
           },
+          items: rows.map((r) => ({
+            title: r.item.title || "",
+            variant: r.item.variant || "",
+            color_name: r.item.color || "",
+            quantity: r.qty,
+            price_clienta: r.unitPrice,
+            line_total: r.lineTotal,
+          })),
         },
       };
 
@@ -4570,8 +4574,9 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         status: 200,
         reason: null,
       });
-      this.waNoteSent.set({ ok: true, msg: "Nota enviada por WhatsApp." });
-      this.showActionToast("Nota enviada por WhatsApp.");
+      const successMsg = "Nota enviada. Si la clienta estaba fuera de ventana, recibio mensaje de reenganche.";
+      this.waNoteSent.set({ ok: true, msg: successMsg });
+      this.showActionToast(successMsg);
     } catch (error: unknown) {
       const mapped = await this.mapWaSendError(error, customerId, order.order_id);
       this.waNoteSent.set({ ok: false, msg: mapped.message });
@@ -4654,9 +4659,13 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   private assertWaSendAccepted(response: unknown): void {
-    if (!response || typeof response !== "object") return;
+    if (!response || typeof response !== "object") {
+      throw new Error("Respuesta invalida del servicio de WhatsApp.");
+    }
     const payload = response as Record<string, unknown>;
     const status = String(payload["status"] || "").trim().toLowerCase();
+    const sent = payload["sent"] === true;
+    const ok = payload["ok"] === true;
     const explicitFailure =
       payload["ok"] === false ||
       payload["sent"] === false ||
@@ -4665,6 +4674,9 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       status === "failed";
     if (explicitFailure) {
       throw new Error(this.extractWaSendMessage(payload) || "No se pudo enviar la nota por WhatsApp.");
+    }
+    if (!sent && !ok) {
+      throw new Error(this.extractWaSendMessage(payload) || "El servicio no confirmo el envio de la nota.");
     }
   }
 
