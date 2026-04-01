@@ -1,4 +1,4 @@
-import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, QueryList, ViewChildren, computed, inject, signal, ChangeDetectionStrategy, DestroyRef } from "@angular/core";
+import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, QueryList, ViewChildren, computed, inject, signal, effect, ChangeDetectionStrategy, DestroyRef, HostListener } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { CurrencyPipe, DatePipe, NgClass } from "@angular/common";
 import { FormsModule } from "@angular/forms";
@@ -41,6 +41,23 @@ type SalesNoteRow = {
   lineTotal: number;
 };
 
+type TableRangePreset = "today" | "last7" | "last30";
+type TableSortColumn = "updated_at" | "created_at" | "status" | "customer" | "route" | "items" | "total";
+type TableMenuColumn = "route" | "status";
+type TableMenuOption = { value: string; label: string; count: number };
+type PedidosUiStateSnapshot = {
+  viewMode: "cards" | "table";
+  search: string;
+  intentFilter: IntentFilter;
+  routeFilter: string;
+  tableSortCol: TableSortColumn;
+  tableSortDir: "asc" | "desc";
+  tableDateFrom: string;
+  tableDateTo: string;
+  tableRouteSelections: string[] | null;
+  tableStatusSelections: string[] | null;
+};
+
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
@@ -55,6 +72,8 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   private routes = inject(RoutesService);
   private router = inject(Router);
   private destroyRef = inject(DestroyRef);
+  private readonly uiStateStorageKey = "pedidos.ui-state.v1";
+  private uiStateHydrated = signal(false);
 
   search = signal("");
   intentFilter = signal<IntentFilter>("por_confirmar");
@@ -83,10 +102,14 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
 
   // ── Vista tabla ────────────────────────────────────────────────────
   viewMode = signal<"cards" | "table">("cards");
-  tableSortCol = signal<"updated_at" | "created_at" | "status" | "customer" | "route" | "total">("updated_at");
+  tableSortCol = signal<TableSortColumn>("updated_at");
   tableSortDir = signal<"asc" | "desc">("desc");
   tableDateFrom = signal<string>("");
   tableDateTo   = signal<string>("");
+  tableMenuOpen = signal<TableMenuColumn | null>(null);
+  tableMenuPosition = signal<{ left: number; top: number; width: number } | null>(null);
+  tableRouteSelections = signal<string[] | null>(null);
+  tableStatusSelections = signal<string[] | null>(null);
   private visiblePillsByOrder = signal<Record<string, number>>({});
   private pillsResizeObserver: ResizeObserver | null = null;
   private pillMeasureEl: HTMLSpanElement | null = null;
@@ -112,6 +135,13 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
       meta: OrderCardMeta;
     }
   >();
+
+  constructor() {
+    effect(() => {
+      if (!this.uiStateHydrated()) return;
+      this.saveUiStateSnapshot(this.captureUiStateSnapshot());
+    });
+  }
 
   list = computed(() => this.orders.list());
   intentCounts = computed(() => {
@@ -162,49 +192,343 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     return map;
   });
 
-  /** Filas de la vista tabla: aplica filtro de fechas y ordenamiento */
-  tableRows = computed(() => {
-    const col  = this.tableSortCol();
-    const dir  = this.tableSortDir();
+  private tableBaseRows = computed(() => {
     const from = this.tableDateFrom();
-    const to   = this.tableDateTo();
+    const to = this.tableDateTo();
     const term = this.normalizeSearchTerm(this.search());
     const route = this.routeFilter();
 
-    let rows = this.list().filter(order => {
+    return this.list().filter((order) => {
       if (route !== "todos" && order.route_id !== route) return false;
       if (!this.matchesSearchTerm(order, term)) return false;
       if (from && order.created_at < from) return false;
-      if (to   && order.created_at > to + "T23:59:59") return false;
+      if (to && order.created_at > to + "T23:59:59") return false;
       return true;
     });
+  });
 
-    rows = [...rows].sort((a, b) => {
-      let va: string | number = "";
-      let vb: string | number = "";
-      switch (col) {
-        case "updated_at":  va = a.updated_at  || ""; vb = b.updated_at  || ""; break;
-        case "created_at":  va = a.created_at  || ""; vb = b.created_at  || ""; break;
-        case "status":      va = a.status      || ""; vb = b.status      || ""; break;
-        case "customer":    va = this.customers.getById(a.customer_id)?.first_name || ""; vb = this.customers.getById(b.customer_id)?.first_name || ""; break;
-        case "route":       va = this.routes.getById(a.route_id || "")?.name || ""; vb = this.routes.getById(b.route_id || "")?.name || ""; break;
-        case "total":       va = a.totals?.total_amount ?? 0; vb = b.totals?.total_amount ?? 0; break;
+  tableRouteMenuOptions = computed<TableMenuOption[]>(() => {
+    const rows = this.applyStatusColumnFilter(this.tableBaseRows());
+    const map = new Map<string, TableMenuOption>();
+    for (const order of rows) {
+      const value = this.tableRouteFilterKey(order.route_id);
+      const found = map.get(value);
+      if (found) {
+        found.count += 1;
+        continue;
       }
-      if (va < vb) return dir === "asc" ? -1 : 1;
-      if (va > vb) return dir === "asc" ?  1 : -1;
-      return 0;
-    });
+      map.set(value, { value, label: this.routeName(order.route_id), count: 1 });
+    }
+    return [...map.values()].sort((a, b) => a.label.localeCompare(b.label, "es-MX"));
+  });
 
+  tableStatusMenuOptions = computed<TableMenuOption[]>(() => {
+    const rows = this.applyRouteColumnFilter(this.tableBaseRows());
+    const map = new Map<string, TableMenuOption>();
+    for (const order of rows) {
+      const value = this.tableStatusFilterKey(order.status);
+      const found = map.get(value);
+      if (found) {
+        found.count += 1;
+        continue;
+      }
+      map.set(value, { value, label: this.tableStatusLabel(order.status), count: 1 });
+    }
+    return [...map.values()].sort((a, b) => a.label.localeCompare(b.label, "es-MX"));
+  });
+
+  tableHasRouteFilter = computed(() => this.tableRouteSelections() !== null);
+  tableHasStatusFilter = computed(() => this.tableStatusSelections() !== null);
+  tableHasNonDefaultSort = computed(() => this.tableSortCol() !== "updated_at" || this.tableSortDir() !== "desc");
+  tableHasAnyFilters = computed(() =>
+    !!this.tableDateFrom()
+    || !!this.tableDateTo()
+    || this.tableHasRouteFilter()
+    || this.tableHasStatusFilter()
+    || this.tableHasNonDefaultSort()
+  );
+
+  private tableRowsFiltered = computed(() => {
+    let rows = this.tableBaseRows();
+    rows = this.applyRouteColumnFilter(rows);
+    rows = this.applyStatusColumnFilter(rows);
     return rows;
   });
 
-  toggleTableSort(col: "updated_at" | "created_at" | "status" | "customer" | "route" | "total"): void {
+  /** Filas de la vista tabla: aplica filtros de columna y ordenamiento */
+  tableRows = computed(() => {
+    const col = this.tableSortCol();
+    const dir = this.tableSortDir();
+    const rows = [...this.tableRowsFiltered()];
+
+    return rows.sort((a, b) => {
+      let va: string | number = "";
+      let vb: string | number = "";
+      switch (col) {
+        case "updated_at":
+          va = a.updated_at || "";
+          vb = b.updated_at || "";
+          break;
+        case "created_at":
+          va = a.created_at || "";
+          vb = b.created_at || "";
+          break;
+        case "status":
+          va = a.status || "";
+          vb = b.status || "";
+          break;
+        case "customer":
+          va = this.customerName(a.customer_id);
+          vb = this.customerName(b.customer_id);
+          break;
+        case "route":
+          va = this.routeName(a.route_id);
+          vb = this.routeName(b.route_id);
+          break;
+        case "items":
+          va = (a.items || []).length;
+          vb = (b.items || []).length;
+          break;
+        case "total":
+          va = this.tableOrderClientTotal(a);
+          vb = this.tableOrderClientTotal(b);
+          break;
+      }
+      if (va < vb) return dir === "asc" ? -1 : 1;
+      if (va > vb) return dir === "asc" ? 1 : -1;
+      return 0;
+    });
+  });
+
+  tableRangeCompactSummary = computed(() => {
+    const from = this.tableDateFrom();
+    const to = this.tableDateTo();
+    if (!from && !to) return "";
+    if (from && to) return `${this.formatTableDateCompact(from)} -> ${this.formatTableDateCompact(to)}`;
+    if (from) return `desde ${this.formatTableDateCompact(from)}`;
+    return `hasta ${this.formatTableDateCompact(to)}`;
+  });
+
+  toggleTableSort(col: TableSortColumn): void {
     if (this.tableSortCol() === col) {
       this.tableSortDir.update(d => d === "asc" ? "desc" : "asc");
     } else {
       this.tableSortCol.set(col);
       this.tableSortDir.set("desc");
     }
+  }
+
+  setTableSortFromMenu(col: TableMenuColumn, dir: "asc" | "desc", event?: Event): void {
+    event?.stopPropagation();
+    this.tableSortCol.set(col);
+    this.tableSortDir.set(dir);
+    this.tableMenuOpen.set(null);
+    this.tableMenuPosition.set(null);
+  }
+
+  toggleTableColumnMenu(col: TableMenuColumn, event?: Event): void {
+    event?.stopPropagation();
+    if (this.tableMenuOpen() === col) {
+      this.tableMenuOpen.set(null);
+      this.tableMenuPosition.set(null);
+      return;
+    }
+    this.tableMenuOpen.set(col);
+    this.tableMenuPosition.set(this.computeTableMenuPosition(event));
+  }
+
+  isTableColumnMenuOpen(col: TableMenuColumn): boolean {
+    return this.tableMenuOpen() === col;
+  }
+
+  isTableRouteOptionChecked(value: string): boolean {
+    const selected = this.tableRouteSelections();
+    if (selected === null) return true;
+    return selected.includes(value);
+  }
+
+  isTableStatusOptionChecked(value: string): boolean {
+    const selected = this.tableStatusSelections();
+    if (selected === null) return true;
+    return selected.includes(value);
+  }
+
+  toggleTableRouteOption(value: string, checked: boolean): void {
+    const options = this.tableRouteMenuOptions().map((option) => option.value);
+    this.tableRouteSelections.update((selected) => this.updateColumnSelection(selected, options, value, checked));
+  }
+
+  toggleTableStatusOption(value: string, checked: boolean): void {
+    const options = this.tableStatusMenuOptions().map((option) => option.value);
+    this.tableStatusSelections.update((selected) => this.updateColumnSelection(selected, options, value, checked));
+  }
+
+  clearTableRouteColumnFilter(event?: Event): void {
+    event?.stopPropagation();
+    this.tableRouteSelections.set(null);
+  }
+
+  clearTableStatusColumnFilter(event?: Event): void {
+    event?.stopPropagation();
+    this.tableStatusSelections.set(null);
+  }
+
+  @HostListener("document:keydown.escape")
+  onTableMenuEscape(): void {
+    this.tableMenuOpen.set(null);
+    this.tableMenuPosition.set(null);
+  }
+
+  @HostListener("document:click", ["$event"])
+  onTableMenuOutsideClick(event: MouseEvent): void {
+    if (!this.tableMenuOpen()) return;
+    const target = event.target as HTMLElement | null;
+    if (!target) {
+      this.tableMenuOpen.set(null);
+      this.tableMenuPosition.set(null);
+      return;
+    }
+    if (target.closest(".th-menu-trigger") || target.closest(".th-menu-dropdown")) return;
+    this.tableMenuOpen.set(null);
+    this.tableMenuPosition.set(null);
+  }
+
+  @HostListener("window:resize")
+  onWindowResizeCloseTableMenu(): void {
+    if (!this.tableMenuOpen()) return;
+    this.tableMenuOpen.set(null);
+    this.tableMenuPosition.set(null);
+  }
+
+  applyTableRangePreset(preset: TableRangePreset): void {
+    const today = new Date();
+    const to = this.toDateInputValue(today);
+    let from = to;
+    if (preset === "last7") {
+      const start = new Date(today);
+      start.setDate(start.getDate() - 6);
+      from = this.toDateInputValue(start);
+    } else if (preset === "last30") {
+      const start = new Date(today);
+      start.setDate(start.getDate() - 29);
+      from = this.toDateInputValue(start);
+    }
+    this.tableDateFrom.set(from);
+    this.tableDateTo.set(to);
+  }
+
+  isTableRangePresetActive(preset: TableRangePreset): boolean {
+    const from = this.tableDateFrom();
+    const to = this.tableDateTo();
+    if (!from || !to) return false;
+    const today = new Date();
+    const expectedTo = this.toDateInputValue(today);
+    let expectedFrom = expectedTo;
+    if (preset === "last7") {
+      const start = new Date(today);
+      start.setDate(start.getDate() - 6);
+      expectedFrom = this.toDateInputValue(start);
+    } else if (preset === "last30") {
+      const start = new Date(today);
+      start.setDate(start.getDate() - 29);
+      expectedFrom = this.toDateInputValue(start);
+    }
+    return from === expectedFrom && to === expectedTo;
+  }
+
+  clearTableRange(): void {
+    this.tableDateFrom.set("");
+    this.tableDateTo.set("");
+  }
+
+  clearTableFilters(): void {
+    this.clearTableRange();
+    this.tableRouteSelections.set(null);
+    this.tableStatusSelections.set(null);
+    this.tableSortCol.set("updated_at");
+    this.tableSortDir.set("desc");
+    this.tableMenuOpen.set(null);
+    this.tableMenuPosition.set(null);
+  }
+
+  private updateColumnSelection(
+    selected: string[] | null,
+    options: string[],
+    value: string,
+    checked: boolean
+  ): string[] | null {
+    const available = [...new Set(options)];
+
+    if (checked) {
+      if (selected === null) return null;
+      const next = [...new Set([...selected, value])];
+      if (available.length > 0 && available.every((option) => next.includes(option))) return null;
+      return next;
+    }
+
+    if (selected === null) {
+      return available.filter((option) => option !== value);
+    }
+
+    return selected.filter((option) => option !== value);
+  }
+
+  private tableRouteFilterKey(routeId: string | null): string {
+    return routeId || "sin_ruta";
+  }
+
+  private tableStatusFilterKey(status: string): string {
+    return status || "sin_estado";
+  }
+
+  private computeTableMenuPosition(event?: Event): { left: number; top: number; width: number } {
+    const margin = 8;
+    const maxAllowedWidth = Math.max(180, window.innerWidth - (margin * 2));
+    const menuWidth = Math.min(260, maxAllowedWidth);
+    const trigger = this.resolveTableMenuTrigger(event);
+    if (!trigger) {
+      return {
+        left: margin,
+        top: 140,
+        width: menuWidth,
+      };
+    }
+    const rect = trigger.getBoundingClientRect();
+    const centerLeft = rect.left + (rect.width / 2) - (menuWidth / 2);
+    const left = Math.min(window.innerWidth - margin - menuWidth, Math.max(margin, centerLeft));
+    const top = Math.max(76, rect.bottom + 6);
+    return { left, top, width: menuWidth };
+  }
+
+  private resolveTableMenuTrigger(event?: Event): HTMLElement | null {
+    if (!event) return null;
+    const currentTarget = event.currentTarget;
+    if (currentTarget instanceof HTMLElement) return currentTarget;
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return null;
+    return target.closest(".th-menu-trigger");
+  }
+
+  private applyRouteColumnFilter(rows: Order[]): Order[] {
+    const selected = this.tableRouteSelections();
+    if (selected === null) return rows;
+    if (selected.length === 0) return [];
+    const allowed = new Set(selected);
+    return rows.filter((order) => allowed.has(this.tableRouteFilterKey(order.route_id)));
+  }
+
+  private applyStatusColumnFilter(rows: Order[]): Order[] {
+    const selected = this.tableStatusSelections();
+    if (selected === null) return rows;
+    if (selected.length === 0) return [];
+    const allowed = new Set(selected);
+    return rows.filter((order) => allowed.has(this.tableStatusFilterKey(order.status)));
+  }
+
+  openTableDatePicker(event: Event): void {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement) || target.type !== "date") return;
+    this.tryOpenDatePicker(target);
   }
 
   tableStatusLabel(status: string): string {
@@ -241,6 +565,41 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     };
     return map[status] ?? "trow-status--default";
   }
+
+  formatTableDateShort(input: string): string {
+    const value = new Date(input);
+    if (Number.isNaN(value.getTime())) return "--";
+    const day = String(value.getDate()).padStart(2, "0");
+    const monthAbbr = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"][value.getMonth()];
+    return `${day}-${monthAbbr}`;
+  }
+
+  tableOrderClientTotal(order: Order): number {
+    const persistedTotal = Number(order.totals?.total_amount ?? 0);
+    if (Number.isFinite(persistedTotal) && persistedTotal > 0) return persistedTotal;
+
+    let estimated = 0;
+    for (const item of order.items || []) {
+      const qtyRaw = Number(item.quantity ?? 0);
+      const qty = Number.isFinite(qtyRaw) ? Math.max(0, Math.trunc(qtyRaw)) : 0;
+      const unitRaw = Number(item.price_clienta ?? item.price_public ?? 0);
+      const unit = Number.isFinite(unitRaw) ? Math.max(0, unitRaw) : 0;
+      estimated += qty * unit;
+    }
+    return Number(estimated.toFixed(2));
+  }
+
+  isTableOrderPaid(order: Order): boolean {
+    const total = this.tableOrderClientTotal(order);
+    if (total <= 0) return false;
+
+    const paid = Number(order.totals?.paid_amount ?? 0);
+    const hasPaidInTotals = Number.isFinite(paid) && paid >= total - 0.01;
+    if (hasPaidInTotals) return true;
+
+    return ["pagado", "closed"].includes(order.status);
+  }
+
   canBulkCreateNotes = computed(() => this.intentFilter() === "listos_ruta");
   bulkReadyOrders = computed(() => this.filtered().filter((order) => this.isReadyForRoute(order)));
   bulkSelectedCount = computed(() => this.bulkReadyOrders().filter((order) => this.bulkSelected()[order.order_id]).length);
@@ -267,7 +626,118 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     return this.routes.getById(id)?.name || "Ruta sin nombre";
   });
 
+  private captureUiStateSnapshot(): PedidosUiStateSnapshot {
+    return {
+      viewMode: this.viewMode(),
+      search: this.search(),
+      intentFilter: this.intentFilter(),
+      routeFilter: this.routeFilter(),
+      tableSortCol: this.tableSortCol(),
+      tableSortDir: this.tableSortDir(),
+      tableDateFrom: this.tableDateFrom(),
+      tableDateTo: this.tableDateTo(),
+      tableRouteSelections: this.tableRouteSelections(),
+      tableStatusSelections: this.tableStatusSelections(),
+    };
+  }
+
+  private saveUiStateSnapshot(snapshot: PedidosUiStateSnapshot): void {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(this.uiStateStorageKey, JSON.stringify(snapshot));
+    } catch {
+      // Ignore storage errors (private mode, quota, blocked storage).
+    }
+  }
+
+  private restoreUiStateSnapshot(): void {
+    if (typeof window === "undefined") {
+      this.uiStateHydrated.set(true);
+      return;
+    }
+
+    let parsed: Partial<PedidosUiStateSnapshot> | null = null;
+    try {
+      const raw = window.localStorage.getItem(this.uiStateStorageKey);
+      if (raw) parsed = JSON.parse(raw) as Partial<PedidosUiStateSnapshot>;
+    } catch {
+      parsed = null;
+    }
+
+    const shouldRestorePrimaryFilters = this.shouldRestorePrimaryFilters();
+
+    if (parsed) {
+      if (parsed.viewMode === "cards" || parsed.viewMode === "table") {
+        this.viewMode.set(parsed.viewMode);
+      }
+      if (shouldRestorePrimaryFilters && typeof parsed.search === "string") {
+        this.search.set(parsed.search);
+      }
+      if (this.isIntentFilterValue(parsed.intentFilter)) {
+        this.intentFilter.set(parsed.intentFilter);
+      }
+      if (shouldRestorePrimaryFilters && typeof parsed.routeFilter === "string") {
+        this.routeFilter.set(parsed.routeFilter);
+      }
+      if (this.isTableSortColumnValue(parsed.tableSortCol)) {
+        this.tableSortCol.set(parsed.tableSortCol);
+      }
+      if (parsed.tableSortDir === "asc" || parsed.tableSortDir === "desc") {
+        this.tableSortDir.set(parsed.tableSortDir);
+      }
+      if (this.isDateInputValue(parsed.tableDateFrom)) {
+        this.tableDateFrom.set(parsed.tableDateFrom);
+      }
+      if (this.isDateInputValue(parsed.tableDateTo)) {
+        this.tableDateTo.set(parsed.tableDateTo);
+      }
+      const routeSelections = this.parseSelectionList(parsed.tableRouteSelections);
+      if (routeSelections !== undefined) {
+        this.tableRouteSelections.set(routeSelections);
+      }
+      const statusSelections = this.parseSelectionList(parsed.tableStatusSelections);
+      if (statusSelections !== undefined) {
+        this.tableStatusSelections.set(statusSelections);
+      }
+    }
+
+    this.uiStateHydrated.set(true);
+  }
+
+  private shouldRestorePrimaryFilters(): boolean {
+    const historyState = (typeof window !== "undefined" ? window.history.state : null) as Record<string, unknown> | null;
+    if (historyState?.["preservePrimaryFilters"] === true) return true;
+
+    const nav = this.router.getCurrentNavigation();
+    const preserveByState = nav?.extras?.state?.["preservePrimaryFilters"] === true;
+    if (preserveByState) return true;
+    const prevUrl = nav?.previousNavigation?.finalUrl?.toString()
+      || nav?.previousNavigation?.extractedUrl?.toString()
+      || "";
+    return prevUrl.startsWith("/main/pedidos");
+  }
+
+  private isIntentFilterValue(value: unknown): value is IntentFilter {
+    return typeof value === "string" && this.intentsForCount.includes(value as IntentFilter);
+  }
+
+  private isTableSortColumnValue(value: unknown): value is TableSortColumn {
+    return typeof value === "string"
+      && (["updated_at", "created_at", "status", "customer", "route", "items", "total"] as TableSortColumn[]).includes(value as TableSortColumn);
+  }
+
+  private isDateInputValue(value: unknown): value is string {
+    return typeof value === "string" && (value === "" || /^\d{4}-\d{2}-\d{2}$/.test(value));
+  }
+
+  private parseSelectionList(value: unknown): string[] | null | undefined {
+    if (value === null) return null;
+    if (!Array.isArray(value)) return undefined;
+    return [...new Set(value.filter((item): item is string => typeof item === "string"))];
+  }
+
   async ngOnInit() {
+    this.restoreUiStateSnapshot();
     try {
       await Promise.all([
         this.orders.loadFromFirestore(),
@@ -547,6 +1017,48 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     const diffDays = Math.floor(diffHours / 24);
     if (diffDays < 30) return `hace ${diffDays} d`;
     return value.toLocaleDateString("es-MX");
+  }
+
+  private toDateInputValue(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
+  private formatTableDateCompact(input: string): string {
+    const parts = input.split("-");
+    if (parts.length !== 3) return input;
+    const year = Number(parts[0]);
+    const month = Number(parts[1]);
+    const day = Number(parts[2]);
+    if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return input;
+    const value = new Date(year, month - 1, day);
+    if (
+      Number.isNaN(value.getTime())
+      || value.getFullYear() !== year
+      || value.getMonth() !== month - 1
+      || value.getDate() !== day
+    ) {
+      return input;
+    }
+    return value.toLocaleDateString("es-MX", {
+      day: "2-digit",
+      month: "short",
+    });
+  }
+
+  private tryOpenDatePicker(input: HTMLInputElement): void {
+    const dateInput = input as HTMLInputElement & { showPicker?: () => void };
+    if (typeof dateInput.showPicker === "function") {
+      try {
+        dateInput.showPicker();
+        return;
+      } catch {
+        // Fallback to native focus behavior in browsers without showPicker support.
+      }
+    }
+    input.focus();
   }
 
   statusRank(status: OrderStatus): number {
@@ -1207,4 +1719,3 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     return Math.ceil(this.pillMeasureEl.getBoundingClientRect().width);
   }
 }
-

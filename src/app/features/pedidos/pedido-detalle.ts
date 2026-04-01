@@ -366,6 +366,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   catalogLoaded = signal(false);
   showProductList = signal(false);
   private actionToastTimer: ReturnType<typeof setTimeout> | null = null;
+  private waNoteTimer: ReturnType<typeof setTimeout> | null = null;
+  private waStatusPollSeq = 0;
   private popupAlertQueue: Array<{ title: string; message: string; resolve: () => void }> = [];
   private popupAlertResolver: (() => void) | null = null;
   private popupConfirmQueue: Array<{
@@ -4516,8 +4518,18 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     const totalAmount = computedTotal || order.totals?.total_amount || 0;
     const balanceDue = Math.max(0, totalAmount - paidAmount);
     const lastInboundCustomerMessageAt = this.resolveLastInboundCustomerMessageAt(order);
+    const waOrderItems = rows.map((r) => ({
+      title: r.item.title || "Producto",
+      quantity: Math.max(0, Math.trunc(Number(r.qty || 0))),
+    }));
+    const itemCount = waOrderItems.reduce((sum, item) => sum + item.quantity, 0);
+    const pollSeq = ++this.waStatusPollSeq;
 
     this.sendingWaNote.set(true);
+    if (this.waNoteTimer) {
+      clearTimeout(this.waNoteTimer);
+      this.waNoteTimer = null;
+    }
     this.waNoteSent.set(null);
     try {
       // Generamos la imagen en el frontend; si falla enviamos solo payload minimo.
@@ -4540,6 +4552,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
       const payload: Record<string, unknown> = {
         customer_id: customerId,
+        itemCount,
+        item_count: itemCount,
         lastInboundCustomerMessageAt,
         last_inbound_customer_message_at: lastInboundCustomerMessageAt,
         ...(notaImageBase64 ? { nota_image_base64: notaImageBase64 } : {}),
@@ -4550,14 +4564,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
             total_amount: totalAmount,
             balance_due: balanceDue,
           },
-          items: rows.map((r) => ({
-            title: r.item.title || "",
-            variant: r.item.variant || "",
-            color_name: r.item.color || "",
-            quantity: r.qty,
-            price_clienta: r.unitPrice,
-            line_total: r.lineTotal,
-          })),
+          items: waOrderItems,
         },
       };
 
@@ -4567,25 +4574,114 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         "No se pudo conectar, intenta de nuevo",
       );
       this.assertWaSendAccepted(response);
+      const sendResult = response as Record<string, unknown>;
+      const statusQueryPath = this.resolveWaStatusQueryPath(sendResult);
+      const immediateMsg = this.resolveWaAcceptedMessage(sendResult);
 
       this.logWaSendSupport({
         customerId,
         orderId: order.order_id,
         status: 200,
-        reason: null,
+        reason: String(sendResult["delivery_mode"] || "accepted_by_meta"),
       });
-      const successMsg = "Nota enviada. Si la clienta estaba fuera de ventana, recibio mensaje de reenganche.";
-      this.waNoteSent.set({ ok: true, msg: successMsg });
-      this.showActionToast(successMsg);
-    } catch (error: unknown) {
-      const mapped = await this.mapWaSendError(error, customerId, order.order_id);
-      this.waNoteSent.set({ ok: false, msg: mapped.message });
-      if (mapped.isNetwork) {
-        this.showActionToast("No se pudo conectar, intenta de nuevo.");
+      this.setWaNoteStatus(true, immediateMsg, statusQueryPath ? 0 : 7000);
+      this.showActionToast(immediateMsg);
+      if (statusQueryPath) {
+        void this.pollWaDeliveryStatus(statusQueryPath, pollSeq, customerId, order.order_id);
       }
+    } catch (error: unknown) {
+      await this.mapWaSendError(error, customerId, order.order_id);
+      this.setWaNoteStatus(false, "No enviado", 7000);
+      this.showActionToast("No enviado");
     } finally {
       this.sendingWaNote.set(false);
-      setTimeout(() => this.waNoteSent.set(null), 5000);
+    }
+  }
+
+  private resolveWaStatusQueryPath(payload: Record<string, unknown>): string | null {
+    const raw = typeof payload["status_query_path"] === "string" ? payload["status_query_path"].trim() : "";
+    return raw || null;
+  }
+
+  private resolveWaAcceptedMessage(payload: Record<string, unknown>): string {
+    const deliveryMode = String(payload["delivery_mode"] || "").trim().toLowerCase();
+    const pendingUserReply = payload["pending_user_reply"] === true;
+    const fallbackToTemplate = payload["fallback_to_template"] === true;
+    if (deliveryMode === "template" && fallbackToTemplate) {
+      return "Reenganche enviado";
+    }
+    if (deliveryMode === "template" && pendingUserReply) {
+      return "Esperando respuesta";
+    }
+    return "Validando entrega";
+  }
+
+  private setWaNoteStatus(ok: boolean, msg: string, autoClearMs = 0): void {
+    if (this.waNoteTimer) {
+      clearTimeout(this.waNoteTimer);
+      this.waNoteTimer = null;
+    }
+    this.waNoteSent.set({ ok, msg });
+    if (autoClearMs > 0) {
+      this.waNoteTimer = setTimeout(() => {
+        this.waNoteSent.set(null);
+        this.waNoteTimer = null;
+      }, autoClearMs);
+    }
+  }
+
+  private async pollWaDeliveryStatus(
+    statusQueryPath: string,
+    pollSeq: number,
+    customerId: string,
+    orderId: string,
+  ): Promise<void> {
+    const maxAttempts = 15;
+    const intervalMs = 2500;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      if (pollSeq !== this.waStatusPollSeq) return;
+      try {
+        const statusResponse = await lastValueFrom(this.api.get<Record<string, unknown>>(statusQueryPath));
+        const status = String(statusResponse?.["status"] || "").trim().toLowerCase();
+        if (status === "delivered") {
+          this.logWaSendSupport({ customerId, orderId, status: 200, reason: "delivered" });
+          this.setWaNoteStatus(true, "Entregado", 7000);
+          this.showActionToast("Entregado");
+          return;
+        }
+        if (status === "read") {
+          this.logWaSendSupport({ customerId, orderId, status: 200, reason: "read" });
+          this.setWaNoteStatus(true, "Leido", 7000);
+          this.showActionToast("Leido");
+          return;
+        }
+        if (status === "failed") {
+          const details = this.extractWaSendMessage(statusResponse);
+          this.logWaSendSupport({ customerId, orderId, status: 500, reason: details || "failed" });
+          this.setWaNoteStatus(false, "No enviado", 7000);
+          this.showActionToast("No enviado");
+          return;
+        }
+        // "sent" or unknown: seguimos esperando callback real.
+      } catch (error: unknown) {
+        const http = error instanceof HttpErrorResponse ? error : null;
+        const notFoundPending =
+          http?.status === 404 &&
+          http?.error &&
+          typeof http.error === "object" &&
+          (http.error as Record<string, unknown>)["found"] === false;
+        if (!notFoundPending) {
+          this.logWaSendSupport({
+            customerId,
+            orderId,
+            status: http?.status ?? null,
+            reason: "status_check_error",
+          });
+          return;
+        }
+      }
+      await this.sleep(intervalMs);
     }
   }
 
@@ -5698,7 +5794,9 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       });
       return;
     }
-    this.router.navigate(["/main/pedidos"]);
+    this.router.navigate(["/main/pedidos"], {
+      state: { preservePrimaryFilters: true },
+    });
   }
 
   async addItem(order: Order | null) {
