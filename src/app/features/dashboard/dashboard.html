@@ -114,20 +114,20 @@
             <ul class="alerts-list">
               @for (item of skeletonAlertItems; track item) {
                 <li class="alert-item alert-item-skeleton">
-                  <div class="alert-left">
-                    <span class="skeleton-dot"></span>
-                    <span class="skeleton-line skeleton-alert-icon"></span>
-                  </div>
                   <div class="alert-content">
-                    <span class="skeleton-line skeleton-severity"></span>
+                    <div class="alert-top-row">
+                      <span class="skeleton-dot"></span>
+                      <span class="skeleton-line skeleton-alert-icon"></span>
+                      <span class="skeleton-line skeleton-severity"></span>
+                    </div>
                     <span class="skeleton-line skeleton-alert-title"></span>
                     <span class="skeleton-line skeleton-alert-body"></span>
                     <span class="skeleton-line skeleton-alert-body short"></span>
                   </div>
                   <div class="alert-actions">
                     <span class="skeleton-line skeleton-btn"></span>
-                    <span class="skeleton-line skeleton-btn-icon"></span>
                   </div>
+                  <span class="skeleton-line skeleton-btn-icon alert-btn-dismiss-skeleton"></span>
                 </li>
               }
             </ul>
@@ -152,38 +152,38 @@
             <ul class="alerts-list">
               @for (alert of group.alerts; track alert.id) {
                 <li class="alert-item" [ngClass]="'alert-' + alert.severity">
-                  <div class="alert-left">
-                    <span class="alert-severity-dot"></span>
-                    <span class="alert-icon material-symbols-rounded">{{ alert.icon }}</span>
-                  </div>
                   <div class="alert-content">
                     <div class="alert-top-row">
+                      <span class="alert-severity-dot"></span>
+                      <span class="alert-icon material-symbols-rounded">{{ alert.icon }}</span>
                       <span class="alert-severity-label">{{ severityLabel(alert.severity) }}</span>
                     </div>
                     <p class="alert-title">{{ alert.title }}</p>
                     <p class="alert-body">{{ alert.body }}</p>
                   </div>
-                  <div class="alert-actions">
-                    @if (hasCustomAction(alert)) {
-                      <button
-                        type="button"
-                        class="alert-btn alert-btn-primary"
-                        [disabled]="isSchedulingRoute(alert)"
-                        (click)="handleSmartAction(alert)"
-                      >
-                        {{ isSchedulingRoute(alert) ? "Creando..." : smartActionLabel(alert) }}
-                        <span class="material-symbols-rounded">{{ isSchedulingRoute(alert) ? "hourglass_top" : smartActionIcon(alert) }}</span>
-                      </button>
-                    } @else if (alert.actionUrl) {
-                      <a class="alert-btn alert-btn-primary" [routerLink]="alert.actionUrl">
-                        {{ alert.actionLabel ?? "Ver" }}
-                        <span class="material-symbols-rounded">arrow_forward</span>
-                      </a>
-                    }
-                    <button type="button" class="alert-btn-dismiss" (click)="dismiss(alert.id)" aria-label="Descartar alerta">
-                      <span class="material-symbols-rounded">close</span>
-                    </button>
-                  </div>
+                  @if (hasCustomAction(alert) || alert.actionUrl) {
+                    <div class="alert-actions">
+                      @if (hasCustomAction(alert)) {
+                        <button
+                          type="button"
+                          class="alert-btn alert-btn-primary"
+                          [disabled]="isSchedulingRoute(alert)"
+                          (click)="handleSmartAction(alert)"
+                        >
+                          {{ isSchedulingRoute(alert) ? "Creando..." : smartActionLabel(alert) }}
+                          <span class="material-symbols-rounded">{{ isSchedulingRoute(alert) ? "hourglass_top" : smartActionIcon(alert) }}</span>
+                        </button>
+                      } @else if (alert.actionUrl) {
+                        <a class="alert-btn alert-btn-primary" [routerLink]="alert.actionUrl">
+                          {{ alert.actionLabel ?? "Ver" }}
+                          <span class="material-symbols-rounded">arrow_forward</span>
+                        </a>
+                      }
+                    </div>
+                  }
+                  <button type="button" class="alert-btn-dismiss alert-btn-dismiss--corner" (click)="dismiss(alert.id)" aria-label="Descartar alerta">
+                    <span class="material-symbols-rounded">close</span>
+                  </button>
                 </li>
               }
             </ul>

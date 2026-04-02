@@ -253,13 +253,16 @@
 }
 
 .alert-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: 10px;
+  align-items: start;
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 14px;
-  padding: 14px 16px;
+  padding: 14px 16px 14px 16px;
+  padding-right: 42px;
   transition: box-shadow 0.15s;
 }
 
@@ -272,14 +275,6 @@
 .alert-urgent   { border-left: 4px solid #ea580c; }
 .alert-warning  { border-left: 4px solid #ca8a04; }
 .alert-opportunity { border-left: 4px solid #2563eb; }
-
-.alert-left {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding-top: 2px;
-}
 
 .alert-severity-dot {
   width: 8px;
@@ -304,9 +299,11 @@
 .alert-opportunity .alert-icon { color: #2563eb; }
 
 .alert-content {
-  flex: 1;
+  grid-column: 1;
+  grid-row: 1;
   display: grid;
   gap: 3px;
+  min-width: 0;
 }
 
 .alert-top-row {
@@ -351,11 +348,13 @@
 }
 
 .alert-actions {
+  grid-column: 1;
+  grid-row: 2;
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
   gap: 8px;
-  flex-shrink: 0;
 }
 
 .alert-btn {
@@ -400,6 +399,12 @@
 
 .alert-btn-dismiss .material-symbols-rounded {
   font-size: 1rem;
+}
+
+.alert-btn-dismiss--corner {
+  position: absolute;
+  top: 10px;
+  right: 10px;
 }
 
 /* ── Accesos rápidos ──────────────────────────────────────────────────── */
@@ -584,6 +589,12 @@
   width: 24px;
   height: 24px;
   border-radius: 6px;
+}
+
+.alert-btn-dismiss-skeleton {
+  position: absolute;
+  top: 10px;
+  right: 10px;
 }
 
 .quicklink-skeleton {

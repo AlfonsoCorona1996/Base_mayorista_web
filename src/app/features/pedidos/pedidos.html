@@ -5,7 +5,7 @@
         <span class="material-symbols-rounded" aria-hidden="true">receipt_long</span>
         Pedidos
       </p>
-      <h1>Seguimiento end-to-end</h1>
+      <h1>Seguimiento pedidos</h1>
       <p class="muted">Confirma con proveedor, reserva inventario y entrega sin perder trazabilidad.</p>
     </div>
   </header>
@@ -62,7 +62,7 @@
   </section>
 
   <section class="filters surface-card">
-    <label class="field with-icon" for="orders-search">
+    <label class="field with-icon filters-search" for="orders-search">
       <span class="material-symbols-rounded" aria-hidden="true">search</span>
       <input
         id="orders-search"
@@ -73,7 +73,7 @@
       />
     </label>
 
-    <label class="field with-icon" for="route-filter">
+    <label class="field with-icon filters-route" for="route-filter">
       <span class="material-symbols-rounded" aria-hidden="true">map</span>
       <select id="route-filter" class="input" [(ngModel)]="routeFilter">
         @for (route of routeOptions(); track route.id) {
@@ -107,57 +107,38 @@
     </div>
   </section>
 
-  <div class="intent-tabs surface-card" role="tablist" aria-label="Filtros por intencion">
-    @if (intentCounts(); as counts) {
-      @for (intent of intentOptions; track intent.id) {
-        <button
-          type="button"
-          class="intent-tab"
-          [class.active]="intentFilter() === intent.id"
-          (click)="setIntentFilter(intent.id)"
-          role="tab"
-          [attr.aria-selected]="intentFilter() === intent.id"
-          [attr.aria-label]="intent.label + ': ' + counts[intent.id]"
-          [attr.title]="intent.label"
-        >
-          <span class="material-symbols-rounded" aria-hidden="true">
-            {{
-              intent.id === 'por_confirmar' ? 'pending_actions' :
-              intent.id === 'en_transito' ? 'local_shipping' :
-              intent.id === 'en_empaque' ? 'inventory_2' :
-              intent.id === 'listos_ruta' ? 'task_alt' :
-              intent.id === 'en_ruta' ? 'route' :
-              intent.id === 'con_incidencias' ? 'warning' :
-              intent.id === 'cobranza_pendiente' ? 'payments' :
-              'done_all'
-            }}
-          </span>
-          <span class="intent-label">{{ intent.label }}</span>
-          <span class="intent-count" [class.zero]="counts[intent.id] === 0">{{ counts[intent.id] }}</span>
-        </button>
-      }
-    }
-  </div>
-
-  @if (canBulkCreateNotes()) {
-    <section class="bulk-note-bar surface-card">
-      @if (!bulkNoteMode()) {
-        <button type="button" class="btn primary with-icon" (click)="startBulkNoteMode()" [disabled]="bulkReadyOrders().length === 0">
-          <span class="material-symbols-rounded" aria-hidden="true">post_add</span>
-          Crear nota
-        </button>
-        <p class="muted">Disponible solo para pedidos en "Listos para ruta".</p>
-      } @else {
-        <div class="bulk-note-actions">
-          <button type="button" class="btn primary with-icon" (click)="generateBulkNotes()" [disabled]="bulkNotesLoading() || bulkSelectedCount() === 0">
-            <span class="material-symbols-rounded" aria-hidden="true">receipt_long</span>
-            {{ bulkNotesLoading() ? "Generando..." : "Generar notas (" + bulkSelectedCount() + ")" }}
+  @if (viewMode() === 'cards') {
+    <div class="intent-tabs surface-card" role="tablist" aria-label="Filtros por intencion">
+      @if (intentCounts(); as counts) {
+        @for (intent of intentOptions; track intent.id) {
+          <button
+            type="button"
+            class="intent-tab"
+            [class.active]="intentFilter() === intent.id"
+            (click)="setIntentFilter(intent.id)"
+            role="tab"
+            [attr.aria-selected]="intentFilter() === intent.id"
+            [attr.aria-label]="intent.label + ': ' + counts[intent.id]"
+            [attr.title]="intent.label"
+          >
+            <span class="material-symbols-rounded" aria-hidden="true">
+              {{
+                intent.id === 'por_confirmar' ? 'pending_actions' :
+                intent.id === 'en_transito' ? 'local_shipping' :
+                intent.id === 'en_empaque' ? 'inventory_2' :
+                intent.id === 'listos_ruta' ? 'task_alt' :
+                intent.id === 'en_ruta' ? 'route' :
+                intent.id === 'con_incidencias' ? 'warning' :
+                intent.id === 'cobranza_pendiente' ? 'payments' :
+                'done_all'
+              }}
+            </span>
+            <span class="intent-label">{{ intent.label }}</span>
+            <span class="intent-count" [class.zero]="counts[intent.id] === 0">{{ counts[intent.id] }}</span>
           </button>
-          <button type="button" class="btn ghost" (click)="cancelBulkNoteMode()" [disabled]="bulkNotesLoading()">Cancelar</button>
-        </div>
-        <p class="muted">Selecciona en cada card los pedidos que quieres incluir.</p>
+        }
       }
-    </section>
+    </div>
   }
 
   @if (bulkNotesMessage()) {
@@ -180,7 +161,8 @@
     </div>
   }
 
-  @if (filtered(); as filteredOrders) {
+  @if (viewMode() === 'cards') {
+    @if (filtered(); as filteredOrders) {
     <div class="orders-grid">
       @for (order of filteredOrders; track order.order_id) {
         @if (orderMeta(order); as meta) {
@@ -246,7 +228,7 @@
               <span class="meta-item" [attr.title]="'Actualizado ' + (order.updated_at | date: 'medium')">
                 <span class="material-symbols-rounded" aria-hidden="true">schedule</span>
                 <span class="meta-label">Actualizado</span>
-                <span class="meta-dot">·</span>
+                <span class="meta-dot">&middot;</span>
                 <span class="meta-value">{{ meta.updatedAtRelative }}</span>
               </span>
             </div>
@@ -271,11 +253,12 @@
       }
     </div>
 
-    @if (filteredOrders.length === 0 && !loading()) {
-      <article class="empty-card surface-card">
-        <p class="kicker">Sin resultados</p>
-        <p class="muted">Crea tu primer pedido o ajusta los filtros.</p>
-      </article>
+      @if (filteredOrders.length === 0 && !loading()) {
+        <article class="empty-card surface-card">
+          <p class="kicker">Sin resultados</p>
+          <p class="muted">Crea tu primer pedido o ajusta los filtros.</p>
+        </article>
+      }
     }
   }
 
@@ -285,7 +268,7 @@
         <div class="sheet-handle" aria-hidden="true"></div>
         <h2>Cuantos paquetes esperas?</h2>
         <p class="muted">
-          {{ customerName(plannedOrder()?.customer_id || "") }} · {{ routeName(plannedOrder()?.route_id || null) }}
+          {{ customerName(plannedOrder()?.customer_id || "") }} &middot; {{ routeName(plannedOrder()?.route_id || null) }}
         </p>
         <div class="sheet-field">
           <label>Paquetes planificados</label>
@@ -305,7 +288,7 @@
         <div class="sheet-handle" aria-hidden="true"></div>
         <h2>{{ sheetAction()?.label }}</h2>
         <p class="muted">
-          {{ customerName(sheetOrder()?.customer_id || "") }} · {{ routeName(sheetOrder()?.route_id || null) }}
+          {{ customerName(sheetOrder()?.customer_id || "") }} &middot; {{ routeName(sheetOrder()?.route_id || null) }}
         </p>
         <div class="sheet-summary">
           <span>{{ sheetOrder()?.items?.length ?? 0 }} productos</span>
@@ -367,43 +350,163 @@
     </div>
   }
 
-  <!-- ── Vista tabla ─────────────────────────────────────────────────── -->
+  <!-- ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Vista tabla ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ -->
   @if (viewMode() === 'table') {
     <section class="table-view surface-card">
 
       <!-- Filtros de tabla -->
       <div class="table-filters">
-        <div class="tfilter-group">
-          <label class="tfilter-label" for="tf-from">
-            <span class="material-symbols-rounded">calendar_today</span>
-            Desde
-          </label>
-          <input id="tf-from" type="date" class="input tfilter-input" [(ngModel)]="tableDateFrom" />
-        </div>
-        <div class="tfilter-group">
-          <label class="tfilter-label" for="tf-to">
-            <span class="material-symbols-rounded">event</span>
-            Hasta
-          </label>
-          <input id="tf-to" type="date" class="input tfilter-input" [(ngModel)]="tableDateTo" />
-        </div>
-        <div class="tfilter-count">
-          <span class="material-symbols-rounded">format_list_numbered</span>
-          {{ tableRows().length }} pedidos
-        </div>
-        @if (tableDateFrom() || tableDateTo()) {
-          <button type="button" class="tfilter-clear" (click)="tableDateFrom.set(''); tableDateTo.set('')">
-            <span class="material-symbols-rounded">close</span>
-            Limpiar fechas
+        <div class="tfilter-head">
+          <span class="material-symbols-rounded tfilter-head-icon" aria-hidden="true">calendar_month</span>
+          <span class="tfilter-head-title">Rango de fechas</span>
+          <button
+            type="button"
+            class="tfilter-bulk-trigger"
+            (click)="toggleTableBulkMenu($event)"
+            [disabled]="tableBulkActionLoading()"
+            aria-label="Acciones masivas"
+          >
+            <span class="material-symbols-rounded" aria-hidden="true">more_vert</span>
           </button>
+        </div>
+        @if (tableBulkMenuOpen()) {
+          <div
+            class="table-bulk-menu"
+            role="menu"
+            (click)="$event.stopPropagation()"
+            [style.left.px]="tableBulkMenuPosition()?.left"
+            [style.top.px]="tableBulkMenuPosition()?.top"
+            [style.width.px]="tableBulkMenuPosition()?.width"
+          >
+            <button type="button" class="table-bulk-menu-item" (click)="applyTableBulkAction('create_bitacora', $event)" [disabled]="!canApplyTableBulkAction('create_bitacora')">
+              Crear bitacora
+            </button>
+            <button type="button" class="table-bulk-menu-item" (click)="applyTableBulkAction('create_nota', $event)" [disabled]="!canApplyTableBulkAction('create_nota')">
+              Crear nota
+            </button>
+            <div class="table-bulk-menu-divider"></div>
+            <button type="button" class="table-bulk-menu-item" (click)="applyTableBulkAction('mark_pagado', $event)" [disabled]="!canApplyTableBulkAction('mark_pagado')">
+              Marcar como pagados ({{ tableMarkPaidEligibleRows().length }})
+            </button>
+            <button type="button" class="table-bulk-menu-item" (click)="applyTableBulkAction('mark_recibido', $event)" [disabled]="!canApplyTableBulkAction('mark_recibido')">
+              Marcar como recibidos ({{ tableMarkReceivedEligibleRows().length }})
+            </button>
+          </div>
+        }
+        <p class="tfilter-section-label">Rango rapido</p>
+        <div class="tfilter-presets" role="group" aria-label="Atajos de rango de fechas">
+          <button type="button" class="tfilter-chip" [class.active]="isTableRangePresetActive('today')" (click)="applyTableRangePreset('today')">
+            <span class="material-symbols-rounded" aria-hidden="true">today</span>
+            Hoy
+          </button>
+          <button type="button" class="tfilter-chip" [class.active]="isTableRangePresetActive('last7')" (click)="applyTableRangePreset('last7')">
+            <span class="material-symbols-rounded" aria-hidden="true">calendar_view_week</span>
+            7 dias
+          </button>
+          <button type="button" class="tfilter-chip" [class.active]="isTableRangePresetActive('last30')" (click)="applyTableRangePreset('last30')">
+            <span class="material-symbols-rounded" aria-hidden="true">calendar_month</span>
+            30 dias
+          </button>
+        </div>
+        <div class="tfilter-divider" aria-hidden="true"></div>
+        <div class="tfilter-dates">
+          <div class="tfilter-group">
+            <label class="tfilter-label" for="tf-from">
+              <span class="material-symbols-rounded">calendar_today</span>
+              Desde
+            </label>
+            <input
+              id="tf-from"
+              type="date"
+              class="input tfilter-input"
+              [(ngModel)]="tableDateFrom"
+              (click)="openTableDatePicker($event)"
+              (focus)="openTableDatePicker($event)"
+            />
+          </div>
+          <div class="tfilter-group">
+            <label class="tfilter-label" for="tf-to">
+              <span class="material-symbols-rounded">event</span>
+              Hasta
+            </label>
+            <input
+              id="tf-to"
+              type="date"
+              class="input tfilter-input"
+              [(ngModel)]="tableDateTo"
+              (click)="openTableDatePicker($event)"
+              (focus)="openTableDatePicker($event)"
+            />
+          </div>
+        </div>
+        <div class="tfilter-footer">
+          <p class="tfilter-footer-text">
+            <strong>{{ tableRows().length }} resultados</strong>
+            @if (tableRangeCompactSummary()) {
+              <span class="tfilter-footer-sep" aria-hidden="true">&bull;</span>
+              <span>{{ tableRangeCompactSummary() }}</span>
+            }
+          </p>
+          @if (tableHasAnyFilters()) {
+            <button type="button" class="tfilter-reset" (click)="clearTableFilters()">
+              <span class="material-symbols-rounded" aria-hidden="true">refresh</span>
+              Reset
+            </button>
+          }
+        </div>
+        @if (tableBulkProgressVisible()) {
+          <div class="tfilter-progress" role="status" aria-live="polite">
+            <div class="tfilter-progress-head">
+              <span>{{ tableBulkProgressLabel() }}</span>
+              <span>{{ tableBulkProgressCurrent() }} / {{ tableBulkProgressTotal() }}</span>
+            </div>
+            <div class="tfilter-progress-track" aria-hidden="true">
+              <div class="tfilter-progress-fill" [style.width.%]="tableBulkProgressPercent()"></div>
+            </div>
+          </div>
+        }
+        @if (tableBulkResultVisible()) {
+          <div class="tfilter-result-row" role="status" aria-live="polite">
+            <div class="tfilter-result-chip">
+              <span class="material-symbols-rounded" aria-hidden="true">check_circle</span>
+              <span>{{ tableBulkResultText() }}</span>
+              <button type="button" class="tfilter-result-close" (click)="closeTableBulkResult($event)" aria-label="Cerrar mensaje">
+                <span class="material-symbols-rounded" aria-hidden="true">close</span>
+              </button>
+            </div>
+          </div>
         }
       </div>
+
+      @if (tableRows().length === 0) {
+        <div class="table-empty-banner" role="status">
+          <span class="material-symbols-rounded" aria-hidden="true">filter_alt_off</span>
+          <span>No hay resultados con los filtros activos.</span>
+        </div>
+      }
 
       <!-- Tabla -->
       <div class="table-scroll">
         <table class="orders-table">
           <thead>
             <tr>
+              <th class="th-select-col">
+                <div class="th-select-wrap">
+                  @if (tableSelectionMode()) {
+                    <input
+                      type="checkbox"
+                      class="th-select-checkbox"
+                      [checked]="tableAllVisibleSelected()"
+                      (click)="onTableSelectionCheckboxClick($event)"
+                      (change)="toggleTableSelectAllVisible($any($event.target).checked, $event)"
+                      aria-label="Seleccionar filas visibles"
+                    />
+                  }
+                  <button type="button" class="th-select-trigger" (click)="toggleTableSelectionMode($event)" aria-label="Modo seleccion">
+                    <span class="material-symbols-rounded">more_vert</span>
+                  </button>
+                </div>
+              </th>
               <th class="th-sortable" (click)="toggleTableSort('created_at')">
                 Fecha
                 @if (tableSortCol() === 'created_at') {
@@ -416,19 +519,122 @@
                   <span class="material-symbols-rounded sort-icon">{{ tableSortDir() === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
                 }
               </th>
-              <th class="th-sortable" (click)="toggleTableSort('route')">
-                Ruta
-                @if (tableSortCol() === 'route') {
+              <th class="th-menu" [class.th-menu--open]="isTableColumnMenuOpen('route')">
+                <button type="button" class="th-menu-trigger" (click)="toggleTableColumnMenu('route', $event)">
+                  <span>Ruta</span>
+                  @if (tableSortCol() === 'route') {
+                    <span class="material-symbols-rounded sort-icon">{{ tableSortDir() === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
+                  }
+                  @if (tableHasRouteFilter()) {
+                    <span class="material-symbols-rounded filter-icon">filter_alt</span>
+                  }
+                  <span class="material-symbols-rounded th-menu-caret">more_vert</span>
+                </button>
+                @if (isTableColumnMenuOpen('route')) {
+                  <div
+                    class="th-menu-dropdown"
+                    role="menu"
+                    (click)="$event.stopPropagation()"
+                    [style.left.px]="tableMenuPosition()?.left"
+                    [style.top.px]="tableMenuPosition()?.top"
+                    [style.width.px]="tableMenuPosition()?.width"
+                  >
+                    <button type="button" class="th-menu-item" (click)="setTableSortFromMenu('route', 'asc', $event)">
+                      <span class="material-symbols-rounded">arrow_upward</span>
+                      Ordenar ascendente
+                    </button>
+                    <button type="button" class="th-menu-item" (click)="setTableSortFromMenu('route', 'desc', $event)">
+                      <span class="material-symbols-rounded">arrow_downward</span>
+                      Ordenar descendente
+                    </button>
+                    <div class="th-menu-divider"></div>
+                    @if (tableRouteColumnFilterDisabled()) {
+                      <p class="th-menu-disabled-hint">Filtro por columna deshabilitado mientras eliges una ruta global.</p>
+                    } @else {
+                      <div class="th-menu-checklist">
+                        @for (option of tableRouteMenuOptions(); track option.value) {
+                          <label class="th-menu-check">
+                            <input
+                              type="checkbox"
+                              [checked]="isTableRouteOptionChecked(option.value)"
+                              (change)="toggleTableRouteOption(option.value, $any($event.target).checked)"
+                            />
+                            <span class="th-menu-check-label">{{ option.label }}</span>
+                            <span class="th-menu-check-count">{{ option.count }}</span>
+                          </label>
+                        } @empty {
+                          <p class="th-menu-empty">Sin rutas</p>
+                        }
+                      </div>
+                      @if (tableHasRouteFilter()) {
+                        <button type="button" class="th-menu-reset" (click)="clearTableRouteColumnFilter($event)">
+                          <span class="material-symbols-rounded" aria-hidden="true">refresh</span>
+                          Reset
+                        </button>
+                      }
+                    }
+                  </div>
+                }
+              </th>
+              <th class="th-menu" [class.th-menu--open]="isTableColumnMenuOpen('status')">
+                <button type="button" class="th-menu-trigger" (click)="toggleTableColumnMenu('status', $event)">
+                  <span>Estado</span>
+                  @if (tableSortCol() === 'status') {
+                    <span class="material-symbols-rounded sort-icon">{{ tableSortDir() === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
+                  }
+                  @if (tableHasStatusFilter()) {
+                    <span class="material-symbols-rounded filter-icon">filter_alt</span>
+                  }
+                  <span class="material-symbols-rounded th-menu-caret">more_vert</span>
+                </button>
+                @if (isTableColumnMenuOpen('status')) {
+                  <div
+                    class="th-menu-dropdown"
+                    role="menu"
+                    (click)="$event.stopPropagation()"
+                    [style.left.px]="tableMenuPosition()?.left"
+                    [style.top.px]="tableMenuPosition()?.top"
+                    [style.width.px]="tableMenuPosition()?.width"
+                  >
+                    <button type="button" class="th-menu-item" (click)="setTableSortFromMenu('status', 'asc', $event)">
+                      <span class="material-symbols-rounded">arrow_upward</span>
+                      Ordenar ascendente
+                    </button>
+                    <button type="button" class="th-menu-item" (click)="setTableSortFromMenu('status', 'desc', $event)">
+                      <span class="material-symbols-rounded">arrow_downward</span>
+                      Ordenar descendente
+                    </button>
+                    <div class="th-menu-divider"></div>
+                    <div class="th-menu-checklist">
+                      @for (option of tableStatusMenuOptions(); track option.value) {
+                        <label class="th-menu-check">
+                          <input
+                            type="checkbox"
+                            [checked]="isTableStatusOptionChecked(option.value)"
+                            (change)="toggleTableStatusOption(option.value, $any($event.target).checked)"
+                          />
+                          <span class="th-menu-check-label">{{ option.label }}</span>
+                          <span class="th-menu-check-count">{{ option.count }}</span>
+                        </label>
+                      } @empty {
+                        <p class="th-menu-empty">Sin estados</p>
+                      }
+                    </div>
+                    @if (tableHasStatusFilter()) {
+                      <button type="button" class="th-menu-reset" (click)="clearTableStatusColumnFilter($event)">
+                        <span class="material-symbols-rounded" aria-hidden="true">refresh</span>
+                        Reset
+                      </button>
+                    }
+                  </div>
+                }
+              </th>
+              <th class="th-sortable" (click)="toggleTableSort('items')">
+                Productos
+                @if (tableSortCol() === 'items') {
                   <span class="material-symbols-rounded sort-icon">{{ tableSortDir() === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
                 }
               </th>
-              <th class="th-sortable" (click)="toggleTableSort('status')">
-                Estado
-                @if (tableSortCol() === 'status') {
-                  <span class="material-symbols-rounded sort-icon">{{ tableSortDir() === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
-                }
-              </th>
-              <th>Productos</th>
               <th class="th-sortable th-right" (click)="toggleTableSort('total')">
                 Total
                 @if (tableSortCol() === 'total') {
@@ -436,7 +642,7 @@
                 }
               </th>
               <th class="th-sortable" (click)="toggleTableSort('updated_at')">
-                Últ. cambio
+                Ult. cambio
                 @if (tableSortCol() === 'updated_at') {
                   <span class="material-symbols-rounded sort-icon">{{ tableSortDir() === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
                 }
@@ -446,8 +652,20 @@
           </thead>
           <tbody>
             @for (order of tableRows(); track order.order_id) {
-              <tr class="trow" (click)="open(order.order_id)">
-                <td class="td-date">{{ order.created_at | date:'dd/MM/yy' }}</td>
+              <tr class="trow" [class.trow--paid-row]="order.status === 'pagado'" [class.trow--selection-mode]="tableSelectionMode()" (click)="onTableRowActivate(order, $event)">
+                <td class="td-select-col">
+                  @if (tableSelectionMode()) {
+                    <input
+                      type="checkbox"
+                      class="td-select-checkbox"
+                      [checked]="!!tableSelected()[order.order_id]"
+                      (click)="onTableSelectionCheckboxClick($event)"
+                      (change)="toggleTableRowSelection(order.order_id, $any($event.target).checked)"
+                      [attr.aria-label]="'Seleccionar pedido ' + order.order_id"
+                    />
+                  }
+                </td>
+                <td class="td-date">{{ formatTableDateShort(order.created_at) }}</td>
                 <td class="td-customer">
                   <span class="tc-name">{{ customerName(order.customer_id) }}</span>
                 </td>
@@ -461,11 +679,9 @@
                 </td>
                 <td class="td-items">{{ (order.items || []).length }}</td>
                 <td class="td-total">
-                  @if (order.totals.total_amount > 0) {
-                    {{ order.totals.total_amount | currency:'MXN':'symbol-narrow':'1.0-0' }}
-                  } @else {
-                    <span class="tc-empty">—</span>
-                  }
+                  <span class="td-total-value" [class.td-total-value--paid]="isTableOrderPaid(order)">
+                    {{ tableOrderClientTotal(order) | currency:'MXN':'symbol-narrow':'1.0-0' }}
+                  </span>
                 </td>
                 <td class="td-updated">{{ order.updated_at | date:'dd/MM HH:mm' }}</td>
                 <td class="td-action">
@@ -474,9 +690,22 @@
               </tr>
             } @empty {
               <tr>
-                <td colspan="8" class="trow-empty">
-                  <span class="material-symbols-rounded">search_off</span>
-                  No hay pedidos con los filtros actuales
+                <td colspan="9" class="trow-empty">
+                  <div class="trow-empty-content">
+                    <span class="material-symbols-rounded">search_off</span>
+                    <p class="trow-empty-title">Sin resultados para este rango</p>
+                    <p class="trow-empty-text">Prueba quitar o ajustar el filtro de fechas.</p>
+                    <div class="trow-empty-actions">
+                      @if (tableDateFrom() || tableDateTo()) {
+                        <button type="button" class="trow-empty-btn secondary" (click)="clearTableRange()">
+                          Quitar rango
+                        </button>
+                      }
+                      <button type="button" class="trow-empty-btn primary" (click)="applyTableRangePreset('today')">
+                        Ver hoy
+                      </button>
+                    </div>
+                  </div>
                 </td>
               </tr>
             }
@@ -486,5 +715,91 @@
     </section>
   }
 
-</section>
+  @if (bitacoraConfigOpen()) {
+    <div class="sheet-backdrop" (click)="closeBitacoraConfig($event)">
+      <div class="sheet bitacora-sheet" role="dialog" aria-modal="true" aria-label="Configurar bitacora" (click)="$event.stopPropagation()">
+        <div class="sheet-handle" aria-hidden="true"></div>
+        <h2>Crear bitacora</h2>
+        @if (tableSelectionMode()) {
+          <p class="bitacora-selection-summary">{{ bitacoraSelectionSummaryText() }}</p>
+        } @else {
+          <div class="bitacora-route-block">
+            <p class="bitacora-block-title">Rutas para generar bitacora</p>
+            <div class="bitacora-route-list" role="listbox" aria-multiselectable="true">
+              @for (option of bitacoraRouteOptions(); track option.value) {
+                <label class="bitacora-route-option">
+                  <input
+                    type="checkbox"
+                    [checked]="isBitacoraRouteSelected(option.value)"
+                    (change)="toggleBitacoraRouteSelection(option.value, $any($event.target).checked)"
+                  />
+                  <span>{{ option.label }}</span>
+                  <span class="bitacora-route-count">{{ option.count }}</span>
+                </label>
+              } @empty {
+                <p class="th-menu-empty">Sin rutas disponibles.</p>
+              }
+            </div>
+          </div>
+        }
 
+        <div class="bitacora-options">
+          <p class="bitacora-block-title">Contenido</p>
+          <label class="bitacora-check">
+            <input
+              type="checkbox"
+              [checked]="bitacoraIncludeProductCount()"
+              (change)="onBitacoraProductCountToggle($any($event.target).checked)"
+            />
+            <span>Incluir numero de productos</span>
+          </label>
+
+          @if (bitacoraIncludeProductCount()) {
+            <label class="bitacora-check bitacora-check--child">
+              <input
+                type="checkbox"
+                [checked]="bitacoraIncludeProductDetail()"
+                (change)="onBitacoraProductDetailToggle($any($event.target).checked)"
+              />
+              <span>Incluir detalle de productos</span>
+            </label>
+          }
+
+          @if (bitacoraIncludeProductDetail()) {
+            <label class="bitacora-check bitacora-check--grandchild">
+              <input
+                type="checkbox"
+                [checked]="bitacoraIncludeProductPrices()"
+                (change)="onBitacoraProductPricesToggle($any($event.target).checked)"
+              />
+              <span>Incluir precios por producto</span>
+            </label>
+          }
+
+          <label class="bitacora-check">
+            <input
+              type="checkbox"
+              [checked]="bitacoraIncludeCustomerContact()"
+              (change)="bitacoraIncludeCustomerContact.set($any($event.target).checked)"
+            />
+            <span>Incluir WhatsApp de clienta</span>
+          </label>
+        </div>
+
+        @if (bitacoraConfigError()) {
+          <p class="error-text">{{ bitacoraConfigError() }}</p>
+        }
+
+        <div class="bitacora-actions">
+          <button type="button" class="btn primary" (click)="confirmBitacoraConfig($event)" [disabled]="!bitacoraCanCreate() || tableBulkActionLoading()">
+            Crear
+          </button>
+          <button type="button" class="btn ghost" (click)="closeBitacoraConfig($event)">
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+</section>
