@@ -141,27 +141,6 @@
     </div>
   }
 
-  @if (canBulkCreateNotes()) {
-    <section class="bulk-note-bar surface-card">
-      @if (!bulkNoteMode()) {
-        <button type="button" class="btn primary with-icon" (click)="startBulkNoteMode()" [disabled]="bulkReadyOrders().length === 0">
-          <span class="material-symbols-rounded" aria-hidden="true">post_add</span>
-          Crear nota
-        </button>
-        <p class="muted">Disponible solo para pedidos en "Listos para ruta".</p>
-      } @else {
-        <div class="bulk-note-actions">
-          <button type="button" class="btn primary with-icon" (click)="generateBulkNotes()" [disabled]="bulkNotesLoading() || bulkSelectedCount() === 0">
-            <span class="material-symbols-rounded" aria-hidden="true">receipt_long</span>
-            {{ bulkNotesLoading() ? "Generando..." : "Generar notas (" + bulkSelectedCount() + ")" }}
-          </button>
-          <button type="button" class="btn ghost" (click)="cancelBulkNoteMode()" [disabled]="bulkNotesLoading()">Cancelar</button>
-        </div>
-        <p class="muted">Selecciona en cada card los pedidos que quieres incluir.</p>
-      }
-    </section>
-  }
-
   @if (bulkNotesMessage()) {
     <div class="alert" role="status">
       <span class="material-symbols-rounded" aria-hidden="true">info</span>
@@ -380,7 +359,40 @@
         <div class="tfilter-head">
           <span class="material-symbols-rounded tfilter-head-icon" aria-hidden="true">calendar_month</span>
           <span class="tfilter-head-title">Rango de fechas</span>
+          <button
+            type="button"
+            class="tfilter-bulk-trigger"
+            (click)="toggleTableBulkMenu($event)"
+            [disabled]="tableBulkActionLoading()"
+            aria-label="Acciones masivas"
+          >
+            <span class="material-symbols-rounded" aria-hidden="true">more_vert</span>
+          </button>
         </div>
+        @if (tableBulkMenuOpen()) {
+          <div
+            class="table-bulk-menu"
+            role="menu"
+            (click)="$event.stopPropagation()"
+            [style.left.px]="tableBulkMenuPosition()?.left"
+            [style.top.px]="tableBulkMenuPosition()?.top"
+            [style.width.px]="tableBulkMenuPosition()?.width"
+          >
+            <button type="button" class="table-bulk-menu-item" (click)="applyTableBulkAction('create_bitacora', $event)" [disabled]="!canApplyTableBulkAction('create_bitacora')">
+              Crear bitacora
+            </button>
+            <button type="button" class="table-bulk-menu-item" (click)="applyTableBulkAction('create_nota', $event)" [disabled]="!canApplyTableBulkAction('create_nota')">
+              Crear nota
+            </button>
+            <div class="table-bulk-menu-divider"></div>
+            <button type="button" class="table-bulk-menu-item" (click)="applyTableBulkAction('mark_pagado', $event)" [disabled]="!canApplyTableBulkAction('mark_pagado')">
+              Marcar como pagados ({{ tableMarkPaidEligibleRows().length }})
+            </button>
+            <button type="button" class="table-bulk-menu-item" (click)="applyTableBulkAction('mark_recibido', $event)" [disabled]="!canApplyTableBulkAction('mark_recibido')">
+              Marcar como recibidos ({{ tableMarkReceivedEligibleRows().length }})
+            </button>
+          </div>
+        }
         <p class="tfilter-section-label">Rango rapido</p>
         <div class="tfilter-presets" role="group" aria-label="Atajos de rango de fechas">
           <button type="button" class="tfilter-chip" [class.active]="isTableRangePresetActive('today')" (click)="applyTableRangePreset('today')">
@@ -397,33 +409,35 @@
           </button>
         </div>
         <div class="tfilter-divider" aria-hidden="true"></div>
-        <div class="tfilter-group">
-          <label class="tfilter-label" for="tf-from">
-            <span class="material-symbols-rounded">calendar_today</span>
-            Desde
-          </label>
-          <input
-            id="tf-from"
-            type="date"
-            class="input tfilter-input"
-            [(ngModel)]="tableDateFrom"
-            (click)="openTableDatePicker($event)"
-            (focus)="openTableDatePicker($event)"
-          />
-        </div>
-        <div class="tfilter-group">
-          <label class="tfilter-label" for="tf-to">
-            <span class="material-symbols-rounded">event</span>
-            Hasta
-          </label>
-          <input
-            id="tf-to"
-            type="date"
-            class="input tfilter-input"
-            [(ngModel)]="tableDateTo"
-            (click)="openTableDatePicker($event)"
-            (focus)="openTableDatePicker($event)"
-          />
+        <div class="tfilter-dates">
+          <div class="tfilter-group">
+            <label class="tfilter-label" for="tf-from">
+              <span class="material-symbols-rounded">calendar_today</span>
+              Desde
+            </label>
+            <input
+              id="tf-from"
+              type="date"
+              class="input tfilter-input"
+              [(ngModel)]="tableDateFrom"
+              (click)="openTableDatePicker($event)"
+              (focus)="openTableDatePicker($event)"
+            />
+          </div>
+          <div class="tfilter-group">
+            <label class="tfilter-label" for="tf-to">
+              <span class="material-symbols-rounded">event</span>
+              Hasta
+            </label>
+            <input
+              id="tf-to"
+              type="date"
+              class="input tfilter-input"
+              [(ngModel)]="tableDateTo"
+              (click)="openTableDatePicker($event)"
+              (focus)="openTableDatePicker($event)"
+            />
+          </div>
         </div>
         <div class="tfilter-footer">
           <p class="tfilter-footer-text">
@@ -440,6 +454,28 @@
             </button>
           }
         </div>
+        @if (tableBulkProgressVisible()) {
+          <div class="tfilter-progress" role="status" aria-live="polite">
+            <div class="tfilter-progress-head">
+              <span>{{ tableBulkProgressLabel() }}</span>
+              <span>{{ tableBulkProgressCurrent() }} / {{ tableBulkProgressTotal() }}</span>
+            </div>
+            <div class="tfilter-progress-track" aria-hidden="true">
+              <div class="tfilter-progress-fill" [style.width.%]="tableBulkProgressPercent()"></div>
+            </div>
+          </div>
+        }
+        @if (tableBulkResultVisible()) {
+          <div class="tfilter-result-row" role="status" aria-live="polite">
+            <div class="tfilter-result-chip">
+              <span class="material-symbols-rounded" aria-hidden="true">check_circle</span>
+              <span>{{ tableBulkResultText() }}</span>
+              <button type="button" class="tfilter-result-close" (click)="closeTableBulkResult($event)" aria-label="Cerrar mensaje">
+                <span class="material-symbols-rounded" aria-hidden="true">close</span>
+              </button>
+            </div>
+          </div>
+        }
       </div>
 
       @if (tableRows().length === 0) {
@@ -454,6 +490,23 @@
         <table class="orders-table">
           <thead>
             <tr>
+              <th class="th-select-col">
+                <div class="th-select-wrap">
+                  @if (tableSelectionMode()) {
+                    <input
+                      type="checkbox"
+                      class="th-select-checkbox"
+                      [checked]="tableAllVisibleSelected()"
+                      (click)="onTableSelectionCheckboxClick($event)"
+                      (change)="toggleTableSelectAllVisible($any($event.target).checked, $event)"
+                      aria-label="Seleccionar filas visibles"
+                    />
+                  }
+                  <button type="button" class="th-select-trigger" (click)="toggleTableSelectionMode($event)" aria-label="Modo seleccion">
+                    <span class="material-symbols-rounded">more_vert</span>
+                  </button>
+                </div>
+              </th>
               <th class="th-sortable" (click)="toggleTableSort('created_at')">
                 Fecha
                 @if (tableSortCol() === 'created_at') {
@@ -495,26 +548,30 @@
                       Ordenar descendente
                     </button>
                     <div class="th-menu-divider"></div>
-                    <div class="th-menu-checklist">
-                      @for (option of tableRouteMenuOptions(); track option.value) {
-                        <label class="th-menu-check">
-                          <input
-                            type="checkbox"
-                            [checked]="isTableRouteOptionChecked(option.value)"
-                            (change)="toggleTableRouteOption(option.value, $any($event.target).checked)"
-                          />
-                          <span class="th-menu-check-label">{{ option.label }}</span>
-                          <span class="th-menu-check-count">{{ option.count }}</span>
-                        </label>
-                      } @empty {
-                        <p class="th-menu-empty">Sin rutas</p>
+                    @if (tableRouteColumnFilterDisabled()) {
+                      <p class="th-menu-disabled-hint">Filtro por columna deshabilitado mientras eliges una ruta global.</p>
+                    } @else {
+                      <div class="th-menu-checklist">
+                        @for (option of tableRouteMenuOptions(); track option.value) {
+                          <label class="th-menu-check">
+                            <input
+                              type="checkbox"
+                              [checked]="isTableRouteOptionChecked(option.value)"
+                              (change)="toggleTableRouteOption(option.value, $any($event.target).checked)"
+                            />
+                            <span class="th-menu-check-label">{{ option.label }}</span>
+                            <span class="th-menu-check-count">{{ option.count }}</span>
+                          </label>
+                        } @empty {
+                          <p class="th-menu-empty">Sin rutas</p>
+                        }
+                      </div>
+                      @if (tableHasRouteFilter()) {
+                        <button type="button" class="th-menu-reset" (click)="clearTableRouteColumnFilter($event)">
+                          <span class="material-symbols-rounded" aria-hidden="true">refresh</span>
+                          Reset
+                        </button>
                       }
-                    </div>
-                    @if (tableHasRouteFilter()) {
-                      <button type="button" class="th-menu-reset" (click)="clearTableRouteColumnFilter($event)">
-                        <span class="material-symbols-rounded" aria-hidden="true">refresh</span>
-                        Reset
-                      </button>
                     }
                   </div>
                 }
@@ -595,7 +652,19 @@
           </thead>
           <tbody>
             @for (order of tableRows(); track order.order_id) {
-              <tr class="trow" [class.trow--paid-row]="order.status === 'pagado'" (click)="open(order.order_id)">
+              <tr class="trow" [class.trow--paid-row]="order.status === 'pagado'" [class.trow--selection-mode]="tableSelectionMode()" (click)="onTableRowActivate(order, $event)">
+                <td class="td-select-col">
+                  @if (tableSelectionMode()) {
+                    <input
+                      type="checkbox"
+                      class="td-select-checkbox"
+                      [checked]="!!tableSelected()[order.order_id]"
+                      (click)="onTableSelectionCheckboxClick($event)"
+                      (change)="toggleTableRowSelection(order.order_id, $any($event.target).checked)"
+                      [attr.aria-label]="'Seleccionar pedido ' + order.order_id"
+                    />
+                  }
+                </td>
                 <td class="td-date">{{ formatTableDateShort(order.created_at) }}</td>
                 <td class="td-customer">
                   <span class="tc-name">{{ customerName(order.customer_id) }}</span>
@@ -621,7 +690,7 @@
               </tr>
             } @empty {
               <tr>
-                <td colspan="8" class="trow-empty">
+                <td colspan="9" class="trow-empty">
                   <div class="trow-empty-content">
                     <span class="material-symbols-rounded">search_off</span>
                     <p class="trow-empty-title">Sin resultados para este rango</p>
@@ -644,6 +713,93 @@
         </table>
       </div>
     </section>
+  }
+
+  @if (bitacoraConfigOpen()) {
+    <div class="sheet-backdrop" (click)="closeBitacoraConfig($event)">
+      <div class="sheet bitacora-sheet" role="dialog" aria-modal="true" aria-label="Configurar bitacora" (click)="$event.stopPropagation()">
+        <div class="sheet-handle" aria-hidden="true"></div>
+        <h2>Crear bitacora</h2>
+        @if (tableSelectionMode()) {
+          <p class="bitacora-selection-summary">{{ bitacoraSelectionSummaryText() }}</p>
+        } @else {
+          <div class="bitacora-route-block">
+            <p class="bitacora-block-title">Rutas para generar bitacora</p>
+            <div class="bitacora-route-list" role="listbox" aria-multiselectable="true">
+              @for (option of bitacoraRouteOptions(); track option.value) {
+                <label class="bitacora-route-option">
+                  <input
+                    type="checkbox"
+                    [checked]="isBitacoraRouteSelected(option.value)"
+                    (change)="toggleBitacoraRouteSelection(option.value, $any($event.target).checked)"
+                  />
+                  <span>{{ option.label }}</span>
+                  <span class="bitacora-route-count">{{ option.count }}</span>
+                </label>
+              } @empty {
+                <p class="th-menu-empty">Sin rutas disponibles.</p>
+              }
+            </div>
+          </div>
+        }
+
+        <div class="bitacora-options">
+          <p class="bitacora-block-title">Contenido</p>
+          <label class="bitacora-check">
+            <input
+              type="checkbox"
+              [checked]="bitacoraIncludeProductCount()"
+              (change)="onBitacoraProductCountToggle($any($event.target).checked)"
+            />
+            <span>Incluir numero de productos</span>
+          </label>
+
+          @if (bitacoraIncludeProductCount()) {
+            <label class="bitacora-check bitacora-check--child">
+              <input
+                type="checkbox"
+                [checked]="bitacoraIncludeProductDetail()"
+                (change)="onBitacoraProductDetailToggle($any($event.target).checked)"
+              />
+              <span>Incluir detalle de productos</span>
+            </label>
+          }
+
+          @if (bitacoraIncludeProductDetail()) {
+            <label class="bitacora-check bitacora-check--grandchild">
+              <input
+                type="checkbox"
+                [checked]="bitacoraIncludeProductPrices()"
+                (change)="onBitacoraProductPricesToggle($any($event.target).checked)"
+              />
+              <span>Incluir precios por producto</span>
+            </label>
+          }
+
+          <label class="bitacora-check">
+            <input
+              type="checkbox"
+              [checked]="bitacoraIncludeCustomerContact()"
+              (change)="bitacoraIncludeCustomerContact.set($any($event.target).checked)"
+            />
+            <span>Incluir WhatsApp de clienta</span>
+          </label>
+        </div>
+
+        @if (bitacoraConfigError()) {
+          <p class="error-text">{{ bitacoraConfigError() }}</p>
+        }
+
+        <div class="bitacora-actions">
+          <button type="button" class="btn primary" (click)="confirmBitacoraConfig($event)" [disabled]="!bitacoraCanCreate() || tableBulkActionLoading()">
+            Crear
+          </button>
+          <button type="button" class="btn ghost" (click)="closeBitacoraConfig($event)">
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
   }
 
 </section>

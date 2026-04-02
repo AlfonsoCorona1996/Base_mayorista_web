@@ -3,6 +3,7 @@ import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { CurrencyPipe, DatePipe, NgClass } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { Router } from "@angular/router";
+import { PDFDocument, StandardFonts, rgb, type PDFFont } from "pdf-lib";
 import { CustomersService } from "../../core/customers.service";
 import { OrdersService, Order, OrderStatus, IncidentSeverity } from "../../core/orders.service";
 import { RoutesService } from "../../core/routes.service";
@@ -45,6 +46,13 @@ type TableRangePreset = "today" | "last7" | "last30";
 type TableSortColumn = "updated_at" | "created_at" | "status" | "customer" | "route" | "items" | "total";
 type TableMenuColumn = "route" | "status";
 type TableMenuOption = { value: string; label: string; count: number };
+type TableBulkAction = "create_bitacora" | "create_nota" | "mark_pagado" | "mark_recibido";
+type BitacoraConfig = {
+  includeProductCount: boolean;
+  includeProductDetail: boolean;
+  includeProductPrices: boolean;
+  includeCustomerContact: boolean;
+};
 type PedidosUiStateSnapshot = {
   viewMode: "cards" | "table";
   search: string;
@@ -110,6 +118,30 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   tableMenuPosition = signal<{ left: number; top: number; width: number } | null>(null);
   tableRouteSelections = signal<string[] | null>(null);
   tableStatusSelections = signal<string[] | null>(null);
+  tableSelectionMode = signal(false);
+  tableSelected = signal<Record<string, boolean>>({});
+  tableBulkMenuOpen = signal(false);
+  tableBulkMenuPosition = signal<{ left: number; top: number; width: number } | null>(null);
+  tableBulkActionLoading = signal(false);
+  tableBulkProgressVisible = signal(false);
+  tableBulkProgressLabel = signal("");
+  tableBulkProgressCurrent = signal(0);
+  tableBulkProgressTotal = signal(0);
+  tableBulkResultVisible = signal(false);
+  tableBulkResultText = signal("");
+  bitacoraConfigOpen = signal(false);
+  bitacoraIncludeProductCount = signal(true);
+  bitacoraIncludeProductDetail = signal(false);
+  bitacoraIncludeProductPrices = signal(false);
+  bitacoraIncludeCustomerContact = signal(false);
+  bitacoraRouteSelections = signal<string[]>([]);
+  bitacoraConfigError = signal<string | null>(null);
+  tableBulkProgressPercent = computed(() => {
+    const total = this.tableBulkProgressTotal();
+    if (total <= 0) return 0;
+    return Math.max(0, Math.min(100, Math.round((this.tableBulkProgressCurrent() / total) * 100)));
+  });
+  private tableBulkProgressHideTimer: ReturnType<typeof setTimeout> | null = null;
   private visiblePillsByOrder = signal<Record<string, number>>({});
   private pillsResizeObserver: ResizeObserver | null = null;
   private pillMeasureEl: HTMLSpanElement | null = null;
@@ -140,6 +172,22 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     effect(() => {
       if (!this.uiStateHydrated()) return;
       this.saveUiStateSnapshot(this.captureUiStateSnapshot());
+    });
+    effect(() => {
+      if (this.viewMode() !== "table" && this.tableSelectionMode()) {
+        this.disableTableSelectionMode();
+      }
+    });
+    effect(() => {
+      const route = this.routeFilter();
+      if (route === "todos") return;
+      if (this.tableRouteSelections() !== null) {
+        this.tableRouteSelections.set(null);
+      }
+      if (this.tableMenuOpen() === "route") {
+        this.tableMenuOpen.set(null);
+        this.tableMenuPosition.set(null);
+      }
     });
   }
 
@@ -237,11 +285,18 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     return [...map.values()].sort((a, b) => a.label.localeCompare(b.label, "es-MX"));
   });
 
-  tableHasRouteFilter = computed(() => this.tableRouteSelections() !== null);
+  tableRouteColumnFilterDisabled = computed(() => this.routeFilter() !== "todos");
+  tableHasRouteFilter = computed(() => !this.tableRouteColumnFilterDisabled() && this.tableRouteSelections() !== null);
   tableHasStatusFilter = computed(() => this.tableStatusSelections() !== null);
   tableHasNonDefaultSort = computed(() => this.tableSortCol() !== "updated_at" || this.tableSortDir() !== "desc");
+  tableHasPrimaryFilters = computed(() => {
+    const search = this.search().trim();
+    const route = this.routeFilter();
+    return search.length > 0 || route !== "todos";
+  });
   tableHasAnyFilters = computed(() =>
-    !!this.tableDateFrom()
+    this.tableHasPrimaryFilters()
+    || !!this.tableDateFrom()
     || !!this.tableDateTo()
     || this.tableHasRouteFilter()
     || this.tableHasStatusFilter()
@@ -309,6 +364,52 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     return `hasta ${this.formatTableDateCompact(to)}`;
   });
 
+  tableSelectedRows = computed(() => {
+    const selected = this.tableSelected();
+    return this.tableRows().filter((order) => !!selected[order.order_id]);
+  });
+
+  tableSelectedCount = computed(() => this.tableSelectedRows().length);
+
+  tableAllVisibleSelected = computed(() => {
+    const rows = this.tableRows();
+    if (rows.length === 0) return false;
+    const selected = this.tableSelected();
+    return rows.every((order) => !!selected[order.order_id]);
+  });
+
+  tableMarkPaidEligibleRows = computed(() =>
+    this.tableSelectedRows().filter((order) => order.status === "ready_for_route")
+  );
+
+  tableMarkReceivedEligibleRows = computed(() =>
+    this.tableSelectedRows().filter((order) => this.canMarkAsReceivedFromBulk(order.status))
+  );
+  bitacoraRouteOptions = computed<TableMenuOption[]>(() => {
+    const map = new Map<string, TableMenuOption>();
+    for (const order of this.tableRowsFiltered()) {
+      const value = this.tableRouteFilterKey(order.route_id);
+      const found = map.get(value);
+      if (found) {
+        found.count += 1;
+      } else {
+        map.set(value, { value, label: this.routeName(order.route_id), count: 1 });
+      }
+    }
+    return [...map.values()].sort((a, b) => a.label.localeCompare(b.label, "es-MX"));
+  });
+  bitacoraSelectionRouteCount = computed(() => {
+    const selected = this.tableSelectedRows();
+    const routes = new Set(selected.map((order) => this.tableRouteFilterKey(order.route_id)));
+    return routes.size;
+  });
+  bitacoraCanCreate = computed(() => {
+    if (this.tableSelectionMode()) return this.tableSelectedCount() > 0;
+    const selectedRoutes = new Set(this.bitacoraRouteSelections());
+    if (selectedRoutes.size === 0) return false;
+    return this.tableRowsFiltered().some((order) => selectedRoutes.has(this.tableRouteFilterKey(order.route_id)));
+  });
+
   toggleTableSort(col: TableSortColumn): void {
     if (this.tableSortCol() === col) {
       this.tableSortDir.update(d => d === "asc" ? "desc" : "asc");
@@ -328,6 +429,8 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
 
   toggleTableColumnMenu(col: TableMenuColumn, event?: Event): void {
     event?.stopPropagation();
+    this.tableBulkMenuOpen.set(false);
+    this.tableBulkMenuPosition.set(null);
     if (this.tableMenuOpen() === col) {
       this.tableMenuOpen.set(null);
       this.tableMenuPosition.set(null);
@@ -354,6 +457,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   toggleTableRouteOption(value: string, checked: boolean): void {
+    if (this.tableRouteColumnFilterDisabled()) return;
     const options = this.tableRouteMenuOptions().map((option) => option.value);
     this.tableRouteSelections.update((selected) => this.updateColumnSelection(selected, options, value, checked));
   }
@@ -365,6 +469,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
 
   clearTableRouteColumnFilter(event?: Event): void {
     event?.stopPropagation();
+    if (this.tableRouteColumnFilterDisabled()) return;
     this.tableRouteSelections.set(null);
   }
 
@@ -375,29 +480,49 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
 
   @HostListener("document:keydown.escape")
   onTableMenuEscape(): void {
+    if (this.bitacoraConfigOpen()) {
+      this.closeBitacoraConfig();
+      return;
+    }
     this.tableMenuOpen.set(null);
     this.tableMenuPosition.set(null);
+    this.tableBulkMenuOpen.set(false);
+    this.tableBulkMenuPosition.set(null);
   }
 
   @HostListener("document:click", ["$event"])
   onTableMenuOutsideClick(event: MouseEvent): void {
-    if (!this.tableMenuOpen()) return;
+    if (!this.tableMenuOpen() && !this.tableBulkMenuOpen()) return;
     const target = event.target as HTMLElement | null;
     if (!target) {
       this.tableMenuOpen.set(null);
       this.tableMenuPosition.set(null);
+      this.tableBulkMenuOpen.set(false);
+      this.tableBulkMenuPosition.set(null);
       return;
     }
-    if (target.closest(".th-menu-trigger") || target.closest(".th-menu-dropdown")) return;
+    if (
+      target.closest(".th-menu-trigger")
+      || target.closest(".th-menu-dropdown")
+      || target.closest(".tfilter-bulk-trigger")
+      || target.closest(".table-bulk-menu")
+      || target.closest(".th-select-trigger")
+    ) {
+      return;
+    }
     this.tableMenuOpen.set(null);
     this.tableMenuPosition.set(null);
+    this.tableBulkMenuOpen.set(false);
+    this.tableBulkMenuPosition.set(null);
   }
 
   @HostListener("window:resize")
   onWindowResizeCloseTableMenu(): void {
-    if (!this.tableMenuOpen()) return;
+    if (!this.tableMenuOpen() && !this.tableBulkMenuOpen()) return;
     this.tableMenuOpen.set(null);
     this.tableMenuPosition.set(null);
+    this.tableBulkMenuOpen.set(false);
+    this.tableBulkMenuPosition.set(null);
   }
 
   applyTableRangePreset(preset: TableRangePreset): void {
@@ -442,6 +567,8 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   clearTableFilters(): void {
+    this.search.set("");
+    this.routeFilter.set("todos");
     this.clearTableRange();
     this.tableRouteSelections.set(null);
     this.tableStatusSelections.set(null);
@@ -449,6 +576,354 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     this.tableSortDir.set("desc");
     this.tableMenuOpen.set(null);
     this.tableMenuPosition.set(null);
+    this.disableTableSelectionMode();
+  }
+
+  toggleTableSelectionMode(event?: Event): void {
+    event?.stopPropagation();
+    this.tableMenuOpen.set(null);
+    this.tableMenuPosition.set(null);
+    this.tableBulkMenuOpen.set(false);
+    this.tableBulkMenuPosition.set(null);
+    if (this.tableSelectionMode()) {
+      this.disableTableSelectionMode();
+      return;
+    }
+    this.tableSelectionMode.set(true);
+    this.tableSelected.set({});
+  }
+
+  disableTableSelectionMode(): void {
+    this.tableSelectionMode.set(false);
+    this.tableSelected.set({});
+    this.tableBulkMenuOpen.set(false);
+    this.tableBulkMenuPosition.set(null);
+  }
+
+  onTableRowActivate(order: Order, event?: Event): void {
+    if (!this.tableSelectionMode()) {
+      this.open(order.order_id);
+      return;
+    }
+    event?.preventDefault();
+    event?.stopPropagation();
+    const selected = !!this.tableSelected()[order.order_id];
+    this.toggleTableRowSelection(order.order_id, !selected);
+  }
+
+  onTableSelectionCheckboxClick(event: Event): void {
+    event.stopPropagation();
+  }
+
+  toggleTableRowSelection(orderId: string, checked: boolean): void {
+    this.tableSelected.update((current) => {
+      const next = { ...current };
+      if (checked) {
+        next[orderId] = true;
+      } else {
+        delete next[orderId];
+      }
+      return next;
+    });
+  }
+
+  toggleTableSelectAllVisible(checked: boolean, event?: Event): void {
+    event?.stopPropagation();
+    const ids = this.visibleTableRowIds();
+    this.tableSelected.update((current) => {
+      const next = { ...current };
+      for (const id of ids) {
+        if (checked) next[id] = true;
+        else delete next[id];
+      }
+      return next;
+    });
+  }
+
+  toggleTableBulkMenu(event?: Event): void {
+    event?.stopPropagation();
+    this.tableMenuOpen.set(null);
+    this.tableMenuPosition.set(null);
+    if (this.tableBulkMenuOpen()) {
+      this.tableBulkMenuOpen.set(false);
+      this.tableBulkMenuPosition.set(null);
+      return;
+    }
+    this.tableBulkMenuOpen.set(true);
+    this.tableBulkMenuPosition.set(this.computeTableBulkMenuPosition(event));
+  }
+
+  closeTableBulkResult(event?: Event): void {
+    event?.stopPropagation();
+    this.tableBulkResultVisible.set(false);
+    this.tableBulkResultText.set("");
+  }
+
+  openBitacoraConfig(event?: Event): void {
+    event?.stopPropagation();
+    this.tableBulkMenuOpen.set(false);
+    this.tableBulkMenuPosition.set(null);
+    this.bitacoraConfigError.set(null);
+
+    this.bitacoraIncludeProductCount.set(true);
+    this.bitacoraIncludeProductDetail.set(false);
+    this.bitacoraIncludeProductPrices.set(false);
+    this.bitacoraIncludeCustomerContact.set(false);
+
+    if (!this.tableSelectionMode()) {
+      const defaults = this.bitacoraRouteOptions().map((option) => option.value);
+      this.bitacoraRouteSelections.set(defaults);
+    } else {
+      this.bitacoraRouteSelections.set([]);
+    }
+
+    this.bitacoraConfigOpen.set(true);
+  }
+
+  closeBitacoraConfig(event?: Event): void {
+    event?.stopPropagation();
+    this.bitacoraConfigOpen.set(false);
+    this.bitacoraConfigError.set(null);
+  }
+
+  onBitacoraProductCountToggle(checked: boolean): void {
+    this.bitacoraIncludeProductCount.set(checked);
+    if (!checked) {
+      this.bitacoraIncludeProductDetail.set(false);
+      this.bitacoraIncludeProductPrices.set(false);
+    }
+  }
+
+  onBitacoraProductDetailToggle(checked: boolean): void {
+    this.bitacoraIncludeProductDetail.set(checked);
+    if (checked) {
+      this.bitacoraIncludeProductCount.set(true);
+      return;
+    }
+    this.bitacoraIncludeProductPrices.set(false);
+  }
+
+  onBitacoraProductPricesToggle(checked: boolean): void {
+    this.bitacoraIncludeProductPrices.set(checked);
+    if (!checked) return;
+    this.bitacoraIncludeProductCount.set(true);
+    this.bitacoraIncludeProductDetail.set(true);
+  }
+
+  isBitacoraRouteSelected(value: string): boolean {
+    return this.bitacoraRouteSelections().includes(value);
+  }
+
+  toggleBitacoraRouteSelection(value: string, checked: boolean): void {
+    this.bitacoraRouteSelections.update((current) => {
+      if (checked) {
+        if (current.includes(value)) return current;
+        return [...current, value];
+      }
+      return current.filter((id) => id !== value);
+    });
+  }
+
+  bitacoraSelectionSummaryText(): string {
+    const clients = this.tableSelectedCount();
+    const routes = this.bitacoraSelectionRouteCount();
+    return `Se creara una bitacora para ${this.tableBulkCountLabel(clients, "clienta", "clientas")} en ${this.tableBulkCountLabel(routes, "ruta", "rutas")}.`;
+  }
+
+  async confirmBitacoraConfig(event?: Event): Promise<void> {
+    event?.stopPropagation();
+    this.bitacoraConfigError.set(null);
+
+    const orders = this.resolveBitacoraTargetOrders();
+    if (orders.length === 0) {
+      this.bitacoraConfigError.set("No hay pedidos para generar bitacora con la configuracion actual.");
+      return;
+    }
+
+    const config: BitacoraConfig = {
+      includeProductCount: this.bitacoraIncludeProductCount(),
+      includeProductDetail: this.bitacoraIncludeProductDetail(),
+      includeProductPrices: this.bitacoraIncludeProductPrices(),
+      includeCustomerContact: this.bitacoraIncludeCustomerContact(),
+    };
+
+    this.bitacoraConfigOpen.set(false);
+    this.tableBulkActionLoading.set(true);
+    this.tableBulkResultVisible.set(false);
+    this.tableBulkResultText.set("");
+
+    let generated = 0;
+    let failed = 0;
+    let routes = 0;
+
+    try {
+      const result = await this.generateRouteBitacoraPdfs(orders, config);
+      generated = result.generated;
+      failed = result.failed;
+      routes = result.routes;
+    } finally {
+      this.tableBulkActionLoading.set(false);
+      if (generated > 0 && this.tableSelectionMode()) {
+        this.tableSelected.set({});
+      }
+    }
+
+    const generatedLabel = `${generated} PDF${generated === 1 ? "" : "s"} creados`;
+    const routesLabel = this.tableBulkCountLabel(routes, "ruta", "rutas");
+    const errorLabel = failed > 0 ? ` | ${this.tableBulkCountLabel(failed, "ruta con error", "rutas con error")}` : "";
+    this.tableBulkResultText.set(`Bitacora creada, ${generatedLabel} para ${routesLabel}${errorLabel}`);
+    this.tableBulkResultVisible.set(true);
+    this.bulkNotesMessage.set(null);
+  }
+
+  private resolveBitacoraTargetOrders(): Order[] {
+    if (this.tableSelectionMode()) return this.tableSelectedRows();
+    const selectedRoutes = new Set(this.bitacoraRouteSelections());
+    if (selectedRoutes.size === 0) return [];
+    return this.tableRowsFiltered().filter((order) => selectedRoutes.has(this.tableRouteFilterKey(order.route_id)));
+  }
+
+  canApplyTableBulkAction(action: TableBulkAction): boolean {
+    if (this.tableBulkActionLoading()) return false;
+    if (action === "create_bitacora") {
+      if (this.tableSelectionMode()) return this.tableSelectedCount() > 0;
+      return this.bitacoraRouteOptions().length > 0;
+    }
+    if (!this.tableSelectionMode()) {
+      return false;
+    }
+    if (action === "create_nota") {
+      return this.tableSelectedCount() > 0;
+    }
+    if (action === "mark_pagado") {
+      return this.tableMarkPaidEligibleRows().length > 0;
+    }
+    return this.tableMarkReceivedEligibleRows().length > 0;
+  }
+
+  async applyTableBulkAction(action: TableBulkAction, event?: Event): Promise<void> {
+    event?.stopPropagation();
+    if (!this.canApplyTableBulkAction(action)) return;
+    if (action === "create_bitacora") {
+      this.openBitacoraConfig(event);
+      return;
+    }
+
+    const selectedRows = this.tableSelectedRows();
+    if (selectedRows.length === 0) return;
+
+    this.tableBulkActionLoading.set(true);
+    this.tableBulkMenuOpen.set(false);
+    this.tableBulkMenuPosition.set(null);
+    let updated = 0;
+    let skipped = 0;
+    let failed = 0;
+    if (action === "create_nota") {
+      this.tableBulkResultVisible.set(false);
+      this.tableBulkResultText.set("");
+    }
+    this.tableBulkProgressVisible.set(false);
+    this.tableBulkProgressLabel.set("");
+    this.tableBulkProgressCurrent.set(0);
+    this.tableBulkProgressTotal.set(0);
+
+    try {
+      if (action === "create_nota") {
+        for (const order of selectedRows) {
+          try {
+            const rows = this.salesNoteRows(order);
+            if (rows.length === 0) {
+              skipped += 1;
+              continue;
+            }
+            const blob = await this.buildSalesNoteImage(order, rows);
+            this.downloadBlob(blob, `nota-${order.order_id}-${Date.now()}.png`);
+            await this.orders.logEvent(
+              order.order_id,
+              "SALES_NOTE_GENERATED",
+              "Nota de venta generada (seleccion de tabla)",
+              {
+                rows: rows.length,
+                total: rows.reduce((sum, row) => sum + row.lineTotal, 0),
+                mode: "table_bulk_selection",
+              }
+            ).catch(() => null);
+            updated += 1;
+            await this.sleep(120);
+          } catch {
+            failed += 1;
+          }
+        }
+      } else if (action === "mark_pagado") {
+        for (const order of selectedRows) {
+          if (order.status !== "ready_for_route") {
+            skipped += 1;
+            continue;
+          }
+          try {
+            const total = this.tableOrderClientTotal(order);
+            if (total > 0) {
+              await this.orders.closeWithPayment(order.order_id, total, total);
+            } else {
+              await this.orders.updateStatus(order.order_id, "pagado");
+            }
+            await this.orders.logEvent(
+              order.order_id,
+              "PAYMENT_REGISTERED",
+              "Marcado como pagado desde seleccion de tabla",
+              { source: "pedidos_table_selection", total_amount: total }
+            ).catch(() => null);
+            updated += 1;
+          } catch {
+            failed += 1;
+          }
+        }
+      } else {
+        for (const order of selectedRows) {
+          if (!this.canMarkAsReceivedFromBulk(order.status)) {
+            skipped += 1;
+            continue;
+          }
+          try {
+            await this.orders.updateStatus(order.order_id, "recibido_qa");
+            await this.orders.logEvent(
+              order.order_id,
+              "ORDER_RECEIVED_MARKED",
+              "Marcado como recibido desde seleccion de tabla",
+              { source: "pedidos_table_selection", previous_status: order.status }
+            ).catch(() => null);
+            updated += 1;
+          } catch {
+            failed += 1;
+          }
+        }
+      }
+    } finally {
+      this.tableBulkActionLoading.set(false);
+      if (updated > 0) {
+        this.tableSelected.set({});
+      }
+    }
+
+    const actionLabel = this.tableBulkActionLabel(action);
+    if (action === "create_nota") {
+      const notesLabel = this.tableBulkCountLabel(updated, "nota creada", "notas creadas");
+      const skippedLabel = this.tableBulkCountLabel(skipped, "omitida", "omitidas");
+      const failedLabel = failed > 0
+        ? `, ${this.tableBulkCountLabel(failed, "con error", "con errores")}`
+        : "";
+      this.tableBulkResultText.set(`${notesLabel}, ${skippedLabel}${failedLabel}`);
+      this.tableBulkResultVisible.set(true);
+      this.bulkNotesMessage.set(null);
+      return;
+    }
+
+    const summary = [
+      `${actionLabel}: ${this.tableBulkCountLabel(updated, "aplicado", "aplicados")}`,
+      skipped > 0 ? this.tableBulkCountLabel(skipped, "omitido", "omitidos") : "",
+      failed > 0 ? this.tableBulkCountLabel(failed, "con error", "con errores") : "",
+    ].filter(Boolean).join(" | ");
+    this.bulkNotesMessage.set(summary);
   }
 
   private updateColumnSelection(
@@ -509,7 +984,63 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     return target.closest(".th-menu-trigger");
   }
 
+  private computeTableBulkMenuPosition(event?: Event): { left: number; top: number; width: number } {
+    const margin = 8;
+    const maxAllowedWidth = Math.max(190, window.innerWidth - (margin * 2));
+    const menuWidth = Math.min(280, maxAllowedWidth);
+    const trigger = this.resolveTableBulkMenuTrigger(event);
+    if (!trigger) {
+      return {
+        left: Math.max(margin, window.innerWidth - menuWidth - margin),
+        top: 140,
+        width: menuWidth,
+      };
+    }
+    const rect = trigger.getBoundingClientRect();
+    const left = Math.min(window.innerWidth - margin - menuWidth, Math.max(margin, rect.right - menuWidth));
+    const top = Math.max(76, rect.bottom + 6);
+    return { left, top, width: menuWidth };
+  }
+
+  private resolveTableBulkMenuTrigger(event?: Event): HTMLElement | null {
+    if (!event) return null;
+    const currentTarget = event.currentTarget;
+    if (currentTarget instanceof HTMLElement) return currentTarget;
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return null;
+    return target.closest(".tfilter-bulk-trigger");
+  }
+
+  private visibleTableRowIds(): string[] {
+    return this.tableRows().map((order) => order.order_id);
+  }
+
+  private canMarkAsReceivedFromBulk(status: string): boolean {
+    return ["borrador", "en_transito", "inbound_in_transit"].includes(status);
+  }
+
+  private tableBulkActionLabel(action: TableBulkAction): string {
+    switch (action) {
+      case "create_bitacora":
+        return "Crear bitacora";
+      case "create_nota":
+        return "Crear nota";
+      case "mark_pagado":
+        return "Marcar como pagados";
+      case "mark_recibido":
+        return "Marcar como recibidos";
+      default:
+        return "Accion";
+    }
+  }
+
+  private tableBulkCountLabel(count: number, singular: string, plural: string): string {
+    const safe = Math.max(0, Math.trunc(count));
+    return `${safe} ${safe === 1 ? singular : plural}`;
+  }
+
   private applyRouteColumnFilter(rows: Order[]): Order[] {
+    if (this.tableRouteColumnFilterDisabled()) return rows;
     const selected = this.tableRouteSelections();
     if (selected === null) return rows;
     if (selected.length === 0) return [];
@@ -770,6 +1301,10 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   ngOnDestroy(): void {
     this.pillsResizeObserver?.disconnect();
     this.pillsResizeObserver = null;
+    if (this.tableBulkProgressHideTimer) {
+      clearTimeout(this.tableBulkProgressHideTimer);
+      this.tableBulkProgressHideTimer = null;
+    }
     if (this.pillMeasureEl) {
       this.pillMeasureEl.remove();
       this.pillMeasureEl = null;
@@ -1426,9 +1961,12 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     this.bulkNotesLoading.set(false);
     this.cancelBulkNoteMode();
     if (failed === 0) {
-      this.bulkNotesMessage.set(`Se generaron ${generated} nota(s).`);
+      this.bulkNotesMessage.set(`Se generaron ${this.tableBulkCountLabel(generated, "nota", "notas")}.`);
     } else if (generated > 0) {
-      this.bulkNotesMessage.set(`Se generaron ${generated} nota(s). ${failed} pedido(s) no se pudieron procesar.`);
+      this.bulkNotesMessage.set(
+        `Se generaron ${this.tableBulkCountLabel(generated, "nota", "notas")}. `
+        + `${this.tableBulkCountLabel(failed, "pedido no se pudo procesar", "pedidos no se pudieron procesar")}.`
+      );
     } else {
       this.bulkNotesMessage.set("No se pudo generar ninguna nota con la selección actual.");
     }
@@ -1480,6 +2018,404 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
         };
       })
       .filter((row) => row.qty > 0);
+  }
+
+  private startTableBulkProgress(label: string, total: number): void {
+    if (this.tableBulkProgressHideTimer) {
+      clearTimeout(this.tableBulkProgressHideTimer);
+      this.tableBulkProgressHideTimer = null;
+    }
+    this.tableBulkProgressLabel.set(label);
+    this.tableBulkProgressTotal.set(Math.max(1, Math.trunc(total)));
+    this.tableBulkProgressCurrent.set(0);
+    this.tableBulkProgressVisible.set(true);
+  }
+
+  private updateTableBulkProgress(current: number): void {
+    const total = this.tableBulkProgressTotal();
+    if (total <= 0) return;
+    this.tableBulkProgressCurrent.set(Math.max(0, Math.min(total, Math.trunc(current))));
+  }
+
+  private finishTableBulkProgress(): void {
+    const total = this.tableBulkProgressTotal();
+    if (total > 0) this.tableBulkProgressCurrent.set(total);
+    if (this.tableBulkProgressHideTimer) {
+      clearTimeout(this.tableBulkProgressHideTimer);
+    }
+    this.tableBulkProgressHideTimer = setTimeout(() => {
+      this.tableBulkProgressVisible.set(false);
+      this.tableBulkProgressLabel.set("");
+      this.tableBulkProgressCurrent.set(0);
+      this.tableBulkProgressTotal.set(0);
+      this.tableBulkProgressHideTimer = null;
+    }, 900);
+  }
+
+  private async generateRouteBitacoraPdfs(
+    orders: Order[],
+    config: BitacoraConfig,
+  ): Promise<{ generated: number; failed: number; routes: number }> {
+    const grouped = new Map<string, { routeName: string; orders: Order[] }>();
+    for (const order of orders) {
+      const routeKey = order.route_id || "sin_ruta";
+      const routeName = this.routeName(order.route_id);
+      const current = grouped.get(routeKey);
+      if (current) {
+        current.orders.push(order);
+        continue;
+      }
+      grouped.set(routeKey, { routeName, orders: [order] });
+    }
+
+    const groups = [...grouped.values()].sort((a, b) => a.routeName.localeCompare(b.routeName, "es-MX"));
+    const dateStamp = new Date().toISOString().slice(0, 10);
+    let generated = 0;
+    let failed = 0;
+    this.startTableBulkProgress("Generando bitacoras por ruta...", groups.length || 1);
+
+    try {
+      for (let idx = 0; idx < groups.length; idx += 1) {
+        const group = groups[idx];
+        try {
+          const blob = await this.buildRouteBitacoraPdf(group.routeName, group.orders, config);
+          const fileName = `bitacora-${this.slugifyForFileName(group.routeName)}-${dateStamp}.pdf`;
+          this.downloadBlob(blob, fileName);
+          generated += 1;
+        } catch {
+          failed += 1;
+        } finally {
+          this.updateTableBulkProgress(idx + 1);
+        }
+      }
+    } finally {
+      this.finishTableBulkProgress();
+    }
+
+    return { generated, failed, routes: groups.length };
+  }
+
+  private async buildRouteBitacoraPdf(routeName: string, orders: Order[], config: BitacoraConfig): Promise<Blob> {
+    const pdfDoc = await PDFDocument.create();
+    const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+    const pageWidth = 612;
+    const pageHeight = 792;
+    const marginX = 36;
+    const marginTop = 42;
+    const marginBottom = 40;
+    const checkboxSize = 10;
+    const checkboxX = marginX;
+    const indexX = marginX + 18;
+    const customerX = marginX + 36;
+    const totalColWidth = 96;
+    const totalLeftX = (pageWidth - marginX) - totalColWidth;
+    const productsColRight = totalLeftX - 10;
+    const detailMaxWidth = Math.max(84, productsColRight - customerX - 8);
+
+    let page = pdfDoc.addPage([pageWidth, pageHeight]);
+    let y = pageHeight - marginTop;
+    let pageNumber = 1;
+    let routeGrandTotal = 0;
+
+    const drawRightAlignedText = (value: string, yPos: number, size: number, font: PDFFont, color = rgb(0.11, 0.42, 0.24)): void => {
+      const width = font.widthOfTextAtSize(value, size);
+      const x = Math.max(marginX, (pageWidth - marginX) - width);
+      page.drawText(value, {
+        x,
+        y: yPos,
+        size,
+        font,
+        color,
+      });
+    };
+
+    const drawListHeader = (): void => {
+      page.drawText("Ent.", {
+        x: checkboxX,
+        y,
+        size: 8.2,
+        font: fontRegular,
+        color: rgb(0.47, 0.56, 0.67),
+      });
+      page.drawText("#", {
+        x: indexX,
+        y,
+        size: 8.2,
+        font: fontRegular,
+        color: rgb(0.47, 0.56, 0.67),
+      });
+      page.drawText("Clienta", {
+        x: customerX,
+        y,
+        size: 8.8,
+        font: fontBold,
+        color: rgb(0.34, 0.42, 0.52),
+      });
+      if (config.includeProductCount) {
+        const productsHead = "Productos";
+        const productsHeadWidth = fontRegular.widthOfTextAtSize(productsHead, 8.2);
+        page.drawText(productsHead, {
+          x: productsColRight - productsHeadWidth,
+          y,
+          size: 8.2,
+          font: fontRegular,
+          color: rgb(0.47, 0.56, 0.67),
+        });
+      }
+      drawRightAlignedText("Total", y, 8.8, fontBold, rgb(0.34, 0.42, 0.52));
+      y -= 8;
+      page.drawLine({
+        start: { x: marginX, y },
+        end: { x: pageWidth - marginX, y },
+        thickness: 0.7,
+        color: rgb(0.85, 0.89, 0.94),
+      });
+      y -= 8;
+    };
+
+    const drawHeader = (continuation: boolean): void => {
+      const title = continuation ? "Bitacora de ruta (continuacion)" : "Bitacora de ruta";
+      const dateText = new Date().toLocaleDateString("es-MX", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      });
+      page.drawText(title, {
+        x: marginX,
+        y,
+        size: 16,
+        font: fontBold,
+        color: rgb(0.09, 0.18, 0.32),
+      });
+      y -= 20;
+      page.drawText(`Ruta: ${routeName}`, {
+        x: marginX,
+        y,
+        size: 11,
+        font: fontBold,
+        color: rgb(0.15, 0.28, 0.45),
+      });
+      y -= 14;
+      page.drawText(`Fecha: ${dateText} | Pedidos: ${orders.length} | Pagina: ${pageNumber}`, {
+        x: marginX,
+        y,
+        size: 9.5,
+        font: fontRegular,
+        color: rgb(0.35, 0.42, 0.52),
+      });
+      y -= 10;
+      page.drawLine({
+        start: { x: marginX, y },
+        end: { x: pageWidth - marginX, y },
+        thickness: 0.8,
+        color: rgb(0.82, 0.86, 0.92),
+      });
+      y -= 12;
+      drawListHeader();
+    };
+
+    const ensureSpace = (needed: number): void => {
+      if (y - needed >= marginBottom) return;
+      page = pdfDoc.addPage([pageWidth, pageHeight]);
+      pageNumber += 1;
+      y = pageHeight - marginTop;
+      drawHeader(true);
+    };
+
+    drawHeader(false);
+    const sortedOrders = [...orders].sort((a, b) =>
+      this.customerName(a.customer_id).localeCompare(this.customerName(b.customer_id), "es-MX")
+    );
+
+    for (let index = 0; index < sortedOrders.length; index += 1) {
+      const order = sortedOrders[index];
+      const customer = this.customerName(order.customer_id);
+      const customerCompact = this.truncatePdfText(customer, fontBold, 10.2, Math.max(72, productsColRight - customerX - 8));
+      const itemsCount = this.routeBitacoraItemsCount(order);
+      const productsText = `${itemsCount} producto${itemsCount === 1 ? "" : "s"}`;
+      const orderTotal = this.tableOrderClientTotal(order);
+      const detailLines: string[] = [];
+
+      if (config.includeCustomerContact) {
+        detailLines.push(`WhatsApp: ${this.customerWhatsApp(order.customer_id)}`);
+      }
+      if (config.includeProductDetail) {
+        const detailEntries = this.buildRouteBitacoraDetailEntries(order, config.includeProductPrices);
+        if (detailEntries.length > 0) {
+          detailLines.push(...this.wrapPdfEntries(detailEntries, fontRegular, 7.6, detailMaxWidth));
+        }
+      }
+
+      const detailBlockHeight = detailLines.length > 0 ? (detailLines.length * 9) + 3 : 0;
+      const rowHeight = 24 + detailBlockHeight;
+      routeGrandTotal += orderTotal;
+
+      ensureSpace(rowHeight + 2);
+      const rowTop = y;
+      const rowBottom = rowTop - rowHeight;
+      const textY = rowTop - 16;
+      const checkboxY = rowTop - ((24 + checkboxSize) / 2);
+
+      page.drawRectangle({
+        x: checkboxX,
+        y: checkboxY,
+        width: checkboxSize,
+        height: checkboxSize,
+        borderWidth: 0.8,
+        borderColor: rgb(0.72, 0.78, 0.86),
+        color: rgb(1, 1, 1),
+      });
+      page.drawText(String(index + 1), {
+        x: indexX,
+        y: textY,
+        size: 8.6,
+        font: fontRegular,
+        color: rgb(0.47, 0.56, 0.67),
+      });
+      page.drawText(customerCompact, {
+        x: customerX,
+        y: textY,
+        size: 10.2,
+        font: fontBold,
+        color: rgb(0.1, 0.17, 0.27),
+      });
+      if (config.includeProductCount) {
+        const productsWidth = fontRegular.widthOfTextAtSize(productsText, 8.2);
+        page.drawText(productsText, {
+          x: productsColRight - productsWidth,
+          y: textY + 0.6,
+          size: 8.2,
+          font: fontRegular,
+          color: rgb(0.52, 0.59, 0.69),
+        });
+      }
+      drawRightAlignedText(this.formatCurrency(orderTotal), textY, 10, fontBold);
+
+      if (detailLines.length > 0) {
+        let detailY = textY - 9;
+        for (const line of detailLines) {
+          page.drawText(this.truncatePdfText(line, fontRegular, 7.6, detailMaxWidth), {
+            x: customerX + 2,
+            y: detailY,
+            size: 7.6,
+            font: fontRegular,
+            color: rgb(0.46, 0.54, 0.64),
+          });
+          detailY -= 9;
+        }
+      }
+
+      page.drawLine({
+        start: { x: marginX, y: rowBottom },
+        end: { x: pageWidth - marginX, y: rowBottom },
+        thickness: 0.6,
+        color: rgb(0.9, 0.92, 0.95),
+      });
+      y = rowBottom;
+    }
+
+    ensureSpace(34);
+    page.drawLine({
+      start: { x: marginX, y },
+      end: { x: pageWidth - marginX, y },
+      thickness: 0.9,
+      color: rgb(0.78, 0.83, 0.9),
+    });
+    y -= 18;
+    drawRightAlignedText(`Total: ${this.formatCurrency(routeGrandTotal)}`, y, 13, fontBold, rgb(0.08, 0.35, 0.2));
+
+    const bytes = await pdfDoc.save();
+    const safeBytes = new Uint8Array(bytes);
+    return new Blob([safeBytes], { type: "application/pdf" });
+  }
+
+  private customerWhatsApp(customerId: string): string {
+    const value = (this.customers.getById(customerId)?.whatsapp || "").trim();
+    return value || "sin dato";
+  }
+
+  private buildRouteBitacoraDetailEntries(order: Order, includePrices: boolean): string[] {
+    const chunks: string[] = [];
+    for (const item of order.items || []) {
+      if (["cancelado", "devuelto"].includes(item.state)) continue;
+      const qtyRaw = Number(item.quantity ?? 0);
+      const qty = Number.isFinite(qtyRaw) && qtyRaw > 0 ? Math.max(1, Math.trunc(qtyRaw)) : 1;
+      const title = (item.title || "Producto sin nombre").trim();
+      const base = `${qty}x ${title}`;
+      if (includePrices) {
+        const unitRaw = Number(item.price_clienta ?? item.price_public ?? 0);
+        const unit = Number.isFinite(unitRaw) && unitRaw > 0 ? unitRaw : 0;
+        chunks.push(unit > 0 ? `${base} (${this.formatCurrency(unit)} c/u)` : base);
+      } else {
+        chunks.push(base);
+      }
+    }
+    return chunks;
+  }
+
+  private wrapPdfEntries(entries: string[], font: PDFFont, size: number, maxWidth: number): string[] {
+    const normalizedEntries = entries.map((entry) => entry.trim()).filter(Boolean);
+    if (normalizedEntries.length === 0) return [];
+    const lines: string[] = [];
+    let current = "";
+    for (const entry of normalizedEntries) {
+      const candidate = current ? `${current}, ${entry}` : entry;
+      if (font.widthOfTextAtSize(candidate, size) <= maxWidth) {
+        current = candidate;
+        continue;
+      }
+
+      if (!current) {
+        lines.push(this.truncatePdfText(entry, font, size, maxWidth));
+      } else {
+        lines.push(current);
+        if (font.widthOfTextAtSize(entry, size) <= maxWidth) {
+          current = entry;
+        } else {
+          lines.push(this.truncatePdfText(entry, font, size, maxWidth));
+          current = "";
+        }
+      }
+    }
+
+    if (current) {
+      lines.push(current);
+    }
+    return lines;
+  }
+
+  private routeBitacoraItemsCount(order: Order): number {
+    let total = 0;
+    for (const item of order.items || []) {
+      if (["cancelado", "devuelto"].includes(item.state)) continue;
+      const qtyRaw = Number(item.quantity ?? 0);
+      const qty = Number.isFinite(qtyRaw) && qtyRaw > 0 ? Math.max(1, Math.trunc(qtyRaw)) : 1;
+      total += qty;
+    }
+    return total;
+  }
+
+  private truncatePdfText(value: string, font: PDFFont, size: number, maxWidth: number): string {
+    const normalized = (value || "").trim();
+    if (!normalized) return "";
+    if (font.widthOfTextAtSize(normalized, size) <= maxWidth) return normalized;
+    let current = normalized;
+    while (current.length > 0 && font.widthOfTextAtSize(`${current}...`, size) > maxWidth) {
+      current = current.slice(0, -1);
+    }
+    return current ? `${current}...` : "...";
+  }
+
+  private slugifyForFileName(value: string): string {
+    const base = String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    return base || "sin-ruta";
   }
 
   private async buildSalesNoteImage(order: Order, rows: SalesNoteRow[]): Promise<Blob> {
