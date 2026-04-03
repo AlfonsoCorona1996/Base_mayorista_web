@@ -41,6 +41,18 @@ export const routes: Routes = [
         loadComponent: () => import("./features/inbox/inbox").then((m) => m.default),
       },
       {
+        path: "chats",
+        canActivate: [permissionGuard],
+        data: { permission: "validacion" },
+        loadComponent: () => import("./features/chats/chats-page.component").then((m) => m.default),
+      },
+      {
+        path: "chats/:chatId",
+        canActivate: [permissionGuard],
+        data: { permission: "validacion" },
+        loadComponent: () => import("./features/chats/chats-page.component").then((m) => m.default),
+      },
+      {
         path: "catalogo/:id",
         canActivate: [permissionGuard],
         data: { permission: "catalogo" },

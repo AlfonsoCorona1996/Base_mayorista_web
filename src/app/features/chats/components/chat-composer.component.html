@@ -1,0 +1,37 @@
+<div class="chat-composer" [class.is-disabled]="disabled() || !windowOpen()">
+  @if (!windowOpen()) {
+    <div class="chat-composer__notice">
+      <span class="material-symbols-rounded" aria-hidden="true">lock_clock</span>
+      <p>{{ windowClosedHint() }}</p>
+    </div>
+  }
+
+  <div class="chat-composer__box">
+    <textarea
+      class="chat-composer__input"
+      rows="2"
+      placeholder="Escribe tu respuesta..."
+      [value]="draft()"
+      [disabled]="disabled() || !windowOpen()"
+      (input)="onDraftChange($event)"
+      (keydown)="onKeydown($event)"
+    ></textarea>
+    <button
+      type="button"
+      class="chat-composer__send"
+      [disabled]="!canSend()"
+      (click)="onSubmit()"
+    >
+      @if (sending()) {
+        <span class="chat-composer__sending">Enviando...</span>
+      } @else {
+        <span class="material-symbols-rounded" aria-hidden="true">send</span>
+        <span>Enviar</span>
+      }
+    </button>
+  </div>
+
+  @if (sendError()) {
+    <p class="chat-composer__error">{{ sendError() }}</p>
+  }
+</div>

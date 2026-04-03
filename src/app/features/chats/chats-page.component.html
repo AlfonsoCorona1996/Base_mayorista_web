@@ -1,0 +1,44 @@
+<section class="chats-page">
+  @if (showListPane()) {
+    <aside class="chats-page__list-pane" [class.is-hidden-mobile]="!isDesktop() && !!routeChatId()">
+      <app-wa-template-policy-panel class="chats-page__policy-panel" />
+      <app-chat-list
+        [chats]="chats.filteredChats()"
+        [selectedChatId]="chats.selectedChatId()"
+        [loading]="chats.listLoading()"
+        [error]="chats.listError()"
+        [totalChats]="chats.chats().length"
+        [activeFilter]="chats.activeFilter()"
+        [searchTerm]="chats.searchTerm()"
+        [filterCounts]="chats.filterCounts()"
+        (searchTermChanged)="onSearchTermChange($event)"
+        (filterChanged)="onFilterChange($event)"
+        (refreshRequested)="onRefreshList()"
+        (chatSelected)="onSelectChat($event)"
+      />
+    </aside>
+  }
+
+  @if (showDetailPane()) {
+    <section class="chats-page__detail-pane">
+      <app-chat-detail
+        [chat]="chats.selectedChat()"
+        [messages]="chats.selectedMessages()"
+        [loading]="chats.detailLoading()"
+        [messagesLoading]="chats.messagesLoading()"
+        [detailError]="chats.detailError()"
+        [messagesError]="chats.messagesError()"
+        [sending]="chats.sendLoading()"
+        [sendError]="chats.sendError()"
+        [isMobile]="isMobileDetail()"
+        [canReply]="chats.canReplyInSelectedChat()"
+        [windowClosedHint]="chats.windowClosedHint"
+        [sendMessageFn]="sendMessageFn"
+        (backRequested)="onBackToList()"
+        (refreshRequested)="onRefreshDetail()"
+        (markReadRequested)="onMarkRead()"
+        (closeRequested)="onCloseChat()"
+      />
+    </section>
+  }
+</section>

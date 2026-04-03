@@ -28,10 +28,16 @@
             <span>Dashboard</span>
           </a>
           }
-                    @if (can('validacion')) {
+          @if (can('validacion')) {
           <a routerLink="/main/validacion" routerLinkActive="active" (click)="closeMenu()">
             <span class="menu-item-icon material-symbols-rounded" aria-hidden="true">fact_check</span>
             <span>Validacion</span>
+          </a>
+          }
+          @if (can('validacion')) {
+          <a routerLink="/main/chats" routerLinkActive="active" (click)="closeMenu()">
+            <span class="menu-item-icon material-symbols-rounded" aria-hidden="true">chat</span>
+            <span>Chats</span>
           </a>
           }
           @if (can('pedidos')) {

@@ -1,0 +1,65 @@
+<div class="chat-message-list">
+  @if (loading()) {
+    <div class="chat-message-list__skeletons">
+      @for (item of skeletonRows; track item) {
+        <div class="chat-message-list__skeleton" [class.is-outbound]="item % 2 === 1"></div>
+      }
+    </div>
+  } @else if (error()) {
+    <div class="chat-message-list__error">
+      <span class="material-symbols-rounded" aria-hidden="true">warning</span>
+      <p>{{ error() }}</p>
+    </div>
+  } @else if (messages().length === 0) {
+    <div class="chat-message-list__empty">
+      <span class="material-symbols-rounded" aria-hidden="true">chat</span>
+      <p>Aún no hay mensajes en esta conversación.</p>
+    </div>
+  } @else {
+    <ol class="chat-message-list__items">
+      @for (message of messages(); track trackById($index, message)) {
+        <li class="chat-message-list__row" [class.is-outbound]="isOutbound(message)">
+          <article class="chat-message-list__bubble" [class.is-failed]="isFailed(message)">
+            @if (message.type === "template") {
+              <span class="chat-message-list__tag">template</span>
+            }
+
+            @if (message.type === "image") {
+              @if (message.media?.url) {
+                <img
+                  class="chat-message-list__image"
+                  [src]="message.media?.url"
+                  alt="Imagen enviada por chat"
+                  loading="lazy"
+                />
+              } @else {
+                <div class="chat-message-list__image chat-message-list__image--placeholder">
+                  <span class="material-symbols-rounded" aria-hidden="true">image</span>
+                  <span>Imagen</span>
+                </div>
+              }
+            }
+
+            @if (message.text) {
+              <p class="chat-message-list__text">{{ message.text }}</p>
+            }
+            @if (message.caption) {
+              <p class="chat-message-list__caption">{{ message.caption }}</p>
+            }
+
+            <footer class="chat-message-list__meta">
+              <span>{{ timestampLabel(message) }}</span>
+              @if (isOutbound(message)) {
+                <span class="chat-message-list__status">{{ statusLabel(message) }}</span>
+              }
+            </footer>
+
+            @if (isFailed(message) && message.metaStatusDetails) {
+              <p class="chat-message-list__fail-reason">{{ message.metaStatusDetails }}</p>
+            }
+          </article>
+        </li>
+      }
+    </ol>
+  }
+</div>

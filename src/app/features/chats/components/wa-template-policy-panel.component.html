@@ -1,0 +1,116 @@
+<article class="wa-policy-panel">
+  <header class="wa-policy-panel__header">
+    <div>
+      <p class="wa-policy-panel__eyebrow">WhatsApp Operacion</p>
+      <h3>Politica de plantillas (sales_note)</h3>
+      <p>Define modo de envio, plantilla activa y fallback para fuera de ventana.</p>
+    </div>
+    <div class="wa-policy-panel__actions">
+      <button type="button" class="btn ghost" [disabled]="loading() || syncing()" (click)="reload()">
+        {{ loading() ? "Cargando..." : "Recargar" }}
+      </button>
+      <button type="button" class="btn ghost" [disabled]="loading() || syncing()" (click)="syncTemplates()">
+        {{ syncing() ? "Sincronizando..." : "Sync Meta" }}
+      </button>
+    </div>
+  </header>
+
+  @if (error()) {
+    <p class="wa-policy-panel__error">{{ error() }}</p>
+  }
+  @if (success()) {
+    <p class="wa-policy-panel__success">{{ success() }}</p>
+  }
+
+  <form class="wa-policy-panel__form" (submit)="$event.preventDefault(); savePolicy()">
+    <label>
+      Modo de envio
+      <select [ngModel]="sendMode()" (ngModelChange)="setSendMode($event)" name="wa_send_mode">
+        <option value="auto">auto (libre en ventana + template fuera)</option>
+        <option value="template_only">template_only (siempre plantilla)</option>
+        <option value="free_only">free_only (solo libre en ventana)</option>
+      </select>
+    </label>
+
+    <label class="wa-policy-panel__checkbox">
+      <input type="checkbox" [ngModel]="active()" (ngModelChange)="setActive($event)" name="wa_policy_active" />
+      Politica activa
+    </label>
+
+    <label>
+      Plantilla activa
+      <select
+        [ngModel]="activeTemplateKey()"
+        (ngModelChange)="setActiveTemplateKey($event)"
+        name="wa_active_template_key"
+      >
+        <option value="">(sin plantilla)</option>
+        @for (option of templateOptions(); track trackTemplate($index, option)) {
+          <option [value]="option.key">{{ option.label }}{{ option.status ? " - " + option.status : "" }}</option>
+        }
+      </select>
+    </label>
+
+    <label>
+      Plantilla fallback
+      <select
+        [ngModel]="fallbackTemplateKey()"
+        (ngModelChange)="setFallbackTemplateKey($event)"
+        name="wa_fallback_template_key"
+      >
+        <option value="">(sin plantilla)</option>
+        @for (option of templateOptions(); track trackTemplate($index, option)) {
+          <option [value]="option.key">{{ option.label }}{{ option.status ? " - " + option.status : "" }}</option>
+        }
+      </select>
+    </label>
+
+    <label class="wa-policy-panel__full">
+      Notas internas
+      <textarea
+        rows="2"
+        [ngModel]="notes()"
+        (ngModelChange)="setNotes($event)"
+        name="wa_policy_notes"
+        placeholder="Ejemplo: usar template_only en campañas nocturnas"
+      ></textarea>
+    </label>
+
+    <div class="wa-policy-panel__actions">
+      <button type="submit" class="btn primary" [disabled]="saving() || !hasUnsavedChanges()">
+        {{ saving() ? "Guardando..." : "Guardar politica" }}
+      </button>
+    </div>
+  </form>
+
+  <section class="wa-policy-panel__attempts">
+    <h4>Consultar intento de envio</h4>
+    <p>Usa el <code>attempt_id</code> para ver estado real y traza.</p>
+    <div class="wa-policy-panel__attempt-row">
+      <input
+        type="text"
+        [ngModel]="attemptIdInput()"
+        (ngModelChange)="setAttemptIdInput($event)"
+        name="attempt_id_lookup"
+        placeholder="UUID de attempt_id"
+      />
+      <button type="button" class="btn ghost" [disabled]="attemptLoading()" (click)="fetchAttempt()">
+        {{ attemptLoading() ? "Consultando..." : "Consultar" }}
+      </button>
+    </div>
+
+    @if (attemptError()) {
+      <p class="wa-policy-panel__error">{{ attemptError() }}</p>
+    }
+
+    @if (attempt(); as row) {
+      <div class="wa-policy-panel__attempt-summary">
+        <span><strong>Estado:</strong> {{ row.state }}</span>
+        <span><strong>Meta status:</strong> {{ row.lastMetaStatus || "n/a" }}</span>
+        <span><strong>Message ID:</strong> {{ row.messageId || "n/a" }}</span>
+      </div>
+      <pre>{{ attemptJson() }}</pre>
+    }
+  </section>
+</article>
+

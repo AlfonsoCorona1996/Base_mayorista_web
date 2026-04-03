@@ -4576,6 +4576,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       this.assertWaSendAccepted(response);
       const sendResult = response as Record<string, unknown>;
       const statusQueryPath = this.resolveWaStatusQueryPath(sendResult);
+      const attemptId = this.resolveWaAttemptId(sendResult);
       const immediateMsg = this.resolveWaAcceptedMessage(sendResult);
 
       this.logWaSendSupport({
@@ -4583,6 +4584,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         orderId: order.order_id,
         status: 200,
         reason: String(sendResult["delivery_mode"] || "accepted_by_meta"),
+        attemptId,
       });
       this.setWaNoteStatus(true, immediateMsg, statusQueryPath ? 0 : 7000);
       this.showActionToast(immediateMsg);
@@ -4600,6 +4602,11 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
   private resolveWaStatusQueryPath(payload: Record<string, unknown>): string | null {
     const raw = typeof payload["status_query_path"] === "string" ? payload["status_query_path"].trim() : "";
+    return raw || null;
+  }
+
+  private resolveWaAttemptId(payload: Record<string, unknown>): string | null {
+    const raw = typeof payload["attempt_id"] === "string" ? payload["attempt_id"].trim() : "";
     return raw || null;
   }
 
@@ -4800,6 +4807,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       (typeof payload?.["reason"] === "string" ? payload["reason"] : null) ||
       (typeof payload?.["code"] === "string" ? payload["code"] : null) ||
       null;
+    const attemptId =
+      typeof payload?.["attempt_id"] === "string" ? String(payload["attempt_id"]).trim() : null;
     const backendMessage = this.extractWaSendMessage(payload || {});
 
     this.logWaSendSupport({
@@ -4807,6 +4816,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       orderId,
       status,
       reason,
+      attemptId,
     });
 
     if (status === 401) {
@@ -4818,6 +4828,9 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       return { message: backendMessage || "Solicitud inválida. Revisa los datos de la nota.", isNetwork: false };
     }
     if (status === 422) {
+      return { message: this.mapWaBusinessReason(reason, backendMessage), isNetwork: false };
+    }
+    if (status === 409) {
       return { message: this.mapWaBusinessReason(reason, backendMessage), isNetwork: false };
     }
     if (status !== null && status >= 500) {
@@ -4836,6 +4849,9 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     if (normalized === "no_phone") return "La clienta no tiene WhatsApp registrado.";
     if (normalized === "customer_not_found") return "No se encontró la clienta.";
     if (normalized === "opted_out") return "La clienta no tiene notificaciones activadas.";
+    if (normalized === "window_closed_template_required" || normalized === "window_closed") {
+      return "La ventana de 24 horas está cerrada. Debes usar una plantilla.";
+    }
     return backendMessage || "No se pudo enviar la nota por WhatsApp.";
   }
 
@@ -4844,12 +4860,14 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     orderId: string;
     status: number | null;
     reason: string | null;
+    attemptId?: string | null;
   }): void {
     console.info("[WA_NOTE_SEND]", {
       customer_id: input.customerId,
       order_id: input.orderId,
       status: input.status,
       reason: input.reason,
+      attempt_id: input.attemptId || null,
     });
   }
 

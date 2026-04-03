@@ -1,0 +1,76 @@
+<section class="chat-list-panel">
+  <header class="chat-list-panel__header">
+    <div>
+      <p class="chat-list-panel__eyebrow">Inbox WhatsApp</p>
+      <h1 class="chat-list-panel__title">Chats</h1>
+    </div>
+    <button type="button" class="chat-list-panel__refresh" (click)="onRefresh()" [disabled]="loading()">
+      <span class="material-symbols-rounded" aria-hidden="true">refresh</span>
+      <span>Actualizar</span>
+    </button>
+  </header>
+
+  <div class="chat-list-panel__search-wrap">
+    <span class="material-symbols-rounded" aria-hidden="true">search</span>
+    <input
+      type="search"
+      class="chat-list-panel__search"
+      placeholder="Buscar por clienta, número o mensaje"
+      [value]="searchTerm()"
+      (input)="onSearch($event)"
+    />
+  </div>
+
+  <div class="chat-list-panel__filters" role="tablist" aria-label="Filtros de chats">
+    @for (filter of filters; track filter.id) {
+      <button
+        type="button"
+        class="chat-list-panel__filter"
+        [class.is-active]="isFilterActive(filter.id)"
+        (click)="onFilterChange(filter.id)"
+      >
+        <span>{{ filter.label }}</span>
+        <span class="chat-list-panel__filter-count">{{ filterCount(filter.id) }}</span>
+      </button>
+    }
+  </div>
+
+  @if (error()) {
+    <div class="chat-list-panel__error">
+      <span class="material-symbols-rounded" aria-hidden="true">warning</span>
+      <p>{{ error() }}</p>
+    </div>
+  }
+
+  <div class="chat-list-panel__body">
+    @if (loading() && totalChats() === 0) {
+      <div class="chat-list-panel__skeletons">
+        @for (item of skeletonRows; track item) {
+          <div class="chat-list-panel__skeleton"></div>
+        }
+      </div>
+    } @else if (!loading() && totalChats() === 0) {
+      <div class="chat-list-panel__empty">
+        <span class="material-symbols-rounded" aria-hidden="true">chat_bubble</span>
+        <h2>No hay chats</h2>
+        <p>Cuando lleguen conversaciones de WhatsApp aparecerán aquí.</p>
+      </div>
+    } @else if (!loading() && chats().length === 0) {
+      <div class="chat-list-panel__empty">
+        <span class="material-symbols-rounded" aria-hidden="true">search_off</span>
+        <h2>Sin resultados</h2>
+        <p>No encontramos chats con ese criterio de búsqueda.</p>
+      </div>
+    } @else {
+      <div class="chat-list-panel__items">
+        @for (chat of chats(); track trackByChatId($index, chat)) {
+          <app-chat-list-item
+            [chat]="chat"
+            [selected]="selectedChatId() === chat.chatId"
+            (openRequested)="onSelectChat($event)"
+          />
+        }
+      </div>
+    }
+  </div>
+</section>

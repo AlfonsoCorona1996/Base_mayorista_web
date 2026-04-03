@@ -1,0 +1,43 @@
+:host {
+  display: block;
+  min-height: 100%;
+}
+
+.chats-page {
+  --chats-topbar-height: calc(58px + env(safe-area-inset-top, 0px));
+  min-height: calc(100vh - var(--chats-topbar-height));
+  padding: 12px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  background: radial-gradient(circle at 15% -20%, #ffffff 0%, transparent 45%), #eef3f9;
+}
+
+.chats-page__list-pane,
+.chats-page__detail-pane {
+  min-height: 0;
+}
+
+.chats-page__list-pane {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.chats-page__policy-panel {
+  width: 100%;
+}
+
+@media (min-width: 960px) {
+  .chats-page {
+    grid-template-columns: minmax(320px, 390px) minmax(0, 1fr);
+    gap: 14px;
+    padding: 14px;
+  }
+}
+
+@media (max-width: 959px) {
+  .chats-page {
+    min-height: calc(100vh - var(--chats-topbar-height));
+  }
+}

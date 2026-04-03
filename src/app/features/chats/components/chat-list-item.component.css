@@ -1,0 +1,163 @@
+:host {
+  display: block;
+}
+
+.chat-list-item {
+  width: 100%;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 18px;
+  background: #ffffff;
+  padding: 12px;
+  text-align: left;
+  display: grid;
+  gap: 9px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.chat-list-item:hover {
+  border-color: rgba(23, 108, 214, 0.26);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.1);
+  transform: translateY(-1px);
+}
+
+.chat-list-item.is-selected {
+  border-color: rgba(23, 108, 214, 0.4);
+  box-shadow: 0 12px 28px rgba(23, 108, 214, 0.2);
+  background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+}
+
+.chat-list-item__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.chat-list-item__name {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 680;
+  color: #0f172a;
+  line-height: 1.2;
+}
+
+.chat-list-item__top-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.chat-list-item__time {
+  color: #607088;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.chat-list-item__unread {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #1674e0;
+  color: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.chat-list-item__preview {
+  margin: 0;
+  color: #46566d;
+  font-size: 0.83rem;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.chat-list-item__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chat-list-item__status,
+.chat-list-item__chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  border-radius: 999px;
+  padding: 0 8px;
+  font-size: 0.7rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+
+.chat-list-item__status {
+  border: 1px solid transparent;
+}
+
+.status-new {
+  color: #235e99;
+  background: #e8f3ff;
+  border-color: #c9e3ff;
+}
+
+.status-pending {
+  color: #834e04;
+  background: #fff4df;
+  border-color: #f3d9ab;
+}
+
+.status-waiting {
+  color: #3f556e;
+  background: #edf3fa;
+  border-color: #d6e1ee;
+}
+
+.status-closed {
+  color: #6d5a49;
+  background: #f7efe4;
+  border-color: #e9d8c4;
+}
+
+.chat-list-item__chip {
+  border: 1px solid #d8e2ee;
+  background: #f6f9fc;
+  color: #54667f;
+}
+
+.chip-pending {
+  border-color: #f0d7ab;
+  color: #85530f;
+  background: #fff7e8;
+}
+
+.chip-failed {
+  border-color: #f2b2b2;
+  color: #a11818;
+  background: #fff2f2;
+}
+
+.chip-window-open {
+  border-color: #c5e6cf;
+  color: #1d6b30;
+  background: #f1fbf3;
+}
+
+.chip-window-closed {
+  border-color: #ecd0a8;
+  color: #8c4e05;
+  background: #fff7ec;
+}
+
+.chip-note {
+  border-color: #d8ccff;
+  color: #55438d;
+  background: #f4f1ff;
+}

@@ -1,0 +1,39 @@
+<button
+  type="button"
+  class="chat-list-item"
+  [class.is-selected]="selected()"
+  (click)="onOpen()"
+  [attr.aria-label]="'Abrir chat de ' + displayName()"
+>
+  <div class="chat-list-item__top">
+    <p class="chat-list-item__name">{{ displayName() }}</p>
+    <div class="chat-list-item__top-meta">
+      @if (activityLabel()) {
+        <span class="chat-list-item__time">{{ activityLabel() }}</span>
+      }
+      @if (chat().unreadCount > 0) {
+        <span class="chat-list-item__unread">{{ chat().unreadCount }}</span>
+      }
+    </div>
+  </div>
+
+  <p class="chat-list-item__preview">{{ preview() }}</p>
+
+  <div class="chat-list-item__chips">
+    <span class="chat-list-item__status" [class]="statusClass(chat().status)">
+      {{ statusLabel(chat().status) }}
+    </span>
+    @if (hasPending()) {
+      <span class="chat-list-item__chip chip-pending">Pendiente</span>
+    }
+    @if (hasFailures()) {
+      <span class="chat-list-item__chip chip-failed">Error</span>
+    }
+    <span class="chat-list-item__chip" [class.chip-window-open]="chat().isWindowOpen" [class.chip-window-closed]="!chat().isWindowOpen">
+      {{ chat().isWindowOpen ? "24h abierta" : "24h cerrada" }}
+    </span>
+    @if (chat().pendingSalesNote) {
+      <span class="chat-list-item__chip chip-note">Nota pendiente</span>
+    }
+  </div>
+</button>
