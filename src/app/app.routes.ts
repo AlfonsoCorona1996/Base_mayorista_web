@@ -148,6 +148,12 @@ export const routes: Routes = [
         loadComponent: () => import("./features/administracion/administracion").then((m) => m.default),
       },
       {
+        path: "wa-bot",
+        canActivate: [permissionGuard],
+        data: { permission: "administracion" },
+        loadComponent: () => import("./features/wa-bot/wa-bot-routing").then((m) => m.default),
+      },
+      {
         path: "proveedores-operaciones",
         canActivate: [permissionGuard],
         data: { permission: "pedidos" },

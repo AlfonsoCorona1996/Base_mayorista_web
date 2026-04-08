@@ -1,0 +1,181 @@
+:host {
+  display: block;
+}
+
+.wa-bot-page {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.page-header h1 {
+  margin: 0;
+  font-size: 1.3rem;
+}
+
+.page-header p {
+  margin: 0.3rem 0 0;
+  color: #4a4a4a;
+}
+
+.card {
+  border: 1px solid #e4e6eb;
+  border-radius: 12px;
+  background: #fff;
+  padding: 1rem;
+  display: grid;
+  gap: 0.9rem;
+}
+
+.card h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.8rem;
+}
+
+.field {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.field span {
+  font-size: 0.85rem;
+  color: #474f5a;
+}
+
+.field input,
+.field select,
+.field textarea {
+  border: 1px solid #cfd6df;
+  border-radius: 8px;
+  padding: 0.55rem 0.65rem;
+  font: inherit;
+}
+
+.field.full {
+  grid-column: 1 / -1;
+}
+
+.mode-help {
+  display: grid;
+  gap: 0.2rem;
+  font-size: 0.85rem;
+  color: #475569;
+}
+
+.mode-help p {
+  margin: 0;
+}
+
+.btn {
+  border: 1px solid #1757d7;
+  background: #1757d7;
+  color: #fff;
+  border-radius: 8px;
+  padding: 0.55rem 0.9rem;
+  font: inherit;
+  cursor: pointer;
+  width: fit-content;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn.ghost {
+  border-color: #cdd6e4;
+  background: #fff;
+  color: #213547;
+}
+
+.btn.small {
+  padding: 0.4rem 0.65rem;
+  font-size: 0.85rem;
+}
+
+.btn.danger {
+  border-color: #c62828;
+  background: #c62828;
+}
+
+.feedback {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+.feedback.error {
+  background: #ffe6e6;
+  color: #7f1d1d;
+  border: 1px solid #f5bcbc;
+}
+
+.feedback.success {
+  background: #e8f6ee;
+  color: #14532d;
+  border: 1px solid #b7e3c9;
+}
+
+.table-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.inline-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.table-wrap {
+  width: 100%;
+  overflow: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  border-bottom: 1px solid #eef1f5;
+  padding: 0.6rem 0.4rem;
+  text-align: left;
+  vertical-align: middle;
+  font-size: 0.9rem;
+}
+
+tbody tr.inactive {
+  opacity: 0.55;
+}
+
+.summary {
+  margin: 0;
+  color: #516070;
+  font-size: 0.88rem;
+}
+
+@media (max-width: 900px) {
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

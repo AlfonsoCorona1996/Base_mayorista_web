@@ -1,0 +1,179 @@
+<section class="wa-bot-page">
+  <header class="page-header">
+    <div>
+      <h1>Bot WhatsApp</h1>
+      <p>
+        Administra qué números entran a modo registro de producto y cuáles van a atención de clienta.
+      </p>
+    </div>
+    <button type="button" class="btn ghost" (click)="reload()" [disabled]="loading() || saving()">
+      Recargar
+    </button>
+  </header>
+
+  @if (error()) {
+    <p class="feedback error">{{ error() }}</p>
+  }
+  @if (success()) {
+    <p class="feedback success">{{ success() }}</p>
+  }
+
+  <article class="card">
+    <h2>Configuración general</h2>
+    <label class="field">
+      <span>Modo por defecto para números sin regla</span>
+      <select
+        [ngModel]="settings().default_mode"
+        (ngModelChange)="onDefaultModeChange($event)"
+      >
+        @for (item of modeOptions; track item.value) {
+          <option [value]="item.value">{{ item.label }}</option>
+        }
+      </select>
+    </label>
+    <button type="button" class="btn" (click)="saveSettings()" [disabled]="saving() || loading()">
+      Guardar configuración
+    </button>
+  </article>
+
+  <article class="card">
+    <h2>Alta rápida de número</h2>
+
+    <div class="grid">
+      <label class="field">
+        <span>Número WhatsApp</span>
+        <input
+          type="text"
+          [ngModel]="draftWaId()"
+          (ngModelChange)="draftWaId.set($event)"
+          placeholder="Ej: +52 5512345678"
+        />
+      </label>
+
+      <label class="field">
+        <span>Modo</span>
+        <select [ngModel]="draftMode()" (ngModelChange)="draftMode.set($event)">
+          @for (item of modeOptions; track item.value) {
+            <option [value]="item.value">{{ item.label }}</option>
+          }
+        </select>
+      </label>
+
+      <label class="field">
+        <span>Activo</span>
+        <select [ngModel]="draftActive()" (ngModelChange)="draftActive.set($event)">
+          <option [ngValue]="true">Sí</option>
+          <option [ngValue]="false">No</option>
+        </select>
+      </label>
+
+      <label class="field">
+        <span>Etiqueta</span>
+        <input
+          type="text"
+          [ngModel]="draftLabel()"
+          (ngModelChange)="draftLabel.set($event)"
+          placeholder="Proveedor Frodam"
+        />
+      </label>
+
+      <label class="field full">
+        <span>Notas</span>
+        <textarea
+          rows="2"
+          [ngModel]="draftNotes()"
+          (ngModelChange)="draftNotes.set($event)"
+          placeholder="Contexto interno opcional"
+        ></textarea>
+      </label>
+    </div>
+
+    <div class="mode-help">
+      @for (item of modeOptions; track item.value) {
+        <p><strong>{{ item.label }}:</strong> {{ item.helper }}</p>
+      }
+    </div>
+
+    <button type="button" class="btn" (click)="saveDraft()" [disabled]="saving() || loading()">
+      Guardar número
+    </button>
+  </article>
+
+  <article class="card">
+    <div class="table-header">
+      <h2>Números configurados</h2>
+      <label class="inline-switch">
+        <input
+          type="checkbox"
+          [ngModel]="includeInactive()"
+          (ngModelChange)="toggleIncludeInactive($event)"
+        />
+        Ver inactivos
+      </label>
+    </div>
+
+    @if (loading()) {
+      <p>Cargando...</p>
+    } @else if (rows().length === 0) {
+      <p>No hay números configurados todavía.</p>
+    } @else {
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Número</th>
+              <th>Modo</th>
+              <th>Activo</th>
+              <th>Etiqueta</th>
+              <th>Notas</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of rows(); track row.wa_id) {
+              <tr [class.inactive]="!row.active">
+                <td>+{{ row.wa_id }}</td>
+                <td>
+                  <select
+                    [ngModel]="row.mode"
+                    (ngModelChange)="updateMode(row, $event)"
+                    [disabled]="saving()"
+                  >
+                    @for (item of modeOptions; track item.value) {
+                      <option [value]="item.value">{{ item.label }}</option>
+                    }
+                  </select>
+                </td>
+                <td>
+                  <select
+                    [ngModel]="row.active"
+                    (ngModelChange)="toggleRowActive(row, $event)"
+                    [disabled]="saving()"
+                  >
+                    <option [ngValue]="true">Sí</option>
+                    <option [ngValue]="false">No</option>
+                  </select>
+                </td>
+                <td>{{ row.label || "-" }}</td>
+                <td>{{ row.notes || "-" }}</td>
+                <td>
+                  <button
+                    type="button"
+                    class="btn small danger"
+                    (click)="deactivateRow(row)"
+                    [disabled]="saving() || !row.active"
+                  >
+                    Desactivar
+                  </button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <p class="summary">
+        Activos: {{ activeRows().length }} · Inactivos: {{ inactiveRows().length }}
+      </p>
+    }
+  </article>
+</section>

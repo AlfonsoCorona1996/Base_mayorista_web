@@ -122,6 +122,7 @@ export interface OrderTotals {
   total_amount: number;
   paid_amount: number;
   balance_due: number;
+  discount_amount?: number;
 }
 
 export interface Order {
@@ -576,9 +577,10 @@ export class OrdersService {
   }
 
   /** Cierra el pedido registrando el pago total o parcial. */
-  async closeWithPayment(orderId: string, paidAmount: number, totalAmount: number): Promise<void> {
+  async closeWithPayment(orderId: string, paidAmount: number, totalAmount: number, discountAmount = 0): Promise<void> {
     const safePaid = Math.max(0, Number.isFinite(paidAmount) ? paidAmount : 0);
     const safeTotal = Math.max(0, Number.isFinite(totalAmount) ? totalAmount : 0);
+    const safeDiscount = Math.max(0, Number.isFinite(discountAmount) ? discountAmount : 0);
     const balanceDue = Math.max(0, safeTotal - safePaid);
 
     let nextStatus: OrderStatus;
@@ -602,6 +604,7 @@ export class OrdersService {
             total_amount: safeTotal,
             paid_amount: safePaid,
             balance_due: balanceDue,
+            discount_amount: safeDiscount,
           },
           timeline: [
             ...order.timeline,
@@ -617,6 +620,30 @@ export class OrdersService {
       "totals.total_amount": safeTotal,
       "totals.paid_amount": safePaid,
       "totals.balance_due": balanceDue,
+      "totals.discount_amount": safeDiscount,
+    });
+  }
+
+  async setDiscountAmount(orderId: string, discountAmount: number): Promise<void> {
+    const safeDiscount = Math.max(0, Number.isFinite(discountAmount) ? discountAmount : 0);
+    const now = new Date().toISOString();
+    this.rows.update((current) =>
+      current.map((order) => {
+        if (order.order_id !== orderId) return order;
+        return {
+          ...order,
+          updated_at: now,
+          totals: {
+            ...order.totals,
+            discount_amount: safeDiscount,
+          },
+        };
+      }),
+    );
+
+    await updateDoc(doc(this.colRef, orderId), {
+      "totals.discount_amount": safeDiscount,
+      updated_at: serverTimestamp(),
     });
   }
 
@@ -1190,6 +1217,7 @@ export class OrdersService {
         total_amount: Number(data.totals?.total_amount ?? 0),
         paid_amount: Number(data.totals?.paid_amount ?? 0),
         balance_due: Number(data.totals?.balance_due ?? 0),
+        discount_amount: Number(data.totals?.discount_amount ?? 0),
       },
     };
   }

@@ -10,14 +10,14 @@
       <span class="material-symbols-rounded" aria-hidden="true">warning</span>
       <p>{{ error() }}</p>
     </div>
-  } @else if (messages().length === 0) {
+  } @else if (visibleMessages().length === 0) {
     <div class="chat-message-list__empty">
       <span class="material-symbols-rounded" aria-hidden="true">chat</span>
       <p>Aún no hay mensajes en esta conversación.</p>
     </div>
   } @else {
     <ol class="chat-message-list__items">
-      @for (message of messages(); track trackById($index, message)) {
+      @for (message of visibleMessages(); track trackById($index, message)) {
         <li class="chat-message-list__row" [class.is-outbound]="isOutbound(message)">
           <article class="chat-message-list__bubble" [class.is-failed]="isFailed(message)">
             @if (message.type === "template") {
@@ -40,10 +40,10 @@
               }
             }
 
-            @if (message.text) {
+            @if (hasRenderableText(message)) {
               <p class="chat-message-list__text">{{ message.text }}</p>
             }
-            @if (message.caption) {
+            @if (hasRenderableCaption(message)) {
               <p class="chat-message-list__caption">{{ message.caption }}</p>
             }
 

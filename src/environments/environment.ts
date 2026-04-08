@@ -3,6 +3,7 @@ export const environment = {
   // URL base del backend que expone /admin/users/*
   // Ejemplo: "https://api.tudominio.com"
   adminApiBaseUrl: "https://api.base-mayorista.com",
+  // adminApiBaseUrl: "http://localhost:3000",
   firebase:{
       apiKey: "AIzaSyBZhmiBbnywXaTW32VTaZFPPPzGNLJCXDo",
       authDomain: "base-mayorista.firebaseapp.com",

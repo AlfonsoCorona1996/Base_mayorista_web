@@ -1,18 +1,72 @@
 import { Component, ChangeDetectionStrategy, inject, OnInit, signal } from "@angular/core";
 import { RouterLink, Router } from "@angular/router";
 import { CurrencyPipe, DatePipe, NgClass } from "@angular/common";
+import { lastValueFrom } from "rxjs";
 import { SmartAlertsService, SmartAlert, AlertSeverity } from "../../core/smart-alerts.service";
 import { OrdersService } from "../../core/orders.service";
 import { CustomersService } from "../../core/customers.service";
 import { RoutesService } from "../../core/routes.service";
 import { RouteRunsService } from "../../services/route-runs.service";
 import { AuthzService } from "../../core/authz.service";
+import { UserAdminApiService } from "../../services/user-admin-api.service";
 
 interface AlertGroup {
   category: string;
   label: string;
   icon: string;
   alerts: SmartAlert[];
+}
+
+interface MarketInsightTopProduct {
+  title: string;
+  units: number;
+  orderCount: number;
+  revenue: number;
+}
+
+interface MarketInsightTopCategory {
+  category: string;
+  units: number;
+  orderCount: number;
+  revenue: number;
+}
+
+interface MarketInsightNiche {
+  niche: string;
+  rationale: string;
+  sampleProducts: string[];
+  demandSignal: string;
+  riskLevel: string;
+  firstAction: string;
+}
+
+interface MarketInsightsSnapshot {
+  generated_at: string;
+  window_days: number;
+  source: string | null;
+  model: string | null;
+  prompt_version: string | null;
+  ai_error?: {
+    name?: string | null;
+    message?: string | null;
+    code?: string | null;
+    status?: number | null;
+  } | null;
+  totals?: {
+    orders_considered?: number;
+    top_products_count?: number;
+    top_categories_count?: number;
+    active_customers?: number;
+  } | null;
+  top_products?: MarketInsightTopProduct[];
+  top_categories?: MarketInsightTopCategory[];
+  ai_insights?: {
+    summary?: string;
+    nicheIdeas?: MarketInsightNiche[];
+    crossSellIdeas?: string[];
+    watchouts?: string[];
+    next7DaysPlan?: string[];
+  } | null;
 }
 
 @Component({
@@ -31,6 +85,7 @@ export default class DashboardPage implements OnInit {
   private readonly routeRuns = inject(RouteRunsService);
   private readonly authz = inject(AuthzService);
   private readonly router = inject(Router);
+  private readonly api = inject(UserAdminApiService);
 
   readonly alerts = this.alertsSvc.allAlerts;
   readonly kpis = this.alertsSvc.kpis;
@@ -42,6 +97,10 @@ export default class DashboardPage implements OnInit {
   readonly skeletonAlertColumns = [0, 1];
   readonly skeletonAlertItems = [0, 1];
   readonly skeletonQuicklinks = [0, 1, 2, 3, 4, 5];
+  readonly marketInsightsLoading = signal(true);
+  readonly marketInsightsGenerating = signal(false);
+  readonly marketInsightsError = signal<string | null>(null);
+  readonly marketInsights = signal<MarketInsightsSnapshot | null>(null);
 
   dismissed = new Set<string>();
 
@@ -63,6 +122,7 @@ export default class DashboardPage implements OnInit {
         this.customersSvc.loadFromFirestore(),
         this.routesSvc.loadFromFirestore(),
       ]);
+      await this.loadMarketInsightsLatest();
     } finally {
       this.loading.set(false);
     }
@@ -95,6 +155,95 @@ export default class DashboardPage implements OnInit {
 
   now(): Date {
     return new Date();
+  }
+
+  marketInsightTopProducts(): MarketInsightTopProduct[] {
+    return (this.marketInsights()?.top_products || []).slice(0, 8);
+  }
+
+  marketInsightTopCategories(): MarketInsightTopCategory[] {
+    return (this.marketInsights()?.top_categories || []).slice(0, 8);
+  }
+
+  marketInsightNiches(): MarketInsightNiche[] {
+    return (this.marketInsights()?.ai_insights?.nicheIdeas || []).slice(0, 6);
+  }
+
+  marketInsightCrossSellIdeas(): string[] {
+    return (this.marketInsights()?.ai_insights?.crossSellIdeas || []).slice(0, 6);
+  }
+
+  marketInsightWatchouts(): string[] {
+    return (this.marketInsights()?.ai_insights?.watchouts || []).slice(0, 6);
+  }
+
+  marketInsightNext7Days(): string[] {
+    return (this.marketInsights()?.ai_insights?.next7DaysPlan || []).slice(0, 6);
+  }
+
+  marketInsightsSummary(): string {
+    return this.marketInsights()?.ai_insights?.summary || "Sin resumen disponible.";
+  }
+
+  marketInsightsGeneratedAt(): string | null {
+    return this.marketInsights()?.generated_at || null;
+  }
+
+  marketInsightsFallbackMessage(): string | null {
+    const snapshot = this.marketInsights();
+    if (!snapshot) return null;
+
+    const source = String(snapshot.source || "");
+    if (!source.startsWith("heuristic")) return null;
+
+    const code = String(snapshot.ai_error?.code || "").trim();
+    if (code === "UNABLE_TO_GET_ISSUER_CERT_LOCALLY") {
+      return "Analisis generado con datos internos. La conexion segura del servidor al proveedor de IA requiere ajustar certificados.";
+    }
+
+    return "Analisis generado con datos internos. El proveedor de IA no respondio en este intento.";
+  }
+
+  async generateMarketInsights(): Promise<void> {
+    if (this.marketInsightsGenerating()) return;
+
+    this.marketInsightsGenerating.set(true);
+    this.marketInsightsError.set(null);
+    try {
+      const response = await lastValueFrom(
+        this.api.post<{ ok?: boolean; snapshot?: MarketInsightsSnapshot | null }>("/api/admin/market-insights/generate", {
+          windowDays: 42,
+        }),
+      );
+      const snapshot = response?.snapshot || null;
+      this.marketInsights.set(snapshot);
+    } catch (err: any) {
+      this.marketInsightsError.set(
+        err?.error?.message || err?.message || "No se pudo generar el analisis comercial.",
+      );
+    } finally {
+      this.marketInsightsGenerating.set(false);
+      this.marketInsightsLoading.set(false);
+    }
+  }
+
+  private async loadMarketInsightsLatest(): Promise<void> {
+    this.marketInsightsLoading.set(true);
+    this.marketInsightsError.set(null);
+
+    try {
+      const response = await lastValueFrom(
+        this.api.get<{ ok?: boolean; snapshot?: MarketInsightsSnapshot | null }>("/api/admin/market-insights/latest"),
+      );
+      const snapshot = response?.snapshot || null;
+      this.marketInsights.set(snapshot);
+    } catch (err: any) {
+      this.marketInsightsError.set(
+        err?.error?.message || err?.message || "No se pudo cargar el analisis comercial.",
+      );
+    } finally {
+      this.marketInsightsLoading.set(false);
+    }
   }
 
   // ── Smart actions ────────────────────────────────────────────────────────

@@ -1067,6 +1067,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
       borrador: "Borrador",
       confirmando_proveedor: "Confirmando",
       en_transito: "En tránsito",
+      recibido_qa: "En transito",
       packing: "Empaque",
       empaque: "Empaque",
       ready_for_route: "Listo ruta",

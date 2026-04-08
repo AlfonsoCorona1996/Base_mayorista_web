@@ -130,7 +130,7 @@
             <span class="material-symbols-rounded btn-icon">chat</span>
             {{ sendingWaNote() ? "Enviando…" : "Nota por WA" }}
           </button>
-          @if (waNoteSent(); as r) {
+          @if (!waProgressVisible() && waNoteSent(); as r) {
             <span class="wa-note-result" [class.ok]="r.ok" [class.err]="!r.ok">
               <span class="material-symbols-rounded">{{ r.ok ? 'check_circle' : 'error' }}</span>
               {{ r.ok ? (r.msg || 'Enviada') : r.msg }}
@@ -148,6 +148,37 @@
           </button>
         }
       </div>
+      @if (waProgressVisible()) {
+        <div class="wa-progress-row">
+          <div
+            class="wa-progress"
+            [class.is-success]="waProgressState() === 'success'"
+            [class.is-error]="waProgressState() === 'error'"
+            role="status"
+            aria-live="polite"
+          >
+            <div class="wa-progress-track">
+              @for (step of waProgressSteps(); track step.id; let i = $index; let last = $last) {
+                <div
+                  class="wa-progress-step"
+                  [class.is-active]="step.state === 'active'"
+                  [class.is-done]="step.state === 'done'"
+                  [class.is-failed]="step.state === 'failed'"
+                >
+                  <span class="wa-progress-dot">
+                    <span class="material-symbols-rounded">{{ waProgressStepIcon(step) }}</span>
+                  </span>
+                  <span class="wa-progress-label">{{ step.label }}</span>
+                  @if (!last) {
+                    <span class="wa-progress-connector" [class.is-done]="waProgressConnectorDone(i)"></span>
+                  }
+                </div>
+              }
+            </div>
+            <p class="wa-progress-detail">{{ waProgressDetail() }}</p>
+          </div>
+        </div>
+      }
     </header>
 
     @if (actionToast()) {
@@ -390,6 +421,21 @@
             <button type="button" class="btn primary with-icon" (click)="openAddItemModal()">
               <span class="material-symbols-rounded btn-icon" aria-hidden="true">add</span>
               Agregar producto
+            </button>
+          }
+          @if (!isOrderClosed(current)) {
+            <button type="button" class="discount-card-btn" (click)="openDiscountModal()">
+              <span class="material-symbols-rounded discount-card-btn__icon" aria-hidden="true">remove_circle</span>
+              <span class="discount-card-btn__body">
+                <span class="discount-card-btn__title">
+                  {{ orderDiscountAmount(current) > 0 ? "Editar descuento" : "Agregar descuento" }}
+                </span>
+                @if (orderDiscountAmount(current) > 0) {
+                  <span class="discount-card-btn__meta">-${{ orderDiscountAmount(current) | number:'1.2-2' }}</span>
+                } @else {
+                  <span class="discount-card-btn__meta">Sin descuento</span>
+                }
+              </span>
             </button>
           }
           <p class="muted">Escanea o cambia el estado por producto.</p>
@@ -1699,7 +1745,7 @@
               <span class="material-symbols-rounded" aria-hidden="true">sell</span>
               Producto
               @if (isManualSource() && manualHistory.entries().length > 0) {
-                <span class="manual-history-hint">· {{ manualHistory.entries().length }} en historial</span>
+                <span class="manual-history-hint">· {{ manualHistory.entries().length }} en historial global</span>
               }
             </label>
             <div class="manual-autocomplete-wrap">
@@ -1711,7 +1757,7 @@
                 [readonly]="lockItemFields()"
                 [disabled]="!canSubmitNewItem() || !vm.canEditItems"
                 (focus)="manualSuggestionsOpen.set(isManualSource())"
-                (input)="manualSuggestionsOpen.set(isManualSource() && newItemTitle().length >= 2)"
+                (input)="manualSuggestionsOpen.set(isManualSource())"
                 autocomplete="off"
               />
               @if (isManualSource() && manualSuggestionsOpen() && manualSuggestions().length > 0) {
@@ -1927,8 +1973,16 @@
 
         <div class="payment-summary-row">
           <div class="payment-summary-item">
-            <span class="payment-summary-label">Total del pedido</span>
+            <span class="payment-summary-label">Subtotal del pedido</span>
             <span class="payment-summary-value">${{ totals().totalClienta | number:'1.2-2' }}</span>
+          </div>
+          <div class="payment-summary-item">
+            <span class="payment-summary-label">Descuento</span>
+            <span class="payment-summary-value payment-summary-value--discount">-${{ paymentDiscountValue(current) | number:'1.2-2' }}</span>
+          </div>
+          <div class="payment-summary-item">
+            <span class="payment-summary-label">Total con descuento</span>
+            <span class="payment-summary-value">${{ paymentTotalWithDiscount(current) | number:'1.2-2' }}</span>
           </div>
           @if ((current.totals.paid_amount || 0) > 0) {
             <div class="payment-summary-item">
@@ -1938,7 +1992,7 @@
           }
           <div class="payment-summary-item">
             <span class="payment-summary-label">Saldo pendiente</span>
-            <span class="payment-summary-value payment-summary-value--balance">${{ orderBalanceDue(current) | number:'1.2-2' }}</span>
+            <span class="payment-summary-value payment-summary-value--balance">${{ paymentBalancePreview(current) | number:'1.2-2' }}</span>
           </div>
         </div>
 
@@ -1965,7 +2019,7 @@
               class="btn ghost payment-quick-btn"
               (click)="markFullyPaid(current)"
             >
-              Pago completo (${{ totals().totalClienta | number:'1.2-2' }})
+              Pago completo (${{ paymentTotalWithDiscount(current) | number:'1.2-2' }})
             </button>
             <button
               type="button"
@@ -1995,6 +2049,87 @@
             }
           </button>
           <button type="button" class="btn ghost" [disabled]="paymentSaving()" (click)="closePaymentModal()">
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (discountModalOpen() && order(); as current) {
+    <div class="sheet-backdrop sheet-backdrop--center" (click)="closeDiscountModal()">
+      <div class="sheet payment-sheet discount-sheet" role="dialog" aria-modal="true" aria-labelledby="discount-modal-title" (click)="$event.stopPropagation()">
+        <div class="sheet-handle" aria-hidden="true"></div>
+
+        <div class="payment-sheet-header">
+          <span class="material-symbols-rounded payment-sheet-icon discount-sheet-icon" aria-hidden="true">money_off</span>
+          <h2 id="discount-modal-title">{{ orderDiscountAmount(current) > 0 ? "Editar descuento" : "Agregar descuento" }}</h2>
+        </div>
+
+        <p class="discount-sheet-note">
+          Este descuento se aplica al total de la nota de venta y no crea items para empaque.
+        </p>
+
+        <div class="payment-summary-row">
+          <div class="payment-summary-item">
+            <span class="payment-summary-label">Subtotal del pedido</span>
+            <span class="payment-summary-value">${{ totals().totalClienta | number:'1.2-2' }}</span>
+          </div>
+          <div class="payment-summary-item">
+            <span class="payment-summary-label">Descuento capturado</span>
+            <span class="payment-summary-value payment-summary-value--discount">-${{ discountDraftValue(current) | number:'1.2-2' }}</span>
+          </div>
+          <div class="payment-summary-item">
+            <span class="payment-summary-label">Total con descuento</span>
+            <span class="payment-summary-value">${{ discountTotalPreview(current) | number:'1.2-2' }}</span>
+          </div>
+        </div>
+
+        <div class="sheet-field">
+          <label class="sheet-label" for="discount-amount-input">
+            <span class="material-symbols-rounded" aria-hidden="true" style="font-size:16px;vertical-align:-3px">percent</span>
+            Monto a descontar
+          </label>
+          <input
+            id="discount-amount-input"
+            class="input payment-amount-input"
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="0.00"
+            [ngModel]="discountDraft()"
+            (ngModelChange)="discountDraft.set($event)"
+            (keyup.enter)="saveOrderDiscount(current)"
+            autofocus
+          />
+        </div>
+
+        @if (discountError()) {
+          <p class="payment-error">{{ discountError() }}</p>
+        }
+
+        <div class="sheet-actions">
+          <button
+            type="button"
+            class="btn primary"
+            [disabled]="discountSaving()"
+            (click)="saveOrderDiscount(current)"
+          >
+            @if (discountSaving()) {
+              Guardando...
+            } @else {
+              Guardar descuento
+            }
+          </button>
+          <button
+            type="button"
+            class="btn danger"
+            [disabled]="discountSaving() || orderDiscountAmount(current) <= 0"
+            (click)="clearOrderDiscount(current)"
+          >
+            Quitar descuento
+          </button>
+          <button type="button" class="btn ghost" [disabled]="discountSaving()" (click)="closeDiscountModal()">
             Cancelar
           </button>
         </div>
