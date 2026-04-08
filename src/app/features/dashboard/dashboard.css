@@ -407,6 +407,247 @@
   right: 10px;
 }
 
+/* —— Insights comerciales IA —— */
+.insights-section {
+  display: grid;
+  gap: 14px;
+}
+
+.insights-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.insights-title {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.insights-title .material-symbols-rounded {
+  font-size: 1.2rem;
+  color: #4f46e5;
+}
+
+.insights-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.insights-generated-at {
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+.insights-refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #c7d2fe;
+  border-radius: 10px;
+  background: #eef2ff;
+  color: #3730a3;
+  padding: 8px 12px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.insights-refresh-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.insights-refresh-btn .material-symbols-rounded {
+  font-size: 1rem;
+}
+
+.insights-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.insight-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 14px 16px;
+  display: grid;
+  gap: 10px;
+}
+
+.insight-card-wide {
+  grid-column: 1 / -1;
+}
+
+.insight-card-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.insight-ranked-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 7px;
+}
+
+.insight-ranked-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid #eef2ff;
+  background: #fafbff;
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+
+.insight-ranked-name {
+  font-size: 0.82rem;
+  color: #1f2937;
+  font-weight: 600;
+}
+
+.insight-ranked-meta {
+  font-size: 0.74rem;
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+.insight-summary {
+  margin: 0;
+  font-size: 0.86rem;
+  color: #334155;
+  line-height: 1.45;
+}
+
+.insight-pill-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.insight-pill-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+  padding: 10px 12px;
+  display: grid;
+  gap: 6px;
+}
+
+.insight-pill-title {
+  margin: 0;
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.insight-pill-text {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #475569;
+  line-height: 1.4;
+}
+
+.insight-pill-list {
+  margin: 2px 0 6px;
+  padding-left: 16px;
+  display: grid;
+  gap: 2px;
+  font-size: 0.76rem;
+  color: #334155;
+}
+
+.insight-subgrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.insight-subtitle {
+  margin: 0 0 6px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #334155;
+}
+
+.insight-mini-list {
+  margin: 0;
+  padding-left: 16px;
+  display: grid;
+  gap: 4px;
+  font-size: 0.78rem;
+  color: #475569;
+}
+
+.insights-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  background: #fef2f2;
+  color: #b91c1c;
+  padding: 10px 12px;
+  font-size: 0.82rem;
+}
+
+.insights-fallback {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: #1e40af;
+  padding: 10px 12px;
+  font-size: 0.82rem;
+}
+
+.insights-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 14px;
+  padding: 28px 18px;
+  background: #f8fafc;
+  color: #64748b;
+}
+
+.insights-empty .material-symbols-rounded {
+  font-size: 2rem;
+  color: #64748b;
+}
+
+@media (max-width: 960px) {
+  .insights-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .insight-subgrid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ── Accesos rápidos ──────────────────────────────────────────────────── */
 .quicklinks-section {
   display: grid;
@@ -610,4 +851,23 @@
 .skeleton-quicklink-label {
   width: 88px;
   height: 12px;
+}
+
+.insight-card-skeleton {
+  border-color: #e2e8f0;
+}
+
+.skeleton-insight-title {
+  width: 160px;
+  height: 16px;
+}
+
+.skeleton-insight-row {
+  width: 100%;
+  max-width: 96%;
+  height: 12px;
+}
+
+.skeleton-insight-row.short {
+  max-width: 60%;
 }

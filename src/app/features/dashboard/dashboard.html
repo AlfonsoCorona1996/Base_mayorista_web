@@ -193,6 +193,147 @@
     }
   </section>
 
+  <section class="insights-section">
+    <div class="insights-header">
+      <h2 class="insights-title">
+        <span class="material-symbols-rounded">auto_awesome</span>
+        Analisis comercial IA
+      </h2>
+      <div class="insights-header-actions">
+        @if (marketInsightsGeneratedAt(); as generatedAt) {
+          <span class="insights-generated-at">Actualizado {{ generatedAt | date:'dd/MM/yyyy HH:mm' : '' : 'es-MX' }}</span>
+        }
+        <button
+          type="button"
+          class="insights-refresh-btn"
+          [disabled]="marketInsightsGenerating()"
+          (click)="generateMarketInsights()"
+        >
+          <span class="material-symbols-rounded">{{ marketInsightsGenerating() ? "hourglass_top" : "refresh" }}</span>
+          {{ marketInsightsGenerating() ? "Generando..." : "Generar analisis" }}
+        </button>
+      </div>
+    </div>
+
+    @if (marketInsightsError()) {
+      <div class="insights-error">
+        <span class="material-symbols-rounded">warning</span>
+        {{ marketInsightsError() }}
+      </div>
+    }
+
+    @if (marketInsightsFallbackMessage(); as fallbackMsg) {
+      <div class="insights-fallback">
+        <span class="material-symbols-rounded">info</span>
+        {{ fallbackMsg }}
+      </div>
+    }
+
+    @if (marketInsightsLoading()) {
+      <div class="insights-grid" aria-hidden="true">
+        <article class="insight-card insight-card-skeleton">
+          <span class="skeleton-line skeleton-insight-title"></span>
+          <span class="skeleton-line skeleton-insight-row"></span>
+          <span class="skeleton-line skeleton-insight-row"></span>
+          <span class="skeleton-line skeleton-insight-row short"></span>
+        </article>
+        <article class="insight-card insight-card-skeleton">
+          <span class="skeleton-line skeleton-insight-title"></span>
+          <span class="skeleton-line skeleton-insight-row"></span>
+          <span class="skeleton-line skeleton-insight-row"></span>
+          <span class="skeleton-line skeleton-insight-row short"></span>
+        </article>
+        <article class="insight-card insight-card-skeleton insight-card-wide">
+          <span class="skeleton-line skeleton-insight-title"></span>
+          <span class="skeleton-line skeleton-insight-row"></span>
+          <span class="skeleton-line skeleton-insight-row"></span>
+          <span class="skeleton-line skeleton-insight-row"></span>
+        </article>
+      </div>
+    } @else if (!marketInsights()) {
+      <div class="insights-empty">
+        <span class="material-symbols-rounded">insights</span>
+        <p>Aun no hay analisis generado. Pulsa "Generar analisis" para crear el primer reporte.</p>
+      </div>
+    } @else {
+      <div class="insights-grid">
+        <article class="insight-card">
+          <h3 class="insight-card-title">Productos mas vendidos</h3>
+          <ul class="insight-ranked-list">
+            @for (row of marketInsightTopProducts(); track $index) {
+              <li class="insight-ranked-item">
+                <span class="insight-ranked-name">{{ row.title }}</span>
+                <span class="insight-ranked-meta">{{ row.units }} uds • {{ row.orderCount }} pedidos</span>
+              </li>
+            }
+          </ul>
+        </article>
+
+        <article class="insight-card">
+          <h3 class="insight-card-title">Categorias mas solicitadas</h3>
+          <ul class="insight-ranked-list">
+            @for (row of marketInsightTopCategories(); track $index) {
+              <li class="insight-ranked-item">
+                <span class="insight-ranked-name">{{ row.category }}</span>
+                <span class="insight-ranked-meta">{{ row.units }} uds • {{ row.orderCount }} pedidos</span>
+              </li>
+            }
+          </ul>
+        </article>
+
+        <article class="insight-card insight-card-wide">
+          <h3 class="insight-card-title">Nuevas oportunidades por nicho</h3>
+          <p class="insight-summary">{{ marketInsightsSummary() }}</p>
+
+          <div class="insight-pill-row">
+            @for (idea of marketInsightNiches(); track $index) {
+              <div class="insight-pill-card">
+                <p class="insight-pill-title">{{ idea.niche }}</p>
+                <p class="insight-pill-text">{{ idea.rationale }}</p>
+                @if (idea.sampleProducts.length) {
+                  <p class="insight-pill-text"><strong>Productos a investigar:</strong></p>
+                  <ul class="insight-pill-list">
+                    @for (sample of idea.sampleProducts; track $index) {
+                      <li>{{ sample }}</li>
+                    }
+                  </ul>
+                }
+                <p class="insight-pill-text"><strong>Primer paso:</strong> {{ idea.firstAction }}</p>
+              </div>
+            }
+          </div>
+
+          <div class="insight-subgrid">
+            <div>
+              <h4 class="insight-subtitle">Cross-sell sugerido</h4>
+              <ul class="insight-mini-list">
+                @for (row of marketInsightCrossSellIdeas(); track $index) {
+                  <li>{{ row }}</li>
+                }
+              </ul>
+            </div>
+            <div>
+              <h4 class="insight-subtitle">Riesgos a cuidar</h4>
+              <ul class="insight-mini-list">
+                @for (row of marketInsightWatchouts(); track $index) {
+                  <li>{{ row }}</li>
+                }
+              </ul>
+            </div>
+            <div>
+              <h4 class="insight-subtitle">Plan 7 dias</h4>
+              <ul class="insight-mini-list">
+                @for (row of marketInsightNext7Days(); track $index) {
+                  <li>{{ row }}</li>
+                }
+              </ul>
+            </div>
+          </div>
+        </article>
+      </div>
+    }
+  </section>
+
   <section class="quicklinks-section">
     <h2 class="section-title">Accesos rapidos</h2>
     <div class="quicklinks-grid">

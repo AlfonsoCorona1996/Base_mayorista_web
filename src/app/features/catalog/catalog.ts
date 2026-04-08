@@ -433,14 +433,15 @@ export default class CatalogPage {
     this.manualError.set(null);
     try {
       const id = `manual_${entry.id}`;
+      const previewImage = (entry.image_url || "").trim() || null;
       const listingDoc: Record<string, unknown> = {
         normalized_id: id,
         schema_version: "normalized_v3.0",
         status: "needs_review",
         source: "manual_history",
         supplier_id: null,
-        cover_images: [],
-        preview_image_url: null,
+        cover_images: previewImage ? [previewImage] : [],
+        preview_image_url: previewImage,
         product_colors: [],
         listing: {
           title: entry.title,

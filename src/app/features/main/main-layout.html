@@ -28,10 +28,16 @@
             <span>Dashboard</span>
           </a>
           }
-                    @if (can('validacion')) {
+          @if (can('validacion')) {
           <a routerLink="/main/validacion" routerLinkActive="active" (click)="closeMenu()">
             <span class="menu-item-icon material-symbols-rounded" aria-hidden="true">fact_check</span>
             <span>Validacion</span>
+          </a>
+          }
+          @if (can('validacion')) {
+          <a routerLink="/main/chats" routerLinkActive="active" (click)="closeMenu()">
+            <span class="menu-item-icon material-symbols-rounded" aria-hidden="true">chat</span>
+            <span>Chats</span>
           </a>
           }
           @if (can('pedidos')) {
@@ -148,6 +154,10 @@
           <a routerLink="/main/administracion" routerLinkActive="active" (click)="closeMenu()">
             <span class="menu-item-icon material-symbols-rounded" aria-hidden="true">monitoring</span>
             <span>Administracion</span>
+          </a>
+          <a routerLink="/main/wa-bot" routerLinkActive="active" (click)="closeMenu()">
+            <span class="menu-item-icon material-symbols-rounded" aria-hidden="true">smart_toy</span>
+            <span>Bot WhatsApp</span>
           </a>
         </div>
         }

@@ -1,0 +1,193 @@
+:host {
+  display: block;
+}
+
+.wa-policy-panel {
+  border: 1px solid #d3deec;
+  border-radius: 12px;
+  background: #f8fbff;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.wa-policy-panel__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.wa-policy-panel__header h3 {
+  margin: 0;
+  color: #1d3556;
+  font-size: 0.96rem;
+}
+
+.wa-policy-panel__header p {
+  margin: 2px 0 0;
+  color: #536f90;
+  font-size: 0.82rem;
+}
+
+.wa-policy-panel__eyebrow {
+  margin: 0;
+  color: #3f658a;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+
+.wa-policy-panel__form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.wa-policy-panel label {
+  display: grid;
+  gap: 4px;
+  color: #2d4a6a;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.wa-policy-panel select,
+.wa-policy-panel input,
+.wa-policy-panel textarea {
+  border: 1px solid #c6d4e6;
+  border-radius: 10px;
+  padding: 7px 8px;
+  font: inherit;
+  color: #17324d;
+  background: #fff;
+}
+
+.wa-policy-panel__checkbox {
+  align-self: end;
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+}
+
+.wa-policy-panel__checkbox input {
+  width: auto;
+}
+
+.wa-policy-panel__full {
+  grid-column: 1 / -1;
+}
+
+.wa-policy-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.btn {
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 7px 10px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn.primary {
+  background: #1166f4;
+  color: #fff;
+}
+
+.btn.ghost {
+  background: #fff;
+  border-color: #c4d4e9;
+  color: #184068;
+}
+
+.wa-policy-panel__error,
+.wa-policy-panel__success {
+  margin: 0;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 0.8rem;
+}
+
+.wa-policy-panel__error {
+  color: #9f2f2f;
+  background: #fdeaea;
+  border: 1px solid #f5c9c9;
+}
+
+.wa-policy-panel__success {
+  color: #0a6d49;
+  background: #e9f9f1;
+  border: 1px solid #c2ecd9;
+}
+
+.wa-policy-panel__attempts {
+  border-top: 1px dashed #c7d8ea;
+  padding-top: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.wa-policy-panel__attempts h4 {
+  margin: 0;
+  color: #1c3757;
+  font-size: 0.9rem;
+}
+
+.wa-policy-panel__attempts p {
+  margin: 0;
+  color: #4f6a89;
+  font-size: 0.8rem;
+}
+
+.wa-policy-panel__attempt-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.wa-policy-panel__attempt-summary {
+  display: grid;
+  gap: 2px;
+  color: #28496d;
+  font-size: 0.78rem;
+}
+
+.wa-policy-panel pre {
+  margin: 0;
+  padding: 10px;
+  border-radius: 10px;
+  background: #0e1d2f;
+  color: #d8e8ff;
+  font-size: 0.72rem;
+  max-height: 260px;
+  overflow: auto;
+}
+
+code {
+  background: #e8f0fc;
+  color: #23456d;
+  border-radius: 6px;
+  padding: 1px 5px;
+}
+
+@media (max-width: 720px) {
+  .wa-policy-panel__header {
+    flex-direction: column;
+  }
+
+  .wa-policy-panel__form {
+    grid-template-columns: 1fr;
+  }
+}
+

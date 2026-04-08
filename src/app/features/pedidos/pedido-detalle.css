@@ -177,6 +177,13 @@
   justify-content: flex-end;
 }
 
+.wa-progress-row {
+  flex: 1 0 100%;
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.15rem;
+}
+
 .sticky-banner {
   position: sticky;
   top: 0;
@@ -769,6 +776,52 @@
 
 .panel-actions .btn.link {
   padding-left: 0;
+}
+
+.discount-card-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid #fecdd3;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #fff1f2, #ffe4e6);
+  color: #9f1239;
+  padding: 0.45rem 0.7rem;
+  min-height: 42px;
+  cursor: pointer;
+}
+
+.discount-card-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #ffe4e6, #fecdd3);
+  border-color: #fda4af;
+}
+
+.discount-card-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.discount-card-btn__icon {
+  font-size: 20px;
+  color: #be123c;
+}
+
+.discount-card-btn__body {
+  display: grid;
+  gap: 1px;
+  text-align: left;
+}
+
+.discount-card-btn__title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.discount-card-btn__meta {
+  font-size: 0.73rem;
+  font-weight: 600;
+  color: #be123c;
 }
 
 .items,
@@ -1764,6 +1817,16 @@
   .status-actions {
     width: 100%;
     justify-content: flex-start;
+  }
+
+  .wa-progress-row {
+    justify-content: flex-start;
+  }
+
+  .wa-progress {
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
   }
 
   .order-item-grid {
@@ -6029,6 +6092,136 @@ code {
 .wa-note-result.err { background: #fef2f2; color: #dc2626; }
 .wa-note-result .material-symbols-rounded { font-size: 15px; }
 
+.wa-progress {
+  min-width: 320px;
+  max-width: 520px;
+  display: grid;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid #d9e3f3;
+  background: #f8fbff;
+}
+
+.wa-progress.is-success {
+  border-color: #bbf7d0;
+  background: #f6fff8;
+}
+
+.wa-progress.is-error {
+  border-color: #fecaca;
+  background: #fff8f8;
+}
+
+.wa-progress-track {
+  display: flex;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.wa-progress-step {
+  position: relative;
+  flex: 1 1 0;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+}
+
+.wa-progress-dot {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #94a3b8;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+
+.wa-progress-dot .material-symbols-rounded {
+  font-size: 16px;
+}
+
+.wa-progress-label {
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 0.02em;
+  text-align: center;
+  line-height: 1.1;
+}
+
+.wa-progress-step.is-active .wa-progress-dot {
+  border-color: #1d4ed8;
+  color: #1d4ed8;
+  background: #eff6ff;
+}
+
+.wa-progress-step.is-done .wa-progress-dot {
+  border-color: #16a34a;
+  color: #16a34a;
+  background: #f0fdf4;
+}
+
+.wa-progress-step.is-failed .wa-progress-dot {
+  border-color: #dc2626;
+  color: #dc2626;
+  background: #fef2f2;
+}
+
+.wa-progress-step.is-active .wa-progress-dot .material-symbols-rounded {
+  animation: wa-progress-spin 1.2s linear infinite;
+}
+
+.wa-progress-step.is-done .wa-progress-label {
+  color: #166534;
+}
+
+.wa-progress-step.is-failed .wa-progress-label {
+  color: #991b1b;
+}
+
+.wa-progress-connector {
+  position: absolute;
+  top: 11px;
+  left: calc(50% + 14px);
+  width: calc(100% - 28px);
+  height: 2px;
+  border-radius: 999px;
+  background: #dbe3ef;
+}
+
+.wa-progress-connector.is-done {
+  background: #60a5fa;
+}
+
+.wa-progress-detail {
+  margin: 0;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: #1e3a8a;
+  line-height: 1.25;
+}
+
+.wa-progress.is-success .wa-progress-detail {
+  color: #166534;
+}
+
+.wa-progress.is-error .wa-progress-detail {
+  color: #991b1b;
+}
+
+@keyframes wa-progress-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* ── Sheet de pago ── */
 .payment-sheet {
   max-width: 440px;
@@ -6079,8 +6272,27 @@ code {
   color: #16a34a;
 }
 
+.payment-summary-value--discount {
+  color: #be123c;
+}
+
 .payment-summary-value--balance {
   color: #dc2626;
+}
+
+.discount-sheet-icon {
+  color: #be123c;
+}
+
+.discount-sheet-note {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #fecdd3;
+  background: #fff1f2;
+  color: #9f1239;
+  font-size: 0.82rem;
+  line-height: 1.4;
 }
 
 .payment-amount-input {

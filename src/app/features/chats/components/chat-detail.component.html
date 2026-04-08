@@ -1,0 +1,103 @@
+<section class="chat-detail">
+  @if (!chat() && loading()) {
+    <div class="chat-detail__loading">
+      <div class="chat-detail__loading-line line-lg"></div>
+      <div class="chat-detail__loading-line line-sm"></div>
+      <div class="chat-detail__loading-box"></div>
+      <div class="chat-detail__loading-input"></div>
+    </div>
+  } @else if (!chat()) {
+    <div class="chat-detail__placeholder">
+      <span class="material-symbols-rounded" aria-hidden="true">forum</span>
+      <h2>Selecciona una conversación</h2>
+      <p>Elige un chat de la lista para ver mensajes y responder.</p>
+    </div>
+  } @else {
+    <header class="chat-detail__header">
+      <div class="chat-detail__identity">
+        @if (isMobile()) {
+          <button type="button" class="chat-detail__back" (click)="onBack()">
+            <span class="material-symbols-rounded" aria-hidden="true">arrow_back</span>
+            <span>Volver</span>
+          </button>
+        }
+
+        <div class="chat-detail__name-wrap">
+          <h2 class="chat-detail__name">{{ displayName() }}</h2>
+          <p class="chat-detail__waid">{{ chat()!.waId }}</p>
+        </div>
+      </div>
+
+      <div class="chat-detail__header-actions">
+        <button type="button" class="chat-detail__action" (click)="onRefresh()" [disabled]="loading() || messagesLoading()">
+          <span class="material-symbols-rounded" aria-hidden="true">refresh</span>
+          <span>Actualizar</span>
+        </button>
+        <button type="button" class="chat-detail__action" (click)="onMarkRead()" [disabled]="!hasUnread()">
+          <span class="material-symbols-rounded" aria-hidden="true">mark_chat_read</span>
+          <span>Marcar leído</span>
+        </button>
+        <button type="button" class="chat-detail__action danger" (click)="onCloseChat()" [disabled]="chat()!.status === 'closed'">
+          <span class="material-symbols-rounded" aria-hidden="true">lock</span>
+          <span>Cerrar chat</span>
+        </button>
+      </div>
+    </header>
+
+    <div class="chat-detail__chips">
+      <span class="chat-detail__chip" [class]="statusClass(chat()!.status)">{{ statusLabel(chat()!.status) }}</span>
+      <span class="chat-detail__chip" [class.chip-window-open]="chat()!.isWindowOpen" [class.chip-window-closed]="!chat()!.isWindowOpen">
+        {{ chat()!.isWindowOpen ? "Ventana 24h abierta" : "Ventana 24h cerrada" }}
+      </span>
+      @if (chat()!.pendingSalesNote) {
+        <span class="chat-detail__chip chip-note">Nota pendiente</span>
+      }
+      @if (chat()!.isFailed || chat()!.hasFailedMessages) {
+        <span class="chat-detail__chip chip-failed">Mensajes con error</span>
+      }
+      @if (chat()!.unreadCount > 0) {
+        <span class="chat-detail__chip chip-unread">{{ chat()!.unreadCount }} sin leer</span>
+      }
+    </div>
+
+    <div class="chat-detail__context">
+      @if (chat()!.lastOrderId) {
+        <span class="chat-detail__context-chip">Pedido: {{ chat()!.lastOrderId }}</span>
+      }
+      @if (chat()!.lastSalesNoteId) {
+        <span class="chat-detail__context-chip">Nota: {{ chat()!.lastSalesNoteId }}</span>
+      }
+      @if (chat()!.pendingSalesNoteData?.salesNoteId) {
+        <span class="chat-detail__context-chip">
+          Nota pendiente: {{ chat()!.pendingSalesNoteData?.salesNoteId }}
+          @if (pendingNoteAmount()) {
+            <strong> · ${{ pendingNoteAmount() }}</strong>
+          }
+        </span>
+      }
+    </div>
+
+    @if (detailError()) {
+      <p class="chat-detail__error">{{ detailError() }}</p>
+    }
+
+    <div class="chat-detail__messages">
+      <app-chat-message-list
+        [messages]="messages()"
+        [loading]="loading() || messagesLoading()"
+        [error]="messagesError()"
+      />
+    </div>
+
+    <footer class="chat-detail__composer">
+      <app-chat-composer
+        [disabled]="sending() || chat()!.status === 'closed'"
+        [sending]="sending()"
+        [windowOpen]="canReply() && chat()!.status !== 'closed'"
+        [windowClosedHint]="windowClosedHint()"
+        [sendError]="sendError()"
+        (sendRequested)="onSendRequested($event)"
+      />
+    </footer>
+  }
+</section>

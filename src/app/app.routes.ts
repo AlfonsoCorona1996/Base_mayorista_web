@@ -41,6 +41,18 @@ export const routes: Routes = [
         loadComponent: () => import("./features/inbox/inbox").then((m) => m.default),
       },
       {
+        path: "chats",
+        canActivate: [permissionGuard],
+        data: { permission: "validacion" },
+        loadComponent: () => import("./features/chats/chats-page.component").then((m) => m.default),
+      },
+      {
+        path: "chats/:chatId",
+        canActivate: [permissionGuard],
+        data: { permission: "validacion" },
+        loadComponent: () => import("./features/chats/chats-page.component").then((m) => m.default),
+      },
+      {
         path: "catalogo/:id",
         canActivate: [permissionGuard],
         data: { permission: "catalogo" },
@@ -134,6 +146,12 @@ export const routes: Routes = [
         canActivate: [authzGuard],
         data: { section: "sections.administracion" },
         loadComponent: () => import("./features/administracion/administracion").then((m) => m.default),
+      },
+      {
+        path: "wa-bot",
+        canActivate: [permissionGuard],
+        data: { permission: "administracion" },
+        loadComponent: () => import("./features/wa-bot/wa-bot-routing").then((m) => m.default),
       },
       {
         path: "proveedores-operaciones",

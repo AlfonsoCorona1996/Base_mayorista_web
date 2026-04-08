@@ -144,6 +144,17 @@ type OrderViewVm = {
   supplierTransitCandidatesCount: number;
 };
 
+type WaProgressStepId = "prepare" | "free" | "template";
+type WaProgressStepState = "pending" | "active" | "done" | "failed";
+type WaProgressRunState = "idle" | "running" | "success" | "error";
+
+type WaProgressStep = {
+  id: WaProgressStepId;
+  label: string;
+  state: WaProgressStepState;
+  detail: string | null;
+};
+
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
@@ -231,6 +242,26 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   generatingSalesNote = signal(false);
   sendingWaNote       = signal(false);
   waNoteSent          = signal<{ ok: boolean; msg?: string } | null>(null);
+  waProgressState = signal<WaProgressRunState>("idle");
+  waProgressSteps = signal<WaProgressStep[]>(this.createInitialWaProgressSteps());
+  waProgressVisible = computed(() => this.waProgressState() !== "idle");
+  waProgressDetail = computed(() => {
+    const waResult = this.waNoteSent();
+    if (waResult?.msg) return waResult.msg;
+    const steps = this.waProgressSteps();
+    for (let i = steps.length - 1; i >= 0; i -= 1) {
+      if (steps[i].state === "active" && steps[i].detail) return String(steps[i].detail);
+    }
+    for (let i = steps.length - 1; i >= 0; i -= 1) {
+      if (steps[i].state === "failed" && steps[i].detail) return String(steps[i].detail);
+    }
+    for (let i = steps.length - 1; i >= 0; i -= 1) {
+      if (steps[i].state === "done" && steps[i].detail) return String(steps[i].detail);
+    }
+    if (this.waProgressState() === "success") return "Flujo completado.";
+    if (this.waProgressState() === "error") return "No se pudo completar el envio.";
+    return "Preparando envio.";
+  });
 
   incidentModalOpen = signal(false);
   incidentType = signal("GENERAL");
@@ -287,6 +318,10 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   paymentAmount = signal("");
   paymentSaving = signal(false);
   paymentError = signal<string | null>(null);
+  discountModalOpen = signal(false);
+  discountDraft = signal("");
+  discountSaving = signal(false);
+  discountError = signal<string | null>(null);
   // ─────────────────────────────────────────────────────────────────────────
 
   addItemModalOpen = signal(false);
@@ -367,6 +402,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   showProductList = signal(false);
   private actionToastTimer: ReturnType<typeof setTimeout> | null = null;
   private waNoteTimer: ReturnType<typeof setTimeout> | null = null;
+  private waProgressTimer: ReturnType<typeof setTimeout> | null = null;
   private waStatusPollSeq = 0;
   private popupAlertQueue: Array<{ title: string; message: string; resolve: () => void }> = [];
   private popupAlertResolver: (() => void) | null = null;
@@ -734,6 +770,14 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
   ngOnDestroy() {
     window.removeEventListener("scroll", this.onAnyScroll, true);
+    if (this.waNoteTimer) {
+      clearTimeout(this.waNoteTimer);
+      this.waNoteTimer = null;
+    }
+    if (this.waProgressTimer) {
+      clearTimeout(this.waProgressTimer);
+      this.waProgressTimer = null;
+    }
   }
 
   async loadIncidents() {
@@ -929,7 +973,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   orderBalanceDue(order: Order): number {
     const fromTotals = Number(order.totals?.balance_due ?? 0);
     if (Number.isFinite(fromTotals) && fromTotals > 0) return fromTotals;
-    return Math.max(0, (this.totals().totalClienta || 0) - (order.totals?.paid_amount || 0));
+    return Math.max(0, this.orderTotalAfterDiscount(order) - (order.totals?.paid_amount || 0));
   }
 
   isOrderClosed(order: Order | null): boolean {
@@ -3156,9 +3200,14 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       if (!shared) {
         this.downloadBlob(blob, fileName);
       }
+      const subtotal = rows.reduce((sum, row) => sum + row.lineTotal, 0);
+      const discount = Math.min(subtotal, this.orderDiscountAmount(order));
+      const total = Math.max(0, subtotal - discount);
       await this.orders.logEvent(order.order_id, "SALES_NOTE_GENERATED", "Nota de venta generada", {
         rows: rows.length,
-        total: rows.reduce((sum, row) => sum + row.lineTotal, 0),
+        subtotal,
+        discount_amount: discount,
+        total,
         shared,
       }).catch(() => null);
       this.showActionToast(shared ? "Nota generada y lista para compartir." : "Nota generada.");
@@ -3228,7 +3277,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     const ITEM_H   = 114;  // per-row height
     const ITEM_GAP = 14;
     const TOTL_PRE = 30;   // gap before 3rd divider
-    const TOTL_H   = 96;   // total amount block
+    const TOTL_H   = 150;  // total block: subtotal + desc + por pagar
 
     const itemsH = rows.length > 0
       ? rows.length * ITEM_H + (rows.length - 1) * ITEM_GAP
@@ -3418,33 +3467,41 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     y += 1 + 26;
 
     // ── TOTAL / POR PAGAR ────────────────────────────────────────────────────
-    const total       = rows.reduce((s, r) => s + r.lineTotal, 0);
-    const paidAmount  = order.totals?.paid_amount ?? 0;
-    const balanceDue  = Math.max(0, total - paidAmount);
+    const subtotal = rows.reduce((s, r) => s + r.lineTotal, 0);
+    const discount = Math.min(subtotal, this.orderDiscountAmount(order));
+    const total = Math.max(0, subtotal - discount);
+    const balanceDue = Math.max(0, total - (order.totals?.paid_amount ?? 0));
 
-    // "Por pagar" label (left, muted)
+    // Subtotal (2 filas arriba de "Por pagar")
+    const subtotalRowY = y + 30;
+    ctx.fillStyle = "#7a94ae";
+    ctx.font = "600 24px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText("Subtotal", IX, subtotalRowY);
+    ctx.textAlign = "right";
+    ctx.fillText(this.formatCurrency(subtotal), IR, subtotalRowY);
+
+    // Desc (1 fila arriba de "Por pagar"), estilo ticket: rojo + signo "-"
+    const discountRowY = subtotalRowY + 30;
+    ctx.fillStyle = "#dc2626";
+    ctx.font = "700 24px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText("Desc", IX, discountRowY);
+    ctx.textAlign = "right";
+    ctx.fillText(`-${this.formatCurrency(discount)}`, IR, discountRowY);
+
+    // "Por pagar"
+    const porPagarLabelY = discountRowY + 34;
     ctx.fillStyle = "#7a94ae";
     ctx.font = "600 30px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
     ctx.textAlign = "left";
-    ctx.fillText("Por pagar", IX, y + 42);
+    ctx.fillText("Por pagar", IX, porPagarLabelY);
 
     // Amount (right, LARGE)
     ctx.fillStyle = "#0f172a";
     ctx.font = "700 66px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
     ctx.textAlign = "right";
-    ctx.fillText(this.formatCurrency(balanceDue), IR, y + 68);
-
-    // If partial payment: show subtotal below in muted text
-    if (paidAmount > 0) {
-      ctx.fillStyle = "#9badc5";
-      ctx.font = "400 22px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-      ctx.textAlign = "right";
-      ctx.fillText(
-        `Total ${this.formatCurrency(total)} · Pagado ${this.formatCurrency(paidAmount)}`,
-        IR,
-        y + 96,
-      );
-    }
+    ctx.fillText(this.formatCurrency(balanceDue), IR, porPagarLabelY + 34);
     y += TOTL_H;
 
     return new Promise<Blob>((resolve, reject) => {
@@ -4424,6 +4481,10 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.newItemTitle.set(entry.title);
     this.newItemVariant.set(entry.variant || "");
     this.newItemColor.set(entry.color || "");
+    if (entry.price_public != null) {
+      this.newItemPricePublic.set(entry.price_public);
+      this.priceInputDraft.update(d => ({ ...d, final: String(entry.price_public) }));
+    }
     if (entry.price_clienta != null) {
       this.newItemPriceClienta.set(entry.price_clienta);
       this.priceInputDraft.update(d => ({ ...d, clienta: String(entry.price_clienta) }));
@@ -4432,13 +4493,137 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       this.newItemPriceCost.set(entry.price_cost);
       this.priceInputDraft.update(d => ({ ...d, costo: String(entry.price_cost) }));
     }
+    this.selectedPreviewHasColorImage.set(Boolean(entry.image_url));
+    this.selectedPreview.set({
+      title: entry.title || "Producto",
+      variant: entry.variant || "",
+      color: entry.color || "",
+      image: entry.image_url || null,
+      source: "Manual",
+    });
     this.manualSuggestionsOpen.set(false);
+  }
+
+  private parseMoneyInput(raw: string): number | null {
+    const normalized = String(raw || "").replace(/,/g, "").trim();
+    if (!normalized) return 0;
+    const parsed = Number(normalized);
+    if (!Number.isFinite(parsed)) return null;
+    return Number(parsed.toFixed(2));
+  }
+
+  orderDiscountAmount(order: Order | null): number {
+    const value = Number(order?.totals?.discount_amount ?? 0);
+    if (!Number.isFinite(value) || value <= 0) return 0;
+    return Number(value.toFixed(2));
+  }
+
+  orderSubtotalClienta(): number {
+    return Math.max(0, Number(this.totals().totalClienta || 0));
+  }
+
+  orderTotalAfterDiscount(order: Order | null): number {
+    const subtotal = this.orderSubtotalClienta();
+    const discount = Math.min(subtotal, this.orderDiscountAmount(order));
+    return Number(Math.max(0, subtotal - discount).toFixed(2));
+  }
+
+  discountDraftValue(order: Order | null): number {
+    const parsed = this.parseMoneyInput(this.discountDraft());
+    if (parsed === null) return 0;
+    const subtotal = this.orderSubtotalClienta();
+    return Number(Math.max(0, Math.min(subtotal, parsed)).toFixed(2));
+  }
+
+  discountTotalPreview(order: Order | null): number {
+    const subtotal = this.orderSubtotalClienta();
+    const discount = this.discountDraftValue(order);
+    return Number(Math.max(0, subtotal - discount).toFixed(2));
+  }
+
+  openDiscountModal() {
+    const order = this.order();
+    if (!order || this.isOrderClosed(order)) return;
+    const discount = this.orderDiscountAmount(order);
+    this.discountDraft.set(discount > 0 ? String(discount) : "");
+    this.discountError.set(null);
+    this.discountModalOpen.set(true);
+  }
+
+  closeDiscountModal() {
+    if (this.discountSaving()) return;
+    this.discountModalOpen.set(false);
+    this.discountError.set(null);
+  }
+
+  async saveOrderDiscount(order: Order) {
+    if (this.discountSaving()) return;
+    const subtotal = this.orderSubtotalClienta();
+    const discountParsed = this.parseMoneyInput(this.discountDraft());
+    if (discountParsed === null || discountParsed < 0) {
+      this.discountError.set("Ingresa un descuento valido.");
+      return;
+    }
+    if (discountParsed > subtotal) {
+      this.discountError.set("El descuento no puede ser mayor al subtotal del pedido.");
+      return;
+    }
+    const discountAmount = Number(discountParsed.toFixed(2));
+    const previous = this.orderDiscountAmount(order);
+    if (discountAmount === previous) {
+      this.closeDiscountModal();
+      return;
+    }
+
+    this.discountSaving.set(true);
+    this.discountError.set(null);
+    try {
+      await this.orders.setDiscountAmount(order.order_id, discountAmount);
+      await this.orders.logEvent(
+        order.order_id,
+        "ORDER_DISCOUNT_SET",
+        discountAmount > 0
+          ? `Descuento aplicado: $${discountAmount.toFixed(2)}`
+          : "Descuento eliminado",
+        { discount_amount: discountAmount, previous_discount_amount: previous },
+      );
+      this.discountModalOpen.set(false);
+      this.showActionToast(
+        discountAmount > 0
+          ? `Descuento aplicado: $${discountAmount.toFixed(2)}`
+          : "Descuento eliminado.",
+      );
+    } catch (err: any) {
+      this.discountError.set(err?.message || "No se pudo guardar el descuento.");
+    } finally {
+      this.discountSaving.set(false);
+    }
+  }
+
+  clearOrderDiscount(order: Order) {
+    this.discountDraft.set("0");
+    void this.saveOrderDiscount(order);
+  }
+
+  paymentDiscountValue(order: Order | null): number {
+    return this.orderDiscountAmount(order);
+  }
+
+  paymentTotalWithDiscount(order: Order | null): number {
+    return this.orderTotalAfterDiscount(order);
+  }
+
+  paymentBalancePreview(order: Order | null): number {
+    const total = this.paymentTotalWithDiscount(order);
+    const paidParsed = this.parseMoneyInput(this.paymentAmount());
+    const paid = paidParsed === null ? 0 : Math.max(0, paidParsed);
+    return Number(Math.max(0, total - paid).toFixed(2));
   }
 
   openPaymentModal() {
     const order = this.order();
     if (!order) return;
-    const balance = this.orderBalanceDue(order);
+    const balance = Math.max(0, this.paymentTotalWithDiscount(order) - Number(order.totals?.paid_amount || 0));
     this.paymentAmount.set(balance > 0 ? String(balance) : "");
     this.paymentError.set(null);
     this.paymentModalOpen.set(true);
@@ -4460,17 +4645,19 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       return;
     }
 
-    const totalAmount = this.totals().totalClienta || 0;
+    const subtotal = this.orderSubtotalClienta();
+    const discountAmount = Math.min(subtotal, this.orderDiscountAmount(order));
+    const totalAmount = Number(Math.max(0, subtotal - discountAmount).toFixed(2));
 
     this.paymentSaving.set(true);
     this.paymentError.set(null);
     try {
-      await this.orders.closeWithPayment(order.order_id, paidAmount, totalAmount);
+      await this.orders.closeWithPayment(order.order_id, paidAmount, totalAmount, discountAmount);
       await this.orders.logEvent(
         order.order_id,
         "PAYMENT_CLOSED",
-        `Pedido cerrado. Pago: $${paidAmount}. Total: $${totalAmount}.`,
-        { paid_amount: paidAmount, total_amount: totalAmount },
+        `Pedido cerrado. Pago: $${paidAmount}. Total: $${totalAmount}. Descuento: $${discountAmount}.`,
+        { paid_amount: paidAmount, total_amount: totalAmount, discount_amount: discountAmount },
       );
       this.paymentModalOpen.set(false);
       this.showActionToast(
@@ -4488,13 +4675,91 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   markFullyPaid(order: Order) {
-    const total = this.totals().totalClienta || 0;
+    const total = this.paymentTotalWithDiscount(order);
     this.paymentAmount.set(String(total));
     this.confirmPayment(order);
   }
 
+  waProgressStepIcon(step: WaProgressStep): string {
+    if (step.state === "failed") return "error";
+    if (step.state === "done") return "check_circle";
+    if (step.state === "active") return "sync";
+    return "radio_button_unchecked";
+  }
+
+  waProgressConnectorDone(index: number): boolean {
+    const steps = this.waProgressSteps();
+    const next = steps[index + 1];
+    return !!next && next.state !== "pending";
+  }
+
+  private createInitialWaProgressSteps(): WaProgressStep[] {
+    return [
+      { id: "prepare", label: "Preparando mensaje", state: "pending", detail: null },
+      { id: "free", label: "Mensaje libre", state: "pending", detail: null },
+      { id: "template", label: "Plantilla", state: "pending", detail: null },
+    ];
+  }
+
+  private resetWaProgress(): void {
+    this.setWaProgressRunState("idle");
+    this.waProgressSteps.set(this.createInitialWaProgressSteps());
+  }
+
+  private beginWaProgress(): void {
+    this.setWaProgressRunState("running");
+    this.waProgressSteps.set(this.createInitialWaProgressSteps());
+    this.setWaProgressStep("prepare", "active", "Preparando nota de venta.");
+  }
+
+  private setWaProgressRunState(state: WaProgressRunState, autoHideMs = 0): void {
+    if (this.waProgressTimer) {
+      clearTimeout(this.waProgressTimer);
+      this.waProgressTimer = null;
+    }
+
+    this.waProgressState.set(state);
+
+    if (state === "success" && autoHideMs > 0) {
+      this.waProgressTimer = setTimeout(() => {
+        this.waProgressState.set("idle");
+        this.waProgressSteps.set(this.createInitialWaProgressSteps());
+        this.waProgressTimer = null;
+      }, autoHideMs);
+    }
+  }
+
+  private setWaProgressStep(stepId: WaProgressStepId, state: WaProgressStepState, detail?: string | null): void {
+    this.waProgressSteps.update((steps) =>
+      steps.map((step) => {
+        if (step.id !== stepId) return step;
+        if (detail === undefined) return { ...step, state };
+        return { ...step, state, detail };
+      }),
+    );
+  }
+
+  private getWaProgressStepState(stepId: WaProgressStepId): WaProgressStepState | null {
+    const step = this.waProgressSteps().find((candidate) => candidate.id === stepId);
+    return step?.state || null;
+  }
+
+  private markCurrentWaProgressFailed(detail: string): void {
+    const steps = this.waProgressSteps();
+    for (let i = steps.length - 1; i >= 0; i -= 1) {
+      if (steps[i].state === "active") {
+        this.setWaProgressStep(steps[i].id, "failed", detail);
+        this.setWaProgressRunState("error");
+        return;
+      }
+    }
+    this.setWaProgressStep("prepare", "failed", detail);
+    this.setWaProgressRunState("error");
+  }
+
   async sendSalesNoteWa(order: Order): Promise<void> {
     if (this.sendingWaNote()) return;
+    this.resetWaProgress();
     const customerId = order.customer_id;
     if (!customerId) {
       this.waNoteSent.set({ ok: false, msg: "El pedido no tiene clienta asignada." });
@@ -4513,9 +4778,11 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       return;
     }
     const rows = this.salesNoteRows(order);
-    const computedTotal = rows.reduce((s, r) => s + r.lineTotal, 0);
+    const subtotal = rows.reduce((s, r) => s + r.lineTotal, 0);
+    const discountAmount = Math.min(subtotal, this.orderDiscountAmount(order));
+    const computedTotal = Math.max(0, subtotal - discountAmount);
     const paidAmount = order.totals?.paid_amount ?? 0;
-    const totalAmount = computedTotal || order.totals?.total_amount || 0;
+    const totalAmount = rows.length > 0 ? computedTotal : Number(order.totals?.total_amount ?? 0);
     const balanceDue = Math.max(0, totalAmount - paidAmount);
     const lastInboundCustomerMessageAt = this.resolveLastInboundCustomerMessageAt(order);
     const waOrderItems = rows.map((r) => ({
@@ -4531,9 +4798,11 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       this.waNoteTimer = null;
     }
     this.waNoteSent.set(null);
+    this.beginWaProgress();
     try {
       // Generamos la imagen en el frontend; si falla enviamos solo payload minimo.
       let notaImageBase64: string | undefined;
+      let imageReady = false;
       try {
         await this.withTimeout(
           this.ensureSalesNoteImageSourcesReady(),
@@ -4546,9 +4815,18 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
           "Tiempo de espera al generar la nota.",
         );
         notaImageBase64 = await this.blobToJpegBase64(pngBlob, 0.88);
+        imageReady = true;
       } catch {
         // No bloqueamos el envio si no se pudo crear la imagen local.
+        imageReady = false;
       }
+
+      this.setWaProgressStep(
+        "prepare",
+        "done",
+        imageReady ? "Nota lista para envio." : "Continuando sin imagen local.",
+      );
+      this.setWaProgressStep("free", "active", "Intentando mensaje libre.");
 
       const payload: Record<string, unknown> = {
         customer_id: customerId,
@@ -4563,6 +4841,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
           totals: {
             total_amount: totalAmount,
             balance_due: balanceDue,
+            discount_amount: discountAmount,
           },
           items: waOrderItems,
         },
@@ -4576,21 +4855,47 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       this.assertWaSendAccepted(response);
       const sendResult = response as Record<string, unknown>;
       const statusQueryPath = this.resolveWaStatusQueryPath(sendResult);
+      const attemptId = this.resolveWaAttemptId(sendResult);
       const immediateMsg = this.resolveWaAcceptedMessage(sendResult);
+      const deliveryMode = String(sendResult["delivery_mode"] || "").trim().toLowerCase();
+      const fallbackToTemplate = sendResult["fallback_to_template"] === true;
+      const pendingUserReply = sendResult["pending_user_reply"] === true;
+
+      if (deliveryMode === "template") {
+        if (fallbackToTemplate) {
+          this.setWaProgressStep("free", "failed", "Mensaje libre fuera de ventana de 24h.");
+        } else {
+          this.setWaProgressStep("free", "done", "Se envio con plantilla.");
+        }
+        this.setWaProgressStep(
+          "template",
+          "done",
+          pendingUserReply ? "Plantilla enviada. En espera de respuesta de la clienta." : "Plantilla enviada.",
+        );
+        this.setWaProgressRunState("success", 7000);
+      } else {
+        this.setWaProgressStep("free", "done", "Mensaje aceptado por WhatsApp.");
+        this.setWaProgressStep("template", "pending", "Se usara plantilla solo si falla el mensaje libre.");
+      }
 
       this.logWaSendSupport({
         customerId,
         orderId: order.order_id,
         status: 200,
         reason: String(sendResult["delivery_mode"] || "accepted_by_meta"),
+        attemptId,
       });
       this.setWaNoteStatus(true, immediateMsg, statusQueryPath ? 0 : 7000);
       this.showActionToast(immediateMsg);
       if (statusQueryPath) {
-        void this.pollWaDeliveryStatus(statusQueryPath, pollSeq, customerId, order.order_id);
+        void this.pollWaDeliveryStatus(statusQueryPath, pollSeq, customerId, order.order_id, attemptId);
+      } else if (deliveryMode !== "template") {
+        this.setWaProgressStep("template", "done", "No fue necesario usar plantilla.");
+        this.setWaProgressRunState("success", 7000);
       }
     } catch (error: unknown) {
-      await this.mapWaSendError(error, customerId, order.order_id);
+      const mapped = await this.mapWaSendError(error, customerId, order.order_id);
+      this.markCurrentWaProgressFailed(mapped.message);
       this.setWaNoteStatus(false, "No enviado", 7000);
       this.showActionToast("No enviado");
     } finally {
@@ -4600,6 +4905,11 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
   private resolveWaStatusQueryPath(payload: Record<string, unknown>): string | null {
     const raw = typeof payload["status_query_path"] === "string" ? payload["status_query_path"].trim() : "";
+    return raw || null;
+  }
+
+  private resolveWaAttemptId(payload: Record<string, unknown>): string | null {
+    const raw = typeof payload["attempt_id"] === "string" ? payload["attempt_id"].trim() : "";
     return raw || null;
   }
 
@@ -4635,6 +4945,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     pollSeq: number,
     customerId: string,
     orderId: string,
+    attemptId: string | null,
   ): Promise<void> {
     const maxAttempts = 15;
     const intervalMs = 2500;
@@ -4645,12 +4956,24 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         const statusResponse = await lastValueFrom(this.api.get<Record<string, unknown>>(statusQueryPath));
         const status = String(statusResponse?.["status"] || "").trim().toLowerCase();
         if (status === "delivered") {
+          if (this.getWaProgressStepState("template") === "done" || this.getWaProgressStepState("template") === "active") {
+            this.setWaProgressStep("template", "done", "Plantilla enviada. En espera de respuesta de la clienta.");
+          } else {
+            this.setWaProgressStep("template", "done", "No fue necesario usar plantilla.");
+          }
+          this.setWaProgressRunState("success", 7000);
           this.logWaSendSupport({ customerId, orderId, status: 200, reason: "delivered" });
           this.setWaNoteStatus(true, "Entregado", 7000);
           this.showActionToast("Entregado");
           return;
         }
         if (status === "read") {
+          if (this.getWaProgressStepState("template") === "done" || this.getWaProgressStepState("template") === "active") {
+            this.setWaProgressStep("template", "done", "Plantilla enviada. En espera de respuesta de la clienta.");
+          } else {
+            this.setWaProgressStep("template", "done", "No fue necesario usar plantilla.");
+          }
+          this.setWaProgressRunState("success", 7000);
           this.logWaSendSupport({ customerId, orderId, status: 200, reason: "read" });
           this.setWaNoteStatus(true, "Leido", 7000);
           this.showActionToast("Leido");
@@ -4658,7 +4981,45 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         }
         if (status === "failed") {
           const details = this.extractWaSendMessage(statusResponse);
-          this.logWaSendSupport({ customerId, orderId, status: 500, reason: details || "failed" });
+          const windowClosedFailure = this.isWaWindowClosedStatusFailure(statusResponse);
+          if (windowClosedFailure && attemptId) {
+            this.setWaProgressStep("free", "failed", "Mensaje libre fuera de ventana de 24h.");
+            this.setWaProgressStep("template", "active", "Intentando plantilla de reenganche.");
+            const attemptInfo = await this.fetchWaSendAttempt(attemptId);
+            const retryState = this.resolveAttemptRetryState(attemptInfo);
+            if (retryState === "sent") {
+              this.setWaProgressStep("template", "done", "Plantilla enviada. En espera de respuesta de la clienta.");
+              this.setWaProgressRunState("success", 7000);
+              this.logWaSendSupport({
+                customerId,
+                orderId,
+                status: 200,
+                reason: "template_retry_sent",
+                attemptId,
+              });
+              this.setWaNoteStatus(true, "Esperando respuesta", 7000);
+              this.showActionToast("Esperando respuesta");
+              return;
+            }
+            if (retryState === "in_progress") {
+              await this.sleep(intervalMs);
+              continue;
+            }
+            if (retryState === "failed") {
+              this.setWaProgressStep("template", "failed", "La plantilla no pudo enviarse.");
+              this.setWaProgressRunState("error");
+            }
+          }
+
+          this.setWaProgressStep("free", "failed", details || "WhatsApp reporto error de envio.");
+          this.setWaProgressRunState("error");
+          this.logWaSendSupport({
+            customerId,
+            orderId,
+            status: 500,
+            reason: details || "failed",
+            attemptId,
+          });
           this.setWaNoteStatus(false, "No enviado", 7000);
           this.showActionToast("No enviado");
           return;
@@ -4672,6 +5033,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
           typeof http.error === "object" &&
           (http.error as Record<string, unknown>)["found"] === false;
         if (!notFoundPending) {
+          this.setWaProgressStep("free", "failed", "No se pudo validar el estado del envio.");
+          this.setWaProgressRunState("error");
           this.logWaSendSupport({
             customerId,
             orderId,
@@ -4683,6 +5046,50 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       }
       await this.sleep(intervalMs);
     }
+  }
+
+  private isWaWindowClosedStatusFailure(payload: Record<string, unknown>): boolean {
+    const errorValue =
+      payload && typeof payload["error"] === "object" && payload["error"] !== null
+        ? (payload["error"] as Record<string, unknown>)
+        : null;
+    const code = Number(errorValue?.["code"]);
+    if (Number.isFinite(code) && code === 131047) return true;
+
+    const details = String(errorValue?.["details"] || "").toLowerCase();
+    if (!details) return false;
+    return details.includes("24 hours") || details.includes("24h") || details.includes("re-engagement");
+  }
+
+  private async fetchWaSendAttempt(attemptId: string): Promise<Record<string, unknown> | null> {
+    const safeAttemptId = String(attemptId || "").trim();
+    if (!safeAttemptId) return null;
+    try {
+      const response = await lastValueFrom(
+        this.api.get<Record<string, unknown>>(`/api/wa/send-attempts/${encodeURIComponent(safeAttemptId)}`),
+      );
+      if (!response || typeof response !== "object") return null;
+      const attempt =
+        response["attempt"] && typeof response["attempt"] === "object"
+          ? (response["attempt"] as Record<string, unknown>)
+          : null;
+      return attempt;
+    } catch {
+      return null;
+    }
+  }
+
+  private resolveAttemptRetryState(attempt: Record<string, unknown> | null): "in_progress" | "sent" | "failed" | null {
+    if (!attempt) return null;
+    const retryObj =
+      attempt["autoTemplateRetry"] && typeof attempt["autoTemplateRetry"] === "object"
+        ? (attempt["autoTemplateRetry"] as Record<string, unknown>)
+        : null;
+    const state = String(retryObj?.["state"] || "").trim().toLowerCase();
+    if (state === "in_progress" || state === "sent" || state === "failed") {
+      return state;
+    }
+    return null;
   }
 
   private normalizeWhatsappDigits(value: string): string {
@@ -4800,6 +5207,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       (typeof payload?.["reason"] === "string" ? payload["reason"] : null) ||
       (typeof payload?.["code"] === "string" ? payload["code"] : null) ||
       null;
+    const attemptId =
+      typeof payload?.["attempt_id"] === "string" ? String(payload["attempt_id"]).trim() : null;
     const backendMessage = this.extractWaSendMessage(payload || {});
 
     this.logWaSendSupport({
@@ -4807,6 +5216,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       orderId,
       status,
       reason,
+      attemptId,
     });
 
     if (status === 401) {
@@ -4818,6 +5228,9 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       return { message: backendMessage || "Solicitud inválida. Revisa los datos de la nota.", isNetwork: false };
     }
     if (status === 422) {
+      return { message: this.mapWaBusinessReason(reason, backendMessage), isNetwork: false };
+    }
+    if (status === 409) {
       return { message: this.mapWaBusinessReason(reason, backendMessage), isNetwork: false };
     }
     if (status !== null && status >= 500) {
@@ -4836,6 +5249,9 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     if (normalized === "no_phone") return "La clienta no tiene WhatsApp registrado.";
     if (normalized === "customer_not_found") return "No se encontró la clienta.";
     if (normalized === "opted_out") return "La clienta no tiene notificaciones activadas.";
+    if (normalized === "window_closed_template_required" || normalized === "window_closed") {
+      return "La ventana de 24 horas está cerrada. Debes usar una plantilla.";
+    }
     return backendMessage || "No se pudo enviar la nota por WhatsApp.";
   }
 
@@ -4844,12 +5260,14 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     orderId: string;
     status: number | null;
     reason: string | null;
+    attemptId?: string | null;
   }): void {
     console.info("[WA_NOTE_SEND]", {
       customer_id: input.customerId,
       order_id: input.orderId,
       status: input.status,
       reason: input.reason,
+      attempt_id: input.attemptId || null,
     });
   }
 
@@ -5062,9 +5480,9 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         completed_at: order.packing?.completed_at || null,
       },
       totals: {
-        total_amount: Number(order.totals?.total_amount || this.totals().totalClienta || 0),
-        paid_amount: Number(order.totals?.paid_amount || 0),
-        balance_due: Number(order.totals?.balance_due || this.orderBalanceDue(order)),
+        total_amount: Number(order.totals?.total_amount ?? this.orderTotalAfterDiscount(order)),
+        paid_amount: Number(order.totals?.paid_amount ?? 0),
+        balance_due: Number(order.totals?.balance_due ?? this.orderBalanceDue(order)),
       },
       updated_at: order.updated_at,
     };
@@ -5369,7 +5787,18 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     }
     this.uploadingItemImage.update((current) => ({ ...current, [item.item_id]: true }));
     try {
-      await this.orders.uploadOrderItemImage(order.order_id, item.item_id, file, "admin");
+      const imageUrl = await this.orders.uploadOrderItemImage(order.order_id, item.item_id, file, "admin");
+      if (item.source === "manual") {
+        void this.manualHistory.record({
+          title: item.title,
+          variant: item.variant || "",
+          color: item.color || "",
+          image_url: imageUrl,
+          price_public: item.price_public ?? null,
+          price_clienta: item.price_clienta ?? null,
+          price_cost: item.price_cost ?? null,
+        });
+      }
       this.showActionToast("Imagen cargada.");
     } catch {
       await this.showPopupAlert("No se pudo cargar la imagen. Intenta de nuevo.", "Error al cargar imagen");
@@ -5908,6 +6337,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         title: item.title,
         variant: item.variant || "",
         color: item.color || "",
+        image_url: item.image_url ?? this.selectedPreview()?.image ?? null,
+        price_public: item.price_public ?? null,
         price_clienta: item.price_clienta ?? null,
         price_cost: item.price_cost ?? null,
       });
@@ -6086,6 +6517,18 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       nextQty,
     });
 
+    if (updated.source === "manual") {
+      void this.manualHistory.record({
+        title: updated.title,
+        variant: updated.variant || "",
+        color: updated.color || "",
+        image_url: updated.image_url ?? this.selectedPreview()?.image ?? null,
+        price_public: updated.price_public ?? null,
+        price_clienta: updated.price_clienta ?? null,
+        price_cost: updated.price_cost ?? null,
+      });
+    }
+
     this.resetAddItemForm();
     this.addItemModalOpen.set(false);
     await this.refreshEvents();
@@ -6115,7 +6558,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       price_cost: this.newItemPriceCost(),
       discount_pct: this.newItemDiscount(),
       inventory_id: source === "inventario" ? this.newItemInventoryId() : null,
-      image_url: source === "manual" ? null : this.selectedPreview()?.image || null,
+      image_url: this.selectedPreview()?.image || null,
     };
     return { ...base, ...(extra || {}) };
   }
