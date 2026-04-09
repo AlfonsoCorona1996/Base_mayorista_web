@@ -1,5 +1,5 @@
 import { Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild, computed, inject, signal, ChangeDetectionStrategy, DestroyRef } from "@angular/core";
-import { DatePipe, DecimalPipe, UpperCasePipe } from "@angular/common";
+import { DatePipe, DecimalPipe, NgStyle, UpperCasePipe } from "@angular/common";
 import { HttpErrorResponse } from "@angular/common/http";
 import { FormsModule } from "@angular/forms";
 import { ActivatedRoute, Router, RouterLink } from "@angular/router";
@@ -9,7 +9,7 @@ import { collection, getDocs, limit, orderBy, query } from "firebase/firestore";
 import { getBlob, ref as storageRef } from "firebase/storage";
 import { PDFDocument, PDFFont, PDFPage, StandardFonts, rgb } from "pdf-lib";
 import * as QRCode from "qrcode";
-import { CustomersService } from "../../core/customers.service";
+import { CustomersService, Customer } from "../../core/customers.service";
 import { SuppliersService } from "../../core/suppliers.service";
 import { OrdersService, Order, OrderEvent, OrderItem, OrderItemState, OrderStatus, PackageRecord, Incident, IncidentSeverity } from "../../core/orders.service";
 import { RoutesService } from "../../core/routes.service";
@@ -159,7 +159,7 @@ type WaProgressStep = {
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   selector: "app-pedido-detalle",
-  imports: [FormsModule, RouterLink, DatePipe, DecimalPipe, UpperCasePipe, ActivityLogComponent],
+  imports: [FormsModule, RouterLink, DatePipe, DecimalPipe, UpperCasePipe, NgStyle, ActivityLogComponent],
   templateUrl: "./pedido-detalle.html",
   styleUrls: ["./pedido-detalle.css"],
 })
@@ -185,6 +185,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   @ViewChild("packagesSection") packagesSection?: ElementRef<HTMLElement>;
   @ViewChild("timelineSection") timelineSection?: ElementRef<HTMLElement>;
   @ViewChild("productSearchInput") productSearchInput?: ElementRef<HTMLInputElement>;
+  @ViewChild("manualTitleInput") manualTitleInput?: ElementRef<HTMLInputElement>;
   @ViewChild("pageHead") pageHead?: ElementRef<HTMLElement>;
   private readonly onAnyScroll = () => {
     const scrollingEl = document.scrollingElement as HTMLElement | null;
@@ -215,7 +216,14 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   debugMode = signal(false);
   userRole = signal("admin");
   copiedOrderId = signal(false);
+  orderHeadMenuOpen = signal(false);
   actionToast = signal<string | null>(null);
+  changeCustomerModalOpen = signal(false);
+  changeCustomerQuery = signal("");
+  changeCustomerSelectedId = signal<string | null>(null);
+  changeCustomerSaving = signal(false);
+  changeCustomerError = signal<string | null>(null);
+  deletingOrder = signal(false);
   popupAlertOpen = signal(false);
   popupAlertTitle = signal("Aviso");
   popupAlertMessage = signal("");
@@ -362,9 +370,12 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
   // ── Historial / autocomplete de productos manuales ──────────────────
   manualSuggestionsOpen = signal(false);
+  manualSuggestionsStyle = signal<Record<string, string>>({});
   readonly manualSuggestions = computed<ManualProductEntry[]>(() => {
     if (!this.isManualSource()) return [];
-    return this.manualHistory.search(this.newItemTitle());
+    const term = this.newItemTitle().trim();
+    if (term.length < 2) return [];
+    return this.manualHistory.search(term);
   });
   newItemVariant = signal("");
   newItemColor = signal("");
@@ -437,34 +448,50 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     return map;
   });
 
+  readonly changeCustomerSuggestions = computed<Customer[]>(() => {
+    const term = this.normalizeSearchText(this.changeCustomerQuery());
+    const rows = this.customers.customers();
+    const matches = rows.filter((customer) => {
+      if (!term) return true;
+      const blob = [
+        customer.first_name || "",
+        customer.last_name || "",
+        customer.whatsapp || "",
+        customer.customer_id || "",
+      ]
+        .join(" ")
+        .trim();
+      return this.normalizeSearchText(blob).includes(term);
+    });
+    return matches.slice(0, 12);
+  });
+
   inventorySuggestions = computed(() => {
     if (this.newItemSource() !== "inventario") return [];
-    const term = this.newItemSearch().trim().toLowerCase();
+    const term = this.normalizeSearchText(this.newItemSearch());
     if (term.length < 2) return [];
     return this.inventory.items()
       .filter((item) => {
-        const blob = [item.title, item.color_name || "", item.variant_name || "", item.size_label || ""]
-          .join(" ")
-          .toLowerCase();
+        const blob = this.normalizeSearchText([item.title, item.color_name || "", item.variant_name || "", item.size_label || ""].join(" "));
         return blob.includes(term);
       })
       .slice(0, 6);
   });
   catalogSuggestions = computed(() => {
     if (this.newItemSource() !== "catalogo") return [];
-    const term = this.newItemSearch().trim().toLowerCase();
+    const term = this.normalizeSearchText(this.newItemSearch());
     if (term.length < 2) return [];
     const matches: { doc: NormalizedListingDoc; variant: any; color: string; image: string | null }[] = [];
     for (const doc of this.catalogRows()) {
       const listing: any = doc.listing || { items: [] };
-      const title = (listing.title || "").toLowerCase();
-      const cat = (listing.category_hint || "").toLowerCase();
+      const title = this.normalizeSearchText(listing.title || "");
+      const cat = this.normalizeSearchText(listing.category_hint || "");
       const variants = listing.items || [];
       for (const v of variants) {
         const colors = this.getVariantColors(v);
-        const blob = [title, cat, v.variant_name || "", colors.join(" ")].join(" ").toLowerCase();
+        const blob = this.normalizeSearchText([title, cat, v.variant_name || "", colors.join(" ")].join(" "));
         if (!blob.includes(term)) continue;
-        const colorHit = colors.find((c) => c.toLowerCase().includes(term)) || colors[0] || "";
+        const colorHit = colors.find((c) => this.normalizeSearchText(c).includes(term)) || colors[0] || "";
         const colorImage = this.resolveColorImage(doc, colorHit);
         const image = colorImage || v?.image_url || doc.cover_images?.[0] || doc.preview_image_url || null;
         matches.push({ doc, variant: v, color: colorHit, image });
@@ -946,12 +973,30 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     if (!order) return "";
     const row = this.customers.getById(order.customer_id);
     if (!row) return "Cliente sin nombre";
-    return `${row.first_name} ${row.last_name}`.trim();
+    return this.fullCustomerName(row);
+  }
+
+  fullCustomerName(customer: Customer | null): string {
+    if (!customer) return "Cliente sin nombre";
+    return `${customer.first_name || ""} ${customer.last_name || ""}`.trim() || "Cliente sin nombre";
   }
 
   routeName(order: Order | null): string {
     if (!order || !order.route_id) return "Sin ruta";
     return this.rutas.getById(order.route_id)?.name || order.route_id;
+  }
+
+  routeNameById(routeId: string | null): string {
+    if (!routeId) return "Sin ruta";
+    return this.rutas.getById(routeId)?.name || routeId;
+  }
+
+  private normalizeSearchText(value: string): string {
+    return String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .trim();
   }
 
   canCap(key: string): boolean {
@@ -3092,6 +3137,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.selectedCatalogDoc.set(null);
     this.selectedPreviewHasColorImage.set(true);
     this.showProductList.set(false);
+    this.manualSuggestionsOpen.set(false);
   }
 
   onNewItemSourceChange(source: string) {
@@ -3126,6 +3172,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.selectedPreview.set(null);
     this.selectedCatalogDoc.set(null);
     this.selectedPreviewHasColorImage.set(true);
+    this.manualSuggestionsOpen.set(false);
   }
 
   canSubmitNewItem(): boolean {
@@ -4478,9 +4525,12 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
   /** Rellena todos los campos del formulario con la sugerencia seleccionada */
   applyManualSuggestion(entry: ManualProductEntry): void {
-    this.newItemTitle.set(entry.title);
-    this.newItemVariant.set(entry.variant || "");
-    this.newItemColor.set(entry.color || "");
+    const cleanTitle = this.cleanDisplayText(entry.title);
+    const cleanVariant = this.cleanDisplayText(entry.variant || "");
+    const cleanColor = this.cleanDisplayText(entry.color || "");
+    this.newItemTitle.set(cleanTitle);
+    this.newItemVariant.set(cleanVariant);
+    this.newItemColor.set(cleanColor);
     if (entry.price_public != null) {
       this.newItemPricePublic.set(entry.price_public);
       this.priceInputDraft.update(d => ({ ...d, final: String(entry.price_public) }));
@@ -4495,13 +4545,114 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     }
     this.selectedPreviewHasColorImage.set(Boolean(entry.image_url));
     this.selectedPreview.set({
-      title: entry.title || "Producto",
-      variant: entry.variant || "",
-      color: entry.color || "",
+      title: cleanTitle || "Producto",
+      variant: cleanVariant,
+      color: cleanColor,
       image: entry.image_url || null,
       source: "Manual",
     });
     this.manualSuggestionsOpen.set(false);
+    this.manualSuggestionsStyle.set({});
+  }
+
+  onManualTitleFocus(): void {
+    this.syncManualSuggestionsVisibility();
+  }
+
+  onManualTitleInput(): void {
+    this.syncManualSuggestionsVisibility();
+  }
+
+  onManualTitleBlur(): void {
+    setTimeout(() => {
+      this.manualSuggestionsOpen.set(false);
+      this.manualSuggestionsStyle.set({});
+    }, 120);
+  }
+
+  private syncManualSuggestionsVisibility(): void {
+    if (!this.isManualSource()) {
+      this.manualSuggestionsOpen.set(false);
+      this.manualSuggestionsStyle.set({});
+      return;
+    }
+    const term = this.newItemTitle().trim();
+    const shouldOpen = term.length >= 2;
+    this.manualSuggestionsOpen.set(shouldOpen);
+    if (shouldOpen) {
+      this.updateManualSuggestionsPosition();
+    } else {
+      this.manualSuggestionsStyle.set({});
+    }
+  }
+
+  onAddItemSheetScroll(): void {
+    if (!this.manualSuggestionsOpen()) return;
+    this.updateManualSuggestionsPosition();
+  }
+
+  @HostListener("window:resize")
+  onWindowResizeManualSuggestions(): void {
+    if (!this.manualSuggestionsOpen()) return;
+    this.updateManualSuggestionsPosition();
+  }
+
+  @HostListener("window:scroll")
+  onWindowScrollManualSuggestions(): void {
+    if (!this.manualSuggestionsOpen()) return;
+    this.updateManualSuggestionsPosition();
+  }
+
+  private updateManualSuggestionsPosition(): void {
+    const inputEl = this.manualTitleInput?.nativeElement;
+    if (!inputEl) return;
+
+    const rect = inputEl.getBoundingClientRect();
+    const viewportH = window.innerHeight;
+    const spaceBelow = Math.max(0, viewportH - rect.bottom - 12);
+    const spaceAbove = Math.max(0, rect.top - 12);
+    const rowEstimate = 56;
+    const desiredHeight = Math.max(120, Math.min(280, (this.manualSuggestions().length * rowEstimate) + 8));
+    const canOpenAbove = spaceAbove >= 120;
+    const openUp = canOpenAbove;
+    const maxHeight = openUp
+      ? Math.max(120, Math.min(desiredHeight, spaceAbove - 6))
+      : Math.max(120, Math.min(desiredHeight, spaceBelow - 6));
+    const top = openUp
+      ? Math.max(8, rect.top - maxHeight - 6)
+      : rect.bottom + 6;
+
+    this.manualSuggestionsStyle.set({
+      position: "fixed",
+      left: `${Math.max(8, rect.left)}px`,
+      top: `${Math.max(8, top)}px`,
+      width: `${Math.max(220, rect.width)}px`,
+      "max-height": `${maxHeight}px`,
+    });
+  }
+
+  cleanDisplayText(value: string | null | undefined): string {
+    const raw = String(value || "");
+    if (!raw) return "";
+    return raw
+      .replaceAll("Ã¡", "á")
+      .replaceAll("Ã©", "é")
+      .replaceAll("Ã­", "í")
+      .replaceAll("Ã³", "ó")
+      .replaceAll("Ãº", "ú")
+      .replaceAll("Ã", "Á")
+      .replaceAll("Ã‰", "É")
+      .replaceAll("Ã", "Í")
+      .replaceAll("Ã“", "Ó")
+      .replaceAll("Ãš", "Ú")
+      .replaceAll("Ã±", "ñ")
+      .replaceAll("Ã‘", "Ñ")
+      .replaceAll("Ã¼", "ü")
+      .replaceAll("Ãœ", "Ü")
+      .replaceAll("Â·", "·")
+      .replaceAll("Â", "")
+      .replaceAll("â€¢", "•")
+      .trim();
   }
 
   private parseMoneyInput(raw: string): number | null {
@@ -5846,6 +5997,14 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.updateStickyByScroll(scrollTop);
   }
 
+  @HostListener("document:click", ["$event"])
+  onDocumentClick(event: Event) {
+    if (!this.orderHeadMenuOpen()) return;
+    const target = event.target as HTMLElement | null;
+    if (target?.closest(".order-head-menu")) return;
+    this.orderHeadMenuOpen.set(false);
+  }
+
   onPageScroll(event: Event) {
     const target = event.target as HTMLElement | null;
     const scrollTop = target?.scrollTop || 0;
@@ -5867,6 +6026,133 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     await navigator.clipboard.writeText(value).catch(() => null);
     this.copiedOrderId.set(true);
     setTimeout(() => this.copiedOrderId.set(false), 1200);
+  }
+
+  toggleOrderHeadMenu(event?: Event) {
+    event?.stopPropagation();
+    this.orderHeadMenuOpen.update((current) => !current);
+  }
+
+  closeOrderHeadMenu() {
+    this.orderHeadMenuOpen.set(false);
+  }
+
+  canChangeCustomer(order: Order | null): boolean {
+    if (!order) return false;
+    if (this.userRole() === "viewer") return false;
+    if (!this.canCap("cap.orders.edit")) return false;
+    return !this.isOrderClosed(order);
+  }
+
+  canDeleteOrder(order: Order | null): boolean {
+    if (!order) return false;
+    if (this.userRole() === "viewer") return false;
+    if (!this.canCap("cap.orders.delete")) return false;
+    return true;
+  }
+
+  openChangeCustomerModal(order: Order | null) {
+    if (!order) return;
+    if (!this.canChangeCustomer(order)) return;
+    this.closeOrderHeadMenu();
+    this.changeCustomerError.set(null);
+    this.changeCustomerQuery.set("");
+    this.changeCustomerSelectedId.set(order.customer_id || null);
+    this.changeCustomerModalOpen.set(true);
+  }
+
+  closeChangeCustomerModal() {
+    if (this.changeCustomerSaving()) return;
+    this.changeCustomerModalOpen.set(false);
+    this.changeCustomerError.set(null);
+    this.changeCustomerQuery.set("");
+    this.changeCustomerSelectedId.set(null);
+  }
+
+  selectChangeCustomer(customerId: string) {
+    this.changeCustomerSelectedId.set(customerId);
+  }
+
+  canApplyCustomerChange(order: Order | null): boolean {
+    if (!order) return false;
+    if (this.changeCustomerSaving()) return false;
+    const selectedId = String(this.changeCustomerSelectedId() || "").trim();
+    if (!selectedId) return false;
+    if (selectedId === order.customer_id) return false;
+    return !!this.customers.getById(selectedId);
+  }
+
+  async applyCustomerChange(order: Order | null) {
+    if (!order) return;
+    if (!this.canApplyCustomerChange(order)) return;
+
+    const selectedCustomerId = String(this.changeCustomerSelectedId() || "").trim();
+    const selectedCustomer = this.customers.getById(selectedCustomerId);
+    if (!selectedCustomer) {
+      this.changeCustomerError.set("No se encontro la clienta seleccionada.");
+      return;
+    }
+
+    const previousCustomerId = order.customer_id;
+    const previousCustomerName = this.customerName(order);
+    const nextCustomerName = this.fullCustomerName(selectedCustomer);
+    const nextRouteId = selectedCustomer.route_id || order.route_id || null;
+
+    this.changeCustomerSaving.set(true);
+    this.changeCustomerError.set(null);
+    try {
+      await this.orders.updateCustomer(order.order_id, selectedCustomerId, nextRouteId);
+      await this.orders.logEvent(
+        order.order_id,
+        "ORDER_CUSTOMER_CHANGED",
+        `Clienta cambiada: ${previousCustomerName} -> ${nextCustomerName}`,
+        {
+          previousCustomerId,
+          nextCustomerId: selectedCustomerId,
+          previousRouteId: order.route_id ?? null,
+          nextRouteId,
+        },
+      ).catch(() => null);
+      await this.refreshEvents().catch(() => null);
+      this.changeCustomerModalOpen.set(false);
+      this.changeCustomerQuery.set("");
+      this.changeCustomerSelectedId.set(null);
+      this.showActionToast("Clienta actualizada.");
+    } catch (error) {
+      this.changeCustomerError.set("No se pudo cambiar la clienta. Intenta de nuevo.");
+    } finally {
+      this.changeCustomerSaving.set(false);
+    }
+  }
+
+  async requestDeleteOrder(order: Order | null) {
+    if (!order) return;
+    this.closeOrderHeadMenu();
+    if (!this.canDeleteOrder(order)) {
+      await this.showPopupAlert("No tienes permiso para eliminar pedidos.", "Permiso requerido");
+      return;
+    }
+    const confirmed = await this.showPopupConfirm(
+      `Vas a eliminar el pedido ${order.order_id}. Esta accion no se puede deshacer.`,
+      {
+        title: "Eliminar pedido",
+        confirmLabel: "Eliminar pedido",
+        cancelLabel: "Cancelar",
+        danger: true,
+      },
+    );
+    if (!confirmed) return;
+
+    this.deletingOrder.set(true);
+    try {
+      await this.orders.deleteOrder(order.order_id);
+      this.showActionToast("Pedido eliminado.");
+      this.backToList();
+    } catch (error) {
+      await this.showPopupAlert("No se pudo eliminar el pedido. Intenta nuevamente.", "Error al eliminar");
+    } finally {
+      this.deletingOrder.set(false);
+    }
   }
 
   isConfirmItemsPhase(order: Order | null): boolean {

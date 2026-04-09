@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from "@a
 import { FormsModule } from "@angular/forms";
 import { ActivatedRoute, Router } from "@angular/router";
 import { isNormalizedListingDocV3 } from "../../core/firestore-contracts";
-import type { ItemPricesV3, NormalizedItemV3, NormalizedListingDocV3, StockState } from "../../core/firestore-contracts";
+import type { ItemPricesV3, NormalizedItemV3, NormalizedListingDocV3, ProductColor, StockState } from "../../core/firestore-contracts";
 import { NormalizedListingsService } from "../../core/normalized-listings.service";
 import { SuppliersService } from "../../core/suppliers.service";
 
@@ -39,6 +39,7 @@ export default class CatalogDetailPage {
   editing = signal(false);
   error = signal<string | null>(null);
   saveMessage = signal<string | null>(null);
+  private priceDraftByKey = signal<Record<string, string>>({});
 
   doc = signal<NormalizedListingDocV3 | null>(null);
 
@@ -65,7 +66,7 @@ export default class CatalogDetailPage {
   coverUrl = computed(() => {
     const d = this.doc();
     if (!d) return null;
-    return d.cover_images?.[0] || d.preview_image_url || null;
+    return this.firstNonEmpty(d.cover_images) || d.preview_image_url || null;
   });
 
   productStockState = computed(() => {
@@ -177,6 +178,15 @@ export default class CatalogDetailPage {
     return this.toValidPrice(item.prices?.[field]);
   }
 
+  getPriceInputValue(itemIndex: number, item: NormalizedItemV3, field: PriceFieldKey): string {
+    const key = this.priceDraftKey(itemIndex, field);
+    const draft = this.priceDraftByKey()[key];
+    if (draft !== undefined) return draft;
+
+    const value = this.getPriceValue(item, field);
+    return value === null ? "" : String(value);
+  }
+
   priceIssue(item: NormalizedItemV3): string | null {
     const cost = this.toValidPrice(item.prices?.precio_costo);
     const client = this.toValidPrice(item.prices?.precio_clienta);
@@ -197,8 +207,210 @@ export default class CatalogDetailPage {
     return null;
   }
 
+  getColorImageUrl(colorName: string | null | undefined): string | null {
+    const d = this.doc();
+    if (!d || !colorName) return null;
+
+    const target = colorName.trim().toLowerCase();
+    if (!target) return null;
+
+    const match = (d.product_colors || []).find((entry) => (entry.name || "").trim().toLowerCase() === target);
+    const url = (match?.image_url || "").trim();
+    return url || null;
+  }
+
+  addCoverImage() {
+    const d = this.doc();
+    if (!d) return;
+
+    d.cover_images = [...(d.cover_images || []), ""];
+    this.doc.set({ ...d });
+    this.saveMessage.set(null);
+  }
+
+  onCoverImageChange(index: number, rawValue: unknown) {
+    const d = this.doc();
+    if (!d || index < 0 || index >= (d.cover_images || []).length) return;
+
+    const value = typeof rawValue === "string" ? rawValue : String(rawValue ?? "");
+    d.cover_images[index] = value;
+
+    this.doc.set({ ...d });
+    this.saveMessage.set(null);
+  }
+
+  removeCoverImage(index: number) {
+    const d = this.doc();
+    if (!d || index < 0 || index >= (d.cover_images || []).length) return;
+
+    d.cover_images.splice(index, 1);
+
+    const nextCover = this.firstNonEmpty(d.cover_images);
+    d.preview_image_url = nextCover;
+
+    this.doc.set({ ...d });
+    this.saveMessage.set(null);
+  }
+
+  setCoverImageAsPrimary(index: number) {
+    const d = this.doc();
+    if (!d || index < 0 || index >= (d.cover_images || []).length) return;
+
+    const list = d.cover_images || [];
+    const value = (list[index] || "").trim();
+    if (!value) return;
+
+    list.splice(index, 1);
+    list.unshift(value);
+    d.cover_images = list;
+    d.preview_image_url = value;
+
+    this.doc.set({ ...d });
+    this.saveMessage.set(null);
+  }
+
+  addProductColor() {
+    const d = this.doc();
+    if (!d) return;
+
+    const name = this.generateColorName(d.product_colors || []);
+    d.product_colors = [...(d.product_colors || []), { name, image_url: null }];
+
+    d.listing.items.forEach((item) => {
+      const exists = (item.color_stock || []).some((entry) => (entry.color_name || "").trim().toLowerCase() === name.toLowerCase());
+      if (!exists) {
+        item.color_stock = [
+          ...(item.color_stock || []),
+          {
+            color_name: name,
+            stock_state: this.normalizeStockState(item.stock_state) || "unknown_qty",
+          },
+        ];
+      }
+    });
+
+    this.doc.set({ ...d });
+    this.saveMessage.set(null);
+  }
+
+  removeProductColor(colorIndex: number) {
+    const d = this.doc();
+    if (!d || colorIndex < 0 || colorIndex >= (d.product_colors || []).length) return;
+
+    const target = (d.product_colors[colorIndex].name || "").trim().toLowerCase();
+    d.product_colors.splice(colorIndex, 1);
+
+    if (target) {
+      d.listing.items.forEach((item) => {
+        item.color_stock = (item.color_stock || []).filter((entry) => (entry.color_name || "").trim().toLowerCase() !== target);
+      });
+    }
+
+    this.doc.set({ ...d });
+    this.saveMessage.set(null);
+  }
+
+  onProductColorFieldChange(colorIndex: number, field: "name" | "image_url", rawValue: unknown) {
+    const d = this.doc();
+    if (!d || colorIndex < 0 || colorIndex >= (d.product_colors || []).length) return;
+
+    const current = d.product_colors[colorIndex];
+    const value = typeof rawValue === "string" ? rawValue : String(rawValue ?? "");
+
+    if (field === "image_url") {
+      current.image_url = value.trim() || null;
+      this.doc.set({ ...d });
+      this.saveMessage.set(null);
+      return;
+    }
+
+    const previousName = (current.name || "").trim();
+    const nextName = value.trim();
+    current.name = nextName;
+
+    if (previousName && nextName && previousName.toLowerCase() !== nextName.toLowerCase()) {
+      d.listing.items.forEach((item) => {
+        item.color_stock = (item.color_stock || []).map((entry) => {
+          const entryName = (entry.color_name || "").trim();
+          if (entryName.toLowerCase() !== previousName.toLowerCase()) return entry;
+          return { ...entry, color_name: nextName };
+        });
+      });
+    }
+
+    this.dedupeProductColors(d);
+
+    this.doc.set({ ...d });
+    this.saveMessage.set(null);
+  }
+
+  addVariantColor(itemIndex: number) {
+    const d = this.doc();
+    if (!d) return;
+
+    const item = d.listing.items[itemIndex];
+    if (!item) return;
+
+    const used = new Set((item.color_stock || []).map((entry) => (entry.color_name || "").trim().toLowerCase()));
+    const candidate = (d.product_colors || []).find((color) => {
+      const name = (color.name || "").trim().toLowerCase();
+      return name && !used.has(name);
+    });
+
+    const fallbackName = candidate?.name?.trim() || this.generateColorName(d.product_colors || []);
+    item.color_stock = [
+      ...(item.color_stock || []),
+      {
+        color_name: fallbackName,
+        stock_state: this.normalizeStockState(item.stock_state) || "unknown_qty",
+      },
+    ];
+
+    this.ensureProductColor(d, fallbackName);
+
+    this.doc.set({ ...d });
+    this.saveMessage.set(null);
+  }
+
+  onColorNameChange(itemIndex: number, colorIndex: number, rawValue: unknown) {
+    const d = this.doc();
+    if (!d) return;
+
+    const item = d.listing.items[itemIndex];
+    if (!item || !item.color_stock || !item.color_stock[colorIndex]) return;
+
+    const value = typeof rawValue === "string" ? rawValue.trim() : String(rawValue ?? "").trim();
+    if (!value) return;
+
+    item.color_stock[colorIndex].color_name = value;
+    item.color_stock = this.dedupeColorStock(item.color_stock);
+    this.ensureProductColor(d, value);
+    this.dedupeProductColors(d);
+
+    this.doc.set({ ...d });
+    this.saveMessage.set(null);
+  }
+
+  removeVariantColor(itemIndex: number, colorIndex: number) {
+    const d = this.doc();
+    if (!d) return;
+
+    const item = d.listing.items[itemIndex];
+    if (!item || !item.color_stock || colorIndex < 0 || colorIndex >= item.color_stock.length) return;
+
+    item.color_stock.splice(colorIndex, 1);
+    this.syncVariantStateFromColors(item);
+
+    this.doc.set({ ...d });
+    this.saveMessage.set(null);
+  }
+
   toggleEditMode() {
-    this.editing.update((current) => !current);
+    const next = !this.editing();
+    this.editing.set(next);
+    if (!next) {
+      this.priceDraftByKey.set({});
+    }
   }
 
   onListingFieldChange(field: "title" | "category_hint", rawValue: unknown) {
@@ -244,6 +456,25 @@ export default class CatalogDetailPage {
 
     this.doc.set({ ...d });
     this.saveMessage.set(null);
+  }
+
+  onVariantPriceInputChange(itemIndex: number, field: PriceFieldKey, rawValue: unknown) {
+    const key = this.priceDraftKey(itemIndex, field);
+    const value = typeof rawValue === "string" ? rawValue : String(rawValue ?? "");
+    this.priceDraftByKey.set({
+      ...this.priceDraftByKey(),
+      [key]: value,
+    });
+  }
+
+  onVariantPriceInputBlur(itemIndex: number, field: PriceFieldKey) {
+    const key = this.priceDraftKey(itemIndex, field);
+    const raw = this.priceDraftByKey()[key] ?? "";
+    this.onVariantPriceChange(itemIndex, field, raw);
+
+    const nextDrafts = { ...this.priceDraftByKey() };
+    delete nextDrafts[key];
+    this.priceDraftByKey.set(nextDrafts);
   }
 
   onVariantStateChange(itemIndex: number, nextState: StockState) {
@@ -336,6 +567,8 @@ export default class CatalogDetailPage {
     const d = this.doc();
     if (!d) return;
 
+    this.normalizeDocumentForSave(d);
+
     this.saving.set(true);
     this.error.set(null);
     this.saveMessage.set(null);
@@ -343,6 +576,9 @@ export default class CatalogDetailPage {
     try {
       await this.svc.updateListing(this.id, {
         listing: d.listing,
+        cover_images: d.cover_images,
+        preview_image_url: d.preview_image_url ?? null,
+        product_colors: d.product_colors,
       });
       this.saveMessage.set("Cambios del producto guardados correctamente.");
     } catch (e: any) {
@@ -369,10 +605,17 @@ export default class CatalogDetailPage {
       const clone = structuredClone(loaded) as NormalizedListingDocV3;
       const defaultCurrency = this.resolveDefaultCurrency(clone);
 
+      clone.cover_images = this.normalizeCoverImages(clone.cover_images, clone.preview_image_url);
+      clone.preview_image_url = this.firstNonEmpty(clone.cover_images);
+      clone.product_colors = this.normalizeProductColors(clone.product_colors || []);
+
       clone.listing.items.forEach((item) => {
         this.ensureColorStock(item);
         this.ensurePrices(item, defaultCurrency);
       });
+
+      this.syncProductColorsFromItems(clone);
+      this.priceDraftByKey.set({});
 
       this.doc.set(clone);
     } catch (e: any) {
@@ -383,23 +626,8 @@ export default class CatalogDetailPage {
   }
 
   private ensureColorStock(item: NormalizedItemV3) {
-    const colors = this.getVariantColors(item);
     const fallbackState = this.normalizeStockState(item.stock_state) || "unknown_qty";
-    const map = new Map<string, StockState>();
-
-    (item.color_stock || []).forEach((entry) => {
-      const name = (entry.color_name || "").trim();
-      if (!name) return;
-      map.set(name, this.normalizeStockState(entry.stock_state) || fallbackState);
-    });
-
-    colors.forEach((color) => {
-      if (!map.has(color)) {
-        map.set(color, fallbackState);
-      }
-    });
-
-    item.color_stock = Array.from(map.entries()).map(([color_name, stock_state]) => ({ color_name, stock_state }));
+    item.color_stock = this.dedupeColorStock(item.color_stock || [], fallbackState);
   }
 
   private ensurePrices(item: NormalizedItemV3, fallbackCurrency: string) {
@@ -471,6 +699,174 @@ export default class CatalogDetailPage {
     }
 
     return null;
+  }
+
+  private priceDraftKey(itemIndex: number, field: PriceFieldKey): string {
+    return `${itemIndex}:${field}`;
+  }
+
+  private firstNonEmpty(values: Array<string | null | undefined> | null | undefined): string | null {
+    if (!Array.isArray(values)) return null;
+
+    for (const value of values) {
+      const normalized = (value || "").trim();
+      if (normalized) return normalized;
+    }
+
+    return null;
+  }
+
+  private normalizeCoverImages(rawImages: Array<string | null | undefined> | null | undefined, fallbackPreview?: string | null): string[] {
+    const list = Array.isArray(rawImages) ? rawImages : [];
+    const normalized = list
+      .map((entry) => (entry || "").trim())
+      .filter(Boolean);
+
+    const deduped = Array.from(new Set(normalized));
+    const preview = (fallbackPreview || "").trim();
+    if (preview && !deduped.includes(preview)) {
+      deduped.unshift(preview);
+    }
+
+    return deduped;
+  }
+
+  private normalizeProductColors(colors: ProductColor[] | null | undefined): ProductColor[] {
+    const map = new Map<string, string | null>();
+
+    (colors || []).forEach((entry) => {
+      const name = (entry?.name || "").trim();
+      if (!name) return;
+
+      const key = name.toLowerCase();
+      const imageUrl = (entry?.image_url || "").trim() || null;
+      if (!map.has(key) || (!map.get(key) && imageUrl)) {
+        map.set(key, imageUrl);
+      }
+    });
+
+    return Array.from(map.entries()).map(([key, image_url]) => ({
+      name: this.toTitleCase(key),
+      image_url,
+    }));
+  }
+
+  private dedupeColorStock(
+    colorStock: Array<{ color_name: string; stock_state: StockState }> | null | undefined,
+    fallbackState: StockState = "unknown_qty"
+  ): Array<{ color_name: string; stock_state: StockState }> {
+    const map = new Map<string, { color_name: string; stock_state: StockState }>();
+
+    (colorStock || []).forEach((entry) => {
+      const name = (entry?.color_name || "").trim();
+      if (!name) return;
+
+      const key = name.toLowerCase();
+      const stockState = this.normalizeStockState(entry?.stock_state) || fallbackState;
+      if (!map.has(key)) {
+        map.set(key, { color_name: name, stock_state: stockState });
+      }
+    });
+
+    return Array.from(map.values());
+  }
+
+  private ensureProductColor(doc: NormalizedListingDocV3, colorName: string) {
+    const name = (colorName || "").trim();
+    if (!name) return;
+
+    const exists = (doc.product_colors || []).some((entry) => (entry.name || "").trim().toLowerCase() === name.toLowerCase());
+    if (exists) return;
+
+    doc.product_colors = [...(doc.product_colors || []), { name, image_url: null }];
+  }
+
+  private dedupeProductColors(doc: NormalizedListingDocV3) {
+    doc.product_colors = this.normalizeProductColors(doc.product_colors || []);
+  }
+
+  private syncProductColorsFromItems(doc: NormalizedListingDocV3) {
+    const current = this.normalizeProductColors(doc.product_colors || []);
+    const map = new Map<string, ProductColor>();
+
+    current.forEach((entry) => {
+      map.set((entry.name || "").trim().toLowerCase(), entry);
+    });
+
+    doc.listing.items.forEach((item) => {
+      (item.color_stock || []).forEach((entry) => {
+        const name = (entry.color_name || "").trim();
+        if (!name) return;
+
+        const key = name.toLowerCase();
+        if (!map.has(key)) {
+          map.set(key, {
+            name,
+            image_url: null,
+          });
+        }
+      });
+    });
+
+    doc.product_colors = Array.from(map.values());
+  }
+
+  private normalizeDocumentForSave(doc: NormalizedListingDocV3) {
+    doc.cover_images = this.normalizeCoverImages(doc.cover_images, doc.preview_image_url);
+    doc.preview_image_url = this.firstNonEmpty(doc.cover_images);
+
+    doc.listing.items = doc.listing.items.map((item) => {
+      const fallbackState = this.normalizeStockState(item.stock_state) || "unknown_qty";
+      const color_stock = this.dedupeColorStock(item.color_stock || [], fallbackState);
+
+      return {
+        ...item,
+        variant_name: (item.variant_name || "").trim() || null,
+        sku: (item.sku || "").trim() || null,
+        notes: (item.notes || "").trim() || null,
+        stock_state: fallbackState,
+        color_stock,
+        prices: {
+          ...item.prices,
+          currency: (item.prices?.currency || this.preferredCurrency() || "MXN").trim().toUpperCase() || "MXN",
+          precio_costo: this.toValidPrice(item.prices?.precio_costo),
+          precio_clienta: this.toValidPrice(item.prices?.precio_clienta),
+          precio_final: this.toValidPrice(item.prices?.precio_final),
+        },
+      };
+    });
+
+    this.syncProductColorsFromItems(doc);
+    this.dedupeProductColors(doc);
+
+    const validNames = new Set((doc.product_colors || []).map((entry) => (entry.name || "").trim().toLowerCase()));
+    doc.listing.items = doc.listing.items.map((item) => ({
+      ...item,
+      color_stock: (item.color_stock || []).filter((entry) => validNames.has((entry.color_name || "").trim().toLowerCase())),
+    }));
+  }
+
+  private generateColorName(colors: ProductColor[]): string {
+    const used = new Set(
+      (colors || [])
+        .map((entry) => (entry.name || "").trim().toLowerCase())
+        .filter(Boolean),
+    );
+
+    let index = 1;
+    while (used.has(`color ${index}`)) {
+      index += 1;
+    }
+    return `Color ${index}`;
+  }
+
+  private toTitleCase(value: string): string {
+    const words = (value || "").split(/\s+/g).filter(Boolean);
+    if (words.length === 0) return "";
+
+    return words
+      .map((word) => `${word.slice(0, 1).toUpperCase()}${word.slice(1).toLowerCase()}`)
+      .join(" ");
   }
 
   private isRequiredSchema(doc: unknown): doc is NormalizedListingDocV3 {

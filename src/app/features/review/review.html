@@ -568,6 +568,184 @@
       <small class="hint">ID: {{ id }}</small>
     </section>
 
+    <section class="card card-merge">
+      <h2 class="section-title">Fusionar Con Producto Validado</h2>
+      <p class="hint">
+        Usa este bloque para aplicar cambios del producto en validacion sobre un producto ya publicado, sin sobreescribir todo.
+      </p>
+
+      <div class="form-group">
+        <label class="label">Buscar producto destino</label>
+        <input
+          type="text"
+          class="input"
+          [ngModel]="mergeSearch()"
+          (ngModelChange)="mergeSearch.set($event)"
+          placeholder="Titulo, proveedor o ID"
+        />
+      </div>
+
+      <div class="form-group">
+        <label class="label">Producto destino *</label>
+        <select
+          class="input"
+          [ngModel]="mergeSelectedTargetId() || ''"
+          (ngModelChange)="onMergeTargetChange($event)"
+        >
+          <option value="">Seleccionar producto validado...</option>
+          @for (target of filteredMergeTargets(); track target.normalized_id) {
+            <option [value]="target.normalized_id">{{ mergeTargetLabel(target) }}</option>
+          }
+        </select>
+        @if (mergeTargetsLoading()) {
+          <small class="hint">Cargando productos validados...</small>
+        } @else {
+          <small class="hint">{{ filteredMergeTargets().length }} producto(s) disponible(s) para fusion.</small>
+        }
+      </div>
+
+      @if (mergeTargetLoading()) {
+        <div class="empty-state">
+          <p>Cargando producto destino...</p>
+        </div>
+      } @else if (mergeTargetDoc(); as target) {
+        <div class="review-summary merge-summary">
+          <article class="summary-item">
+            <span class="summary-label">Destino Variantes</span>
+            <strong>{{ target.listing.items.length }}</strong>
+          </article>
+          <article class="summary-item">
+            <span class="summary-label">Destino Colores</span>
+            <strong>{{ (target.product_colors || []).length }}</strong>
+          </article>
+          <article class="summary-item">
+            <span class="summary-label">Destino Imagenes</span>
+            <strong>{{ (target.cover_images || []).length }}</strong>
+          </article>
+          <article class="summary-item">
+            <span class="summary-label">Destino ID</span>
+            <strong>{{ target.normalized_id }}</strong>
+          </article>
+        </div>
+
+        @if (mergePreview(); as preview) {
+          <div class="merge-preview-grid">
+            <div class="merge-preview-chip">Imagenes nuevas detectadas: <strong>{{ preview.newImages }}</strong></div>
+            <div class="merge-preview-chip">Colores nuevos detectados: <strong>{{ preview.newColors }}</strong></div>
+            <div class="merge-preview-chip">Variantes nuevas detectadas: <strong>{{ preview.newVariants }}</strong></div>
+            <div class="merge-preview-chip">Variantes coincidentes: <strong>{{ preview.matchedVariants }}</strong></div>
+          </div>
+        }
+
+        <div class="merge-options-grid">
+          <label class="checkbox-label">
+            <input
+              type="checkbox"
+              class="checkbox"
+              [checked]="mergeOptionEnabled('supplier')"
+              (change)="onMergeOptionChange('supplier', $any($event.target).checked)"
+            />
+            <span>Actualizar proveedor del destino</span>
+          </label>
+
+          <label class="checkbox-label">
+            <input
+              type="checkbox"
+              class="checkbox"
+              [checked]="mergeOptionEnabled('title')"
+              (change)="onMergeOptionChange('title', $any($event.target).checked)"
+            />
+            <span>Actualizar titulo del destino</span>
+          </label>
+
+          <label class="checkbox-label">
+            <input
+              type="checkbox"
+              class="checkbox"
+              [checked]="mergeOptionEnabled('category')"
+              (change)="onMergeOptionChange('category', $any($event.target).checked)"
+            />
+            <span>Actualizar categoria del destino</span>
+          </label>
+
+          <label class="checkbox-label">
+            <input
+              type="checkbox"
+              class="checkbox"
+              [checked]="mergeOptionEnabled('images')"
+              (change)="onMergeOptionChange('images', $any($event.target).checked)"
+            />
+            <span>Agregar imagenes nuevas (union)</span>
+          </label>
+
+          <label class="checkbox-label">
+            <input
+              type="checkbox"
+              class="checkbox"
+              [checked]="mergeOptionEnabled('globalColors')"
+              (change)="onMergeOptionChange('globalColors', $any($event.target).checked)"
+            />
+            <span>Agregar colores globales nuevos (union)</span>
+          </label>
+
+          <label class="checkbox-label">
+            <input
+              type="checkbox"
+              class="checkbox"
+              [checked]="mergeOptionEnabled('appendVariants')"
+              (change)="onMergeOptionChange('appendVariants', $any($event.target).checked)"
+            />
+            <span>Agregar variantes nuevas (por SKU/nombre)</span>
+          </label>
+
+          <label class="checkbox-label">
+            <input
+              type="checkbox"
+              class="checkbox"
+              [checked]="mergeOptionEnabled('updateExistingVariantStock')"
+              (change)="onMergeOptionChange('updateExistingVariantStock', $any($event.target).checked)"
+            />
+            <span>Actualizar stock en variantes coincidentes</span>
+          </label>
+
+          <label class="checkbox-label">
+            <input
+              type="checkbox"
+              class="checkbox"
+              [checked]="mergeOptionEnabled('updateExistingVariantPrices')"
+              (change)="onMergeOptionChange('updateExistingVariantPrices', $any($event.target).checked)"
+            />
+            <span>Actualizar precios en variantes coincidentes</span>
+          </label>
+
+          <label class="checkbox-label">
+            <input
+              type="checkbox"
+              class="checkbox"
+              [checked]="mergeOptionEnabled('updateExistingVariantNotes')"
+              (change)="onMergeOptionChange('updateExistingVariantNotes', $any($event.target).checked)"
+            />
+            <span>Actualizar notas en variantes coincidentes</span>
+          </label>
+        </div>
+      }
+
+      <div class="merge-actions">
+        <button
+          type="button"
+          class="btn btn-primary"
+          [disabled]="!mergeSelectedTargetId() || mergeApplying() || mergeTargetLoading()"
+          (click)="mergeIntoSelectedProduct()"
+        >
+          @if (mergeApplying()) {
+            Aplicando fusion...
+          } @else {
+            Aplicar Fusion Controlada
+          }
+        </button>
+      </div>
+    </section>
+
     <div class="actions-shell">
       <div class="actions-bar">
         <button type="button" class="btn btn-secondary" (click)="save()">

@@ -28,6 +28,25 @@ interface ReviewPopupState {
   dismissible?: boolean;
 }
 
+interface MergeOptions {
+  supplier: boolean;
+  title: boolean;
+  category: boolean;
+  images: boolean;
+  globalColors: boolean;
+  appendVariants: boolean;
+  updateExistingVariantStock: boolean;
+  updateExistingVariantPrices: boolean;
+  updateExistingVariantNotes: boolean;
+}
+
+interface MergePreview {
+  newImages: number;
+  newColors: number;
+  newVariants: number;
+  matchedVariants: number;
+}
+
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
@@ -86,6 +105,25 @@ export default class ReviewPage {
   hasVariantColors = signal(false);
   useSharedPrices = signal(false);
 
+  mergeTargetsLoading = signal(false);
+  mergeTargetLoading = signal(false);
+  mergeApplying = signal(false);
+  mergeSearch = signal("");
+  mergeTargets = signal<NormalizedListingDocV3[]>([]);
+  mergeSelectedTargetId = signal<string | null>(null);
+  mergeTargetDoc = signal<NormalizedListingDocV3 | null>(null);
+  mergeOptions = signal<MergeOptions>({
+    supplier: false,
+    title: false,
+    category: false,
+    images: true,
+    globalColors: true,
+    appendVariants: true,
+    updateExistingVariantStock: true,
+    updateExistingVariantPrices: false,
+    updateExistingVariantNotes: false,
+  });
+
   popupState = signal<ReviewPopupState | null>(null);
   private popupResolver: ((value: boolean) => void) | null = null;
 
@@ -99,6 +137,70 @@ export default class ReviewPage {
   visibleRawImages = computed(() => {
     const ex = new Set(this.excludedImages());
     return (this.rawImages() || []).filter(u => !!u && !ex.has(u));
+  });
+
+  filteredMergeTargets = computed(() => {
+    const source = this.draft();
+    const query = (this.mergeSearch() || "").trim().toLowerCase();
+    const sourceSupplier = (source?.supplier_id || "").trim().toLowerCase();
+
+    const ranked = this.mergeTargets()
+      .filter((entry) => entry.normalized_id !== this.id)
+      .map((entry) => {
+        const title = (entry.listing.title || "").trim();
+        const supplier = (entry.supplier_id || "").trim();
+        const haystack = `${entry.normalized_id} ${title} ${supplier}`.toLowerCase();
+        const scoreSupplier = sourceSupplier && supplier.toLowerCase() === sourceSupplier ? 1 : 0;
+        const scoreText = query && haystack.includes(query) ? 1 : 0;
+        return {
+          entry,
+          score: scoreSupplier * 2 + scoreText,
+          haystack,
+        };
+      })
+      .filter((row) => !query || row.haystack.includes(query) || row.score > 0)
+      .sort((a, b) => b.score - a.score || a.entry.normalized_id.localeCompare(b.entry.normalized_id))
+      .map((row) => row.entry);
+
+    return ranked;
+  });
+
+  mergePreview = computed<MergePreview | null>(() => {
+    const source = this.draft();
+    const target = this.mergeTargetDoc();
+    if (!source || !target) return null;
+
+    const sourceImages = this.collectDocumentImages(source);
+    const targetImages = new Set(this.collectDocumentImages(target));
+    const newImages = sourceImages.filter((url) => !targetImages.has(url)).length;
+
+    const sourceColors = this.collectColorNames(source);
+    const targetColors = new Set(this.collectColorNames(target));
+    const newColors = sourceColors.filter((name) => !targetColors.has(name)).length;
+
+    const targetIndex = this.buildVariantIndex(target.listing.items);
+    let matchedVariants = 0;
+    let newVariants = 0;
+
+    source.listing.items.forEach((item) => {
+      const key = this.variantMatchKey(item);
+      if (!key) {
+        newVariants += 1;
+        return;
+      }
+      if (targetIndex.has(key)) {
+        matchedVariants += 1;
+      } else {
+        newVariants += 1;
+      }
+    });
+
+    return {
+      newImages,
+      newColors,
+      newVariants,
+      matchedVariants,
+    };
   });
 
   private moneyFormatter = new Intl.NumberFormat("en-US", {
@@ -132,9 +234,9 @@ export default class ReviewPage {
   });
   
   async ngOnInit() {
-    // Asegurar que las categorías estén cargadas
     await this.categoriesService.loadCategories();
     await this.load();
+    await this.loadMergeTargets();
     this.onCategorySearch(); // Inicializar lista
   }
 
@@ -202,6 +304,423 @@ export default class ReviewPage {
     } finally {
       this.loading.set(false);
     }
+  }
+
+  async loadMergeTargets() {
+    this.mergeTargetsLoading.set(true);
+    try {
+      const rows: NormalizedListingDocV3[] = [];
+      let cursor: any = null;
+      const maxPages = 4;
+
+      for (let pageIndex = 0; pageIndex < maxPages; pageIndex += 1) {
+        const page = await this.svc.listValidated(100, cursor);
+        (page.docs as unknown[]).forEach((entry) => {
+          if (!this.isRequiredSchema(entry)) return;
+          if (entry.normalized_id !== this.id) {
+            rows.push(entry);
+          }
+        });
+
+        if (!page.nextCursor) break;
+        cursor = page.nextCursor;
+      }
+
+      this.mergeTargets.set(rows);
+    } catch (error) {
+      console.error("No se pudieron cargar candidatos para fusion", error);
+      this.mergeTargets.set([]);
+    } finally {
+      this.mergeTargetsLoading.set(false);
+    }
+  }
+
+  mergeOptionEnabled(key: keyof MergeOptions): boolean {
+    return this.mergeOptions()[key];
+  }
+
+  onMergeOptionChange(key: keyof MergeOptions, checked: boolean) {
+    const next: MergeOptions = {
+      ...this.mergeOptions(),
+      [key]: checked,
+    };
+
+    // Si agregamos variantes, necesitamos colores globales para mantener integridad.
+    if (key === "appendVariants" && checked) {
+      next.globalColors = true;
+    }
+    if (key === "globalColors" && !checked) {
+      next.appendVariants = false;
+    }
+
+    this.mergeOptions.set(next);
+  }
+
+  mergeTargetLabel(entry: NormalizedListingDocV3): string {
+    const title = (entry.listing.title || "").trim() || "(sin titulo)";
+    const supplier = (entry.supplier_id || "").trim() || "sin proveedor";
+    return `${title} | ${supplier} | ${entry.normalized_id}`;
+  }
+
+  async onMergeTargetChange(rawTargetId: string | null | undefined) {
+    const targetId = (rawTargetId || "").trim() || null;
+    this.mergeSelectedTargetId.set(targetId);
+
+    if (!targetId) {
+      this.mergeTargetDoc.set(null);
+      return;
+    }
+
+    this.mergeTargetLoading.set(true);
+    try {
+      const loaded = await this.svc.getById(targetId);
+      if (!this.isRequiredSchema(loaded)) {
+        throw new Error(`El producto destino no usa esquema ${this.requiredSchemaVersion}.`);
+      }
+
+      const clone = structuredClone(loaded) as NormalizedListingDocV3;
+      this.normalizeV3Draft(clone);
+      this.mergeTargetDoc.set(clone);
+    } catch (error: any) {
+      this.mergeTargetDoc.set(null);
+      this.showInfoPopup(error?.message || "No se pudo cargar el producto destino para fusion.", "Fusion", "error");
+    } finally {
+      this.mergeTargetLoading.set(false);
+    }
+  }
+
+  async mergeIntoSelectedProduct() {
+    const sourceDraft = this.draft();
+    const targetId = this.mergeSelectedTargetId();
+
+    if (!sourceDraft || !targetId) {
+      this.showInfoPopup("Selecciona un producto validado destino para fusionar.", "Fusion", "warning");
+      return;
+    }
+
+    if (!confirm("Se aplicara una fusion controlada al producto seleccionado. ¿Continuar?")) {
+      return;
+    }
+
+    this.mergeApplying.set(true);
+    try {
+      let targetDoc = this.mergeTargetDoc();
+      if (!targetDoc || targetDoc.normalized_id !== targetId) {
+        const loaded = await this.svc.getById(targetId);
+        if (!this.isRequiredSchema(loaded)) {
+          throw new Error(`El producto destino no usa esquema ${this.requiredSchemaVersion}.`);
+        }
+        targetDoc = structuredClone(loaded) as NormalizedListingDocV3;
+      }
+
+      const merged = this.buildMergedDocument(sourceDraft, targetDoc, this.mergeOptions());
+
+      await this.svc.updateListing(targetId, {
+        supplier_id: merged.supplier_id ?? null,
+        listing: merged.listing,
+        preview_image_url: merged.preview_image_url ?? null,
+        cover_images: merged.cover_images,
+        product_colors: merged.product_colors,
+      });
+
+      const uid = this.auth.uid();
+      if (uid) {
+        await this.svc.reject(this.id, uid);
+      }
+
+      await this.router.navigateByUrl(`/main/catalogo/${targetId}`);
+    } catch (error: any) {
+      this.showInfoPopup(error?.message || "No se pudo fusionar el producto.", "Fusion", "error");
+    } finally {
+      this.mergeApplying.set(false);
+    }
+  }
+
+  private buildMergedDocument(
+    sourceDoc: NormalizedListingDocV3,
+    targetDoc: NormalizedListingDocV3,
+    options: MergeOptions
+  ): NormalizedListingDocV3 {
+    const incoming = structuredClone(sourceDoc) as NormalizedListingDocV3;
+    const merged = structuredClone(targetDoc) as NormalizedListingDocV3;
+
+    this.normalizeV3Draft(incoming);
+    this.normalizeV3Draft(merged);
+
+    if (options.supplier && incoming.supplier_id) {
+      merged.supplier_id = incoming.supplier_id;
+    }
+
+    if (options.title) {
+      const title = (incoming.listing.title || "").trim();
+      if (title) {
+        merged.listing.title = title;
+      }
+    }
+
+    if (options.category) {
+      const category = (incoming.listing.category_hint || "").trim();
+      if (category) {
+        merged.listing.category_hint = category;
+      }
+    }
+
+    if (options.images) {
+      const seed = this.normalizeImageArray([incoming.preview_image_url || null]);
+      merged.cover_images = this.mergeStringArray(merged.cover_images || [], incoming.cover_images || [], seed);
+      if (merged.cover_images.length > 0) {
+        const currentPreview = (merged.preview_image_url || "").trim();
+        merged.preview_image_url = currentPreview && merged.cover_images.includes(currentPreview)
+          ? currentPreview
+          : merged.cover_images[0];
+      }
+    }
+
+    if (options.globalColors) {
+      merged.product_colors = this.mergeProductColors(merged.product_colors || [], incoming.product_colors || []);
+    }
+
+    const targetIndex = this.buildVariantIndex(merged.listing.items);
+    incoming.listing.items.forEach((sourceItem) => {
+      const key = this.variantMatchKey(sourceItem);
+      const targetItemIndex = key ? targetIndex.get(key) : undefined;
+
+      if (targetItemIndex === undefined) {
+        if (!options.appendVariants) return;
+
+        const appended = this.cloneVariantForMerge(sourceItem);
+        merged.listing.items.push(appended);
+
+        const appendedIndex = merged.listing.items.length - 1;
+        const appendedKey = this.variantMatchKey(appended);
+        if (appendedKey && !targetIndex.has(appendedKey)) {
+          targetIndex.set(appendedKey, appendedIndex);
+        }
+        return;
+      }
+
+      const targetItem = merged.listing.items[targetItemIndex];
+      this.mergeVariantData(targetItem, sourceItem, options);
+    });
+
+    if (options.globalColors) {
+      this.syncProductColorsFromVariantStock(merged);
+      this.normalizeColorReferencesForSave(merged);
+    } else {
+      merged.listing.items.forEach((item) => {
+        item.color_stock = this.normalizeColorStock(item.color_stock || [], item.stock_state);
+      });
+    }
+
+    if (!merged.preview_image_url && merged.cover_images.length > 0) {
+      merged.preview_image_url = merged.cover_images[0];
+    }
+    if (merged.cover_images.length === 0 && merged.preview_image_url) {
+      merged.cover_images = [merged.preview_image_url];
+    }
+
+    this.ensureVariantSkus(merged);
+    return merged;
+  }
+
+  private mergeVariantData(targetItem: NormalizedItemV3, sourceItem: NormalizedItemV3, options: MergeOptions) {
+    if (options.updateExistingVariantStock) {
+      const nextState = this.normalizeStockState(sourceItem.stock_state);
+      if (nextState) {
+        targetItem.stock_state = nextState;
+      }
+    }
+
+    if (options.updateExistingVariantPrices) {
+      const nextCost = this.toValidNumber(sourceItem.prices?.precio_costo);
+      const nextFinal = this.toValidNumber(sourceItem.prices?.precio_final);
+      targetItem.prices = {
+        ...targetItem.prices,
+        precio_costo: nextCost !== null ? nextCost : targetItem.prices?.precio_costo ?? null,
+        precio_final: nextFinal !== null ? nextFinal : targetItem.prices?.precio_final ?? null,
+        currency: (sourceItem.prices?.currency || targetItem.prices?.currency || "MXN").trim() || "MXN",
+      };
+    }
+
+    if (options.updateExistingVariantNotes) {
+      const notes = (sourceItem.notes || "").trim();
+      if (notes) {
+        targetItem.notes = notes;
+      }
+    }
+
+    if (options.globalColors || options.updateExistingVariantStock) {
+      const existingByColor = new Map(
+        (targetItem.color_stock || []).map((entry) => [(entry.color_name || "").trim().toLowerCase(), entry])
+      );
+
+      (sourceItem.color_stock || []).forEach((sourceColor) => {
+        const colorName = (sourceColor.color_name || "").trim();
+        if (!colorName) return;
+
+        const key = colorName.toLowerCase();
+        const existing = existingByColor.get(key);
+
+        if (!existing) {
+          if (!options.globalColors) return;
+          targetItem.color_stock.push({
+            color_name: colorName,
+            stock_state: this.normalizeStockState(sourceColor.stock_state) || targetItem.stock_state || "in_stock",
+          });
+          return;
+        }
+
+        if (options.updateExistingVariantStock) {
+          existing.stock_state = this.normalizeStockState(sourceColor.stock_state) || existing.stock_state;
+        }
+      });
+    }
+
+    targetItem.color_stock = this.normalizeColorStock(targetItem.color_stock || [], targetItem.stock_state);
+    this.recalculateVariantPrices(targetItem);
+  }
+
+  private cloneVariantForMerge(item: NormalizedItemV3): NormalizedItemV3 {
+    const cloned = structuredClone(item) as NormalizedItemV3;
+    cloned.variant_name = (cloned.variant_name || "").trim() || null;
+    cloned.sku = (cloned.sku || "").trim().toUpperCase() || null;
+    cloned.notes = (cloned.notes || "").trim() || null;
+    cloned.stock_state = this.normalizeStockState(cloned.stock_state) || "in_stock";
+    cloned.color_stock = this.normalizeColorStock(cloned.color_stock || [], cloned.stock_state);
+    this.recalculateVariantPrices(cloned);
+    return cloned;
+  }
+
+  private normalizeColorStock(
+    entries: Array<{ color_name: string; stock_state: StockState }>,
+    fallbackState: StockState | null | undefined
+  ): Array<{ color_name: string; stock_state: StockState }> {
+    const normalized = new Map<string, { color_name: string; stock_state: StockState }>();
+    const fallback = this.normalizeStockState(fallbackState) || "in_stock";
+
+    entries.forEach((entry) => {
+      const name = (entry.color_name || "").trim();
+      if (!name) return;
+      const key = name.toLowerCase();
+      if (normalized.has(key)) return;
+
+      normalized.set(key, {
+        color_name: name,
+        stock_state: this.normalizeStockState(entry.stock_state) || fallback,
+      });
+    });
+
+    return Array.from(normalized.values());
+  }
+
+  private mergeStringArray(...groups: Array<Array<string | null | undefined>>): string[] {
+    const unique = new Set<string>();
+    const out: string[] = [];
+
+    groups.forEach((group) => {
+      (group || []).forEach((value) => {
+        const normalized = (value || "").trim();
+        if (!normalized || unique.has(normalized)) return;
+        unique.add(normalized);
+        out.push(normalized);
+      });
+    });
+
+    return out;
+  }
+
+  private mergeProductColors(base: Array<{ name: string; image_url: string | null }>, incoming: Array<{ name: string; image_url: string | null }>) {
+    const map = new Map<string, { name: string; image_url: string | null }>();
+
+    [...(base || []), ...(incoming || [])].forEach((entry) => {
+      const name = (entry.name || "").trim();
+      if (!name) return;
+      const key = name.toLowerCase();
+      const imageUrl = (entry.image_url || "").trim() || null;
+      const existing = map.get(key);
+
+      if (!existing) {
+        map.set(key, { name, image_url: imageUrl });
+        return;
+      }
+
+      if (!existing.image_url && imageUrl) {
+        existing.image_url = imageUrl;
+      }
+    });
+
+    return Array.from(map.values());
+  }
+
+  private collectDocumentImages(doc: NormalizedListingDocV3): string[] {
+    return this.mergeStringArray(
+      doc.cover_images || [],
+      [doc.preview_image_url || null],
+      (doc.product_colors || []).map((entry) => entry.image_url || null),
+    );
+  }
+
+  private collectColorNames(doc: NormalizedListingDocV3): string[] {
+    const names = new Set<string>();
+
+    (doc.product_colors || []).forEach((entry) => {
+      const name = (entry.name || "").trim().toLowerCase();
+      if (name) names.add(name);
+    });
+
+    doc.listing.items.forEach((item) => {
+      (item.color_stock || []).forEach((entry) => {
+        const name = (entry.color_name || "").trim().toLowerCase();
+        if (name) names.add(name);
+      });
+    });
+
+    return Array.from(names.values());
+  }
+
+  private syncProductColorsFromVariantStock(doc: NormalizedListingDocV3) {
+    const current = this.mergeProductColors(doc.product_colors || [], []);
+    const map = new Map(current.map((entry) => [(entry.name || "").trim().toLowerCase(), entry]));
+
+    doc.listing.items.forEach((item) => {
+      (item.color_stock || []).forEach((entry) => {
+        const name = (entry.color_name || "").trim();
+        if (!name) return;
+        const key = name.toLowerCase();
+        if (!map.has(key)) {
+          map.set(key, { name, image_url: null });
+        }
+      });
+    });
+
+    doc.product_colors = Array.from(map.values());
+  }
+
+  private buildVariantIndex(items: NormalizedItemV3[]): Map<string, number> {
+    const map = new Map<string, number>();
+    items.forEach((item, index) => {
+      const key = this.variantMatchKey(item);
+      if (!key || map.has(key)) return;
+      map.set(key, index);
+    });
+    return map;
+  }
+
+  private variantMatchKey(item: NormalizedItemV3): string | null {
+    const sku = (item.sku || "").trim().toUpperCase();
+    if (sku) return `sku:${sku}`;
+
+    const name = (item.variant_name || "").trim().toLowerCase();
+    if (name) return `name:${name}`;
+
+    const variantId = (item.variant_id || "").trim().toLowerCase();
+    if (variantId) return `id:${variantId}`;
+
+    return null;
+  }
+
+  private normalizeImageArray(values: Array<string | null | undefined>): string[] {
+    return this.mergeStringArray(values || []);
   }
 
   private initializeImageColors() {
@@ -1518,3 +2037,4 @@ export default class ReviewPage {
     return `${currency} ${this.moneyFormatter.format(value)}`;
   }
 }
+

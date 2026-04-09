@@ -7,10 +7,10 @@
   --ios-text: #111827;
   --ios-muted: #6b7280;
   --ios-border: rgba(15, 23, 42, 0.09);
-  --ios-shadow: 0 14px 36px rgba(15, 23, 42, 0.08);
-  --ios-radius-xl: 24px;
-  --ios-radius-lg: 18px;
-  --ios-radius-md: 14px;
+  --ios-shadow: 0 10px 28px rgba(15, 23, 42, 0.07);
+  --ios-radius-xl: 18px;
+  --ios-radius-lg: 14px;
+  --ios-radius-md: 11px;
   --ios-blue: #007aff;
 
   display: block;
@@ -38,13 +38,13 @@
 }
 
 .detail-page {
-  width: min(1280px, 100%);
+  width: min(1400px, 100%);
   min-height: 100vh;
   margin: 0 auto;
-  padding: 18px 14px 26px;
+  padding: 12px 12px 18px;
   display: grid;
   align-content: start;
-  gap: 14px;
+  gap: 10px;
 }
 
 .surface-card {
@@ -55,14 +55,14 @@
 }
 
 .detail-header {
-  padding: 14px;
+  padding: 10px;
   display: grid;
-  gap: 12px;
+  gap: 9px;
 }
 
 .header-leading {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .header-copy {
@@ -94,20 +94,20 @@
 .btn {
   border: 1px solid transparent;
   border-radius: 13px;
-  min-height: 40px;
-  padding: 0 14px;
+  min-height: 34px;
+  padding: 0 11px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  font-size: 0.84rem;
+  font-size: 0.79rem;
   font-weight: 620;
   cursor: pointer;
   transition: transform 0.15s ease, background-color 0.2s ease, border-color 0.2s ease;
 }
 
 .btn .material-symbols-rounded {
-  font-size: 18px;
+  font-size: 17px;
 }
 
 .btn:hover:not(:disabled) {
@@ -160,19 +160,19 @@
 }
 
 .btn-xs {
-  min-height: 34px;
-  padding: 0 10px;
-  font-size: 0.76rem;
+  min-height: 30px;
+  padding: 0 9px;
+  font-size: 0.72rem;
 }
 
 .notice {
   border-radius: var(--ios-radius-lg);
   border: 1px solid transparent;
-  padding: 12px 14px;
+  padding: 9px 10px;
   display: flex;
   align-items: flex-start;
   gap: 9px;
-  font-size: 0.88rem;
+  font-size: 0.82rem;
 }
 
 .notice p {
@@ -226,16 +226,16 @@
 }
 
 .summary-card {
-  padding: 14px;
+  padding: 10px;
   display: grid;
-  gap: 14px;
+  gap: 10px;
 }
 
 .summary-image,
 .summary-image-placeholder {
-  width: min(100%, 260px);
+  width: min(100%, 200px);
   aspect-ratio: 1;
-  border-radius: 18px;
+  border-radius: 14px;
 }
 
 .summary-image {
@@ -253,7 +253,7 @@
 
 .summary-content {
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 
 .summary-title-block {
@@ -263,7 +263,7 @@
 
 .summary-title {
   margin: 0;
-  font-size: clamp(1.25rem, 1rem + 1vw, 1.96rem);
+  font-size: clamp(1.05rem, 0.92rem + 0.7vw, 1.44rem);
   line-height: 1.08;
   letter-spacing: -0.02em;
 }
@@ -279,15 +279,15 @@
 
 .summary-meta-grid {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .meta-pill {
   min-width: 0;
   border: 1px solid rgba(15, 23, 42, 0.08);
   background: #f8fafd;
-  border-radius: 14px;
-  padding: 9px 10px;
+  border-radius: 11px;
+  padding: 7px 8px;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 8px;
@@ -317,16 +317,16 @@
 }
 
 .summary-stock {
-  min-height: 40px;
-  border-radius: 12px;
+  min-height: 34px;
+  border-radius: 10px;
   border: 1px solid rgba(15, 23, 42, 0.09);
   background: #f7f9fd;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   width: fit-content;
-  padding: 0 11px;
-  font-size: 0.82rem;
+  padding: 0 9px;
+  font-size: 0.76rem;
   color: #46566f;
 }
 
@@ -369,9 +369,9 @@
 }
 
 .pricing-overview {
-  padding: 14px;
+  padding: 10px;
   display: grid;
-  gap: 12px;
+  gap: 9px;
 }
 
 .section-head {
@@ -401,16 +401,16 @@
 
 .pricing-grid {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .price-kpi {
   border: 1px solid rgba(15, 23, 42, 0.08);
   background: #f8fafd;
-  border-radius: 14px;
-  padding: 10px;
+  border-radius: 11px;
+  padding: 8px;
   display: grid;
-  gap: 5px;
+  gap: 4px;
 }
 
 .price-kpi-empty {
@@ -448,16 +448,92 @@
   line-height: 1.35;
 }
 
+.assets-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.assets-card {
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.section-head-inline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.asset-rows {
+  display: grid;
+  gap: 7px;
+}
+
+.asset-row {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: #f8fafd;
+  border-radius: 11px;
+  padding: 7px;
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+
+.asset-thumb {
+  width: 56px;
+  height: 56px;
+  border-radius: 9px;
+  background: #eef3fb;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  color: #7d8ca1;
+}
+
+.asset-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.asset-main {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.asset-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.asset-form-grid {
+  display: grid;
+  gap: 6px;
+}
+
+.asset-meta {
+  color: #6f8098;
+  font-size: 0.74rem;
+}
+
 .variants-grid {
   display: grid;
-  gap: 12px;
+  gap: 9px;
 }
 
 .variant-card {
-  padding: 12px;
+  padding: 10px;
   display: grid;
-  gap: 12px;
-  border-radius: 22px;
+  gap: 9px;
+  border-radius: 16px;
 }
 
 .variant-head {
@@ -501,12 +577,12 @@
 
 .variant-base-grid {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .variant-row {
   display: grid;
-  gap: 5px;
+  gap: 4px;
 }
 
 .label {
@@ -534,8 +610,8 @@
   border: 1px solid var(--ios-border);
   background: var(--ios-surface-muted);
   border-radius: var(--ios-radius-md);
-  min-height: 42px;
-  padding: 0 11px;
+  min-height: 36px;
+  padding: 0 9px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -547,7 +623,7 @@
 }
 
 .field-compact {
-  min-height: 38px;
+  min-height: 34px;
 }
 
 .field-textarea {
@@ -558,16 +634,16 @@
 
 .input {
   width: 100%;
-  min-height: 38px;
+  min-height: 32px;
   border: 0;
   background: transparent;
   color: var(--ios-text);
-  font-size: 0.87rem;
+  font-size: 0.82rem;
 }
 
 .textarea {
   resize: vertical;
-  min-height: 74px;
+  min-height: 62px;
   line-height: 1.35;
 }
 
@@ -584,10 +660,10 @@
 .prices-section {
   border: 1px solid rgba(15, 23, 42, 0.08);
   background: #f8fafd;
-  border-radius: 14px;
-  padding: 10px;
+  border-radius: 11px;
+  padding: 8px;
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .prices-section h4,
@@ -607,7 +683,7 @@
 
 .price-fields-grid {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .price-field-card {
@@ -641,24 +717,36 @@
 
 .notes-section {
   display: grid;
-  gap: 5px;
+  gap: 4px;
 }
 
 .colors-section {
   border-top: 1px solid rgba(15, 23, 42, 0.08);
-  padding-top: 10px;
+  padding-top: 8px;
   display: grid;
-  gap: 8px;
+  gap: 6px;
+}
+
+.colors-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .color-rows {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .color-row {
   display: grid;
-  gap: 8px;
+  gap: 6px;
+}
+
+.color-remove-btn {
+  justify-self: start;
 }
 
 .color-name {
@@ -690,14 +778,14 @@
   .summary-image,
   .summary-image-placeholder {
     width: 100%;
-    max-width: 260px;
+    max-width: 200px;
   }
 }
 
 @media (min-width: 760px) {
   .detail-page {
-    padding: 22px 18px 30px;
-    gap: 16px;
+    padding: 16px 14px 22px;
+    gap: 12px;
   }
 
   .detail-header {
@@ -718,14 +806,22 @@
   }
 
   .summary-card {
-    grid-template-columns: 250px minmax(0, 1fr);
+    grid-template-columns: 190px minmax(0, 1fr);
     align-items: start;
-    padding: 16px;
+    padding: 11px;
   }
 
   .summary-image,
   .summary-image-placeholder {
-    width: 250px;
+    width: 190px;
+  }
+
+  .assets-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .asset-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .summary-meta-grid {
@@ -745,25 +841,29 @@
   }
 
   .color-row {
-    grid-template-columns: minmax(110px, 1fr) minmax(180px, 1fr);
+    grid-template-columns: minmax(120px, 1fr) minmax(145px, 1fr) auto;
     align-items: center;
+  }
+
+  .color-remove-btn {
+    justify-self: end;
   }
 }
 
 @media (min-width: 1080px) {
   .detail-page {
-    padding: 24px 22px 34px;
+    padding: 18px 18px 24px;
   }
 
   .variants-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 14px;
+    gap: 10px;
   }
 }
 
 @media (min-width: 1400px) {
   .variants-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 15px;
+    gap: 11px;
   }
 }

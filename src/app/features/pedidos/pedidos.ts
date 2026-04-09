@@ -1,4 +1,4 @@
-import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, QueryList, ViewChildren, computed, inject, signal, effect, ChangeDetectionStrategy, DestroyRef, HostListener } from "@angular/core";
+﻿import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, QueryList, ViewChildren, computed, inject, signal, effect, ChangeDetectionStrategy, DestroyRef, HostListener } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { CurrencyPipe, DatePipe, NgClass } from "@angular/common";
 import { FormsModule } from "@angular/forms";
@@ -108,7 +108,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   bulkSelected = signal<Record<string, boolean>>({});
   bulkNotesMessage = signal<string | null>(null);
 
-  // ── Vista tabla ────────────────────────────────────────────────────
+  // â”€â”€ Vista tabla â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   viewMode = signal<"cards" | "table">("cards");
   tableSortCol = signal<TableSortColumn>("updated_at");
   tableSortDir = signal<"asc" | "desc">("desc");
@@ -249,8 +249,10 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     return this.list().filter((order) => {
       if (route !== "todos" && order.route_id !== route) return false;
       if (!this.matchesSearchTerm(order, term)) return false;
-      if (from && order.created_at < from) return false;
-      if (to && order.created_at > to + "T23:59:59") return false;
+      const createdDate = this.toLocalDateInputValueFromString(order.created_at);
+      if (!createdDate) return false;
+      if (from && createdDate < from) return false;
+      if (to && createdDate > to) return false;
       return true;
     });
   });
@@ -1064,10 +1066,13 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
 
   tableStatusLabel(status: string): string {
     const map: Record<string, string> = {
-      borrador: "Borrador",
+      borrador: "Capturando pedido",
       confirmando_proveedor: "Confirmando",
-      en_transito: "En tránsito",
-      recibido_qa: "En transito",
+      supplier_processing: "En transito",
+      inbound_in_transit: "En transito",
+      en_transito: "En transito",
+      en_empaque: "Empaque",
+      recibido_qa: "Empaque",
       packing: "Empaque",
       empaque: "Empaque",
       ready_for_route: "Listo ruta",
@@ -1086,6 +1091,13 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   tableStatusClass(status: string): string {
     const map: Record<string, string> = {
       borrador: "trow-status--draft",
+      supplier_processing: "trow-status--transit",
+      inbound_in_transit: "trow-status--transit",
+      en_transito: "trow-status--transit",
+      en_empaque: "trow-status--packing",
+      recibido_qa: "trow-status--packing",
+      packing: "trow-status--packing",
+      empaque: "trow-status--packing",
       pago_pendiente: "trow-status--pay",
       pagado_parcial: "trow-status--partial",
       pagado: "trow-status--paid",
@@ -1139,11 +1151,11 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   routeOptions = computed(() => [{ id: "todos", name: "Todas las rutas" }, ...this.routes.routes().map((r) => ({ id: r.route_id, name: r.name }))]);
   customerOptions = computed(() => this.customers.getActive());
   customerSuggestions = computed(() => {
-    const term = this.customerQuery().trim().toLowerCase();
+    const term = this.normalizeSearchTerm(this.customerQuery());
     if (term.length < 2) return [];
     return this.customerOptions()
       .filter((c) => {
-        const blob = `${c.first_name} ${c.last_name} ${c.whatsapp}`.toLowerCase();
+        const blob = this.normalizeSearchTerm(`${c.first_name} ${c.last_name} ${c.whatsapp}`);
         return blob.includes(term);
       })
       .slice(0, 6);
@@ -1346,7 +1358,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
 
   intentOptions = [
     { id: "por_confirmar" as const, label: "Por confirmar" },
-    { id: "en_transito" as const, label: "En transito proveedor" },
+    { id: "en_transito" as const, label: "En transito" },
     { id: "en_empaque" as const, label: "En empaque" },
     { id: "listos_ruta" as const, label: "Listos para ruta" },
     { id: "en_ruta" as const, label: "En ruta" },
@@ -1516,7 +1528,11 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private normalizeSearchTerm(value: string): string {
-    return (value || "").trim().toLowerCase();
+    return String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .trim();
   }
 
   private compactSearchValue(value: string): string {
@@ -1560,6 +1576,13 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     const month = String(date.getMonth() + 1).padStart(2, "0");
     const day = String(date.getDate()).padStart(2, "0");
     return `${year}-${month}-${day}`;
+  }
+
+  private toLocalDateInputValueFromString(dateInput: string | null | undefined): string | null {
+    if (!dateInput) return null;
+    const parsed = new Date(dateInput);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return this.toDateInputValue(parsed);
   }
 
   private formatTableDateCompact(input: string): string {
@@ -1806,15 +1829,15 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
 
   statusLabel(status: OrderStatus): string {
     const map: Record<OrderStatus, string> = {
-      borrador: "Borrador",
+      borrador: "Capturando pedido",
       confirmando_proveedor: "Confirmando",
       reservado_inventario: "Reservado",
       solicitado_proveedor: "Solicitado",
-      supplier_processing: "Proveedor",
-      inbound_in_transit: "En transito proveedor",
-      en_transito: "En transito proveedor",
+      supplier_processing: "En transito",
+      inbound_in_transit: "En transito",
+      en_transito: "En transito",
       packing: "Empacando",
-      recibido_qa: "En transito proveedor",
+      recibido_qa: "Empaque",
       empaque: "Empaque",
       ready_for_route: "Listo para ruta",
       assigned_to_run: "Asignado a salida",
@@ -1969,7 +1992,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
         + `${this.tableBulkCountLabel(failed, "pedido no se pudo procesar", "pedidos no se pudieron procesar")}.`
       );
     } else {
-      this.bulkNotesMessage.set("No se pudo generar ninguna nota con la selección actual.");
+      this.bulkNotesMessage.set("No se pudo generar ninguna nota con la selecciÃ³n actual.");
     }
   }
 
@@ -2012,7 +2035,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
         const unitPrice = item.price_clienta ?? item.price_public ?? 0;
         return {
           title: item.title || "Producto",
-          variant: `${item.variant || "Unica"} · ${item.color || "N/A"}`,
+          variant: `${item.variant || "Unica"} Â· ${item.color || "N/A"}`,
           qty,
           unitPrice,
           lineTotal: unitPrice * qty,
@@ -2557,10 +2580,10 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     ctx.font = font;
     if (ctx.measureText(value).width <= maxWidth) return value;
     let text = value;
-    while (text.length > 0 && ctx.measureText(`${text}…`).width > maxWidth) {
+    while (text.length > 0 && ctx.measureText(`${text}â€¦`).width > maxWidth) {
       text = text.slice(0, -1);
     }
-    return text ? `${text}…` : "…";
+    return text ? `${text}â€¦` : "â€¦";
   }
 
   private formatCurrency(value: number): string {
@@ -2656,3 +2679,5 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     return Math.ceil(this.pillMeasureEl.getBoundingClientRect().width);
   }
 }
+
+
