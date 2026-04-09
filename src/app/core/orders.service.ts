@@ -3,6 +3,7 @@ import { FIRESTORE } from "./firebase.providers";
 import {
   arrayUnion,
   collection,
+  deleteDoc,
   doc,
   getDocs,
   limit,
@@ -574,6 +575,60 @@ export class OrdersService {
       planned_packages: plannedPackages,
       updated_at: serverTimestamp(),
     });
+  }
+
+  async updateCustomer(orderId: string, customerId: string, routeId: string | null): Promise<void> {
+    const safeCustomerId = String(customerId || "").trim();
+    if (!safeCustomerId) throw new Error("customer_id requerido");
+    const safeRouteId = routeId ? String(routeId).trim() || null : null;
+    const now = new Date().toISOString();
+
+    this.rows.update((current) =>
+      current.map((order) => {
+        if (order.order_id !== orderId) return order;
+        return {
+          ...order,
+          customer_id: safeCustomerId,
+          route_id: safeRouteId,
+          updated_at: now,
+          timeline: [
+            ...(order.timeline || []),
+            {
+              id: `t-${Date.now()}`,
+              label: "Clienta actualizada",
+              created_at: now,
+            },
+          ],
+        };
+      }),
+    );
+
+    await updateDoc(doc(this.colRef, orderId), {
+      customer_id: safeCustomerId,
+      route_id: safeRouteId,
+      timeline: this.getById(orderId)?.timeline || [],
+      updated_at: serverTimestamp(),
+    });
+  }
+
+  async deleteOrder(orderId: string): Promise<void> {
+    const targetOrderId = String(orderId || "").trim();
+    if (!targetOrderId) return;
+
+    const previousRows = this.rows();
+    this.rows.update((current) => current.filter((order) => order.order_id !== targetOrderId));
+    try {
+      await this.supplierOperations.removeByOrder(targetOrderId).catch(() => null);
+      const nestedCollections = ["incidents", "events", "supplierOrders"];
+      for (const nested of nestedCollections) {
+        const snap = await getDocs(collection(FIRESTORE, "orders", targetOrderId, nested));
+        await Promise.all(snap.docs.map((entry) => deleteDoc(entry.ref)));
+      }
+      await deleteDoc(doc(this.colRef, targetOrderId));
+    } catch (error) {
+      this.rows.set(previousRows);
+      throw error;
+    }
   }
 
   /** Cierra el pedido registrando el pago total o parcial. */

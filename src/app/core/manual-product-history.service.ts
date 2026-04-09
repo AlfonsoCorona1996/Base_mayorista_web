@@ -57,12 +57,12 @@ export class ManualProductHistoryService {
    * Returns up to 20 rows.
    */
   search(queryText: string): ManualProductEntry[] {
-    const q = queryText.trim().toLowerCase();
+    const q = this.normalizeSearchValue(queryText);
     const rows = this.entries();
     if (!q) return rows.slice(0, 20);
 
     return rows
-      .filter((e) => [e.title, e.variant, e.color].join(" ").toLowerCase().includes(q))
+      .filter((e) => this.normalizeSearchValue([e.title, e.variant, e.color].join(" ")).includes(q))
       .slice(0, 20);
   }
 
@@ -75,8 +75,8 @@ export class ManualProductHistoryService {
     const title = entry.title?.trim();
     if (!title) return;
 
-    const normalized = title.toLowerCase();
-    const existing = this.entries().find((e) => e.title.toLowerCase() === normalized);
+    const normalized = this.normalizeSearchValue(title);
+    const existing = this.entries().find((e) => this.normalizeSearchValue(e.title) === normalized);
     const imageUrl = this.normalizeImageUrl(entry.image_url);
 
     const now = new Date().toISOString();
@@ -168,5 +168,13 @@ export class ManualProductHistoryService {
     if (typeof value !== "string") return null;
     const trimmed = value.trim();
     return trimmed || null;
+  }
+
+  private normalizeSearchValue(value: string | null | undefined): string {
+    return String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .trim();
   }
 }

@@ -1910,6 +1910,8 @@
 
 .trow-status--default  { background: #f1f5f9; color: #475569; }
 .trow-status--draft    { background: #f1f5f9; color: #94a3b8; }
+.trow-status--packing  { background: #fef3c7; color: #92400e; }
+.trow-status--transit  { background: #e0f2fe; color: #0369a1; }
 .trow-status--route    { background: #dbeafe; color: #1d4ed8; }
 .trow-status--ready    { background: #ede9fe; color: #6d28d9; }
 .trow-status--pay      { background: #fef9c3; color: #ca8a04; }

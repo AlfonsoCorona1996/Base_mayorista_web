@@ -145,6 +145,156 @@
       </div>
     </section>
 
+    <section class="assets-grid">
+      <article class="surface-card assets-card">
+        <div class="section-head section-head-inline">
+          <h2>
+            <span class="material-symbols-rounded" aria-hidden="true">photo_library</span>
+            Imagenes del producto
+          </h2>
+
+          @if (editing()) {
+            <button type="button" class="btn btn-soft btn-xs" (click)="addCoverImage()">
+              <span class="material-symbols-rounded" aria-hidden="true">add_photo_alternate</span>
+              Agregar
+            </button>
+          }
+        </div>
+
+        @if ((d.cover_images || []).length === 0) {
+          <p class="muted">No hay imagenes capturadas para este producto.</p>
+        } @else {
+          <div class="asset-rows">
+            @for (imageUrl of (d.cover_images || []); track $index; let ci = $index) {
+              <div class="asset-row">
+                <div class="asset-thumb">
+                  @if (imageUrl) {
+                    <img [src]="imageUrl" alt="Imagen {{ ci + 1 }} del producto" />
+                  } @else {
+                    <span class="material-symbols-rounded" aria-hidden="true">image</span>
+                  }
+                </div>
+
+                <div class="asset-main">
+                  @if (editing()) {
+                    <label class="field field-compact">
+                      <span class="material-symbols-rounded" aria-hidden="true">link</span>
+                      <input
+                        type="text"
+                        class="input"
+                        [ngModel]="imageUrl"
+                        (ngModelChange)="onCoverImageChange(ci, $event)"
+                        placeholder="https://.../imagen.jpg"
+                      />
+                    </label>
+                  } @else {
+                    <p class="value">{{ imageUrl || "Sin URL" }}</p>
+                  }
+
+                  <div class="asset-actions">
+                    <button
+                      type="button"
+                      class="btn btn-soft btn-xs"
+                      [disabled]="!imageUrl || ci === 0"
+                      (click)="setCoverImageAsPrimary(ci)"
+                    >
+                      <span class="material-symbols-rounded" aria-hidden="true">star</span>
+                      Portada
+                    </button>
+
+                    @if (editing()) {
+                      <button type="button" class="btn btn-danger btn-xs" (click)="removeCoverImage(ci)">
+                        <span class="material-symbols-rounded" aria-hidden="true">delete</span>
+                        Quitar
+                      </button>
+                    }
+                  </div>
+                </div>
+              </div>
+            }
+          </div>
+        }
+      </article>
+
+      <article class="surface-card assets-card">
+        <div class="section-head section-head-inline">
+          <h2>
+            <span class="material-symbols-rounded" aria-hidden="true">palette</span>
+            Colores globales
+          </h2>
+
+          @if (editing()) {
+            <button type="button" class="btn btn-soft btn-xs" (click)="addProductColor()">
+              <span class="material-symbols-rounded" aria-hidden="true">add</span>
+              Agregar color
+            </button>
+          }
+        </div>
+
+        @if ((d.product_colors || []).length === 0) {
+          <p class="muted">No hay colores globales definidos.</p>
+        } @else {
+          <div class="asset-rows">
+            @for (productColor of (d.product_colors || []); track $index; let pi = $index) {
+              <div class="asset-row color-asset-row">
+                <div class="asset-thumb">
+                  @if (productColor.image_url) {
+                    <img [src]="productColor.image_url" alt="Color {{ productColor.name || pi + 1 }}" />
+                  } @else {
+                    <span class="material-symbols-rounded" aria-hidden="true">palette</span>
+                  }
+                </div>
+
+                <div class="asset-main">
+                  @if (editing()) {
+                    <div class="asset-form-grid">
+                      <label class="field field-compact">
+                        <span class="material-symbols-rounded" aria-hidden="true">label</span>
+                        <input
+                          type="text"
+                          class="input"
+                          [ngModel]="productColor.name || ''"
+                          (ngModelChange)="onProductColorFieldChange(pi, 'name', $event)"
+                          placeholder="Nombre del color"
+                        />
+                      </label>
+
+                      <label class="field field-compact">
+                        <span class="material-symbols-rounded" aria-hidden="true">image</span>
+                        <input
+                          type="text"
+                          class="input"
+                          [ngModel]="productColor.image_url || ''"
+                          (ngModelChange)="onProductColorFieldChange(pi, 'image_url', $event)"
+                          placeholder="URL de imagen del color"
+                        />
+                      </label>
+                    </div>
+                  } @else {
+                    <p class="value">
+                      {{ productColor.name || "Sin nombre" }}
+                      @if (productColor.image_url) {
+                        <span class="asset-meta"> con imagen</span>
+                      }
+                    </p>
+                  }
+
+                  @if (editing()) {
+                    <div class="asset-actions">
+                      <button type="button" class="btn btn-danger btn-xs" (click)="removeProductColor(pi)">
+                        <span class="material-symbols-rounded" aria-hidden="true">delete</span>
+                        Quitar
+                      </button>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        }
+      </article>
+    </section>
+
     <section class="pricing-overview surface-card">
       <div class="section-head">
         <h2>
@@ -267,12 +417,11 @@
                       <input
                         [id]="'price-' + field.key + '-' + i"
                         class="input"
-                        type="number"
-                        min="0"
-                        step="0.01"
+                        type="text"
                         inputmode="decimal"
-                        [ngModel]="getPriceValue(item, field.key) ?? ''"
-                        (ngModelChange)="onVariantPriceChange(i, field.key, $event)"
+                        [ngModel]="getPriceInputValue(i, item, field.key)"
+                        (ngModelChange)="onVariantPriceInputChange(i, field.key, $event)"
+                        (blur)="onVariantPriceInputBlur(i, field.key)"
                         placeholder="0.00"
                       />
                     </label>
@@ -314,10 +463,19 @@
           </div>
 
           <div class="colors-section">
-            <h4>
-              <span class="material-symbols-rounded" aria-hidden="true">palette</span>
-              Stock por color
-            </h4>
+            <div class="colors-section-head">
+              <h4>
+                <span class="material-symbols-rounded" aria-hidden="true">palette</span>
+                Stock por color
+              </h4>
+
+              @if (editing()) {
+                <button type="button" class="btn btn-soft btn-xs" (click)="addVariantColor(i)">
+                  <span class="material-symbols-rounded" aria-hidden="true">add</span>
+                  Agregar color
+                </button>
+              }
+            </div>
 
             @if ((item.color_stock || []).length === 0) {
               <p class="muted">Esta variante no tiene colores definidos.</p>
@@ -325,10 +483,26 @@
               <div class="color-rows">
                 @for (color of (item.color_stock || []); track (color.color_name || ci); let ci = $index) {
                   <div class="color-row">
-                    <span class="color-name">
-                      <span class="material-symbols-rounded" aria-hidden="true">lens</span>
-                      {{ color.color_name }}
-                    </span>
+                    @if (editing()) {
+                      <label class="field field-compact">
+                        <span class="material-symbols-rounded" aria-hidden="true">lens</span>
+                        <input
+                          type="text"
+                          class="input"
+                          [ngModel]="color.color_name || ''"
+                          (ngModelChange)="onColorNameChange(i, ci, $event)"
+                          placeholder="Nombre del color"
+                        />
+                      </label>
+                    } @else {
+                      <span class="color-name">
+                        <span class="material-symbols-rounded" aria-hidden="true">lens</span>
+                        {{ color.color_name }}
+                        @if (getColorImageUrl(color.color_name)) {
+                          <span class="asset-meta">con imagen</span>
+                        }
+                      </span>
+                    }
 
                     <label class="field select-field">
                       <span class="material-symbols-rounded" aria-hidden="true">inventory</span>
@@ -342,6 +516,13 @@
                         }
                       </select>
                     </label>
+
+                    @if (editing()) {
+                      <button type="button" class="btn btn-danger btn-xs color-remove-btn" (click)="removeVariantColor(i, ci)">
+                        <span class="material-symbols-rounded" aria-hidden="true">delete</span>
+                        Quitar
+                      </button>
+                    }
                   </div>
                 }
               </div>

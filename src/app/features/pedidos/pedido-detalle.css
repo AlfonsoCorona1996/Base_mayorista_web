@@ -177,6 +177,73 @@
   justify-content: flex-end;
 }
 
+.order-head-menu {
+  position: relative;
+  z-index: 50;
+}
+
+.order-head-menu-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  border: 1px solid #d7e1ef;
+  background: #ffffff;
+  color: #4b6381;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.order-head-menu-btn .material-symbols-rounded {
+  font-size: 18px;
+}
+
+.order-head-menu-dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  min-width: 220px;
+  border-radius: 12px;
+  border: 1px solid #d8e3f2;
+  background: #ffffff;
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.16);
+  padding: 4px;
+  display: grid;
+  gap: 2px;
+  z-index: 55;
+}
+
+.order-head-menu-dropdown .menuItem {
+  justify-content: flex-start;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #3b4f6a;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 9px 10px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.order-head-menu-dropdown .menuItem .material-symbols-rounded {
+  font-size: 18px;
+}
+
+.order-head-menu-dropdown .menuItem:hover:not(:disabled) {
+  background: #f3f7fd;
+}
+
+.order-head-menu-dropdown .menuItem.danger {
+  color: #9d1b32;
+}
+
+.order-head-menu-dropdown .menuItem:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .wa-progress-row {
   flex: 1 0 100%;
   display: flex;
@@ -2622,6 +2689,8 @@
   border: 1px solid #dce6f2;
   background: var(--ios-surface, #ffffff);
   box-shadow: 0 22px 52px rgba(15, 23, 42, 0.18);
+  overflow-y: auto;
+  overflow-x: visible;
 }
 
 .sheet-add-item-ios .sheet-header {
@@ -2684,6 +2753,7 @@
   min-height: 0;
   padding: 14px 16px;
   background: #f3f6fb;
+  overflow: visible;
 }
 
 .sheet-add-item-ios .add-item {
@@ -2693,6 +2763,8 @@
   box-shadow: 0 12px 26px rgba(15, 23, 42, 0.06);
   padding: 12px;
   gap: 0.65rem;
+  position: relative;
+  overflow: visible;
 }
 
 .sheet-add-item-ios .field label {
@@ -3012,6 +3084,8 @@
     margin: 0;
     border-radius: clamp(16px, 4vw, 20px);
     border: 1px solid #dce6f2;
+    overflow-y: auto;
+    overflow-x: visible;
   }
 
   .sheet-add-item-ios .sheet-header {
@@ -3027,6 +3101,7 @@
     flex: 0 1 auto;
     min-height: auto;
     padding: 10px 12px 12px;
+    overflow: visible;
   }
 
   .sheet-add-item-ios .add-item {
@@ -4115,6 +4190,73 @@ code {
   max-width: 560px;
 }
 
+.change-customer-sheet {
+  max-width: 560px;
+}
+
+.change-customer-current {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #3d506b;
+}
+
+.change-customer-list {
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid #d8e3f2;
+  border-radius: 12px;
+  background: #f7faff;
+  padding: 4px;
+  display: grid;
+  gap: 4px;
+}
+
+.change-customer-option {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: #ffffff;
+  text-align: left;
+  padding: 9px 10px;
+  display: grid;
+  gap: 2px;
+  cursor: pointer;
+}
+
+.change-customer-option:hover {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+.change-customer-option.active {
+  border-color: #93c5fd;
+  background: #dbeafe;
+}
+
+.change-customer-option-name {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: #1f3047;
+}
+
+.change-customer-option-meta {
+  font-size: 0.76rem;
+  color: #64748b;
+}
+
+.change-customer-empty {
+  margin: 0;
+  padding: 0.7rem 0.65rem;
+  font-size: 0.82rem;
+  color: #64748b;
+}
+
+.change-customer-error {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #b42318;
+}
+
 .popup-confirm-actions {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -4484,6 +4626,7 @@ code {
 }
 
 .registration-alert {
+  grid-column: 1 / -1;
   margin: 8px 0 0;
   padding: 10px 12px;
   border-radius: 10px;
@@ -4492,6 +4635,8 @@ code {
   color: #9a3412;
   font-size: 0.82rem;
   font-weight: 600;
+  line-height: 1.35;
+  word-break: break-word;
 }
 
 .registration-chip {
@@ -6326,7 +6471,14 @@ code {
 }
 
 /* ── Historial / autocomplete de productos manuales ────────────────── */
-.manual-title-field { position: relative; }
+.manual-title-field {
+  position: relative;
+  z-index: 20;
+}
+
+.manual-title-field:focus-within {
+  z-index: 40;
+}
 
 .manual-history-hint {
   font-size: 0.72rem;
@@ -6337,6 +6489,7 @@ code {
 
 .manual-autocomplete-wrap {
   position: relative;
+  z-index: 1200;
 }
 
 .manual-suggestions-dropdown {
@@ -6347,13 +6500,22 @@ code {
   top: 100%;
   left: 0;
   right: 0;
-  z-index: 200;
+  z-index: 4000;
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
   max-height: 240px;
   overflow-y: auto;
+}
+
+.manual-suggestions-dropdown--floating {
+  margin: 0;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: auto;
+  z-index: 5000;
 }
 
 .manual-suggestion-item {

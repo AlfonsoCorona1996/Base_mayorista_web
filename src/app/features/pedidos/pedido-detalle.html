@@ -1,4 +1,4 @@
-@if (initialHydration()) {
+﻿@if (initialHydration()) {
   <section class="page page-skeleton" aria-label="Cargando detalle del pedido" aria-busy="true">
     <header class="page-head skeleton-head">
       <div class="skeleton-bone skeleton-line skeleton-line--sm"></div>
@@ -98,6 +98,29 @@
         </div>
       </div>
       <div class="status-actions">
+        <div class="order-head-menu" (click)="$event.stopPropagation()">
+          <button
+            type="button"
+            class="order-head-menu-btn"
+            aria-label="Opciones del pedido"
+            [attr.aria-expanded]="orderHeadMenuOpen()"
+            (click)="toggleOrderHeadMenu($event)"
+          >
+            <span class="material-symbols-rounded" aria-hidden="true">more_vert</span>
+          </button>
+          @if (orderHeadMenuOpen()) {
+            <div class="order-head-menu-dropdown" (click)="$event.stopPropagation()">
+              <button type="button" class="menuItem" [disabled]="!canChangeCustomer(current)" (click)="openChangeCustomerModal(current)">
+                <span class="material-symbols-rounded" aria-hidden="true">person_search</span>
+                Cambiar clienta
+              </button>
+              <button type="button" class="menuItem danger" [disabled]="deletingOrder() || !canDeleteOrder(current)" (click)="requestDeleteOrder(current)">
+                <span class="material-symbols-rounded" aria-hidden="true">delete</span>
+                {{ deletingOrder() ? "Eliminando..." : "Eliminar pedido" }}
+              </button>
+            </div>
+          }
+        </div>
         @if (vm.phase; as phase) {
           <button
             type="button"
@@ -128,7 +151,7 @@
             title="Enviar nota de venta por WhatsApp"
           >
             <span class="material-symbols-rounded btn-icon">chat</span>
-            {{ sendingWaNote() ? "Enviando…" : "Nota por WA" }}
+            {{ sendingWaNote() ? "Enviando..." : "Nota por WA" }}
           </button>
           @if (!waProgressVisible() && waNoteSent(); as r) {
             <span class="wa-note-result" [class.ok]="r.ok" [class.err]="!r.ok">
@@ -220,6 +243,56 @@
       </div>
     }
 
+    @if (changeCustomerModalOpen()) {
+      <div class="sheet-backdrop sheet-backdrop--center" (click)="closeChangeCustomerModal()">
+        <div class="sheet package-delete-sheet popup-confirm-sheet change-customer-sheet" role="dialog" aria-modal="true" aria-labelledby="change-customer-title" (click)="$event.stopPropagation()">
+          <div class="sheet-handle" aria-hidden="true"></div>
+          <h2 id="change-customer-title">Cambiar clienta</h2>
+          <p class="muted popup-alert-message">Selecciona la clienta correcta para este pedido.</p>
+          <p class="change-customer-current">
+            Actual: <strong>{{ customerName(current) }}</strong>
+          </p>
+          <div class="sheet-field">
+            <label for="change-customer-query">Buscar clienta</label>
+            <input
+              id="change-customer-query"
+              type="text"
+              class="input"
+              placeholder="Nombre o WhatsApp"
+              [(ngModel)]="changeCustomerQuery"
+            />
+          </div>
+          <div class="change-customer-list" role="listbox" aria-label="Resultados de clientas">
+            @for (customer of changeCustomerSuggestions(); track customer.customer_id) {
+              <button
+                type="button"
+                class="change-customer-option"
+                [class.active]="changeCustomerSelectedId() === customer.customer_id"
+                (click)="selectChangeCustomer(customer.customer_id)"
+              >
+                <span class="change-customer-option-name">{{ fullCustomerName(customer) }}</span>
+                <span class="change-customer-option-meta">
+                  {{ customer.whatsapp || "Sin WhatsApp" }} &middot;
+                  {{ routeNameById(customer.route_id) }}
+                </span>
+              </button>
+            } @empty {
+              <p class="change-customer-empty">Sin coincidencias.</p>
+            }
+          </div>
+          @if (changeCustomerError()) {
+            <p class="change-customer-error">{{ changeCustomerError() }}</p>
+          }
+          <div class="sheet-actions popup-confirm-actions">
+            <button type="button" class="btn ghost" [disabled]="changeCustomerSaving()" (click)="closeChangeCustomerModal()">Cancelar</button>
+            <button type="button" class="btn primary" [disabled]="!canApplyCustomerChange(current)" (click)="applyCustomerChange(current)">
+              {{ changeCustomerSaving() ? "Guardando..." : "Guardar cambio" }}
+            </button>
+          </div>
+        </div>
+      </div>
+    }
+
     @if (lateAddNoteModalOpen()) {
       <div class="sheet-backdrop sheet-backdrop--center" (click)="cancelLateAdditionNote()">
         <div class="sheet package-delete-sheet popup-confirm-sheet" role="dialog" aria-modal="true" aria-labelledby="late-add-note-title" (click)="$event.stopPropagation()">
@@ -227,14 +300,14 @@
           <h2 id="late-add-note-title">{{ lateAddNoteTitle() }}</h2>
           <p class="muted popup-alert-message">{{ lateAddNoteMessage() }}</p>
           <div class="sheet-field">
-            <label>Nota para bitácora</label>
+            <label>Nota para bit&aacute;cora</label>
             <textarea
               class="input"
               rows="4"
               maxlength="280"
               [ngModel]="lateAddNoteValue()"
               (ngModelChange)="lateAddNoteValue.set($event)"
-              placeholder="Ejemplo: Clienta pidió de último minuto durante empaque."
+              placeholder="Ejemplo: Clienta pidi&oacute; de &uacute;ltimo minuto durante empaque."
             ></textarea>
           </div>
           @if (lateAddNoteError()) {
@@ -535,10 +608,10 @@
                   }
                   @if (canUsePackingMenuActions(current) && !isItemCancelledOrReturned(item)) {
                     <button type="button" class="menuItem" (click)="markMissingFromMenu(current, item)">Marcar faltante</button>
-                    <button type="button" class="menuItem" (click)="markDamagedFromMenu(current, item)">Marcar dañado</button>
+                    <button type="button" class="menuItem" (click)="markDamagedFromMenu(current, item)">Marcar da&ntilde;ado</button>
                   }
                   @if (hasLateAdditionNote(item)) {
-                    <button type="button" class="menuItem" (click)="viewLateAdditionNote(item)">Ver nota de excepción</button>
+                    <button type="button" class="menuItem" (click)="viewLateAdditionNote(item)">Ver nota de excepci&oacute;n</button>
                   }
                   @if (canUseStockMenuActions(current) && item.confirmation_state && item.confirmation_state !== 'pending') {
                     <button type="button" class="menuItem" (click)="revertItemToPending(current, item)">Regresar a pendiente</button>
@@ -1224,7 +1297,7 @@
         }
 
         @if (actionContext()?.actionId === "supplier_followup") {
-          <p class="muted">Todas las existencias ya fueron confirmadas. Marca cuando el proveedor pase a trÃ¡nsito.</p>
+          <p class="muted">Todas las existencias ya fueron confirmadas. Marca cuando el proveedor pase a trÃƒÂ¡nsito.</p>
           <button type="button" class="btn primary" [disabled]="actionSaving()" (click)="openTransitConfirm()">
             {{ actionSaving() ? "Guardando..." : "Marcar en transito proveedor" }}
           </button>
@@ -1337,7 +1410,7 @@
         @if (readyForRouteLoading()) {
           <p class="muted">Buscando salidas de hoy...</p>
         } @else if (readyForRouteRun(); as run) {
-          <p class="muted">Salida: {{ run.scheduled_at | date: "shortTime" }} · {{ run.driver?.name || "Sin repartidor" }}</p>
+          <p class="muted">Salida: {{ run.scheduled_at | date: "shortTime" }} Â· {{ run.driver?.name || "Sin repartidor" }}</p>
         } @else {
           <p class="muted">No hay salida programada para hoy.</p>
         }
@@ -1404,7 +1477,7 @@
       <div class="sheet package-delete-sheet" role="dialog" aria-modal="true" aria-labelledby="delete-package-title" (click)="$event.stopPropagation()">
         <div class="sheet-handle" aria-hidden="true"></div>
         <h2 id="delete-package-title">Eliminar caja con productos</h2>
-        <p class="muted">Se eliminarÃ¡ la caja y sus productos volverÃ¡n a "sin empacar".</p>
+        <p class="muted">Se eliminarÃƒÂ¡ la caja y sus productos volverÃƒÂ¡n a "sin empacar".</p>
         <div class="sheet-actions">
           <button type="button" class="btn primary" [disabled]="packingBusy()" (click)="confirmDeletePackageWithItems(current)">Eliminar caja</button>
           <button type="button" class="btn ghost" [disabled]="packingBusy()" (click)="closeDeletePackageConfirm()">Cancelar</button>
@@ -1573,7 +1646,7 @@
             Cerrar
           </button>
         </div>
-        <div class="sheet-body">
+        <div class="sheet-body" (scroll)="onAddItemSheetScroll()">
           <div class="add-item">
           @if (isConvertMode() && convertTargetItem(); as targetItem) {
             <p class="registration-alert">
@@ -1721,7 +1794,7 @@
                 <p class="preview-meta">
                   <span class="material-symbols-rounded" aria-hidden="true">straighten</span>
                   {{ preview.variant || "Sin variante" }}
-                  <span class="preview-dot">•</span>
+                  <span class="preview-dot">&middot;</span>
                   <span class="material-symbols-rounded" aria-hidden="true">palette</span>
                   {{ preview.color || "Sin color" }}
                 </p>
@@ -1750,39 +1823,18 @@
             </label>
             <div class="manual-autocomplete-wrap">
               <input
+                #manualTitleInput
                 class="input"
                 type="text"
                 [(ngModel)]="newItemTitle"
                 [class.input-readonly]="lockItemFields()"
                 [readonly]="lockItemFields()"
                 [disabled]="!canSubmitNewItem() || !vm.canEditItems"
-                (focus)="manualSuggestionsOpen.set(isManualSource())"
-                (input)="manualSuggestionsOpen.set(isManualSource())"
+                (focus)="onManualTitleFocus()"
+                (input)="onManualTitleInput()"
+                (blur)="onManualTitleBlur()"
                 autocomplete="off"
               />
-              @if (isManualSource() && manualSuggestionsOpen() && manualSuggestions().length > 0) {
-                <ul class="manual-suggestions-dropdown" role="listbox">
-                  @for (entry of manualSuggestions(); track entry.id) {
-                    <li
-                      class="manual-suggestion-item"
-                      role="option"
-                      (click)="applyManualSuggestion(entry)"
-                    >
-                      <div class="msug-top">
-                        <span class="msug-title">{{ entry.title }}</span>
-                        <span class="msug-uses">{{ entry.used_count }}x</span>
-                      </div>
-                      @if (entry.variant || entry.color) {
-                        <div class="msug-meta">
-                          @if (entry.variant) { <span>{{ entry.variant }}</span> }
-                          @if (entry.color) { <span>· {{ entry.color }}</span> }
-                          @if (entry.price_clienta) { <span>· ${{ entry.price_clienta }}</span> }
-                        </div>
-                      }
-                    </li>
-                  }
-                </ul>
-              }
             </div>
           </div>
           @if (catalogVariantOptions().length > 0) {
@@ -1929,6 +1981,36 @@
           <button type="button" class="btn danger" (click)="closeAddItemModal()">Cancelar</button>
         </div>
       </div>
+      @if (isManualSource() && manualSuggestionsOpen() && manualSuggestions().length > 0) {
+        <ul
+          class="manual-suggestions-dropdown manual-suggestions-dropdown--floating"
+          role="listbox"
+          [ngStyle]="manualSuggestionsStyle()"
+          (mousedown)="$event.stopPropagation()"
+          (click)="$event.stopPropagation()"
+        >
+          @for (entry of manualSuggestions(); track entry.id) {
+            <li
+              class="manual-suggestion-item"
+              role="option"
+              (mousedown)="$event.preventDefault(); $event.stopPropagation()"
+              (click)="applyManualSuggestion(entry)"
+            >
+              <div class="msug-top">
+                <span class="msug-title">{{ cleanDisplayText(entry.title) }}</span>
+                <span class="msug-uses">{{ entry.used_count }}x</span>
+              </div>
+              @if (entry.variant || entry.color) {
+                <div class="msug-meta">
+                  @if (entry.variant) { <span>{{ cleanDisplayText(entry.variant) }}</span> }
+                  @if (entry.color) { <span>· {{ cleanDisplayText(entry.color) }}</span> }
+                  @if (entry.price_clienta) { <span>· ${{ entry.price_clienta }}</span> }
+                </div>
+              }
+            </li>
+          }
+        </ul>
+      }
     </div>
   }
 
@@ -1967,7 +2049,7 @@
         @if (!['en_ruta','entregado','delivered','delivered_partial','pago_pendiente','pagado_parcial'].includes(current.status)) {
           <div class="payment-context-note">
             <span class="material-symbols-rounded" style="font-size:16px;flex-shrink:0">info</span>
-            El pedido está en estado <strong>{{ statusLabel(current.status) }}</strong>. Al cerrar se marcará como entregado y pagado (o con saldo pendiente según el monto).
+            El pedido est&aacute; en estado <strong>{{ statusLabel(current.status) }}</strong>. Al cerrar se marcar&aacute; como entregado y pagado (o con saldo pendiente seg&uacute;n el monto).
           </div>
         }
 

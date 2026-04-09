@@ -70,6 +70,23 @@ const IN_PROGRESS_STATUSES = new Set<OrderStatus>([
   "pago_pendiente",
 ]);
 
+// Pedidos a considerar en "pendiente por cobrar" del dashboard
+// (desde borrador hasta listo para ruta, inclusive).
+const PENDING_COLLECTION_STATUSES = new Set<OrderStatus>([
+  "borrador",
+  "confirmando_proveedor",
+  "reservado_inventario",
+  "solicitado_proveedor",
+  "supplier_processing",
+  "inbound_in_transit",
+  "en_transito",
+  "recibido_qa",
+  "packing",
+  "empaque",
+  "ready_for_route",
+  "assigned_to_run",
+]);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
@@ -89,6 +106,33 @@ function plural(n: number, singular: string, pluralStr: string): string {
 
 function simpleId(...parts: (string | number)[]): string {
   return parts.join(":");
+}
+
+function toSafeNumber(value: unknown): number {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function estimateOrderTotal(order: Order): number {
+  return Number(
+    (order.items || [])
+      .reduce((sum, item) => {
+        const qtyRaw = item.confirmed_qty ?? item.quantity ?? 0;
+        const qty = Math.max(0, Math.trunc(toSafeNumber(qtyRaw)));
+        const unit = Math.max(0, toSafeNumber(item.price_clienta ?? item.price_public ?? 0));
+        return sum + qty * unit;
+      }, 0)
+      .toFixed(2),
+  );
+}
+
+function pendingAmountForOrder(order: Order): number {
+  const persistedTotal = Math.max(0, toSafeNumber(order.totals?.total_amount));
+  const estimatedTotal = estimateOrderTotal(order);
+  const total = Math.max(persistedTotal, estimatedTotal);
+  const paid = Math.max(0, toSafeNumber(order.totals?.paid_amount));
+  const reportedBalance = Math.max(0, toSafeNumber(order.totals?.balance_due));
+  return Math.max(0, Math.min(total, Math.max(reportedBalance, total - paid)));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -212,8 +256,8 @@ export class SmartAlertsService {
   /** Total de adeudos activos */
   readonly totalBalanceDue = computed<number>(() => {
     return this.orders.list()
-      .filter(o => ["pago_pendiente", "pagado_parcial"].includes(o.status))
-      .reduce((sum, o) => sum + (o.totals?.balance_due ?? 0), 0);
+      .filter((o) => PENDING_COLLECTION_STATUSES.has(o.status))
+      .reduce((sum, o) => sum + pendingAmountForOrder(o), 0);
   });
 
   // ── Alertas de RUTAS ───────────────────────────────────────────────────
@@ -364,7 +408,10 @@ export class SmartAlertsService {
     const byPacking = orders.filter(o => ["packing", "empaque"].includes(o.status)).length;
     const readyForRoute = orders.filter(o => ["ready_for_route", "assigned_to_run"].includes(o.status)).length;
     const inRoute = orders.filter(o => ["in_transit", "en_ruta"].includes(o.status)).length;
-    const pendingPayment = orders.filter(o => ["pago_pendiente", "pagado_parcial"].includes(o.status)).length;
+    const pendingPayment = orders.filter((o) => {
+      if (!PENDING_COLLECTION_STATUSES.has(o.status)) return false;
+      return pendingAmountForOrder(o) > 0;
+    }).length;
     const totalBalance = this.totalBalanceDue();
 
     const activeCustomers = this.customers.getActive().length;
