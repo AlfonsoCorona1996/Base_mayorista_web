@@ -128,6 +128,9 @@ export interface NormalizedListing {
   title: string | null;
   category_hint: string | null;
   category_proposed?: string | null;
+  semantic_tags?: string[];
+  search_aliases?: string[];
+  search_blob?: string;
   price_tiers_global: PriceTierGlobal[];
   items: NormalizedItem[];
 }
@@ -136,6 +139,9 @@ export interface NormalizedListingV3 {
   title: string | null;
   category_hint: string | null;
   category_proposed?: string | null;
+  semantic_tags?: string[];
+  search_aliases?: string[];
+  search_blob?: string;
   items: NormalizedItemV3[];
 }
 
