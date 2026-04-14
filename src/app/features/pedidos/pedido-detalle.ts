@@ -1115,7 +1115,11 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     }
     const paidRaw = Number(order.totals?.paid_amount ?? 0);
     const paidAmount = Number.isFinite(paidRaw) ? Math.max(0, paidRaw) : 0;
-    return Number(Math.max(0, safeTotal - paidAmount).toFixed(2));
+    const computedBalance = Number(Math.max(0, safeTotal - paidAmount).toFixed(2));
+    if (computedBalance <= 0 && safeTotal > 0) {
+      return safeTotal;
+    }
+    return computedBalance;
   }
 
   isOrderClosed(order: Order | null): boolean {
