@@ -155,6 +155,31 @@ type WaProgressStep = {
   detail: string | null;
 };
 
+const CATALOG_QUERY_SYNONYMS: Record<string, string[]> = {
+  legging: ["malla", "licra", "lycra", "pantalon de licra", "pants de licra"],
+  malla: ["legging", "licra", "lycra", "pantalon de licra"],
+  licra: ["legging", "malla", "lycra", "pantalon de licra"],
+  lycra: ["licra", "legging", "malla"],
+  pantalon: ["pants", "jogger", "jeans", "legging"],
+  pants: ["pantalon", "jogger", "legging"],
+  jogger: ["pantalon", "pants"],
+  blusa: ["playera", "camisa", "top", "camiseta"],
+  playera: ["blusa", "camiseta", "camisa", "top"],
+  camisa: ["blusa", "playera", "camiseta"],
+  top: ["blusa", "playera", "camiseta"],
+  vestido: ["enterizo", "jumpsuit", "overall"],
+  falda: ["minifalda", "maxifalda", "skirt"],
+  short: ["shorts", "bermuda"],
+  chamarra: ["chaqueta", "sudadera", "hoodie", "sweater"],
+  sudadera: ["hoodie", "sweater", "chamarra"],
+  tenis: ["sneaker", "zapatilla", "zapato deportivo"],
+  sneaker: ["tenis", "zapatilla", "zapato deportivo"],
+  zapato: ["zapatilla", "tenis", "sandalia", "bota"],
+  sandalia: ["huarache", "chancla"],
+  bolsa: ["bolso", "cartera", "crossbody", "bandolera", "mochila"],
+  cartera: ["bolsa", "bolso", "crossbody"],
+};
+
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
@@ -479,24 +504,37 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   });
   catalogSuggestions = computed(() => {
     if (this.newItemSource() !== "catalogo") return [];
-    const term = this.normalizeSearchText(this.newItemSearch());
-    if (term.length < 2) return [];
+    const terms = this.buildCatalogSearchTerms(this.newItemSearch());
+    if (terms.length === 0) return [];
     const matches: { doc: NormalizedListingDoc; variant: any; color: string; image: string | null }[] = [];
     for (const doc of this.catalogRows()) {
       const listing: any = doc.listing || { items: [] };
-      const title = this.normalizeSearchText(listing.title || "");
-      const cat = this.normalizeSearchText(listing.category_hint || "");
+      const title = this.compactSearchText(listing.title || "");
+      const cat = this.compactSearchText(listing.category_hint || "");
+      const semanticValues = this.getListingSemanticValues(listing);
+      const docBlob = this.compactSearchText([title, cat, ...semanticValues].join(" "));
       const variants = listing.items || [];
+      let matched = false;
       for (const v of variants) {
         const colors = this.getVariantColors(v);
-        const blob = this.normalizeSearchText([title, cat, v.variant_name || "", colors.join(" ")].join(" "));
-        if (!blob.includes(term)) continue;
-        const colorHit = colors.find((c) => this.normalizeSearchText(c).includes(term)) || colors[0] || "";
+        const blob = this.compactSearchText([docBlob, v.variant_name || "", colors.join(" ")].join(" "));
+        if (!this.catalogBlobMatches(blob, terms)) continue;
+        const colorHit = colors.find((c) => this.catalogBlobMatches(this.compactSearchText(c), terms)) || colors[0] || "";
         const colorImage = this.resolveColorImage(doc, colorHit);
         const image = colorImage || v?.image_url || doc.cover_images?.[0] || doc.preview_image_url || null;
         matches.push({ doc, variant: v, color: colorHit, image });
+        matched = true;
         break; // first variant hit is enough per doc for now
       }
+
+      if (matched || !this.catalogBlobMatches(docBlob, terms)) continue;
+      const fallbackVariant = variants[0] || null;
+      if (!fallbackVariant) continue;
+      const fallbackColors = this.getVariantColors(fallbackVariant);
+      const fallbackColor = fallbackColors.find((c) => this.catalogBlobMatches(this.compactSearchText(c), terms)) || fallbackColors[0] || "";
+      const fallbackColorImage = this.resolveColorImage(doc, fallbackColor);
+      const fallbackImage = fallbackColorImage || fallbackVariant?.image_url || doc.cover_images?.[0] || doc.preview_image_url || null;
+      matches.push({ doc, variant: fallbackVariant, color: fallbackColor, image: fallbackImage });
     }
     return matches.slice(0, 6);
   });
@@ -999,6 +1037,54 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       .trim();
   }
 
+  private compactSearchText(value: string): string {
+    return this.normalizeSearchText(value)
+      .replace(/[^a-z0-9]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  private buildCatalogSearchTerms(value: string): string[] {
+    const normalized = this.compactSearchText(value);
+    if (normalized.length < 2) return [];
+
+    const terms = new Set<string>([normalized]);
+    const tokens = normalized.split(" ").filter(Boolean);
+    for (const token of tokens) {
+      if (token.length >= 2) terms.add(token);
+      const expansions = CATALOG_QUERY_SYNONYMS[token] || [];
+      for (const alias of expansions) {
+        const compactAlias = this.compactSearchText(alias);
+        if (compactAlias.length >= 2) terms.add(compactAlias);
+      }
+    }
+
+    for (const [key, values] of Object.entries(CATALOG_QUERY_SYNONYMS)) {
+      if (!normalized.includes(key)) continue;
+      terms.add(key);
+      for (const alias of values) {
+        const compactAlias = this.compactSearchText(alias);
+        if (compactAlias.length >= 2) terms.add(compactAlias);
+      }
+    }
+
+    return Array.from(terms).slice(0, 24);
+  }
+
+  private catalogBlobMatches(blob: string, terms: string[]): boolean {
+    if (!blob || terms.length === 0) return false;
+    return terms.some((term) => blob.includes(term));
+  }
+
+  private getListingSemanticValues(listing: any): string[] {
+    const semanticTags = Array.isArray(listing?.semantic_tags) ? listing.semantic_tags : [];
+    const searchAliases = Array.isArray(listing?.search_aliases) ? listing.search_aliases : [];
+    const searchBlob = typeof listing?.search_blob === "string" ? listing.search_blob : "";
+    return [...semanticTags, ...searchAliases, searchBlob]
+      .map((value) => String(value || "").trim())
+      .filter(Boolean);
+  }
+
   canCap(key: string): boolean {
     return this.authz.canCap(key);
   }
@@ -1019,6 +1105,17 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     const fromTotals = Number(order.totals?.balance_due ?? 0);
     if (Number.isFinite(fromTotals) && fromTotals > 0) return fromTotals;
     return Math.max(0, this.orderTotalAfterDiscount(order) - (order.totals?.paid_amount || 0));
+  }
+
+  private salesNoteBalanceDue(order: Order, totalAmount: number): number {
+    const safeTotal = Number(Math.max(0, Number(totalAmount || 0)).toFixed(2));
+    const reportedBalance = Number(order.totals?.balance_due ?? 0);
+    if (Number.isFinite(reportedBalance) && reportedBalance > 0) {
+      return Number(reportedBalance.toFixed(2));
+    }
+    const paidRaw = Number(order.totals?.paid_amount ?? 0);
+    const paidAmount = Number.isFinite(paidRaw) ? Math.max(0, paidRaw) : 0;
+    return Number(Math.max(0, safeTotal - paidAmount).toFixed(2));
   }
 
   isOrderClosed(order: Order | null): boolean {
@@ -3203,7 +3300,10 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       .filter((item) => !["cancelado", "devuelto"].includes(item.state))
       .map((item) => {
         const qty = item.confirmation_state === "confirmed" ? this.confirmedQty(item) : 0;
-        const unitPrice = item.price_clienta ?? item.price_public ?? 0;
+        const legacyUnitPrice = (item as any)?.unit_price_clienta ?? (item as any)?.unit_price ?? (item as any)?.unitPrice;
+        const unitRaw = item.price_clienta ?? item.price_public ?? legacyUnitPrice ?? 0;
+        const unitParsed = Number(typeof unitRaw === "string" ? unitRaw.replace(/,/g, "").trim() : unitRaw);
+        const unitPrice = Number.isFinite(unitParsed) && unitParsed > 0 ? Number(unitParsed.toFixed(2)) : 0;
         return {
           item,
           qty,
@@ -3517,7 +3617,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     const subtotal = rows.reduce((s, r) => s + r.lineTotal, 0);
     const discount = Math.min(subtotal, this.orderDiscountAmount(order));
     const total = Math.max(0, subtotal - discount);
-    const balanceDue = Math.max(0, total - (order.totals?.paid_amount ?? 0));
+    const balanceDue = this.salesNoteBalanceDue(order, total);
 
     // Subtotal (2 filas arriba de "Por pagar")
     const subtotalRowY = y + 30;
@@ -4932,9 +5032,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     const subtotal = rows.reduce((s, r) => s + r.lineTotal, 0);
     const discountAmount = Math.min(subtotal, this.orderDiscountAmount(order));
     const computedTotal = Math.max(0, subtotal - discountAmount);
-    const paidAmount = order.totals?.paid_amount ?? 0;
     const totalAmount = rows.length > 0 ? computedTotal : Number(order.totals?.total_amount ?? 0);
-    const balanceDue = Math.max(0, totalAmount - paidAmount);
+    const balanceDue = this.salesNoteBalanceDue(order, totalAmount);
     const lastInboundCustomerMessageAt = this.resolveLastInboundCustomerMessageAt(order);
     const waOrderItems = rows.map((r) => ({
       title: r.item.title || "Producto",
