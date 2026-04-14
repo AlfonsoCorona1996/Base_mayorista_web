@@ -1107,6 +1107,17 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     return Math.max(0, this.orderTotalAfterDiscount(order) - (order.totals?.paid_amount || 0));
   }
 
+  private salesNoteBalanceDue(order: Order, totalAmount: number): number {
+    const safeTotal = Number(Math.max(0, Number(totalAmount || 0)).toFixed(2));
+    const reportedBalance = Number(order.totals?.balance_due ?? 0);
+    if (Number.isFinite(reportedBalance) && reportedBalance > 0) {
+      return Number(reportedBalance.toFixed(2));
+    }
+    const paidRaw = Number(order.totals?.paid_amount ?? 0);
+    const paidAmount = Number.isFinite(paidRaw) ? Math.max(0, paidRaw) : 0;
+    return Number(Math.max(0, safeTotal - paidAmount).toFixed(2));
+  }
+
   isOrderClosed(order: Order | null): boolean {
     if (!order) return true;
     return ["entregado", "pagado", "cancelado", "devuelto", "closed", "delivered"].includes(order.status);
@@ -3289,7 +3300,10 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       .filter((item) => !["cancelado", "devuelto"].includes(item.state))
       .map((item) => {
         const qty = item.confirmation_state === "confirmed" ? this.confirmedQty(item) : 0;
-        const unitPrice = item.price_clienta ?? item.price_public ?? 0;
+        const legacyUnitPrice = (item as any)?.unit_price_clienta ?? (item as any)?.unit_price ?? (item as any)?.unitPrice;
+        const unitRaw = item.price_clienta ?? item.price_public ?? legacyUnitPrice ?? 0;
+        const unitParsed = Number(typeof unitRaw === "string" ? unitRaw.replace(/,/g, "").trim() : unitRaw);
+        const unitPrice = Number.isFinite(unitParsed) && unitParsed > 0 ? Number(unitParsed.toFixed(2)) : 0;
         return {
           item,
           qty,
@@ -3603,7 +3617,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     const subtotal = rows.reduce((s, r) => s + r.lineTotal, 0);
     const discount = Math.min(subtotal, this.orderDiscountAmount(order));
     const total = Math.max(0, subtotal - discount);
-    const balanceDue = Math.max(0, total - (order.totals?.paid_amount ?? 0));
+    const balanceDue = this.salesNoteBalanceDue(order, total);
 
     // Subtotal (2 filas arriba de "Por pagar")
     const subtotalRowY = y + 30;
@@ -5018,9 +5032,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     const subtotal = rows.reduce((s, r) => s + r.lineTotal, 0);
     const discountAmount = Math.min(subtotal, this.orderDiscountAmount(order));
     const computedTotal = Math.max(0, subtotal - discountAmount);
-    const paidAmount = order.totals?.paid_amount ?? 0;
     const totalAmount = rows.length > 0 ? computedTotal : Number(order.totals?.total_amount ?? 0);
-    const balanceDue = Math.max(0, totalAmount - paidAmount);
+    const balanceDue = this.salesNoteBalanceDue(order, totalAmount);
     const lastInboundCustomerMessageAt = this.resolveLastInboundCustomerMessageAt(order);
     const waOrderItems = rows.map((r) => ({
       title: r.item.title || "Producto",
