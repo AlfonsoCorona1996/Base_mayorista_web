@@ -25,6 +25,7 @@ export class AuthzService {
   private refreshPromise: Promise<void> | null = null;
   private lastRefreshAt = 0;
   private impersonationLoadSeq = 0;
+  private authStateReadyPromise = FIREBASE_AUTH.authStateReady().catch(() => undefined);
 
   currentUserSig = signal<UserDoc | null>(null);
   roleSig = signal<RoleDoc | null>(null);
@@ -137,6 +138,7 @@ export class AuthzService {
   private async doRefresh(): Promise<void> {
     this.loadingSig.set(true);
     try {
+      await this.authStateReadyPromise;
       await this.roles.ensureDefaultsSeeded();
       const current = FIREBASE_AUTH.currentUser;
       if (!current) {

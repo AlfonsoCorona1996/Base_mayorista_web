@@ -136,6 +136,13 @@ service cloud.firestore {
       allow delete: if hasCapability("cap.finance.movements.delete");
     }
 
+    match /finance_withdrawals/{withdrawalId} {
+      allow read: if hasSection("sections.administracion") || hasCapability("cap.finance.movements.view");
+      allow create: if hasCapability("cap.finance.movements.create");
+      allow update: if hasCapability("cap.finance.movements.edit");
+      allow delete: if hasCapability("cap.finance.movements.delete");
+    }
+
     match /finance_cuts/{cutId} {
       allow read: if hasSection("sections.administracion") || hasCapability("cap.finance.reports.view");
       allow create: if hasCapability("cap.finance.reports.view");

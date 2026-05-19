@@ -140,6 +140,7 @@ const BACKEND_SECTION_KEYS: BackendSectionKey[] = [
 export class UserAdminApiService {
   private readonly baseUrl = environment.adminApiBaseUrl.replace(/\/+$/, "");
   private readonly http = inject(HttpClient);
+  private readonly authStateReadyPromise = FIREBASE_AUTH.authStateReady().catch(() => undefined);
 
   // ── Métodos HTTP genéricos (usan el interceptor de auth automáticamente) ──
   get<T>(path: string) {
@@ -376,6 +377,7 @@ export class UserAdminApiService {
   }
 
   private async request<T>(path: string, init: RequestInit): Promise<T> {
+    await this.authStateReadyPromise;
     if (!FIREBASE_AUTH.currentUser) {
       throw new Error("Sesion no valida para operaciones administrativas.");
     }

@@ -85,7 +85,7 @@
         <div class="form-columns">
           <label class="field">
             <span>Ruta</span>
-            <select class="input" [(ngModel)]="draft.route_id" name="route_id">
+            <select class="input" [ngModel]="draft.route_id" (ngModelChange)="onRouteChange($event)" name="route_id">
               <option value="">Sin ruta</option>
               @for (route of routes(); track route.route_id) {
                 <option [value]="route.route_id">{{ route.name }}</option>
@@ -95,9 +95,9 @@
 
           <label class="field">
             <span>Localidad</span>
-            <select class="input" [(ngModel)]="draft.locality_id" name="locality_id">
+            <select class="input" [(ngModel)]="draft.locality_id" name="locality_id" [disabled]="!draft.route_id">
               <option value="">Sin localidad</option>
-              @for (locality of localities(); track locality.locality_id) {
+              @for (locality of localitiesForRoute(draft.route_id); track locality.locality_id) {
                 <option [value]="locality.locality_id">{{ locality.name }}</option>
               }
             </select>

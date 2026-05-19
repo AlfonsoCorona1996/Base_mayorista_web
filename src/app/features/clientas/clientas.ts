@@ -2,7 +2,7 @@ import { Component, computed, inject, signal, ChangeDetectionStrategy } from "@a
 import { FormsModule } from "@angular/forms";
 import { RouterLink } from "@angular/router";
 import { Customer, CustomersService, OptInStatus } from "../../core/customers.service";
-import { LocalitiesService } from "../../core/localities.service";
+import { LocalitiesService, Locality } from "../../core/localities.service";
 import { RoutesService } from "../../core/routes.service";
 
 type CustomerFilter = "all" | "active" | "inactive";
@@ -122,6 +122,21 @@ export default class ClientasPage {
   clearFilters() {
     this.searchTerm.set("");
     this.statusFilter.set("all");
+  }
+
+  onRouteChange(routeId: string) {
+    const nextRouteId = (routeId || "").trim();
+    this.draft.route_id = nextRouteId;
+
+    if (!nextRouteId) {
+      this.draft.locality_id = "";
+      return;
+    }
+
+    const allowedLocalityIds = new Set(this.routeLocalityIds(nextRouteId));
+    if (!allowedLocalityIds.has(this.draft.locality_id)) {
+      this.draft.locality_id = "";
+    }
   }
 
   startCreate() {
@@ -262,6 +277,14 @@ export default class ClientasPage {
     return this.localitiesService.getById(localityId)?.name || localityId;
   }
 
+  localitiesForRoute(routeId: string): Locality[] {
+    const routeLocalityIds = this.routeLocalityIds(routeId);
+    if (routeLocalityIds.length === 0) return [];
+
+    const allowed = new Set(routeLocalityIds);
+    return this.localities().filter((locality) => allowed.has(locality.locality_id));
+  }
+
   private emptyDraft(): CustomerDraft {
     return {
       customer_id: "",
@@ -288,6 +311,13 @@ export default class ClientasPage {
       .split(",")
       .map((item) => item.trim())
       .filter(Boolean);
+  }
+
+  private routeLocalityIds(routeId: string): string[] {
+    if (!routeId) return [];
+    const route = this.routesService.getById(routeId);
+    if (!route || !Array.isArray(route.locality_ids)) return [];
+    return route.locality_ids.filter(Boolean);
   }
 
   private buildCustomerId(firstName: string, lastName: string, phone: string): string {

@@ -511,6 +511,17 @@
               </span>
             </button>
           }
+          @if (productBulkActionType(current); as bulkAction) {
+            <button
+              type="button"
+              class="btn ghost with-icon"
+              (click)="runProductBulkAction()"
+              [disabled]="!canRunProductBulkAction(current)"
+            >
+              <span class="material-symbols-rounded btn-icon" aria-hidden="true">task_alt</span>
+              {{ bulkAction === "mark_received" ? "Marcar todo recibido" : "Marcar todo disponible" }}
+            </button>
+          }
           <p class="muted">Escanea o cambia el estado por producto.</p>
         </div>
       </div>
@@ -557,16 +568,6 @@
           >
             Pendientes ({{ vm.pendingConfirmationItems }})
           </button>
-          @if (isOperationalConfirmPhase(current) && vm.hasPendingItems) {
-            <button
-              type="button"
-              class="products-batch-btn"
-              (click)="confirmarTodoDisponible()"
-              [disabled]="!vm.canMagicConfirm"
-            >
-              Marcar todo como disponible
-            </button>
-          }
         </div>
       }
       @if (visibleProductCardsVm(); as visibleProductItems) {
@@ -1051,6 +1052,65 @@
         </div>
       </section>
       }
+    } @else if (hasPackingStarted(current)) {
+      @if (packingVm(); as packing) {
+        <section class="panel package-shell" id="paquetes" #packagesSection>
+          <div class="panel-head">
+            <h2>Paquetes</h2>
+          </div>
+          @if (packing.closedBoxes.length > 0) {
+            <div class="closedList">
+              @for (pkg of packing.closedBoxes; track pkg.pkg.package_id) {
+                <article class="closedCard">
+                  <div class="closedCard__top">
+                    <div>
+                      <p class="closedCard__title">{{ pkg.title }}</p>
+                      <p class="closedCard__meta">{{ pkg.rows.length }} producto{{ pkg.rows.length === 1 ? "" : "s" }}</p>
+                    </div>
+                    <span class="statusBadge statusBadge--closed">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 13 4 4L19 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      {{ pkg.label }}
+                    </span>
+                  </div>
+
+                  <div class="closedActions">
+                    <button type="button" class="secondaryBtn" (click)="toggleClosedBox(pkg.pkg)"> {{ pkg.isExpanded ? "Ocultar contenido" : "Ver contenido" }} </button>
+                    <button type="button" class="secondaryBtn" [disabled]="packingBusy()" (click)="printLabel(current, pkg.pkg)">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V4h10v5m-10 8h10v3H7v-3Zm12 0h1a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      Imprimir etiqueta 100x150
+                    </button>
+                  </div>
+
+                  @if (pkg.isExpanded) {
+                    <div class="boxCard__body">
+                      @for (row of pkg.rows; track row.item.item_id) {
+                        <div class="itemRow">
+                          <div class="itemRow__thumb">
+                            @if (row.imageUrl) {
+                              <img [src]="row.imageUrl" [alt]="row.item.title" loading="lazy" />
+                            } @else {
+                              <span>{{ row.initials }}</span>
+                            }
+                          </div>
+                          <div class="itemRow__main">
+                            <p class="itemRow__title">{{ row.item.title }} - {{ row.qty }} pza</p>
+                            <div class="chipRow">
+                              @if (row.item.variant) { <span class="metaChip">{{ row.item.variant }}</span> }
+                              @if (row.item.color) { <span class="metaChip">{{ row.item.color }}</span> }
+                            </div>
+                          </div>
+                        </div>
+                      }
+                    </div>
+                  }
+                </article>
+              }
+            </div>
+          } @else {
+            <p class="muted package-empty-note">No hay cajas cerradas para imprimir etiqueta.</p>
+          }
+        </section>
+      }
     } @else {
       <section class="panel locked package-shell" id="paquetes" #packagesSection>
         <div class="panel-head">
@@ -1211,6 +1271,14 @@
                 </p>
               </div>
               <button type="button" class="btn ghost" (click)="closeActionModal()">Cancelar</button>
+              <button
+                type="button"
+                class="btn ghost"
+                [disabled]="vm.pendingConfirmationItems === 0 || actionSaving()"
+                (click)="confirmarTodoDisponible()"
+              >
+                Marcar todo disponible
+              </button>
               <button
                 type="button"
                 class="btn primary confirm-submit-btn"

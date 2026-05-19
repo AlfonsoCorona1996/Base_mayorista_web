@@ -318,6 +318,20 @@
       </div>
     </section>
 
+    <div class="section-head section-head-inline">
+      <h2>
+        <span class="material-symbols-rounded" aria-hidden="true">deployed_code</span>
+        Variantes del producto
+      </h2>
+
+      @if (editing()) {
+        <button type="button" class="btn btn-soft btn-xs" (click)="addVariant()">
+          <span class="material-symbols-rounded" aria-hidden="true">add</span>
+          Agregar variante
+        </button>
+      }
+    </div>
+
     <section class="variants-grid">
       @for (item of d.listing.items; track (item.sku || item.variant_name || $index); let i = $index) {
         <article class="variant-card surface-card">
