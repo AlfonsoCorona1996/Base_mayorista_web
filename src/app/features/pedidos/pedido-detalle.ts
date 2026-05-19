@@ -24,6 +24,7 @@ import { ActivityLogComponent } from "../../shared/components/activity-log/activ
 import { AuthzService } from "../../core/authz.service";
 import { AuthService } from "../../core/auth.service";
 import { DispatchOrderRow, RouteRunDoc, RouteRunsService } from "../../services/route-runs.service";
+import { SalesNoteRenderService } from "./sales-note-render.service";
 
 type EstadoConfirmacion = "pendiente" | "confirmado" | "sin_stock";
 
@@ -202,6 +203,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   readonly manualHistory = inject(ManualProductHistoryService);
   private authz = inject(AuthzService);
   private auth = inject(AuthService);
+  private salesNoteRender = inject(SalesNoteRenderService);
   private routeRuns = inject(RouteRunsService);
   private destroyRef = inject(DestroyRef);
   private api = inject(UserAdminApiService);
@@ -221,6 +223,13 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       document.body.scrollTop || 0,
     );
     this.updateStickyByScroll(scrollTop);
+  };
+  private readonly onVisibilityChange = () => {
+    if (document.visibilityState !== "visible") return;
+    void this.refreshAddItemSources({ force: true, onlyWhenModalOpen: true });
+  };
+  private readonly onWindowFocus = () => {
+    void this.refreshAddItemSources({ onlyWhenModalOpen: true });
   };
   readonly skeletonRows = [1, 2, 3, 4] as const;
 
@@ -440,6 +449,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   private waNoteTimer: ReturnType<typeof setTimeout> | null = null;
   private waProgressTimer: ReturnType<typeof setTimeout> | null = null;
   private waStatusPollSeq = 0;
+  private addItemSourcesRefreshPromise: Promise<void> | null = null;
+  private lastAddItemSourcesRefreshAt = 0;
   private popupAlertQueue: Array<{ title: string; message: string; resolve: () => void }> = [];
   private popupAlertResolver: (() => void) | null = null;
   private popupConfirmQueue: Array<{
@@ -829,12 +840,16 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
     // Capture scroll from window/body and nested scroll containers.
     window.addEventListener("scroll", this.onAnyScroll, true);
+    document.addEventListener("visibilitychange", this.onVisibilityChange);
+    window.addEventListener("focus", this.onWindowFocus);
     // Sync sticky controls with current scroll position on initial render.
     setTimeout(() => this.onAnyScroll(), 0);
   }
 
   ngOnDestroy() {
     window.removeEventListener("scroll", this.onAnyScroll, true);
+    document.removeEventListener("visibilitychange", this.onVisibilityChange);
+    window.removeEventListener("focus", this.onWindowFocus);
     if (this.waNoteTimer) {
       clearTimeout(this.waNoteTimer);
       this.waNoteTimer = null;
@@ -1745,7 +1760,68 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   async confirmarTodoDisponible() {
     const order = this.order();
     if (!order || !this.isConfirmItemsPhase(order)) return;
-    await this.magicConfirmAvailable(order);
+    if (!this.canEditItems(order)) return;
+
+    const pending = (order.items || []).filter((item) => !this.isConfirmedConfirmation(item));
+    if (pending.length === 0) return;
+
+    await this.confirmGroup(order, pending);
+    await this.refreshEvents();
+    this.showActionToast("Todos los productos pendientes se marcaron como disponibles.");
+  }
+
+  pendingSupplierReceptionItems(order: Order): OrderItem[] {
+    return (order.items || []).filter(
+      (item) =>
+        this.isConfirmedConfirmation(item)
+        && this.isSupplierManagedItem(item)
+        && !this.isSupplierItemReceived(order, item),
+    );
+  }
+
+  productBulkActionType(order: Order | null): "mark_available" | "mark_received" | null {
+    if (!order || this.isOrderClosed(order)) return null;
+    if (this.isConfirmItemsPhase(order)) return "mark_available";
+    if (order.status === "empaque") return null;
+    if (this.pendingSupplierReceptionItems(order).length > 0) return "mark_received";
+    return null;
+  }
+
+  canRunProductBulkAction(order: Order | null): boolean {
+    if (!order || !this.canEditItems(order)) return false;
+    const actionType = this.productBulkActionType(order);
+    if (actionType === "mark_available") {
+      return this.canUseStockMenuActions(order) && this.pendingConfirmationItemsCount(order) > 0;
+    }
+    if (actionType === "mark_received") {
+      return this.pendingSupplierReceptionItems(order).length > 0;
+    }
+    return false;
+  }
+
+  async runProductBulkAction() {
+    const order = this.order();
+    if (!order || !this.canEditItems(order)) return;
+    const actionType = this.productBulkActionType(order);
+    if (actionType === "mark_available") {
+      await this.confirmarTodoDisponible();
+      return;
+    }
+    if (actionType === "mark_received") {
+      await this.marcarTodoRecibido(order);
+    }
+  }
+
+  private async marcarTodoRecibido(order: Order) {
+    if (order.status === "empaque") return;
+    const targets = this.pendingSupplierReceptionItems(order);
+    if (targets.length === 0) return;
+
+    for (const item of targets) {
+      await this.receiveItem(order, item, { silentToast: true });
+    }
+    await this.refreshEvents();
+    this.showActionToast(`Se marcaron ${targets.length} producto(s) como recibidos.`);
   }
 
   canMagicConfirm(order: Order): boolean {
@@ -2054,19 +2130,21 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     await this.orders.updateItemConfirmationState(order.order_id, item.item_id, "substitute");
   }
 
-  async receiveItem(order: Order, item: OrderItem) {
+  async receiveItem(order: Order, item: OrderItem, options: { silentToast?: boolean } = {}) {
     if (this.isItemActionLoading(item)) return;
     this.setItemActionLoading(item, true);
     try {
       if (this.isSupplierManagedItem(item)) {
-        await this.receiveSupplierItem(order, item);
+        await this.receiveSupplierItem(order, item, options);
         return;
       }
       await this.orders.updateItemState(order.order_id, item.item_id, "recibido_qa");
       await this.orders.logEvent(order.order_id, "ITEM_RECEIVED_QA", `En transito proveedor: ${item.title}`, {
         itemId: item.item_id,
       });
-      this.showActionToast(`"${item.title}" recibido.`);
+      if (!options.silentToast) {
+        this.showActionToast(`"${item.title}" recibido.`);
+      }
     } finally {
       this.setItemActionLoading(item, false);
     }
@@ -2155,7 +2233,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     return Math.max(0, Math.min(100, Math.round(pct)));
   }
 
-  private async receiveSupplierItem(order: Order, item: OrderItem) {
+  private async receiveSupplierItem(order: Order, item: OrderItem, options: { silentToast?: boolean } = {}) {
     if (!this.isSupplierManagedItem(item)) return;
     const opId = this.supplierOpId(order, item);
     try {
@@ -2168,7 +2246,9 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         supplierOpId: opId,
       });
       this.actionError.set(null);
-      this.showActionToast(`"${item.title}" recibido de proveedor.`);
+      if (!options.silentToast) {
+        this.showActionToast(`"${item.title}" recibido de proveedor.`);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Error al recibir item de proveedor.";
       this.actionError.set(`No se pudo recibir "${item.title}": ${message}`);
@@ -3153,10 +3233,39 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.plannedModalOpen.set(false);
   }
 
+  private async refreshAddItemSources(opts?: { force?: boolean; onlyWhenModalOpen?: boolean }): Promise<void> {
+    if (opts?.onlyWhenModalOpen && !this.addItemModalOpen()) return;
+
+    const force = Boolean(opts?.force);
+    const now = Date.now();
+    if (!force && now - this.lastAddItemSourcesRefreshAt < 6000) return;
+    if (this.addItemSourcesRefreshPromise) return this.addItemSourcesRefreshPromise;
+
+    this.addItemSourcesRefreshPromise = (async () => {
+      await Promise.allSettled([
+        this.inventory
+          .loadFromFirestore()
+          .then(() => this.inventoryLoaded.set(true)),
+        this.catalog
+          .listValidated(120)
+          .then((page) => {
+            this.catalogRows.set(page.docs);
+            this.catalogLoaded.set(true);
+          }),
+      ]);
+      this.lastAddItemSourcesRefreshAt = Date.now();
+    })().finally(() => {
+      this.addItemSourcesRefreshPromise = null;
+    });
+
+    return this.addItemSourcesRefreshPromise;
+  }
+
   openAddItemModal() {
     this.resetAddItemForm();
     this.addItemMode.set("add");
     this.addItemModalOpen.set(true);
+    void this.refreshAddItemSources({ force: true });
   }
 
   openConvertItemModal(item: OrderItem) {
@@ -3174,6 +3283,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.newItemPriceCost.set(item.price_cost ?? null);
     this.updatePriceDraftFromSignals();
     this.addItemModalOpen.set(true);
+    void this.refreshAddItemSources({ force: true });
   }
 
   openEditItemModal(item: OrderItem) {
@@ -3204,6 +3314,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       source: item.source === "inventario" ? "Inventario" : item.source === "catalogo" ? "Catalogo" : "Manual",
     });
     this.addItemModalOpen.set(true);
+    void this.refreshAddItemSources({ force: true });
   }
 
   closeAddItemModal() {
@@ -3248,6 +3359,9 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     if (normalized === this.newItemSource()) return;
     this.newItemSource.set(normalized);
     this.clearAddItemDraftForSourceChange();
+    if (normalized !== "manual") {
+      void this.refreshAddItemSources();
+    }
   }
 
   private clearAddItemDraftForSourceChange() {
@@ -3403,70 +3517,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   private async buildSalesNoteImage(order: Order, rows: SalesNoteRowVm[]): Promise<Blob> {
-    // ── Layout ──────────────────────────────────────────────────────────────
-    const W       = 1080;
-    const CARD_X  = 32;
-    const CARD_Y  = 34;
-    const CARD_W  = W - CARD_X * 2;
-    const PAD_H   = 52;   // horizontal inner padding
-    const PAD_TOP = 48;
-    const PAD_BOT = 52;
-    const IX      = CARD_X + PAD_H;     // inner left edge
-    const IW      = CARD_W - PAD_H * 2; // inner width
-    const IR      = IX + IW;            // inner right edge
-
-    // Section heights
-    const HDR_H    = 230;  // header row — tall enough para logo grande
-    const HDR_GAP  = 8;
-    const DATE_H   = 72;  // fila 2 del header: "Nota de venta" (60px) + fecha
-    const DIV1_PRE = 28;   // gap before 1st divider
-    const LBL_H    = 26;   // "CLIENTE" label height
-    const LBL_GAP  = 8;
-    const CNAME_H  = 88;   // 72px font needs 88px vertical space
-    const DIV2_PRE = 28;   // gap before 2nd divider
-    const ITEMS_PRE= 24;   // gap after 2nd divider
-    const ITEM_H   = 114;  // per-row height
-    const ITEM_GAP = 14;
-    const TOTL_PRE = 30;   // gap before 3rd divider
-    const TOTL_H   = 150;  // total block: subtotal + desc + por pagar
-
-    const itemsH = rows.length > 0
-      ? rows.length * ITEM_H + (rows.length - 1) * ITEM_GAP
-      : 0;
-
-    const CARD_H = PAD_TOP
-      + HDR_H + HDR_GAP + DATE_H
-      + DIV1_PRE + 1 + 22       // divider 1
-      + LBL_H + LBL_GAP + CNAME_H
-      + DIV2_PRE + 1 + ITEMS_PRE // divider 2
-      + itemsH
-      + TOTL_PRE + 1 + 26       // divider 3
-      + TOTL_H
-      + PAD_BOT;
-
-    const H = CARD_Y * 2 + CARD_H;
-
-    // ── Canvas ───────────────────────────────────────────────────────────────
-    const canvas = document.createElement("canvas");
-    canvas.width  = W;
-    canvas.height = H;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("No se pudo crear el lienzo para la nota.");
-
-    // Background
-    ctx.fillStyle = "#eef2f7";
-    ctx.fillRect(0, 0, W, H);
-
-    // White card
-    this.drawRoundedRect(ctx, CARD_X, CARD_Y, CARD_W, CARD_H, 32, "#ffffff");
-    ctx.fill();
-
-    // ── Load product images & logo in parallel ───────────────────────────────
     const imageResults = await Promise.all(rows.map((row) => this.loadSalesNoteRowImage(row)));
-    const imageByItemId = new Map<string, HTMLImageElement | null>();
-    for (const result of imageResults) {
-      imageByItemId.set(result.itemId, result.image);
-    }
     const missingDownloads = imageResults.filter((result) => result.hasCandidates && !result.image);
     if (missingDownloads.length > 0) {
       const missingTitles = rows
@@ -3479,190 +3530,32 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       );
     }
 
-    let logoImage: HTMLImageElement | null = null;
-    try {
-      logoImage = await this.loadImageElement("/BaseMayoristaLogo.png", false, 4000);
-    } catch { /* skip logo gracefully */ }
-
-    // ── Drawing cursor ───────────────────────────────────────────────────────
-    let y = CARD_Y + PAD_TOP;
-
-    // ── FILA 1: Logo (izquierda) · Número de pedido (derecha) ───────────────
-    const LOGO_SIZE = 216;
-    const logoY = y + (HDR_H - LOGO_SIZE) / 2;
-    if (logoImage) {
-      ctx.save();
-      this.drawRoundedRect(ctx, IX, logoY, LOGO_SIZE, LOGO_SIZE, 20, "#f5f8fc");
-      ctx.clip();
-      this.drawImageCover(ctx, logoImage, IX, logoY, LOGO_SIZE, LOGO_SIZE);
-      ctx.restore();
-    }
-
-    // Número de pedido: derecha, centrado verticalmente en la fila del logo
-    ctx.globalAlpha = 0.55;
-    ctx.fillStyle = "#7a94ae";
-    ctx.font = "500 21px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-    ctx.textAlign = "right";
-    ctx.fillText(`#${order.order_id}`, IR, y + Math.round(HDR_H / 2) + 8);
-    ctx.globalAlpha = 1;
-
-    y += HDR_H + HDR_GAP;
-
-    // ── FILA 2: "Nota de venta" (izquierda) · Fecha (derecha) ────────────────
-    const dateText = new Date().toLocaleDateString("es-MX", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-    const row2Baseline = y + 62; // baseline para 60px font (ascender ~50px + margen)
-
-    ctx.fillStyle = "#6b87a4";
-    ctx.font = "600 60px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-    ctx.textAlign = "left";
-    ctx.fillText("Nota de venta", IX, row2Baseline);
-
-    ctx.fillStyle = "#9badc5";
-    ctx.font = "400 26px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-    ctx.textAlign = "right";
-    ctx.fillText(dateText, IR, row2Baseline);
-
-    y += DATE_H;
-
-    // ── Divider 1 ────────────────────────────────────────────────────────────
-    y += DIV1_PRE;
-    ctx.fillStyle = "#e8eef6";
-    ctx.fillRect(IX, y, IW, 1);
-    y += 1 + 22;
-
-    // ── CLIENT SECTION ───────────────────────────────────────────────────────
-    ctx.fillStyle = "#b0c4d8";
-    ctx.font = "600 21px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-    ctx.textAlign = "left";
-    ctx.fillText("CLIENTE", IX, y + LBL_H);
-    y += LBL_H + LBL_GAP;
-
-    const customer = this.customerName(order);
-    const CNAME_FONT = "700 72px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-    ctx.fillStyle = "#0f172a";
-    ctx.font = CNAME_FONT;
-    ctx.fillText(this.truncateForNote(ctx, customer, IW, CNAME_FONT), IX, y + 72);
-    y += CNAME_H;
-
-    // ── Divider 2 ────────────────────────────────────────────────────────────
-    y += DIV2_PRE;
-    ctx.fillStyle = "#e8eef6";
-    ctx.fillRect(IX, y, IW, 1);
-    y += 1 + ITEMS_PRE;
-
-    // ── ITEMS ────────────────────────────────────────────────────────────────
-    const IMG_SIZE   = 80;
-    const TEXT_X     = IX + IMG_SIZE + 20;
-    const TEXT_W     = IW - IMG_SIZE - 20 - 220; // space reserved for price column
-
-    for (const row of rows) {
-      const imgY = y + (ITEM_H - IMG_SIZE) / 2;
-      const image = imageByItemId.get(row.item.item_id) ?? null;
-
-      if (image) {
-        ctx.save();
-        this.drawRoundedRect(ctx, IX, imgY, IMG_SIZE, IMG_SIZE, 14, "#f5f8fc");
-        ctx.clip();
-        this.drawImageCover(ctx, image, IX, imgY, IMG_SIZE, IMG_SIZE);
-        ctx.restore();
-      } else {
-        this.drawRoundedRect(ctx, IX, imgY, IMG_SIZE, IMG_SIZE, 14, "#f0f4fa");
-        ctx.fillStyle = "#f0f4fa";
-        ctx.fill();
-        ctx.fillStyle = "#a8bed4";
-        ctx.font = "600 22px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText((row.item.title || "?").slice(0, 2).toUpperCase(), IX + IMG_SIZE / 2, imgY + IMG_SIZE / 2 + 8);
-        ctx.textAlign = "left";
-      }
-
-      // Product name
-      const TITLE_FONT = "600 29px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-      ctx.fillStyle = "#0f172a";
-      ctx.font = TITLE_FONT;
-      ctx.textAlign = "left";
-      ctx.fillText(this.truncateForNote(ctx, row.item.title || "Producto", TEXT_W, TITLE_FONT), TEXT_X, y + 42);
-
-      // Variant · Color
-      const variant = [row.item.variant, row.item.color].filter(Boolean).join(" · ");
-      if (variant) {
-        const VAR_FONT = "400 23px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-        ctx.fillStyle = "#7a94ae";
-        ctx.font = VAR_FONT;
-        ctx.fillText(this.truncateForNote(ctx, variant, TEXT_W, VAR_FONT), TEXT_X, y + 74);
-      }
-
-      // Qty × unit price (secondary, right)
-      ctx.fillStyle = "#8fabbe";
-      ctx.font = "400 24px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-      ctx.textAlign = "right";
-      ctx.fillText(`${row.qty} × ${this.formatCurrency(row.unitPrice)}`, IR, y + 50);
-
-      // Line total (bold, right)
-      ctx.fillStyle = "#1a2e44";
-      ctx.font = "700 32px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-      ctx.fillText(this.formatCurrency(row.lineTotal), IR, y + 86);
-
-      y += ITEM_H + ITEM_GAP;
-    }
-    y -= ITEM_GAP;
-
-    // ── Divider 3 ────────────────────────────────────────────────────────────
-    y += TOTL_PRE;
-    ctx.fillStyle = "#e8eef6";
-    ctx.fillRect(IX, y, IW, 1);
-    y += 1 + 26;
-
-    // ── TOTAL / POR PAGAR ────────────────────────────────────────────────────
     const subtotal = rows.reduce((s, r) => s + r.lineTotal, 0);
     const discount = Math.min(subtotal, this.orderDiscountAmount(order));
     const total = Math.max(0, subtotal - discount);
     const balanceDue = this.salesNoteBalanceDue(order, total);
 
-    // Subtotal (2 filas arriba de "Por pagar")
-    const subtotalRowY = y + 30;
-    ctx.fillStyle = "#7a94ae";
-    ctx.font = "600 24px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-    ctx.textAlign = "left";
-    ctx.fillText("Subtotal", IX, subtotalRowY);
-    ctx.textAlign = "right";
-    ctx.fillText(this.formatCurrency(subtotal), IR, subtotalRowY);
+    const imageByItemId = new Map<string, HTMLImageElement | null>();
+    for (const result of imageResults) {
+      imageByItemId.set(result.itemId, result.image);
+    }
 
-    // Desc (1 fila arriba de "Por pagar"), estilo ticket: rojo + signo "-"
-    const discountRowY = subtotalRowY + 30;
-    ctx.fillStyle = "#dc2626";
-    ctx.font = "700 24px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-    ctx.textAlign = "left";
-    ctx.fillText("Desc", IX, discountRowY);
-    ctx.textAlign = "right";
-    ctx.fillText(`-${this.formatCurrency(discount)}`, IR, discountRowY);
-
-    // "Por pagar"
-    const porPagarLabelY = discountRowY + 34;
-    ctx.fillStyle = "#7a94ae";
-    ctx.font = "600 30px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-    ctx.textAlign = "left";
-    ctx.fillText("Por pagar", IX, porPagarLabelY);
-
-    // Amount (right, LARGE)
-    ctx.fillStyle = "#0f172a";
-    ctx.font = "700 66px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-    ctx.textAlign = "right";
-    ctx.fillText(this.formatCurrency(balanceDue), IR, porPagarLabelY + 34);
-    y += TOTL_H;
-
-    return new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob((blob) => {
-        if (!blob) {
-          reject(new Error("No se pudo exportar la nota."));
-          return;
-        }
-        resolve(blob);
-      }, "image/png");
+    return this.salesNoteRender.buildSalesNoteImage({
+      orderId: order.order_id,
+      customerName: this.customerName(order),
+      rows: rows.map((row) => ({
+        rowId: row.item.item_id,
+        title: row.item.title || "Producto",
+        variant: row.item.variant || null,
+        color: row.item.color || null,
+        qty: row.qty,
+        unitPrice: row.unitPrice,
+        lineTotal: row.lineTotal,
+        imageUrl: row.imageUrl || null,
+      })),
+      discountAmount: discount,
+      balanceDue,
+      resolveRowImage: async (row) => imageByItemId.get(row.rowId) ?? null,
     });
   }
 

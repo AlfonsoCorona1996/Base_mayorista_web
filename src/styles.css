@@ -28,6 +28,7 @@ html.ms-icons-loading .material-symbols-rounded {
 :root {
   --color-primary: #1e293b;
   --color-secondary: #94a3b8;
+  --desktop-ui-zoom: 1;
 }
 
 /* ============================================================
@@ -64,6 +65,18 @@ body {
   background: #f4f7f9;
 }
 
+
+/* Zoom global en desktop */
+@media (min-width: 1024px) {
+  :root {
+    --desktop-ui-zoom: 0.8;
+  }
+
+  html {
+    zoom: 0.8;
+  }
+}
+
 /* Router Outlet sin mÃ¡rgenes */
 router-outlet {
   display: none;
@@ -84,4 +97,5 @@ app-root {
     font-size: 16px !important;
   }
 }
+
 

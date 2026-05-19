@@ -243,19 +243,27 @@
           @for (color of (d.product_colors || []); track (color.name || i); let i = $index) {
             <div class="gallery-item">
               <div class="gallery-item-image-wrapper">
-                @if (hasColorImage(color.image_url)) {
-                  <img [src]="color.image_url" class="gallery-item-image" alt="Imagen de color"/>
-                } @else {
-                  <div class="gallery-item-placeholder">
-                    <span class="placeholder-icon" aria-hidden="true">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M4 7h4l2-2h4l2 2h4v12H4z"></path>
-                        <circle cx="12" cy="13" r="3"></circle>
-                      </svg>
-                    </span>
-                    <span class="placeholder-text">Sin imagen</span>
-                  </div>
-                }
+                <button
+                  type="button"
+                  class="gallery-item-image-trigger"
+                  (click)="openGlobalColorImageSelector(i)"
+                  [attr.aria-label]="hasColorImage(color.image_url) ? 'Cambiar imagen del color global' : 'Agregar imagen al color global'"
+                  [attr.title]="hasColorImage(color.image_url) ? 'Cambiar imagen' : 'Agregar imagen'"
+                >
+                  @if (hasColorImage(color.image_url)) {
+                    <img [src]="color.image_url" class="gallery-item-image" alt="Imagen de color"/>
+                  } @else {
+                    <div class="gallery-item-placeholder">
+                      <span class="placeholder-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M4 7h4l2-2h4l2 2h4v12H4z"></path>
+                          <circle cx="12" cy="13" r="3"></circle>
+                        </svg>
+                      </span>
+                      <span class="placeholder-text">Sin imagen</span>
+                    </div>
+                  }
+                </button>
 
                 <button
                   type="button"
@@ -284,6 +292,13 @@
                   (focus)="onGlobalColorFocus(i, color.name)"
                   (blur)="onGlobalColorBlur(i)"
                 />
+                <button
+                  type="button"
+                  class="btn btn-sm btn-secondary"
+                  (click)="openGlobalColorImageSelector(i)"
+                >
+                  {{ hasColorImage(color.image_url) ? "Cambiar imagen" : "Agregar imagen" }}
+                </button>
               </div>
             </div>
           }

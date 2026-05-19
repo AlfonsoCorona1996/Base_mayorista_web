@@ -4,7 +4,14 @@ import { FormsModule } from "@angular/forms";
 import { ActivatedRoute, Router } from "@angular/router";
 import { AuthzService } from "../../core/authz.service";
 import { CustomersService } from "../../core/customers.service";
-import { FinanceAccount, FinanceExpense, FinanceExpenseCategory, FinanceService } from "../../core/finance.service";
+import {
+  FinanceAccount,
+  FinanceExpense,
+  FinanceExpenseCategory,
+  FinanceService,
+  FinanceWithdrawal,
+  FinanceWithdrawalPurpose,
+} from "../../core/finance.service";
 import { InventoryItem, InventoryService } from "../../core/inventory.service";
 import { Order, OrderItem, OrderStatus, OrdersService } from "../../core/orders.service";
 import { RoutesService } from "../../core/routes.service";
@@ -176,6 +183,19 @@ const EXPENSE_CATEGORY_LABEL: Record<FinanceExpenseCategory, string> = {
   deuda_meses: "Deuda a meses",
 };
 
+const WITHDRAWAL_PURPOSE_LABEL: Record<FinanceWithdrawalPurpose, string> = {
+  socio_blanca: "Socio 1 - Blanca Trejo",
+  socio_andrea_pepe: "Socio 2 - Andrea y Pepe",
+  persona: "Persona",
+  sueldo: "Sueldo",
+  gasto: "Gasto",
+  inversion: "Inversion",
+  ahorro: "Ahorro",
+  otro: "Otro",
+};
+
+type PartnerWithdrawalPurpose = "socio_blanca" | "socio_andrea_pepe";
+
 const MONEY_BUCKET_ORDER: MoneyBucketId[] = [
   "openDrafts",
   "confirmedNeedInvestment",
@@ -327,11 +347,22 @@ export default class AdministracionPage {
   expenseInstallmentIndex = signal<number | null>(null);
   expenseNotes = signal("");
 
+  withdrawalEditingId = signal<string | null>(null);
+  withdrawalAmount = signal(0);
+  withdrawalAmountInput = signal("");
+  withdrawalDate = signal(this.offsetDate(0));
+  withdrawalPurpose = signal<FinanceWithdrawalPurpose>("socio_blanca");
+  withdrawalRecipient = signal("");
+  withdrawalRouteId = signal("general");
+  withdrawalAccountId = signal("none");
+  withdrawalNotes = signal("");
+
   orders = computed(() => this.ordersService.list());
   inventoryItems = computed(() => this.inventoryService.items());
   routes = computed(() => this.routesService.routes());
   accounts = computed(() => this.financeService.accounts());
   expenses = computed(() => this.financeService.expenses());
+  withdrawals = computed(() => this.financeService.withdrawals());
   cuts = computed(() => this.financeService.cuts());
   customers = computed(() => this.customersService.customers());
 
@@ -370,6 +401,12 @@ export default class AdministracionPage {
     return this.expenses().filter((row) => row.route_id === routeId);
   });
 
+  filteredWithdrawals = computed(() => {
+    const routeId = this.selectedRouteId();
+    if (!routeId) return this.withdrawals();
+    return this.withdrawals().filter((row) => row.route_id === routeId);
+  });
+
   summary = computed<FinanceSummary>(() =>
     this.buildSummary({
       orders: this.filteredOrders(),
@@ -381,6 +418,71 @@ export default class AdministracionPage {
       stagnationDays: this.stagnationDays(),
     }),
   );
+
+  withdrawalSummary = computed(() => {
+    const baseDisponible = Math.max(0, this.summary().utilidadNeta);
+    const totalRetirado = this.filteredWithdrawals().reduce((sum, row) => sum + this.toSafeNumber(row.amount), 0);
+    const disponible = Math.max(0, baseDisponible - totalRetirado);
+    return {
+      baseDisponible: this.toSafeNumber(baseDisponible),
+      totalRetirado: this.toSafeNumber(totalRetirado),
+      disponible: this.toSafeNumber(disponible),
+    };
+  });
+
+  withdrawalPartnerSummary = computed(() => {
+    let withdrawnBlanca = 0;
+    let withdrawnAndreaPepe = 0;
+    let withdrawnNonPartner = 0;
+
+    for (const row of this.filteredWithdrawals()) {
+      const partner = this.resolveWithdrawalPartner(row);
+      if (partner === "socio_blanca") {
+        withdrawnBlanca += this.toSafeNumber(row.amount);
+      } else if (partner === "socio_andrea_pepe") {
+        withdrawnAndreaPepe += this.toSafeNumber(row.amount);
+      } else {
+        withdrawnNonPartner += this.toSafeNumber(row.amount);
+      }
+    }
+
+    const distributableBase = Math.max(0, this.withdrawalSummary().baseDisponible - withdrawnNonPartner);
+    const perPartnerTarget = this.toSafeNumber(distributableBase / 2);
+    const pendingBlanca = Math.max(0, perPartnerTarget - withdrawnBlanca);
+    const pendingAndreaPepe = Math.max(0, perPartnerTarget - withdrawnAndreaPepe);
+
+    return {
+      distributableBase: this.toSafeNumber(distributableBase),
+      perPartnerTarget: this.toSafeNumber(perPartnerTarget),
+      withdrawnBlanca: this.toSafeNumber(withdrawnBlanca),
+      withdrawnAndreaPepe: this.toSafeNumber(withdrawnAndreaPepe),
+      withdrawnNonPartner: this.toSafeNumber(withdrawnNonPartner),
+      pendingBlanca: this.toSafeNumber(pendingBlanca),
+      pendingAndreaPepe: this.toSafeNumber(pendingAndreaPepe),
+    };
+  });
+
+  withdrawalSelectedPartner = computed(() => this.asPartnerPurpose(this.withdrawalPurpose()));
+
+  withdrawalAvailableForForm = computed(() => {
+    const editingId = this.withdrawalEditingId();
+    if (!editingId) return this.withdrawalSummary().disponible;
+    const current = this.filteredWithdrawals().find((row) => row.withdrawal_id === editingId);
+    return this.toSafeNumber(this.withdrawalSummary().disponible + this.toSafeNumber(current?.amount));
+  });
+
+  withdrawalAvailableForSelectedPartner = computed(() => {
+    const selectedPartner = this.withdrawalSelectedPartner();
+    if (!selectedPartner) return this.withdrawalAvailableForForm();
+    const summary = this.withdrawalPartnerSummary();
+    const editingId = this.withdrawalEditingId();
+    const baseWithdrawn = selectedPartner === "socio_blanca" ? summary.withdrawnBlanca : summary.withdrawnAndreaPepe;
+    const current = editingId ? this.filteredWithdrawals().find((row) => row.withdrawal_id === editingId) : null;
+    const currentPartner = current ? this.resolveWithdrawalPartner(current) : null;
+    const restoredCurrentAmount = current && currentPartner === selectedPartner ? this.toSafeNumber(current.amount) : 0;
+    const available = Math.max(0, summary.perPartnerTarget - baseWithdrawn + restoredCurrentAmount);
+    return this.toSafeNumber(available);
+  });
 
   routeRows = computed(() => this.buildRouteRows(this.summary().orderBucketRows));
   drilldownRows = computed(() => {
@@ -667,6 +769,143 @@ export default class AdministracionPage {
     }
   }
 
+  startEditWithdrawal(row: FinanceWithdrawal) {
+    if (!this.canEditMovements()) return;
+    this.withdrawalEditingId.set(row.withdrawal_id);
+    this.withdrawalAmount.set(row.amount);
+    this.withdrawalAmountInput.set(this.formatCurrencyInput(row.amount));
+    this.withdrawalDate.set(this.normalizeDateInput(row.occurred_at, this.offsetDate(0)));
+    this.withdrawalPurpose.set(row.purpose);
+    this.withdrawalRecipient.set(row.recipient || "");
+    this.withdrawalRouteId.set(row.route_id || "general");
+    this.withdrawalAccountId.set(row.account_id || "none");
+    this.withdrawalNotes.set(row.notes || "");
+  }
+
+  resetWithdrawalForm() {
+    this.withdrawalEditingId.set(null);
+    this.withdrawalAmount.set(0);
+    this.withdrawalAmountInput.set("");
+    this.withdrawalDate.set(this.offsetDate(0));
+    this.withdrawalPurpose.set("socio_blanca");
+    this.withdrawalRecipient.set("");
+    this.withdrawalRouteId.set(this.selectedRouteId() || "general");
+    this.withdrawalAccountId.set("none");
+    this.withdrawalNotes.set("");
+  }
+
+  setWithdrawalAmount(value: unknown) {
+    this.withdrawalAmount.set(this.toSafeNumber(value));
+  }
+
+  setWithdrawalAmountInput(value: unknown) {
+    const raw = String(value || "");
+    const normalized = this.normalizeCurrencyInput(raw);
+    this.withdrawalAmount.set(normalized.amount);
+    this.withdrawalAmountInput.set(normalized.formatted);
+  }
+
+  setWithdrawalDate(value: unknown) {
+    this.withdrawalDate.set(this.normalizeDateInput(value, this.offsetDate(0)));
+  }
+
+  setWithdrawalPurpose(value: unknown) {
+    const raw = String(value || "").trim();
+    if (
+      raw === "socio_blanca" ||
+      raw === "socio_andrea_pepe" ||
+      raw === "persona" ||
+      raw === "sueldo" ||
+      raw === "gasto" ||
+      raw === "inversion" ||
+      raw === "ahorro" ||
+      raw === "otro"
+    ) {
+      this.withdrawalPurpose.set(raw);
+    }
+  }
+
+  setWithdrawalRecipient(value: unknown) {
+    this.withdrawalRecipient.set(String(value || ""));
+  }
+
+  setWithdrawalRouteId(value: unknown) {
+    const raw = String(value || "general").trim();
+    this.withdrawalRouteId.set(raw || "general");
+  }
+
+  setWithdrawalAccountId(value: unknown) {
+    const raw = String(value || "none").trim();
+    this.withdrawalAccountId.set(raw || "none");
+  }
+
+  setWithdrawalNotes(value: unknown) {
+    this.withdrawalNotes.set(String(value || ""));
+  }
+
+  async submitWithdrawal() {
+    const editingId = this.withdrawalEditingId();
+    const isEditing = Boolean(editingId);
+    if (isEditing && !this.canEditMovements()) return;
+    if (!isEditing && !this.canCreateMovements()) return;
+    if (this.withdrawalAmount() <= 0) {
+      this.error.set("El monto del retiro debe ser mayor a 0.");
+      return;
+    }
+
+    const available = this.withdrawalAvailableForForm();
+    if (this.withdrawalAmount() > available + 0.001) {
+      this.error.set(`No hay saldo suficiente para retirar ${this.formatCurrency(this.withdrawalAmount())}. Disponible: ${this.formatCurrency(available)}.`);
+      return;
+    }
+
+    const selectedPartner = this.withdrawalSelectedPartner();
+    if (selectedPartner) {
+      const availableForPartner = this.withdrawalAvailableForSelectedPartner();
+      if (this.withdrawalAmount() > availableForPartner + 0.001) {
+        const partnerLabel = this.withdrawalPurposeLabel(this.withdrawalPurpose());
+        this.error.set(`Ese retiro excede la parte de ${partnerLabel}. Maximo permitido ahora: ${this.formatCurrency(availableForPartner)}.`);
+        return;
+      }
+    }
+
+    this.error.set(null);
+    this.success.set(null);
+    try {
+      await this.financeService.saveWithdrawal({
+        withdrawal_id: editingId || undefined,
+        amount: this.withdrawalAmount(),
+        occurred_at: this.withdrawalDate(),
+        purpose: this.withdrawalPurpose(),
+        recipient: this.withdrawalRecipient().trim() || null,
+        route_id: this.withdrawalRouteId() === "general" ? null : this.withdrawalRouteId(),
+        account_id: this.withdrawalAccountId() === "none" ? null : this.withdrawalAccountId(),
+        notes: this.withdrawalNotes().trim() || null,
+      });
+      this.resetWithdrawalForm();
+      this.success.set(isEditing ? "Retiro actualizado." : "Retiro registrado.");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "No se pudo guardar el retiro.";
+      this.error.set(message);
+    }
+  }
+
+  async deleteWithdrawal(row: FinanceWithdrawal) {
+    if (!this.canDeleteMovements()) return;
+    const ok = confirm(`Eliminar retiro de ${this.formatCurrency(row.amount)}?`);
+    if (!ok) return;
+    this.error.set(null);
+    this.success.set(null);
+    try {
+      await this.financeService.deleteWithdrawal(row.withdrawal_id);
+      if (this.withdrawalEditingId() === row.withdrawal_id) this.resetWithdrawalForm();
+      this.success.set("Retiro eliminado.");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "No se pudo eliminar el retiro.";
+      this.error.set(message);
+    }
+  }
+
   openBucketById(bucketId: MoneyBucketId) {
     const target = this.summary().buckets.find((row) => row.id === bucketId);
     if (!target) return;
@@ -799,6 +1038,20 @@ export default class AdministracionPage {
     return EXPENSE_CATEGORY_LABEL[key];
   }
 
+  withdrawalPurposeLabel(key: FinanceWithdrawalPurpose): string {
+    return WITHDRAWAL_PURPOSE_LABEL[key];
+  }
+
+  withdrawalDestinationLabel(row: FinanceWithdrawal): string {
+    const base = this.withdrawalPurposeLabel(row.purpose);
+    if (!row.recipient) return base;
+    return `${base}: ${row.recipient}`;
+  }
+
+  partnerPendingLabel(partner: PartnerWithdrawalPurpose): string {
+    return partner === "socio_blanca" ? "Pendiente Blanca Trejo" : "Pendiente Andrea y Pepe";
+  }
+
   accountLabel(accountId: string | null): string {
     if (!accountId) return "-";
     return this.accounts().find((row) => row.account_id === accountId)?.name || accountId;
@@ -850,10 +1103,26 @@ export default class AdministracionPage {
   trackRoute = (_: number, row: SummaryRow) => row.routeId;
   trackAccount = (_: number, row: FinanceAccount) => row.account_id;
   trackExpense = (_: number, row: FinanceExpense) => row.expense_id;
+  trackWithdrawal = (_: number, row: FinanceWithdrawal) => row.withdrawal_id;
   trackCut = (_: number, row: { cut_id: string }) => row.cut_id;
   trackScope = (_: number, row: { id: string }) => row.id;
   trackBucket = (_: number, row: MoneyBucket) => row.id;
   trackDrilldownRow = (_: number, row: DrilldownRow) => row.rowId;
+
+  private resolveWithdrawalPartner(row: FinanceWithdrawal): PartnerWithdrawalPurpose | null {
+    if (row.purpose === "socio_blanca") return "socio_blanca";
+    if (row.purpose === "socio_andrea_pepe") return "socio_andrea_pepe";
+    const hint = this.normalizeText(`${row.recipient || ""} ${row.notes || ""}`);
+    if (hint.includes("blanca")) return "socio_blanca";
+    if (hint.includes("andrea") || hint.includes("pepe")) return "socio_andrea_pepe";
+    return null;
+  }
+
+  private asPartnerPurpose(value: FinanceWithdrawalPurpose | null | undefined): PartnerWithdrawalPurpose | null {
+    if (value === "socio_blanca") return "socio_blanca";
+    if (value === "socio_andrea_pepe") return "socio_andrea_pepe";
+    return null;
+  }
 
   private restoreReturnContextFromQuery() {
     const scope = String(this.route.snapshot.queryParamMap.get("scope") || "").trim();
@@ -1543,6 +1812,48 @@ export default class AdministracionPage {
     const n = typeof value === "number" ? value : Number(value || 0);
     if (!Number.isFinite(n)) return 0;
     return Number(n.toFixed(2));
+  }
+
+  private formatCurrencyInput(value: number): string {
+    const safe = this.toSafeNumber(value);
+    if (safe <= 0) return "";
+    const [whole, decimals] = safe.toFixed(2).split(".");
+    const wholeFormatted = new Intl.NumberFormat("en-US", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(Number(whole));
+    return `${wholeFormatted}.${decimals}`;
+  }
+
+  private normalizeCurrencyInput(value: string): { amount: number; formatted: string } {
+    const cleaned = String(value || "")
+      .replace(/[^0-9.,]/g, "")
+      .replace(/,/g, "");
+    if (!cleaned) {
+      return { amount: 0, formatted: "" };
+    }
+
+    const hasTrailingDot = cleaned.endsWith(".");
+    const parts = cleaned.split(".");
+    const wholeDigitsRaw = parts.shift() || "";
+    const decimalDigits = parts.join("").slice(0, 2);
+    const wholeDigits = wholeDigitsRaw.replace(/^0+(?=\d)/, "") || "0";
+    const wholeValue = Number(wholeDigits);
+    const wholeFormatted = new Intl.NumberFormat("en-US", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(wholeValue);
+
+    let formatted = wholeFormatted;
+    if (hasTrailingDot) {
+      formatted += ".";
+    } else if (decimalDigits) {
+      formatted += `.${decimalDigits}`;
+    }
+
+    const canonical = `${wholeValue}.${decimalDigits || "0"}`;
+    const amount = this.toSafeNumber(Number(canonical));
+    return { amount, formatted };
   }
 
   private createEmptyDrilldownFilters(): DrilldownFilterState {

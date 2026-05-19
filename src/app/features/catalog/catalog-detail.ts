@@ -429,6 +429,31 @@ export default class CatalogDetailPage {
     this.saveMessage.set(null);
   }
 
+  addVariant() {
+    const d = this.doc();
+    if (!d || !this.editing()) return;
+
+    const variant: NormalizedItemV3 = {
+      variant_id: this.buildNextVariantId(d.listing.items),
+      variant_name: null,
+      sku: null,
+      stock_state: "unknown_qty",
+      notes: null,
+      color_stock: [],
+      prices: {
+        precio_costo: null,
+        precio_clienta: null,
+        precio_final: null,
+        currency: this.preferredCurrency(),
+      },
+    };
+
+    d.listing.items = [...d.listing.items, variant];
+
+    this.doc.set({ ...d });
+    this.saveMessage.set(null);
+  }
+
   onVariantFieldChange(itemIndex: number, field: "variant_name" | "sku" | "notes", rawValue: unknown) {
     const d = this.doc();
     if (!d) return;
@@ -867,6 +892,22 @@ export default class CatalogDetailPage {
     return words
       .map((word) => `${word.slice(0, 1).toUpperCase()}${word.slice(1).toLowerCase()}`)
       .join(" ");
+  }
+
+  private buildNextVariantId(items: NormalizedItemV3[]): string {
+    const existing = new Set(
+      (items || [])
+        .map((item) => (item.variant_id || "").trim().toLowerCase())
+        .filter(Boolean),
+    );
+
+    let index = (items?.length || 0) + 1;
+    let candidate = `variant_${index}`;
+    while (existing.has(candidate.toLowerCase())) {
+      index += 1;
+      candidate = `variant_${index}`;
+    }
+    return candidate;
   }
 
   private isRequiredSchema(doc: unknown): doc is NormalizedListingDocV3 {

@@ -3,11 +3,13 @@ import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { CurrencyPipe, DatePipe, NgClass } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { Router } from "@angular/router";
+import JSZip from "jszip";
 import { PDFDocument, StandardFonts, rgb, type PDFFont } from "pdf-lib";
 import { CustomersService } from "../../core/customers.service";
 import { OrdersService, Order, OrderStatus, IncidentSeverity } from "../../core/orders.service";
 import { RoutesService } from "../../core/routes.service";
 import { ActionChecklist, PrimaryAction, getActionChecklist, getPrimaryAction } from "./order-primary-action.mapper";
+import { SalesNoteRenderRow, SalesNoteRenderService } from "./sales-note-render.service";
 
 type IntentFilter =
   | "hoy"
@@ -34,19 +36,14 @@ type OrderCardMeta = {
   ariaLabel: string;
 };
 
-type SalesNoteRow = {
-  title: string;
-  variant: string;
-  qty: number;
-  unitPrice: number;
-  lineTotal: number;
-};
+type SalesNoteRow = SalesNoteRenderRow;
+type SalesNoteFile = { fileName: string; blob: Blob };
 
 type TableRangePreset = "today" | "last7" | "last30";
 type TableSortColumn = "updated_at" | "created_at" | "status" | "customer" | "route" | "items" | "total";
 type TableMenuColumn = "route" | "status";
 type TableMenuOption = { value: string; label: string; count: number };
-type TableBulkAction = "create_bitacora" | "create_nota" | "mark_pagado" | "mark_recibido";
+type TableBulkAction = "create_bitacora" | "create_nota" | "mark_pagado" | "mark_recibido" | "mark_listo_ruta";
 type BitacoraConfig = {
   includeProductCount: boolean;
   includeProductDetail: boolean;
@@ -78,6 +75,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   private orders = inject(OrdersService);
   private customers = inject(CustomersService);
   private routes = inject(RoutesService);
+  private salesNoteRender = inject(SalesNoteRenderService);
   private router = inject(Router);
   private destroyRef = inject(DestroyRef);
   private readonly uiStateStorageKey = "pedidos.ui-state.v1";
@@ -386,6 +384,10 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
 
   tableMarkReceivedEligibleRows = computed(() =>
     this.tableSelectedRows().filter((order) => this.canMarkAsReceivedFromBulk(order.status))
+  );
+
+  tableMarkReadyForRouteEligibleRows = computed(() =>
+    this.tableSelectedRows().filter((order) => this.canMarkAsReadyForRouteFromBulk(order))
   );
   bitacoraRouteOptions = computed<TableMenuOption[]>(() => {
     const map = new Map<string, TableMenuOption>();
@@ -800,6 +802,9 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     if (action === "mark_pagado") {
       return this.tableMarkPaidEligibleRows().length > 0;
     }
+    if (action === "mark_listo_ruta") {
+      return this.tableMarkReadyForRouteEligibleRows().length > 0;
+    }
     return this.tableMarkReceivedEligibleRows().length > 0;
   }
 
@@ -820,6 +825,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     let updated = 0;
     let skipped = 0;
     let failed = 0;
+    const generatedNoteFiles: SalesNoteFile[] = [];
     if (action === "create_nota") {
       this.tableBulkResultVisible.set(false);
       this.tableBulkResultText.set("");
@@ -839,7 +845,10 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
               continue;
             }
             const blob = await this.buildSalesNoteImage(order, rows);
-            this.downloadBlob(blob, `nota-${order.order_id}-${Date.now()}.png`);
+            generatedNoteFiles.push({
+              fileName: `nota-${order.order_id}-${Date.now()}.png`,
+              blob,
+            });
             await this.orders.logEvent(
               order.order_id,
               "SALES_NOTE_GENERATED",
@@ -856,6 +865,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
             failed += 1;
           }
         }
+        await this.downloadSalesNotesBundle(generatedNoteFiles, "notas-tabla");
       } else if (action === "mark_pagado") {
         for (const order of selectedRows) {
           if (order.status !== "ready_for_route") {
@@ -880,7 +890,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
             failed += 1;
           }
         }
-      } else {
+      } else if (action === "mark_recibido") {
         for (const order of selectedRows) {
           if (!this.canMarkAsReceivedFromBulk(order.status)) {
             skipped += 1;
@@ -893,6 +903,30 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
               "ORDER_RECEIVED_MARKED",
               "Marcado como recibido desde seleccion de tabla",
               { source: "pedidos_table_selection", previous_status: order.status }
+            ).catch(() => null);
+            updated += 1;
+          } catch {
+            failed += 1;
+          }
+        }
+      } else if (action === "mark_listo_ruta") {
+        for (const order of selectedRows) {
+          if (!this.canMarkAsReadyForRouteFromBulk(order)) {
+            skipped += 1;
+            continue;
+          }
+          try {
+            const packagesCount = this.closedPackagesCount(order);
+            await this.orders.markReadyForRoute(order.order_id, packagesCount);
+            await this.orders.logEvent(
+              order.order_id,
+              "DISPATCH_READY",
+              "Marcado listo para ruta desde seleccion de tabla",
+              {
+                source: "pedidos_table_selection",
+                previous_status: order.status,
+                packages_count: packagesCount,
+              }
             ).catch(() => null);
             updated += 1;
           } catch {
@@ -1021,6 +1055,81 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     return ["borrador", "en_transito", "inbound_in_transit"].includes(status);
   }
 
+  private canMarkAsReadyForRouteFromBulk(order: Order): boolean {
+    return this.isBulkDispatchStage(order.status) && this.canFinishPackingFromBulk(order);
+  }
+
+  private isBulkDispatchStage(status: string): boolean {
+    return ["inbound_in_transit", "en_transito", "recibido_qa", "packing", "empaque"].includes(status);
+  }
+
+  private canFinishPackingFromBulk(order: Order): boolean {
+    if (this.closedPackagesCount(order) <= 0) return false;
+    if (this.openPackagesCountForBulk(order) > 0) return false;
+    if (this.hasEmptyPackagesForBulk(order)) return false;
+    if (this.unpackedPiecesForBulk(order) > 0) return false;
+    return true;
+  }
+
+  private openPackagesCountForBulk(order: Order): number {
+    return (order.packages || []).filter((pkg) => this.packageStatusForBulk(pkg) === "open").length;
+  }
+
+  private hasEmptyPackagesForBulk(order: Order): boolean {
+    return (order.packages || []).some((pkg) => !this.packageHasItemsForBulk(pkg));
+  }
+
+  private unpackedPiecesForBulk(order: Order): number {
+    const packedByItem = this.packedQtyByItemForBulk(order);
+    return (order.items || [])
+      .filter((item) => item.confirmation_state === "confirmed")
+      .filter((item) => !["cancelado", "devuelto"].includes(item.state))
+      .reduce((sum, item) => {
+        const confirmed = this.itemConfirmedQty(item);
+        const packed = packedByItem.get(item.item_id) || 0;
+        return sum + Math.max(0, confirmed - packed);
+      }, 0);
+  }
+
+  private packedQtyByItemForBulk(order: Order): Map<string, number> {
+    const map = new Map<string, number>();
+    for (const pkg of order.packages || []) {
+      for (const entry of this.packageItemsForBulk(pkg)) {
+        map.set(entry.orderItemId, (map.get(entry.orderItemId) || 0) + entry.qty);
+      }
+    }
+    return map;
+  }
+
+  private packageHasItemsForBulk(pkg: Order["packages"][number]): boolean {
+    return this.packageItemsForBulk(pkg).some((entry) => entry.qty > 0);
+  }
+
+  private packageStatusForBulk(pkg: Order["packages"][number]): "open" | "closed" {
+    const status = String((pkg as any).status || "").toLowerCase();
+    if (status === "open" || status === "closed") return status;
+    const state = String((pkg as any).state || "").toLowerCase();
+    if (state === "open") return "open";
+    if (state === "closed" || state === "en_ruta" || state === "entregado" || state === "armado") return "closed";
+    if ((pkg as any).closed_at) return "closed";
+    return "closed";
+  }
+
+  private packageItemsForBulk(pkg: Order["packages"][number]): Array<{ orderItemId: string; qty: number }> {
+    const raw = (pkg as any).items;
+    if (Array.isArray(raw) && raw.length > 0) {
+      return raw
+        .map((entry: any) => ({
+          orderItemId: String(entry.orderItemId || entry.order_item_id || ""),
+          qty: Math.max(0, Number(entry.qty || 0)),
+        }))
+        .filter((entry: { orderItemId: string; qty: number }) => entry.orderItemId && entry.qty > 0);
+    }
+    return Array.isArray(pkg.item_ids)
+      ? pkg.item_ids.map((itemId) => ({ orderItemId: String(itemId || ""), qty: 1 }))
+      : [];
+  }
+
   private tableBulkActionLabel(action: TableBulkAction): string {
     switch (action) {
       case "create_bitacora":
@@ -1031,6 +1140,8 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
         return "Marcar como pagados";
       case "mark_recibido":
         return "Marcar como recibidos";
+      case "mark_listo_ruta":
+        return "Marcar como listos para ruta";
       default:
         return "Accion";
     }
@@ -1959,6 +2070,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     this.bulkNotesMessage.set(null);
     let generated = 0;
     let failed = 0;
+    const generatedNoteFiles: SalesNoteFile[] = [];
 
     for (const order of selectedOrders) {
       try {
@@ -1968,7 +2080,10 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
           continue;
         }
         const blob = await this.buildSalesNoteImage(order, rows);
-        this.downloadBlob(blob, `nota-${order.order_id}-${Date.now()}.png`);
+        generatedNoteFiles.push({
+          fileName: `nota-${order.order_id}-${Date.now()}.png`,
+          blob,
+        });
         generated += 1;
         await this.orders.logEvent(order.order_id, "SALES_NOTE_GENERATED", "Nota de venta generada (lote)", {
           rows: rows.length,
@@ -1981,6 +2096,8 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
         console.warn("[pedidos] No se pudo generar nota en lote", { orderId: order.order_id, error });
       }
     }
+
+    await this.downloadSalesNotesBundle(generatedNoteFiles, "notas-lote");
 
     this.bulkNotesLoading.set(false);
     this.cancelBulkNoteMode();
@@ -2032,13 +2149,19 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
       .filter((item) => !["cancelado", "devuelto"].includes(item.state))
       .map((item) => {
         const qty = this.itemConfirmedQty(item);
-        const unitPrice = item.price_clienta ?? item.price_public ?? 0;
+        const legacyUnitPrice = (item as any)?.unit_price_clienta ?? (item as any)?.unit_price ?? (item as any)?.unitPrice;
+        const unitRaw = item.price_clienta ?? item.price_public ?? legacyUnitPrice ?? 0;
+        const unitParsed = Number(typeof unitRaw === "string" ? unitRaw.replace(/,/g, "").trim() : unitRaw);
+        const unitPrice = Number.isFinite(unitParsed) && unitParsed > 0 ? Number(unitParsed.toFixed(2)) : 0;
         return {
+          rowId: item.item_id || `${order.order_id}-${item.title || "item"}`,
           title: item.title || "Producto",
-          variant: `${item.variant || "Unica"} Â· ${item.color || "N/A"}`,
+          variant: item.variant || null,
+          color: item.color || null,
           qty,
           unitPrice,
           lineTotal: unitPrice * qty,
+          imageUrl: item.image_url || null,
         };
       })
       .filter((row) => row.qty > 0);
@@ -2443,147 +2566,38 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private async buildSalesNoteImage(order: Order, rows: SalesNoteRow[]): Promise<Blob> {
-    const width = 1080;
-    const cardX = 40;
-    const cardY = 34;
-    const cardW = width - (cardX * 2);
-    const rowHeight = 84;
-    const rowGap = 10;
-    const rowsHeight = rows.length > 0 ? (rows.length * rowHeight) + ((rows.length - 1) * rowGap) : 0;
-    const cardH = 340 + rowsHeight + 126;
-    const height = (cardY * 2) + cardH;
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("No se pudo crear el lienzo para la nota.");
-
-    const customer = this.customerName(order.customer_id);
-    const dateText = new Date().toLocaleDateString("es-MX", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    });
-    const total = rows.reduce((sum, row) => sum + row.lineTotal, 0);
-
-    ctx.fillStyle = "#f2f5fa";
-    ctx.fillRect(0, 0, width, height);
-    this.drawRoundedRect(ctx, cardX, cardY, cardW, cardH, 32, "#ffffff");
-    ctx.fill();
-
-    const titleTop = cardY + 52;
-    ctx.fillStyle = "#0f172a";
-    ctx.font = "700 50px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-    ctx.fillText("Nota de venta", cardX + 44, titleTop);
-
-    ctx.fillStyle = "#5f6f85";
-    ctx.font = "500 26px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-    ctx.fillText(customer, cardX + 44, titleTop + 46);
-    ctx.fillText(dateText, cardX + 44, titleTop + 82);
-
-    ctx.textAlign = "right";
-    ctx.fillStyle = "#4f627d";
-    ctx.font = "700 30px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-    ctx.fillText(`Pedido ${order.order_id}`, cardX + cardW - 44, titleTop + 4);
-    ctx.textAlign = "left";
-
-    const headerTop = cardY + 150;
-    this.drawRoundedRect(ctx, cardX + 28, headerTop, cardW - 56, 56, 16, "#f5f8fd");
-    ctx.fill();
-
-    const qtyX = cardX + cardW - 360;
-    const unitX = cardX + cardW - 220;
-    const totalX = cardX + cardW - 56;
-    ctx.fillStyle = "#4f627d";
-    ctx.font = "600 24px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-    ctx.fillText("Producto", cardX + 56, headerTop + 36);
-    ctx.textAlign = "right";
-    ctx.fillText("Cant", qtyX, headerTop + 36);
-    ctx.fillText("Unit", unitX, headerTop + 36);
-    ctx.fillText("Total", totalX, headerTop + 36);
-    ctx.textAlign = "left";
-
-    let y = headerTop + 72;
-    for (const row of rows) {
-      this.drawRoundedRect(ctx, cardX + 28, y, cardW - 56, rowHeight, 14, "#ffffff");
-      ctx.fillStyle = "#ffffff";
-      ctx.fill();
-      this.drawRoundedRect(ctx, cardX + 28, y, cardW - 56, rowHeight, 14, "#ffffff");
-      ctx.strokeStyle = "#dce6f3";
-      ctx.lineWidth = 2;
-      ctx.stroke();
-
-      ctx.fillStyle = "#0f172a";
-      ctx.font = "600 26px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-      ctx.fillText(this.truncateForNote(ctx, row.title, 480, "600 26px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"), cardX + 56, y + 36);
-
-      ctx.fillStyle = "#64748b";
-      ctx.font = "500 21px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-      ctx.fillText(this.truncateForNote(ctx, row.variant, 480, "500 21px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"), cardX + 56, y + 66);
-
-      ctx.fillStyle = "#1f2f46";
-      ctx.font = "600 25px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-      ctx.textAlign = "right";
-      ctx.fillText(String(row.qty), qtyX, y + 50);
-      ctx.fillText(this.formatCurrency(row.unitPrice), unitX, y + 50);
-      ctx.fillText(this.formatCurrency(row.lineTotal), totalX, y + 50);
-      ctx.textAlign = "left";
-
-      y += rowHeight + rowGap;
-    }
-
-    const footerTop = headerTop + 72 + rowsHeight + 20;
-    this.drawRoundedRect(ctx, cardX + 28, footerTop, cardW - 56, 90, 16, "#f6f9ff");
-    ctx.fillStyle = "#f6f9ff";
-    ctx.fill();
-    ctx.fillStyle = "#5f6f85";
-    ctx.font = "600 29px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-    ctx.fillText("Total", cardX + 56, footerTop + 55);
-    ctx.fillStyle = "#0f172a";
-    ctx.font = "700 42px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-    ctx.textAlign = "right";
-    ctx.fillText(this.formatCurrency(total), totalX, footerTop + 58);
-    ctx.textAlign = "left";
-
-    return new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob((blob) => {
-        if (!blob) {
-          reject(new Error("No se pudo exportar la nota."));
-          return;
-        }
-        resolve(blob);
-      }, "image/png");
+    const subtotal = rows.reduce((sum, row) => sum + row.lineTotal, 0);
+    const discount = Math.min(subtotal, this.orderDiscountAmount(order));
+    const totalAmount = Math.max(0, subtotal - discount);
+    const balanceDue = this.salesNoteBalanceDue(order, totalAmount);
+    return this.salesNoteRender.buildSalesNoteImage({
+      orderId: order.order_id,
+      customerName: this.customerName(order.customer_id),
+      rows,
+      discountAmount: discount,
+      balanceDue,
     });
   }
 
-  private drawRoundedRect(
-    ctx: CanvasRenderingContext2D,
-    x: number,
-    y: number,
-    width: number,
-    height: number,
-    radius: number,
-    fillStyle: string,
-  ) {
-    const r = Math.max(0, Math.min(radius, width / 2, height / 2));
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.arcTo(x + width, y, x + width, y + height, r);
-    ctx.arcTo(x + width, y + height, x, y + height, r);
-    ctx.arcTo(x, y + height, x, y, r);
-    ctx.arcTo(x, y, x + width, y, r);
-    ctx.closePath();
-    ctx.fillStyle = fillStyle;
+  private orderDiscountAmount(order: Order | null): number {
+    const value = Number(order?.totals?.discount_amount ?? 0);
+    if (!Number.isFinite(value) || value <= 0) return 0;
+    return Number(value.toFixed(2));
   }
 
-  private truncateForNote(ctx: CanvasRenderingContext2D, value: string, maxWidth: number, font: string): string {
-    ctx.font = font;
-    if (ctx.measureText(value).width <= maxWidth) return value;
-    let text = value;
-    while (text.length > 0 && ctx.measureText(`${text}â€¦`).width > maxWidth) {
-      text = text.slice(0, -1);
+  private salesNoteBalanceDue(order: Order, totalAmount: number): number {
+    const safeTotal = Number(Math.max(0, Number(totalAmount || 0)).toFixed(2));
+    const reportedBalance = Number(order.totals?.balance_due ?? 0);
+    if (Number.isFinite(reportedBalance) && reportedBalance > 0) {
+      return Number(reportedBalance.toFixed(2));
     }
-    return text ? `${text}â€¦` : "â€¦";
+    const paidRaw = Number(order.totals?.paid_amount ?? 0);
+    const paidAmount = Number.isFinite(paidRaw) ? Math.max(0, paidRaw) : 0;
+    const computedBalance = Number(Math.max(0, safeTotal - paidAmount).toFixed(2));
+    if (computedBalance <= 0 && safeTotal > 0) {
+      return safeTotal;
+    }
+    return computedBalance;
   }
 
   private formatCurrency(value: number): string {
@@ -2592,6 +2606,33 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
       currency: "MXN",
       maximumFractionDigits: 2,
     }).format(Number(value || 0));
+  }
+
+  private async downloadSalesNotesBundle(files: SalesNoteFile[], zipLabel: string): Promise<void> {
+    if (files.length <= 0) return;
+    if (files.length === 1) {
+      const only = files[0];
+      this.downloadBlob(only.blob, only.fileName);
+      return;
+    }
+
+    try {
+      const zip = new JSZip();
+      for (const file of files) {
+        zip.file(file.fileName, file.blob);
+      }
+      const zipBlob = await zip.generateAsync({
+        type: "blob",
+        compression: "DEFLATE",
+        compressionOptions: { level: 6 },
+      });
+      this.downloadBlob(zipBlob, `${zipLabel}-${Date.now()}.zip`);
+    } catch (error) {
+      console.warn("[pedidos] No se pudo generar zip de notas, se descargaran por separado", error);
+      for (const file of files) {
+        this.downloadBlob(file.blob, file.fileName);
+      }
+    }
   }
 
   private downloadBlob(blob: Blob, fileName: string) {

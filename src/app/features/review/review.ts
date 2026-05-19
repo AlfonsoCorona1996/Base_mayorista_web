@@ -935,6 +935,16 @@ export default class ReviewPage {
     this.showImagePicker.set(true);
   }
 
+  openGlobalColorImageSelector(colorIndex: number) {
+    const d = this.draft();
+    if (!d || !d.product_colors || colorIndex < 0 || colorIndex >= d.product_colors.length) return;
+
+    // Valor especial para "editar imagen de color global existente"
+    this.currentVariantIndex = -4;
+    this.currentColorIndex = colorIndex;
+    this.showImagePicker.set(true);
+  }
+
   /**
    * COLORES GLOBALES: Agrega un color global SIN imagen
    */
@@ -1641,6 +1651,25 @@ export default class ReviewPage {
       return;
     }
 
+    // Caso especial 3: Editar imagen de un color global existente
+    if (this.currentVariantIndex === -4) {
+      const color = d.product_colors?.[this.currentColorIndex];
+      if (!color) return;
+
+      color.image_url = imageUrl;
+      const colorName = (color.name || "").trim();
+      if (colorName) {
+        this.imageColors[imageUrl] = colorName;
+        this.addColorReferencesToSharedItems(d, colorName, imageUrl);
+      }
+      this.syncGlobalColorsToVariantsIfNeeded();
+
+      this.draft.set({ ...d });
+      this.closeImagePicker();
+      console.log("✅ Imagen global actualizada:", colorName || "Sin nombre");
+      return;
+    }
+
     // Caso normal: Asignar color global a una variante
     if (this.currentVariantIndex >= 0) {
       const variant = d.listing.items[this.currentVariantIndex];
@@ -1753,6 +1782,27 @@ export default class ReviewPage {
       const currentRaw = this.rawImages();
       this.rawImages.set([...currentRaw, downloadURL]);
       console.log('✅ Agregada a rawImages, total:', this.rawImages().length);
+
+      // Si estamos editando imagen de un color global existente, asignar directo
+      if (this.currentVariantIndex === -4) {
+        const d = this.draft();
+        const color = d?.product_colors?.[this.currentColorIndex];
+        const colorName = (color?.name || "Nuevo color").trim() || "Nuevo color";
+        this.imageColors[downloadURL] = colorName;
+
+        if (d && color) {
+          color.image_url = downloadURL;
+          this.addColorReferencesToSharedItems(d, colorName, downloadURL);
+          this.syncGlobalColorsToVariantsIfNeeded();
+          this.draft.set({ ...d });
+        }
+
+        this.closeImagePicker();
+        this.uploading.set(false);
+        this.showInfoPopup(`Imagen subida exitosamente: ${colorName}`, "Carga completada", "success");
+        input.value = '';
+        return;
+      }
       
       // Solicitar nombre del color
       const colorName = prompt('Nombre del color para esta imagen:') || 'Nuevo color';

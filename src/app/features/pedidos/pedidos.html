@@ -391,6 +391,9 @@
             <button type="button" class="table-bulk-menu-item" (click)="applyTableBulkAction('mark_recibido', $event)" [disabled]="!canApplyTableBulkAction('mark_recibido')">
               Marcar como recibidos ({{ tableMarkReceivedEligibleRows().length }})
             </button>
+            <button type="button" class="table-bulk-menu-item" (click)="applyTableBulkAction('mark_listo_ruta', $event)" [disabled]="!canApplyTableBulkAction('mark_listo_ruta')">
+              Marcar listo para ruta ({{ tableMarkReadyForRouteEligibleRows().length }})
+            </button>
           </div>
         }
         <p class="tfilter-section-label">Rango rapido</p>

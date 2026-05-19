@@ -250,6 +250,189 @@
     <section class="panel glass-card">
       <header class="panel-head">
         <div>
+          <h3>Retiro de ganancias</h3>
+          <p>La utilidad neta se divide en 2 partes iguales: Socio 1 (Blanca) y Socio 2 (Andrea y Pepe).</p>
+        </div>
+      </header>
+
+      @if (!canViewMovements()) {
+        <p class="muted">Sin permiso: <code>cap.finance.movements.view</code></p>
+      } @else {
+        @if (withdrawalSummary(); as ws) {
+          <div class="kpi-grid withdrawal-kpi-grid">
+            <article class="kpi-card glass-card kpi-card-primary">
+              <p>Disponible para retirar</p>
+              <h2>{{ formatCurrency(ws.disponible) }}</h2>
+              <small>Utilidad neta menos retiros registrados</small>
+            </article>
+            <article class="kpi-card glass-card">
+              <p>Total retirado</p>
+              <h2>{{ formatCurrency(ws.totalRetirado) }}</h2>
+              <small>Acumulado en el ambito seleccionado</small>
+            </article>
+            <article class="kpi-card glass-card">
+              <p>Utilidad neta base</p>
+              <h2>{{ formatCurrency(ws.baseDisponible) }}</h2>
+              <small>Utilidad neta del ambito seleccionado</small>
+            </article>
+            <article class="kpi-card glass-card">
+              <p>Retiros no socios</p>
+              <h2>{{ formatCurrency(withdrawalPartnerSummary().withdrawnNonPartner) }}</h2>
+              <small>Gastos, paqueteria u otros retiros que restan utilidad repartible</small>
+            </article>
+            <article class="kpi-card glass-card">
+              <p>Utilidad repartible</p>
+              <h2>{{ formatCurrency(withdrawalPartnerSummary().distributableBase) }}</h2>
+              <small>Utilidad neta base menos retiros no socios</small>
+            </article>
+            <article class="kpi-card glass-card">
+              <p>Parte por socio (50%)</p>
+              <h2>{{ formatCurrency(withdrawalPartnerSummary().perPartnerTarget) }}</h2>
+              <small>Meta individual de retiro por socio</small>
+            </article>
+            <article class="kpi-card glass-card">
+              <p>Retirado socios</p>
+              <h2>{{ formatCurrency(withdrawalPartnerSummary().withdrawnBlanca + withdrawalPartnerSummary().withdrawnAndreaPepe) }}</h2>
+              <small>Suma de retiros de Blanca + Andrea y Pepe</small>
+            </article>
+            <article class="kpi-card glass-card">
+              <p>{{ partnerPendingLabel("socio_blanca") }}</p>
+              <h2>{{ formatCurrency(withdrawalPartnerSummary().pendingBlanca) }}</h2>
+              <small>Retirado: {{ formatCurrency(withdrawalPartnerSummary().withdrawnBlanca) }}</small>
+            </article>
+            <article class="kpi-card glass-card">
+              <p>{{ partnerPendingLabel("socio_andrea_pepe") }}</p>
+              <h2>{{ formatCurrency(withdrawalPartnerSummary().pendingAndreaPepe) }}</h2>
+              <small>Retirado: {{ formatCurrency(withdrawalPartnerSummary().withdrawnAndreaPepe) }}</small>
+            </article>
+          </div>
+        }
+
+        @if (canCreateMovements() || (withdrawalEditingId() && canEditMovements())) {
+          <form class="entry-form" (submit)="$event.preventDefault(); submitWithdrawal()">
+            <h4>{{ withdrawalEditingId() ? "Editar retiro" : "Registrar retiro" }}</h4>
+            <div class="entry-grid">
+              <label>
+                Monto
+                <input
+                  type="text"
+                  inputmode="decimal"
+                  [ngModel]="withdrawalAmountInput()"
+                  (ngModelChange)="setWithdrawalAmountInput($event)"
+                  name="withdrawal_amount"
+                  placeholder="1,250.00"
+                />
+              </label>
+
+              <label>
+                Fecha
+                <input type="date" [ngModel]="withdrawalDate()" (ngModelChange)="setWithdrawalDate($event)" name="withdrawal_date" />
+              </label>
+
+              <label>
+                Destino
+                <select [ngModel]="withdrawalPurpose()" (ngModelChange)="setWithdrawalPurpose($event)" name="withdrawal_purpose">
+                  <option value="socio_blanca">Socio 1 - Blanca Trejo</option>
+                  <option value="socio_andrea_pepe">Socio 2 - Andrea y Pepe</option>
+                  <option value="sueldo">Sueldo / nomina</option>
+                  <option value="gasto">Gasto</option>
+                  <option value="inversion">Inversion</option>
+                  <option value="ahorro">Ahorro</option>
+                  <option value="persona">Retiro a persona</option>
+                  <option value="otro">Paqueteria / gastos / otro</option>
+                </select>
+              </label>
+
+              <label>
+                Referencia (opcional)
+                <input
+                  type="text"
+                  [ngModel]="withdrawalRecipient()"
+                  (ngModelChange)="setWithdrawalRecipient($event)"
+                  name="withdrawal_recipient"
+                  placeholder="Ej: Transferencia / Folio"
+                />
+              </label>
+
+              <label>
+                Ruta
+                <select [ngModel]="withdrawalRouteId()" (ngModelChange)="setWithdrawalRouteId($event)" name="withdrawal_route">
+                  <option value="general">General</option>
+                  @for (route of routes(); track route.route_id) {
+                    <option [value]="route.route_id">{{ route.name }}</option>
+                  }
+                </select>
+              </label>
+
+              <label>
+                Cuenta
+                <select [ngModel]="withdrawalAccountId()" (ngModelChange)="setWithdrawalAccountId($event)" name="withdrawal_account">
+                  <option value="none">Sin cuenta</option>
+                  @for (account of accounts(); track account.account_id) {
+                    <option [value]="account.account_id">{{ account.name }}</option>
+                  }
+                </select>
+              </label>
+
+              <label class="entry-full">
+                Notas
+                <textarea rows="2" [ngModel]="withdrawalNotes()" (ngModelChange)="setWithdrawalNotes($event)" name="withdrawal_notes"></textarea>
+              </label>
+            </div>
+
+            <p class="muted">Disponible actual: <strong>{{ formatCurrency(withdrawalAvailableForForm()) }}</strong></p>
+            @if (withdrawalSelectedPartner()) {
+              <p class="muted">Disponible para este socio: <strong>{{ formatCurrency(withdrawalAvailableForSelectedPartner()) }}</strong></p>
+            } @else {
+              <p class="muted">Este retiro se toma como no-socio y reduce la utilidad a repartir.</p>
+            }
+
+            <div class="inline-actions">
+              <button type="submit" class="btn primary">{{ withdrawalEditingId() ? "Guardar cambios" : "Registrar retiro" }}</button>
+              @if (withdrawalEditingId()) {
+                <button type="button" class="btn ghost" (click)="resetWithdrawalForm()">Cancelar</button>
+              }
+            </div>
+          </form>
+        }
+
+        @if (filteredWithdrawals().length === 0) {
+          <p class="muted">Sin retiros registrados en este ambito.</p>
+        } @else {
+          <div class="movement-table">
+            <div class="movement-head">
+              <span>Fecha</span>
+              <span>Destino</span>
+              <span>Ruta</span>
+              <span>Monto</span>
+              <span>Cuenta</span>
+              <span>Acciones</span>
+            </div>
+            @for (row of filteredWithdrawals(); track trackWithdrawal($index, row)) {
+              <div class="movement-row">
+                <span>{{ formatDate(row.occurred_at) }}</span>
+                <span>{{ withdrawalDestinationLabel(row) }}</span>
+                <span>{{ routeName(row.route_id) }}</span>
+                <span>{{ formatCurrency(row.amount) }}</span>
+                <span>{{ accountLabel(row.account_id) }}</span>
+                <span class="inline-actions">
+                  @if (canEditMovements()) {
+                    <button type="button" class="btn ghost btn-small" (click)="startEditWithdrawal(row)">Editar</button>
+                  }
+                  @if (canDeleteMovements()) {
+                    <button type="button" class="btn danger btn-small" (click)="deleteWithdrawal(row)">Eliminar</button>
+                  }
+                </span>
+              </div>
+            }
+          </div>
+        }
+      }
+    </section>
+
+    <section class="panel glass-card">
+      <header class="panel-head">
+        <div>
           <h3>Cuentas de dinero</h3>
           <p>Control de saldo en caja, banco y fondos operativos.</p>
         </div>

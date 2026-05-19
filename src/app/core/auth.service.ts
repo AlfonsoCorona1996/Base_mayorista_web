@@ -18,6 +18,7 @@ export class AuthService {
   user = signal<User | null>(null);
   isAuthenticated = computed(() => this.user() !== null);
   uid = computed(() => this.user()?.uid ?? null);
+  private authStateReadyPromise = FIREBASE_AUTH.authStateReady().catch(() => undefined);
 
   private accessCheckCache: { uid: string; value: AccessStatus; at: number } | null = null;
   private accessCheckPromise: Promise<AccessStatus> | null = null;
@@ -69,11 +70,8 @@ export class AuthService {
   }
 
   async getAccessStatus(): Promise<AccessStatus> {
-    let u = FIREBASE_AUTH.currentUser ?? this.user();
-    if (!u) {
-      await new Promise((resolve) => setTimeout(resolve, 120));
-      u = FIREBASE_AUTH.currentUser ?? this.user();
-    }
+    await this.authStateReadyPromise;
+    const u = FIREBASE_AUTH.currentUser ?? this.user();
     if (!u) {
       return { uid: null, roleId: null, isActive: false, invitePending: false, mustChangePassword: false };
     }
