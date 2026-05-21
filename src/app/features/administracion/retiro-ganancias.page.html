@@ -1,0 +1,391 @@
+<section class="withdrawal-page">
+  <header class="page-head">
+    <div>
+      <p class="eyebrow">Administracion</p>
+      <h1>Detalle de retiro de ganancias</h1>
+      <p class="muted">Lista de pedidos con total clienta, inversion y ganancia.</p>
+    </div>
+    <a class="btn ghost" [routerLink]="'/main/administracion'" [queryParams]="{ scope: routeScope() }">Volver a Administracion</a>
+  </header>
+
+  @if (!canViewMovements()) {
+    <p class="muted">Sin permiso: <code>cap.finance.movements.view</code></p>
+  } @else {
+    <section class="panel">
+      <div class="scope-row">
+        <label>
+          Ambito
+          <select [value]="routeScope()" (change)="setRouteScope($any($event.target).value)">
+            @for (option of scopeOptions(); track trackScope($index, option)) {
+              <option [value]="option.id">{{ option.name }}</option>
+            }
+          </select>
+        </label>
+        @if (canCreateMovements()) {
+          <div class="cta-row">
+            <button type="button" class="btn cta-expense" (click)="openExpenseModal()">Registrar egreso</button>
+            <button type="button" class="btn cta-withdrawal" (click)="openWithdrawalModal()">Registrar retiro</button>
+          </div>
+        }
+      </div>
+
+      @if (success()) {
+        <p class="success">{{ success() }}</p>
+      }
+
+      <div class="kpi-grid">
+        <article class="kpi-card">
+          <p>Ganancia bruta pedidos</p>
+          <h3>{{ formatCurrency(financialBreakdown().grossProfit) }}</h3>
+        </article>
+        <article class="kpi-card">
+          <p>Gastos (egresos)</p>
+          <h3>{{ formatCurrency(financialBreakdown().expensesTotal) }}</h3>
+        </article>
+        <article class="kpi-card">
+          <p>Utilidad neta base</p>
+          <h3>{{ formatCurrency(financialBreakdown().netProfitBase) }}</h3>
+        </article>
+        <article class="kpi-card">
+          <p>Total retirado</p>
+          <h3>{{ formatCurrency(financialBreakdown().totalWithdrawn) }}</h3>
+        </article>
+        <article class="kpi-card">
+          <p>Disponible para retirar</p>
+          <h3>{{ formatCurrency(financialBreakdown().available) }}</h3>
+        </article>
+        <article class="kpi-card">
+          <p>Retiros no socios</p>
+          <h3>{{ formatCurrency(withdrawalPartnerSummary().withdrawnNonPartner) }}</h3>
+        </article>
+        <article class="kpi-card">
+          <p>Utilidad repartible</p>
+          <h3>{{ formatCurrency(withdrawalPartnerSummary().distributableBase) }}</h3>
+        </article>
+        <article class="kpi-card">
+          <p>Parte por socio (50%)</p>
+          <h3>{{ formatCurrency(withdrawalPartnerSummary().perPartnerTarget) }}</h3>
+        </article>
+        <article class="kpi-card">
+          <p>{{ partnerPendingLabel("socio_blanca") }}</p>
+          <h3>{{ formatCurrency(withdrawalPartnerSummary().pendingBlanca) }}</h3>
+        </article>
+        <article class="kpi-card">
+          <p>{{ partnerPendingLabel("socio_andrea_pepe") }}</p>
+          <h3>{{ formatCurrency(withdrawalPartnerSummary().pendingAndreaPepe) }}</h3>
+        </article>
+      </div>
+
+      <div class="orders-table">
+        <div class="orders-head expense-head">
+          <span>Fecha</span>
+          <span>Categoria</span>
+          <span>Ruta</span>
+          <span>Monto</span>
+          <span>Notas</span>
+          <span>Cuenta</span>
+        </div>
+        @if (expenseRows().length === 0) {
+          <p class="muted">Sin egresos en este ambito.</p>
+        } @else {
+          @for (row of expenseRows(); track trackExpenseRow($index, row)) {
+            <div class="orders-row expense-row">
+              <span>{{ formatDate(row.occurred_at) }}</span>
+              <span>{{ expenseCategoryLabel(row.category) }}</span>
+              <span>{{ routeName(row.route_id) }}</span>
+              <span>{{ formatCurrency(row.amount) }}</span>
+              <span>{{ row.notes || "-" }}</span>
+              <span>{{ row.account_id || "-" }}</span>
+            </div>
+          }
+        }
+      </div>
+
+      <div class="orders-table">
+        <div class="orders-head expense-head">
+          <span>Fecha</span>
+          <span>Destino</span>
+          <span>Ruta</span>
+          <span>Monto</span>
+          <span>Notas</span>
+          <span>Cuenta</span>
+        </div>
+        @if (withdrawalRows().length === 0) {
+          <p class="muted">Sin retiros en este ambito.</p>
+        } @else {
+          @for (row of withdrawalRows(); track trackWithdrawalRow($index, row)) {
+            <div class="orders-row expense-row">
+              <span>{{ formatDate(row.occurred_at) }}</span>
+              <span>{{ withdrawalDestinationLabel(row) }}</span>
+              <span>{{ routeName(row.route_id) }}</span>
+              <span>{{ formatCurrency(row.amount) }}</span>
+              <span>{{ row.notes || "-" }}</span>
+              <span>{{ row.account_id || "-" }}</span>
+            </div>
+          }
+        }
+      </div>
+
+      <div class="kpi-grid">
+        <article class="kpi-card partner-card">
+          <p>Ganancia total repartible</p>
+          <h3>{{ formatCurrency(partnerSplit().totalProfit) }}</h3>
+          <small>Basada en filtros actuales</small>
+        </article>
+        <article class="kpi-card partner-card">
+          <p>Socio 1 - Blanca Trejo (50%)</p>
+          <h3>{{ formatCurrency(partnerSplit().socioBlanca) }}</h3>
+        </article>
+        <article class="kpi-card partner-card">
+          <p>Socio 2 - Andrea y Pepe (50%)</p>
+          <h3>{{ formatCurrency(partnerSplit().socioAndreaPepe) }}</h3>
+        </article>
+      </div>
+
+      <div class="kpi-grid">
+        <article class="kpi-card">
+          <p>Total clienta</p>
+          <h3>{{ formatCurrency(totals().totalClienta) }}</h3>
+        </article>
+        <article class="kpi-card">
+          <p>Inversion</p>
+          <h3>{{ formatCurrency(totals().investment) }}</h3>
+        </article>
+        <article class="kpi-card">
+          <p>Ganancia</p>
+          <h3>{{ formatCurrency(totals().profit) }}</h3>
+        </article>
+      </div>
+
+      @if (error()) {
+        <p class="error">{{ error() }}</p>
+      }
+
+      @if (loading()) {
+        <p class="muted">Cargando pedidos...</p>
+      } @else if (orderRows().length === 0) {
+        <p class="muted">No hay pedidos para el ambito seleccionado.</p>
+      } @else {
+        <div class="orders-table">
+          <div class="orders-head">
+            <div class="th-menu" [class.th-menu--open]="isTableColumnMenuOpen('customerName')">
+              <button type="button" class="th-menu-trigger" (click)="toggleTableColumnMenu('customerName', $event)">
+                <span>Clienta</span>
+                <small>{{ sortArrow("customerName") }}</small>
+                @if (filterCustomer().trim()) {
+                  <span class="material-symbols-rounded filter-icon">filter_alt</span>
+                }
+                <span class="material-symbols-rounded th-menu-caret">more_vert</span>
+              </button>
+            </div>
+            <div class="th-menu" [class.th-menu--open]="isTableColumnMenuOpen('routeName')">
+              <button type="button" class="th-menu-trigger" (click)="toggleTableColumnMenu('routeName', $event)">
+                <span>Ruta</span>
+                <small>{{ sortArrow("routeName") }}</small>
+                @if (hasRouteFilter()) {
+                  <span class="material-symbols-rounded filter-icon">filter_alt</span>
+                }
+                <span class="material-symbols-rounded th-menu-caret">more_vert</span>
+              </button>
+            </div>
+            <div class="th-menu" [class.th-menu--open]="isTableColumnMenuOpen('createdAt')">
+              <button type="button" class="th-menu-trigger" (click)="toggleTableColumnMenu('createdAt', $event)">
+                <span>Fecha</span>
+                <small>{{ sortArrow("createdAt") }}</small>
+                @if (filterDateFrom() || filterDateTo()) {
+                  <span class="material-symbols-rounded filter-icon">filter_alt</span>
+                }
+                <span class="material-symbols-rounded th-menu-caret">more_vert</span>
+              </button>
+            </div>
+            <div class="th-menu" [class.th-menu--open]="isTableColumnMenuOpen('totalClienta')">
+              <button type="button" class="th-menu-trigger" (click)="toggleTableColumnMenu('totalClienta', $event)">
+                <span>Total clienta</span>
+                <small>{{ sortArrow("totalClienta") }}</small>
+                @if (filterTotalClienta().trim()) {
+                  <span class="material-symbols-rounded filter-icon">filter_alt</span>
+                }
+                <span class="material-symbols-rounded th-menu-caret">more_vert</span>
+              </button>
+            </div>
+            <div class="th-menu" [class.th-menu--open]="isTableColumnMenuOpen('investment')">
+              <button type="button" class="th-menu-trigger" (click)="toggleTableColumnMenu('investment', $event)">
+                <span>Inversion</span>
+                <small>{{ sortArrow("investment") }}</small>
+                @if (filterInvestment().trim()) {
+                  <span class="material-symbols-rounded filter-icon">filter_alt</span>
+                }
+                <span class="material-symbols-rounded th-menu-caret">more_vert</span>
+              </button>
+            </div>
+            <div class="th-menu" [class.th-menu--open]="isTableColumnMenuOpen('profit')">
+              <button type="button" class="th-menu-trigger" (click)="toggleTableColumnMenu('profit', $event)">
+                <span>Ganancia</span>
+                <small>{{ sortArrow("profit") }}</small>
+                @if (filterProfit().trim()) {
+                  <span class="material-symbols-rounded filter-icon">filter_alt</span>
+                }
+                <span class="material-symbols-rounded th-menu-caret">more_vert</span>
+              </button>
+            </div>
+          </div>
+
+          @if (isTableColumnMenuOpen('customerName')) {
+            <div class="th-menu-dropdown" role="menu" (click)="$event.stopPropagation()" [style.left.px]="tableMenuPosition()?.left" [style.top.px]="tableMenuPosition()?.top" [style.width.px]="tableMenuPosition()?.width">
+              <button type="button" class="th-menu-item" (click)="setSortFromMenu('customerName', 'asc', $event)">Ordenar ascendente</button>
+              <button type="button" class="th-menu-item" (click)="setSortFromMenu('customerName', 'desc', $event)">Ordenar descendente</button>
+              <div class="th-menu-divider"></div>
+              <input class="th-menu-input" type="text" placeholder="Filtrar clienta" [value]="filterCustomer()" (input)="filterCustomer.set($any($event.target).value)" />
+            </div>
+          }
+          @if (isTableColumnMenuOpen('routeName')) {
+            <div class="th-menu-dropdown" role="menu" (click)="$event.stopPropagation()" [style.left.px]="tableMenuPosition()?.left" [style.top.px]="tableMenuPosition()?.top" [style.width.px]="tableMenuPosition()?.width">
+              <button type="button" class="th-menu-item" (click)="setSortFromMenu('routeName', 'asc', $event)">Ordenar ascendente</button>
+              <button type="button" class="th-menu-item" (click)="setSortFromMenu('routeName', 'desc', $event)">Ordenar descendente</button>
+              <div class="th-menu-divider"></div>
+              <div class="th-menu-checklist">
+                @for (option of routeMenuOptions(); track option.value) {
+                  <label class="th-menu-check">
+                    <input type="checkbox" [checked]="isRouteOptionChecked(option.value)" (change)="toggleRouteOption(option.value, $any($event.target).checked)" />
+                    <span class="th-menu-check-label">{{ option.label }}</span>
+                    <span class="th-menu-check-count">{{ option.count }}</span>
+                  </label>
+                } @empty {
+                  <p class="th-menu-empty">Sin rutas</p>
+                }
+              </div>
+              @if (hasRouteFilter()) {
+                <button type="button" class="th-menu-reset" (click)="clearRouteColumnFilter($event)">Reset</button>
+              }
+            </div>
+          }
+          @if (isTableColumnMenuOpen('createdAt')) {
+            <div class="th-menu-dropdown" role="menu" (click)="$event.stopPropagation()" [style.left.px]="tableMenuPosition()?.left" [style.top.px]="tableMenuPosition()?.top" [style.width.px]="tableMenuPosition()?.width">
+              <button type="button" class="th-menu-item" (click)="setSortFromMenu('createdAt', 'asc', $event)">Ordenar ascendente</button>
+              <button type="button" class="th-menu-item" (click)="setSortFromMenu('createdAt', 'desc', $event)">Ordenar descendente</button>
+              <div class="th-menu-divider"></div>
+              <div class="date-filters">
+                <input class="th-menu-input" type="date" [value]="filterDateFrom()" (input)="filterDateFrom.set($any($event.target).value)" />
+                <input class="th-menu-input" type="date" [value]="filterDateTo()" (input)="filterDateTo.set($any($event.target).value)" />
+              </div>
+            </div>
+          }
+          @if (isTableColumnMenuOpen('totalClienta')) {
+            <div class="th-menu-dropdown" role="menu" (click)="$event.stopPropagation()" [style.left.px]="tableMenuPosition()?.left" [style.top.px]="tableMenuPosition()?.top" [style.width.px]="tableMenuPosition()?.width">
+              <button type="button" class="th-menu-item" (click)="setSortFromMenu('totalClienta', 'asc', $event)">Ordenar ascendente</button>
+              <button type="button" class="th-menu-item" (click)="setSortFromMenu('totalClienta', 'desc', $event)">Ordenar descendente</button>
+              <div class="th-menu-divider"></div>
+              <input class="th-menu-input" type="text" placeholder="ej. >1000 o 500..1500" [value]="filterTotalClienta()" (input)="filterTotalClienta.set($any($event.target).value)" />
+            </div>
+          }
+          @if (isTableColumnMenuOpen('investment')) {
+            <div class="th-menu-dropdown" role="menu" (click)="$event.stopPropagation()" [style.left.px]="tableMenuPosition()?.left" [style.top.px]="tableMenuPosition()?.top" [style.width.px]="tableMenuPosition()?.width">
+              <button type="button" class="th-menu-item" (click)="setSortFromMenu('investment', 'asc', $event)">Ordenar ascendente</button>
+              <button type="button" class="th-menu-item" (click)="setSortFromMenu('investment', 'desc', $event)">Ordenar descendente</button>
+              <div class="th-menu-divider"></div>
+              <input class="th-menu-input" type="text" placeholder="ej. <=900" [value]="filterInvestment()" (input)="filterInvestment.set($any($event.target).value)" />
+            </div>
+          }
+          @if (isTableColumnMenuOpen('profit')) {
+            <div class="th-menu-dropdown" role="menu" (click)="$event.stopPropagation()" [style.left.px]="tableMenuPosition()?.left" [style.top.px]="tableMenuPosition()?.top" [style.width.px]="tableMenuPosition()?.width">
+              <button type="button" class="th-menu-item" (click)="setSortFromMenu('profit', 'asc', $event)">Ordenar ascendente</button>
+              <button type="button" class="th-menu-item" (click)="setSortFromMenu('profit', 'desc', $event)">Ordenar descendente</button>
+              <div class="th-menu-divider"></div>
+              <input class="th-menu-input" type="text" placeholder="ej. 2000" [value]="filterProfit()" (input)="filterProfit.set($any($event.target).value)" />
+            </div>
+          }
+
+          @for (row of orderRows(); track trackOrderRow($index, row)) {
+            <button type="button" class="orders-row" (click)="openOrder(row.orderId)">
+              <span>{{ row.customerName }}</span>
+              <span>{{ row.routeName }}</span>
+              <span>{{ formatDate(row.createdAt) }}</span>
+              <span>{{ formatCurrency(row.totalClienta) }}</span>
+              <span>{{ formatCurrency(row.investment) }}</span>
+              <span>{{ formatCurrency(row.profit) }}</span>
+            </button>
+          }
+        </div>
+      }
+    </section>
+  }
+
+  @if (expenseModalOpen()) {
+    <div class="sheet-backdrop" (click)="closeExpenseModal()">
+      <aside class="sheet-card entry-form" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+        <h4>Registrar egreso</h4>
+        <form (submit)="$event.preventDefault(); submitExpense()">
+          <div class="entry-grid">
+            <label>Categoria
+              <select [ngModel]="expenseCategory()" (ngModelChange)="setExpenseCategory($event)" name="expense_category">
+                <option value="compra_inversion">Compra por inversion</option><option value="perdida">Perdida</option><option value="paqueteria">Paqueteria</option><option value="consumibles">Consumibles</option><option value="deuda_fija">Deuda fija</option><option value="deuda_meses">Deuda a meses</option>
+              </select>
+            </label>
+            <label>Monto
+              <input type="text" inputmode="decimal" [ngModel]="expenseAmountInput()" (ngModelChange)="setExpenseAmountInput($event)" name="expense_amount" placeholder="1,250.00" />
+            </label>
+            <label>Fecha
+              <input type="date" [ngModel]="expenseDate()" (ngModelChange)="setExpenseDate($event)" name="expense_date" />
+            </label>
+            <label>Ruta
+              <select [ngModel]="expenseRouteId()" (ngModelChange)="setExpenseRouteId($event)" name="expense_route"><option value="general">General</option>@for (route of routes(); track route.route_id) {<option [value]="route.route_id">{{ route.name }}</option>}</select>
+            </label>
+            <label>Cuenta
+              <select [ngModel]="expenseAccountId()" (ngModelChange)="setExpenseAccountId($event)" name="expense_account"><option value="none">Sin cuenta</option>@for (account of accounts(); track trackAccount($index, account)) {<option [value]="account.account_id">{{ account.name }}</option>}</select>
+            </label>
+            <label>Meses de deuda
+              <input type="number" min="1" [ngModel]="expenseInstallmentTotal()" (ngModelChange)="setExpenseInstallmentTotal($event)" name="expense_installment_total" />
+            </label>
+            <label>Mes actual
+              <input type="number" min="1" [ngModel]="expenseInstallmentIndex()" (ngModelChange)="setExpenseInstallmentIndex($event)" name="expense_installment_index" />
+            </label>
+            <label class="entry-full">Notas
+              <textarea rows="2" [ngModel]="expenseNotes()" (ngModelChange)="setExpenseNotes($event)" name="expense_notes"></textarea>
+            </label>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn cta-expense">Guardar egreso</button>
+            <button type="button" class="btn ghost" (click)="closeExpenseModal()">Cancelar</button>
+          </div>
+        </form>
+      </aside>
+    </div>
+  }
+
+  @if (withdrawalModalOpen()) {
+    <div class="sheet-backdrop" (click)="closeWithdrawalModal()">
+      <aside class="sheet-card entry-form" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+        <h4>Registrar retiro</h4>
+        <form (submit)="$event.preventDefault(); submitWithdrawal()">
+          <div class="entry-grid">
+            <label>Monto
+              <input type="text" inputmode="decimal" [ngModel]="withdrawalAmountInput()" (ngModelChange)="setWithdrawalAmountInput($event)" name="withdrawal_amount" placeholder="1,250.00" />
+            </label>
+            <label>Fecha
+              <input type="date" [ngModel]="withdrawalDate()" (ngModelChange)="setWithdrawalDate($event)" name="withdrawal_date" />
+            </label>
+            <label>Destino
+              <select [ngModel]="withdrawalPurpose()" (ngModelChange)="setWithdrawalPurpose($event)" name="withdrawal_purpose"><option value="socio_blanca">Socio 1 - Blanca Trejo</option><option value="socio_andrea_pepe">Socio 2 - Andrea y Pepe</option><option value="sueldo">Sueldo / nomina</option><option value="gasto">Gasto</option><option value="inversion">Inversion</option><option value="ahorro">Ahorro</option><option value="persona">Retiro a persona</option><option value="otro">Paqueteria / gastos / otro</option></select>
+            </label>
+            <label>Referencia (opcional)
+              <input type="text" [ngModel]="withdrawalRecipient()" (ngModelChange)="setWithdrawalRecipient($event)" name="withdrawal_recipient" />
+            </label>
+            <label>Ruta
+              <select [ngModel]="withdrawalRouteId()" (ngModelChange)="setWithdrawalRouteId($event)" name="withdrawal_route"><option value="general">General</option>@for (route of routes(); track route.route_id) {<option [value]="route.route_id">{{ route.name }}</option>}</select>
+            </label>
+            <label>Cuenta
+              <select [ngModel]="withdrawalAccountId()" (ngModelChange)="setWithdrawalAccountId($event)" name="withdrawal_account"><option value="none">Sin cuenta</option>@for (account of accounts(); track trackAccount($index, account)) {<option [value]="account.account_id">{{ account.name }}</option>}</select>
+            </label>
+            <label class="entry-full">Notas
+              <textarea rows="2" [ngModel]="withdrawalNotes()" (ngModelChange)="setWithdrawalNotes($event)" name="withdrawal_notes"></textarea>
+            </label>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn cta-withdrawal">Guardar retiro</button>
+            <button type="button" class="btn ghost" (click)="closeWithdrawalModal()">Cancelar</button>
+          </div>
+        </form>
+      </aside>
+    </div>
+  }
+</section>

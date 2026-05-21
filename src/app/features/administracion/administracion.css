@@ -311,6 +311,23 @@ textarea:focus {
   box-shadow: 0 0 0 4px rgba(12, 102, 244, 0.14);
 }
 
+.kpi-card-clickable {
+  cursor: pointer;
+  transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.kpi-card-clickable:hover {
+  transform: translateY(-1px);
+  border-color: rgba(12, 102, 244, 0.3);
+  box-shadow: 0 10px 22px rgba(12, 102, 244, 0.12);
+}
+
+.kpi-card-clickable:focus-visible {
+  outline: none;
+  border-color: rgba(12, 102, 244, 0.45);
+  box-shadow: 0 0 0 4px rgba(12, 102, 244, 0.14);
+}
+
 .route-table,
 .movement-table,
 .detail-table {
@@ -572,6 +589,46 @@ code {
 
 .detail-table-tools .muted {
   margin: 0;
+}
+
+.withdrawal-breakdown-table {
+  display: grid;
+  gap: 8px;
+}
+
+.withdrawal-breakdown-head,
+.withdrawal-breakdown-row {
+  display: grid;
+  grid-template-columns: 1.7fr 0.45fr 1fr;
+  gap: 8px;
+  align-items: center;
+}
+
+.withdrawal-breakdown-head {
+  color: #547493;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+}
+
+.withdrawal-breakdown-row {
+  padding: 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(20, 58, 98, 0.12);
+  color: #13314f;
+}
+
+.withdrawal-breakdown-row.is-result {
+  background: rgba(12, 102, 244, 0.08);
+  border-color: rgba(12, 102, 244, 0.2);
+  font-weight: 700;
+}
+
+.withdrawal-movements-head,
+.withdrawal-movements-row {
+  grid-template-columns: 0.9fr 1.4fr 1fr 0.8fr 1fr 1.2fr;
 }
 
 .detail-head-row {

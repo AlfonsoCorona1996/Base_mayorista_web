@@ -260,10 +260,17 @@
       } @else {
         @if (withdrawalSummary(); as ws) {
           <div class="kpi-grid withdrawal-kpi-grid">
-            <article class="kpi-card glass-card kpi-card-primary">
+            <article
+              class="kpi-card glass-card kpi-card-primary kpi-card-clickable"
+              role="button"
+              tabindex="0"
+              (click)="goToWithdrawalBreakdownPage()"
+              (keydown.enter)="goToWithdrawalBreakdownPage()"
+              (keydown.space)="goToWithdrawalBreakdownPage(); $event.preventDefault()"
+            >
               <p>Disponible para retirar</p>
               <h2>{{ formatCurrency(ws.disponible) }}</h2>
-              <small>Utilidad neta menos retiros registrados</small>
+              <small>Utilidad neta menos retiros registrados. Click para abrir pagina de detalle.</small>
             </article>
             <article class="kpi-card glass-card">
               <p>Total retirado</p>
@@ -826,4 +833,5 @@
       </aside>
     </div>
   }
+
 </section>

@@ -970,6 +970,14 @@ export default class AdministracionPage {
     this.drilldown.set(null);
   }
 
+  goToWithdrawalBreakdownPage() {
+    this.router.navigate(["/main/administracion/retiro-ganancias"], {
+      queryParams: {
+        scope: this.routeScope(),
+      },
+    });
+  }
+
   setDrilldownFilter(column: DrilldownFilterColumn, value: unknown) {
     const nextValue = String(value || "");
     this.drilldownFilters.update((current) => ({

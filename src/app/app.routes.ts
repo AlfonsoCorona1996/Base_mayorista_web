@@ -148,6 +148,13 @@ export const routes: Routes = [
         loadComponent: () => import("./features/administracion/administracion").then((m) => m.default),
       },
       {
+        path: "administracion/retiro-ganancias",
+        canActivate: [authzGuard],
+        data: { section: "sections.administracion" },
+        loadComponent: () =>
+          import("./features/administracion/retiro-ganancias.page").then((m) => m.default),
+      },
+      {
         path: "wa-bot",
         canActivate: [permissionGuard],
         data: { permission: "administracion" },
