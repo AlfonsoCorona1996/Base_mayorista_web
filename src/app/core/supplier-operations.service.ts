@@ -16,11 +16,14 @@ import {
   updateDoc,
   where,
 } from "firebase/firestore";
+import { BusinessScopeService } from "./business-scope.service";
+import { BusinessId, normalizeBusinessId } from "./rbac.constants";
 
 export type SupplierOperationStatus = "por_levantar" | "levantado" | "en_camino" | "recibido";
 
 export interface SupplierOperationRow {
   op_id: string;
+  business_id: BusinessId;
   order_id: string;
   reserved_for_order_id: string;
   order_item_id: string;
@@ -49,15 +52,21 @@ export interface SupplierOperationRow {
 export class SupplierOperationsService {
   private colRef = collection(FIRESTORE, "supplier_operations");
   private inventory = inject(InventoryService);
+  private businessScope = inject(BusinessScopeService);
 
   private rowsSignal = signal<SupplierOperationRow[]>([]);
 
-  rows = computed(() => this.rowsSignal());
+  rows = computed(() => {
+    const active = this.businessScope.activeBusinessIds();
+    return this.rowsSignal().filter((row) => active.includes(row.business_id || "bm"));
+  });
 
   async loadFromFirestore(): Promise<void> {
-    const q = query(this.colRef, orderBy("updated_at", "desc"));
+    const q = query(this.colRef, where("business_id", "in", this.businessScope.availableBusinessIds()));
     const snap = await getDocs(q);
-    const rows = snap.docs.map((entry) => this.normalize(entry.id, entry.data() as Record<string, any>));
+    const rows = snap.docs
+      .map((entry) => this.normalize(entry.id, entry.data() as Record<string, any>))
+      .sort((a, b) => (a.updated_at > b.updated_at ? -1 : 1));
     this.rowsSignal.set(rows);
   }
 
@@ -81,6 +90,7 @@ export class SupplierOperationsService {
 
       const payload: Partial<SupplierOperationRow> = {
         op_id: opId,
+        business_id: normalizeBusinessId(order.business_id),
         order_id: order.order_id,
         reserved_for_order_id: order.order_id,
         order_item_id: item.item_id,
@@ -193,6 +203,7 @@ export class SupplierOperationsService {
 
     await this.inventory.receiveInbound({
       sku: inventoryId,
+      business_id: row.business_id,
       qty,
       supplierOperationId: row.op_id,
       lineId: row.order_item_id,
@@ -509,6 +520,7 @@ export class SupplierOperationsService {
 
     return {
       op_id: data["op_id"] || id,
+      business_id: normalizeBusinessId(data["business_id"]),
       order_id: data["order_id"] || "",
       reserved_for_order_id: data["reserved_for_order_id"] || data["order_id"] || "",
       order_item_id: data["order_item_id"] || "",

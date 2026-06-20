@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, HostListener, computed, inject, signal } from "@angular/core";
+import { NgClass } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { RouterLink } from "@angular/router";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
@@ -7,6 +8,8 @@ import { STORAGE } from "../../core/firebase.providers";
 import { InventoryItem, InventoryReservation, InventoryService } from "../../core/inventory.service";
 import { OrdersService } from "../../core/orders.service";
 import { SuppliersService } from "../../core/suppliers.service";
+import { BusinessScopeService } from "../../core/business-scope.service";
+import { ReturnRecord, ReturnsService } from "../../core/returns.service";
 
 type StockFilter = "all" | "available" | "reserved" | "low" | "sold_out" | "without_price";
 type SortFilter = "updated_desc" | "name_asc" | "stock_low" | "stock_high" | "price_low" | "price_high";
@@ -31,7 +34,7 @@ interface InventoryDraft {
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   selector: "app-inventario",
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, NgClass],
   templateUrl: "./inventario.html",
   styleUrl: "./inventario.css",
 })
@@ -59,6 +62,7 @@ export default class InventarioPage {
   sortFilter = signal<SortFilter>("stock_low");
   filterCategoryPath = signal("all");
   filterSupplierId = signal("all");
+  activeTab = signal<"stock" | "returns">("stock");
   minStockFilter = signal<number | null>(null);
   maxStockFilter = signal<number | null>(null);
   minPriceFilter = signal<number | null>(null);
@@ -77,12 +81,17 @@ export default class InventarioPage {
   private categories = inject(CategoriesService);
   private suppliers = inject(SuppliersService);
   private orders = inject(OrdersService);
+  businessScope = inject(BusinessScopeService);
+  private returnsService = inject(ReturnsService);
 
   constructor() {
     this.reload();
+    this.returnsService.watch();
   }
 
   rows = computed(() => this.inventory.items());
+  returns = computed(() => this.returnsService.returns());
+  pendingReturns = computed(() => this.returns().filter((row) => row.status === "pending_review"));
   orderStatusById = computed(() => new Map(this.orders.list().map((order) => [order.order_id, order.status])));
   currentViewerImage = computed(() => this.imageViewerUrls()[this.imageViewerIndex()] || null);
   viewerHasMultipleImages = computed(() => this.imageViewerUrls().length > 1);
@@ -237,11 +246,34 @@ export default class InventarioPage {
         this.categories.loadCategories(),
         this.suppliers.loadFromFirestore(),
         this.orders.loadFromFirestore(),
+        Promise.resolve(this.returnsService.watch()),
       ]);
     } catch (error: any) {
       this.error.set(error?.message || "No se pudo cargar inventario");
     } finally {
       this.loading.set(false);
+    }
+  }
+
+  async restockReturn(row: ReturnRecord) {
+    this.error.set(null);
+    this.success.set(null);
+    try {
+      await this.returnsService.restockReturn(row);
+      this.success.set("Devolución enviada a stock disponible");
+    } catch (error: any) {
+      this.error.set(error?.message || "No se pudo restituir la devolución");
+    }
+  }
+
+  async markReturnDamaged(row: ReturnRecord) {
+    this.error.set(null);
+    this.success.set(null);
+    try {
+      await this.returnsService.markDamaged(row);
+      this.success.set("Devolución marcada como dañada");
+    } catch (error: any) {
+      this.error.set(error?.message || "No se pudo marcar como dañada");
     }
   }
 
@@ -541,6 +573,7 @@ export default class InventarioPage {
       const availableQty = Math.max(0, onHandQty - reservedQty);
       const payload: InventoryItem = {
         inventory_id: this.draft.inventory_id,
+        business_id: existing?.business_id || this.businessScope.writeBusinessId(),
         title,
         category_hint: this.draft.category_hint || null,
         supplier_id: this.draft.supplier_id || null,
@@ -631,6 +664,38 @@ export default class InventarioPage {
   supplierName(supplierId: string | null): string {
     if (!supplierId) return "Sin proveedor";
     return this.suppliers.getById(supplierId)?.display_name || supplierId;
+  }
+
+  itemBusinessLabel(item: InventoryItem): string {
+    return this.businessScope.businessShortLabel(item.business_id || "bm");
+  }
+
+  itemBusinessClass(item: InventoryItem): string {
+    return this.businessScope.businessClass(item.business_id);
+  }
+
+  returnBusinessLabel(row: ReturnRecord): string {
+    return this.businessScope.businessShortLabel(row.business_id || "bm");
+  }
+
+  returnBusinessClass(row: ReturnRecord): string {
+    return this.businessScope.businessClass(row.business_id);
+  }
+
+  returnStatusLabel(row: ReturnRecord): string {
+    if (row.status === "restocked") return "Disponible";
+    if (row.status === "damaged") return "Dañado";
+    return "Revisión";
+  }
+
+  returnProductTitle(row: ReturnRecord): string {
+    return String(row.product_snapshot?.["title"] || "Producto devuelto");
+  }
+
+  returnProductMeta(row: ReturnRecord): string {
+    const variant = String(row.product_snapshot?.["variant"] || "").trim();
+    const color = String(row.product_snapshot?.["color"] || "").trim();
+    return [variant, color].filter(Boolean).join(" · ") || "Sin variante/color";
   }
 
   stockTag(item: InventoryItem): string {

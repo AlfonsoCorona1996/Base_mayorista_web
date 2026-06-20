@@ -18,6 +18,80 @@
   gap: 12px;
 }
 
+.inventory-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.inventory-tabs button {
+  border: 1px solid #d8e3ef;
+  border-radius: 12px;
+  background: #ffffff;
+  min-height: 40px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  color: #334155;
+  font: inherit;
+  font-weight: 750;
+}
+
+.inventory-tabs button.active {
+  border-color: rgba(37, 99, 235, 0.32);
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.inventory-tabs strong {
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.08);
+  padding: 2px 8px;
+  font-size: 0.76rem;
+}
+
+.returns-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.returns-list {
+  display: grid;
+  gap: 10px;
+}
+
+.return-card {
+  border: 1px solid #d8e3ef;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.return-card.business-bm {
+  border-left: 4px solid #2563eb;
+}
+
+.return-card.business-catalogo {
+  border-left: 4px solid #10b981;
+}
+
+.return-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.return-title-row h3 {
+  margin: 0;
+  color: #102033;
+  font-size: 1rem;
+}
+
 .page-header {
   display: flex;
   flex-wrap: wrap;
@@ -228,6 +302,36 @@
   gap: 10px;
   background: linear-gradient(180deg, #ffffff 0%, #fcfeff 100%);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.95) inset, 0 8px 20px rgba(15, 35, 58, 0.06);
+  position: relative;
+}
+
+.inventory-card.business-bm {
+  border-left: 4px solid #2f80ed;
+}
+
+.inventory-card.business-catalogo {
+  border-left: 4px solid #10b981;
+}
+
+.business-badge {
+  margin-left: 6px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 7px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  vertical-align: middle;
+}
+
+.business-badge.business-bm {
+  background: #e8f2ff;
+  color: #0b56b7;
+}
+
+.business-badge.business-catalogo {
+  background: #e8fff5;
+  color: #047857;
 }
 
 .inventory-card.card-out {

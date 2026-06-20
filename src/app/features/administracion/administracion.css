@@ -90,6 +90,58 @@
   gap: 12px;
 }
 
+.business-finance-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 12px;
+}
+
+.business-finance-card {
+  padding: 14px;
+  border-left: 4px solid #2f80ed;
+  display: grid;
+  gap: 10px;
+}
+
+.business-finance-card.business-catalogo {
+  border-left-color: #10b981;
+}
+
+.business-finance-card header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.business-finance-card span {
+  border-radius: 999px;
+  padding: 4px 9px;
+  background: #e8f2ff;
+  color: #0b56b7;
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.business-finance-card.business-catalogo span {
+  background: #e8fff5;
+  color: #047857;
+}
+
+.business-finance-card div {
+  display: grid;
+  gap: 6px;
+}
+
+.business-finance-card p {
+  margin: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: #60728a;
+  font-size: 0.82rem;
+}
+
 .scope-pills {
   display: flex;
   flex-wrap: wrap;

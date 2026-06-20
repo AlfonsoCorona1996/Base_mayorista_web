@@ -58,6 +58,17 @@
         <span class="material-symbols-rounded" aria-hidden="true">route</span>
         <span>Ruta: <strong>{{ inferredRouteName() }}</strong></span>
       </div>
+
+      @if (showOrderBusinessPicker()) {
+        <label class="field with-icon business-create-field" for="order-business">
+          <span class="material-symbols-rounded" aria-hidden="true">storefront</span>
+          <select id="order-business" class="input" [(ngModel)]="newBusinessId">
+            @for (business of orderBusinessOptions(); track business.id) {
+              <option [ngValue]="business.id">{{ business.label }}</option>
+            }
+          </select>
+        </label>
+      }
     </div>
   </section>
 
@@ -168,6 +179,7 @@
         @if (orderMeta(order); as meta) {
           <article
             class="order-card surface-card"
+            [ngClass]="businessScope.isBothMode() ? orderBusinessClass(order) : ''"
             [class.order-card--bulk]="bulkNoteMode()"
             [attr.role]="bulkNoteMode() ? 'button' : 'link'"
             tabindex="0"
@@ -189,7 +201,12 @@
             <div class="order-head">
               <div class="title-wrap">
                 <h3>{{ meta.customerName }}</h3>
-                <p class="order-id">Pedido {{ order.order_id }}</p>
+                <p class="order-id">
+                  Pedido {{ order.order_id }}
+                  @if (businessScope.isBothMode()) {
+                    <span class="business-badge" [ngClass]="orderBusinessClass(order)">{{ orderBusinessLabel(order) }}</span>
+                  }
+                </p>
               </div>
 
               <div class="route-badge" [attr.title]="'Ruta: ' + meta.routeName">
@@ -655,7 +672,7 @@
           </thead>
           <tbody>
             @for (order of tableRows(); track order.order_id) {
-              <tr class="trow" [class.trow--paid-row]="order.status === 'pagado'" [class.trow--selection-mode]="tableSelectionMode()" (click)="onTableRowActivate(order, $event)">
+              <tr class="trow" [ngClass]="businessScope.isBothMode() ? orderBusinessClass(order) : ''" [class.trow--paid-row]="order.status === 'pagado'" [class.trow--selection-mode]="tableSelectionMode()" (click)="onTableRowActivate(order, $event)">
                 <td class="td-select-col">
                   @if (tableSelectionMode()) {
                     <input
@@ -671,6 +688,9 @@
                 <td class="td-date">{{ formatTableDateShort(order.created_at) }}</td>
                 <td class="td-customer">
                   <span class="tc-name">{{ customerName(order.customer_id) }}</span>
+                  @if (businessScope.isBothMode()) {
+                    <span class="business-badge" [ngClass]="orderBusinessClass(order)">{{ orderBusinessLabel(order) }}</span>
+                  }
                 </td>
                 <td class="td-route">
                   <span class="tc-route">{{ routeName(order.route_id) }}</span>

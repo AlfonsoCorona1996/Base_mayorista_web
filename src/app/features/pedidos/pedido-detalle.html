@@ -614,6 +614,9 @@
                   @if (hasLateAdditionNote(item)) {
                     <button type="button" class="menuItem" (click)="viewLateAdditionNote(item)">Ver nota de excepci&oacute;n</button>
                   }
+                  @if (canRegisterReturn(current, item)) {
+                    <button type="button" class="menuItem" (click)="openReturnModal(current, item)">Registrar devoluci&oacute;n</button>
+                  }
                   @if (canUseStockMenuActions(current) && item.confirmation_state && item.confirmation_state !== 'pending') {
                     <button type="button" class="menuItem" (click)="revertItemToPending(current, item)">Regresar a pendiente</button>
                   }
@@ -1698,6 +1701,86 @@
     </div>
   }
 
+  @if (returnModalOpen() && returnTargetItem(); as returnItem) {
+    <div class="sheet-backdrop sheet-backdrop--add-item" (click)="closeReturnModal()">
+      <div class="sheet return-sheet" role="dialog" aria-modal="true" aria-labelledby="return-modal-title" (click)="$event.stopPropagation()">
+        <div class="sheet-header">
+          <div class="sheet-handle" aria-hidden="true"></div>
+          <div class="sheet-title-wrap">
+            <h2 id="return-modal-title">
+              <span class="material-symbols-rounded" aria-hidden="true">assignment_return</span>
+              Registrar devolución
+            </h2>
+          </div>
+          <button type="button" class="btn ghost" (click)="closeReturnModal()" [disabled]="returnSaving()">
+            <span class="material-symbols-rounded" aria-hidden="true">close</span>
+            Cerrar
+          </button>
+        </div>
+        <div class="sheet-body">
+          <div class="return-form">
+            <div class="preview">
+              @if (itemImage(returnItem)) {
+                <img [src]="itemImage(returnItem)" alt="" />
+              } @else {
+                <div class="photo-placeholder photo-placeholder-md" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 7h4l2-2h4l2 2h4v12H4z"></path>
+                    <circle cx="12" cy="13" r="3"></circle>
+                  </svg>
+                </div>
+              }
+              <div class="preview-content">
+                <p class="preview-title">{{ returnItem.title }}</p>
+                <p class="preview-meta">{{ returnItem.variant || "Sin variante" }} · {{ returnItem.color || "Sin color" }}</p>
+                <span class="preview-tag">{{ orderBusinessLabel(current) }}</span>
+              </div>
+            </div>
+
+            <label class="field">
+              <span>Cantidad</span>
+              <input class="input" type="number" min="1" [max]="itemQuantity(returnItem)" [ngModel]="returnQty()" (ngModelChange)="returnQty.set($event)" />
+            </label>
+
+            <div class="field">
+              <span>Destino</span>
+              <div class="pill source-toggle return-toggle">
+                <label>
+                  <input type="radio" name="returnDisposition" value="available" [ngModel]="returnDisposition()" (ngModelChange)="returnDisposition.set($event)" />
+                  <span class="material-symbols-rounded" aria-hidden="true">inventory_2</span>
+                  <span>Disponible</span>
+                </label>
+                <label>
+                  <input type="radio" name="returnDisposition" value="review" [ngModel]="returnDisposition()" (ngModelChange)="returnDisposition.set($event)" />
+                  <span class="material-symbols-rounded" aria-hidden="true">rule</span>
+                  <span>Revisión</span>
+                </label>
+                <label>
+                  <input type="radio" name="returnDisposition" value="damaged" [ngModel]="returnDisposition()" (ngModelChange)="returnDisposition.set($event)" />
+                  <span class="material-symbols-rounded" aria-hidden="true">report</span>
+                  <span>Dañado</span>
+                </label>
+              </div>
+            </div>
+
+            <label class="field">
+              <span>Razón / notas</span>
+              <textarea class="input" rows="3" [ngModel]="returnReason()" (ngModelChange)="returnReason.set($event)" placeholder="Opcional"></textarea>
+            </label>
+
+            <div class="sheet-actions">
+              <button type="button" class="btn ghost" (click)="closeReturnModal()" [disabled]="returnSaving()">Cancelar</button>
+              <button type="button" class="btn primary" (click)="confirmReturn(current)" [disabled]="returnSaving()">
+                <span class="material-symbols-rounded" aria-hidden="true">check</span>
+                {{ returnSaving() ? "Guardando..." : "Registrar" }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  }
+
   @if (addItemModalOpen()) {
     <div class="sheet-backdrop sheet-backdrop--add-item" (click)="closeAddItemModal()">
       <div class="sheet full sheet-add-item-ios" role="dialog" aria-modal="true" aria-labelledby="add-item-modal-title" (click)="$event.stopPropagation()">
@@ -1781,16 +1864,23 @@
                     #productSearchInput
                     class="input"
                     type="text"
-                    placeholder="Nombre, variante o color"
-                    [(ngModel)]="newItemSearch"
+                    [placeholder]="isCatalogoOrder() ? 'Buscar SKU de Catálogo' : 'Nombre, variante o color'"
+                    [ngModel]="newItemSearch()"
+                    (ngModelChange)="onNewItemSearchChange($event)"
                   (focus)="showProductList.set(true)"
                   (keydown.escape)="showProductList.set(false)"
                     [disabled]="!vm.canEditItems"
                   />
                 </div>
               </div>
-              @if (showProductList() && (inventorySuggestions().length > 0 || catalogSuggestions().length > 0)) {
+              @if (showProductList() && (inventorySuggestions().length > 0 || catalogSuggestions().length > 0 || catalogProductSuggestions().length > 0 || catalogProductSearching())) {
                 <div class="listbox" role="listbox" aria-label="Resultados de productos">
+                  @if (catalogProductSearching()) {
+                    <div class="listbox-option listbox-option--loading">
+                      <span class="material-symbols-rounded" aria-hidden="true">progress_activity</span>
+                      Buscando SKU...
+                    </div>
+                  }
                   @for (s of inventorySuggestions(); track s.inventory_id) {
                     <button type="button" role="option" class="listbox-option" [attr.aria-label]="'Inventario: ' + s.title" (mousedown)="$event.preventDefault(); beginProductPick(); pickInventory(s)" (touchstart)="$event.preventDefault(); beginProductPick(); pickInventory(s)" (click)="beginProductPick(); pickInventory(s)">
                       @if (s.image_urls[0]) {
@@ -1841,6 +1931,31 @@
                       </span>
                     </button>
                   }
+                  @for (p of catalogProductSuggestions(); track p.product_id) {
+                    <button type="button" role="option" class="listbox-option" [attr.aria-label]="'Catálogo SKU: ' + p.sku" (mousedown)="$event.preventDefault(); beginProductPick(); pickCatalogProduct(p)" (touchstart)="$event.preventDefault(); beginProductPick(); pickCatalogProduct(p)" (click)="beginProductPick(); pickCatalogProduct(p)">
+                      @if (p.image_url) {
+                        <img class="listbox-thumb" [src]="p.image_url" alt="" />
+                      } @else {
+                        <div class="photo-placeholder photo-placeholder-sm" aria-hidden="true">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M4 7h4l2-2h4l2 2h4v12H4z"></path>
+                            <circle cx="12" cy="13" r="3"></circle>
+                          </svg>
+                        </div>
+                      }
+                      <div class="listbox-main">
+                        <div class="card-title">{{ p.name }}</div>
+                        <div class="card-meta">
+                          <span class="material-symbols-rounded" aria-hidden="true">tag</span>
+                          {{ p.sku }} · {{ p.category || "Sin categoría" }}
+                        </div>
+                      </div>
+                      <span class="card-tag cat">
+                        <span class="material-symbols-rounded" aria-hidden="true">storefront</span>
+                        Catálogo
+                      </span>
+                    </button>
+                  }
                 </div>
               }
             </div>
@@ -1886,7 +2001,7 @@
               <span class="material-symbols-rounded" aria-hidden="true">sell</span>
               Producto
               @if (isManualSource() && manualHistory.entries().length > 0) {
-                <span class="manual-history-hint">· {{ manualHistory.entries().length }} en historial global</span>
+                <span class="manual-history-hint">· {{ manualSuggestions().length }} sugerencias {{ orderBusinessLabel(current) }}</span>
               }
             </label>
             <div class="manual-autocomplete-wrap">

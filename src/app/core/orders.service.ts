@@ -21,6 +21,8 @@ import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { FIREBASE_AUTH, STORAGE } from "./firebase.providers";
 import { SupplierOperationsService } from "./supplier-operations.service";
 import { ulid } from "ulid";
+import { BusinessScopeService } from "./business-scope.service";
+import { BusinessId, normalizeBusinessId } from "./rbac.constants";
 
 export type OrderStatus =
   | "borrador"
@@ -52,12 +54,15 @@ export type OrderItemState = OrderStatus | "sin_estado";
 
 export interface OrderItem {
   item_id: string;
+  business_id?: BusinessId;
   title: string;
   variant?: string | null;
   color?: string | null;
   quantity: number;
+  returned_qty?: number | null;
   confirmed_qty?: number | null;
   source: "catalogo" | "inventario" | "manual";
+  product_ref_type?: "normalized_listing" | "catalog_product" | "inventory_item" | "manual" | null;
   state: OrderItemState;
   confirmation_state?: "confirmed" | "out_of_stock" | "substitute" | "pending";
   supplier_id?: string | null;
@@ -128,6 +133,7 @@ export interface OrderTotals {
 
 export interface Order {
   order_id: string;
+  business_id: BusinessId;
   customer_id: string;
   route_id: string | null;
   status: OrderStatus;
@@ -249,17 +255,22 @@ export class OrdersService {
   private colRef = collection(FIRESTORE, "orders");
   private rows = signal<Order[]>([]);
   private supplierOperations = inject(SupplierOperationsService);
+  private businessScope = inject(BusinessScopeService);
   loading = signal(false);
   private unsubscribeOrders?: Unsubscribe;
 
-  list = computed(() => this.rows());
+  list = computed(() => {
+    const active = this.businessScope.activeBusinessIds();
+    return this.rows().filter((order) => active.includes(order.business_id || "bm"));
+  });
 
   /** Inicia un listener en tiempo real. Seguro llamarlo múltiples veces: solo abre un listener. */
   async loadFromFirestore(): Promise<void> {
     if (this.unsubscribeOrders) return;
 
     this.loading.set(true);
-    const q = query(this.colRef, orderBy("updated_at", "desc"));
+    const allowedBusinesses = this.businessScope.availableBusinessIds();
+    const q = query(this.colRef, where("business_id", "in", allowedBusinesses));
 
     return new Promise<void>((resolve) => {
       let resolved = false;
@@ -267,7 +278,9 @@ export class OrdersService {
       this.unsubscribeOrders = onSnapshot(
         q,
         (snap) => {
-          const rows: Order[] = snap.docs.map((d) => this.normalize(d.id, d.data() as any));
+          const rows: Order[] = snap.docs
+            .map((d) => this.normalize(d.id, d.data() as any))
+            .sort((a, b) => (a.updated_at > b.updated_at ? -1 : 1));
           this.rows.set(rows);
           this.loading.set(false);
           if (!resolved) {
@@ -293,11 +306,18 @@ export class OrdersService {
     this.unsubscribeOrders = undefined;
   }
 
-  async createDraft(customerId: string, routeId: string | null, notes?: string): Promise<string> {
+  async createDraft(
+    customerId: string,
+    routeId: string | null,
+    notes?: string,
+    businessId?: BusinessId,
+  ): Promise<string> {
     const now = new Date().toISOString();
     const orderId = makeOrderId();
+    const resolvedBusinessId = normalizeBusinessId(businessId || this.businessScope.writeBusinessId());
     const draft: Order = {
       order_id: orderId,
+      business_id: resolvedBusinessId,
       customer_id: customerId,
       route_id: routeId,
       status: "borrador",
@@ -347,6 +367,7 @@ export class OrdersService {
     const sample: Order[] = [
       {
         order_id: "P-2401",
+        business_id: "bm",
         customer_id: "clienta-ana",
         route_id: "durango",
         status: "empaque",
@@ -420,6 +441,7 @@ export class OrdersService {
       },
       {
         order_id: "P-2402",
+        business_id: "bm",
         customer_id: "clienta-bety",
         route_id: "zapopan",
         status: "en_ruta",
@@ -477,6 +499,7 @@ export class OrdersService {
       },
       {
         order_id: "P-2403",
+        business_id: "bm",
         customer_id: "clienta-luisa",
         route_id: "sin_ruta",
         status: "borrador",
@@ -1242,6 +1265,7 @@ export class OrdersService {
     };
     return {
       order_id: id,
+      business_id: normalizeBusinessId(data.business_id),
       customer_id: data.customer_id || "",
       route_id: data.route_id ?? null,
       status: (data.status as OrderStatus) || "borrador",

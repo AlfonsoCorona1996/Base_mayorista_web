@@ -1,0 +1,315 @@
+<section class="catalog-import-page">
+  <header class="import-head">
+    <div>
+      <p class="kicker">
+        <span class="material-symbols-rounded" aria-hidden="true">upload_file</span>
+        Catalogo importado
+      </p>
+      <h2>Productos de Catalogo</h2>
+      <p>Importa el Excel, mapea columnas y actualiza productos por SKU.</p>
+    </div>
+    <div class="head-actions">
+      <button type="button" class="btn btn-ghost" (click)="reload()" [disabled]="pageState().loading">
+        <span class="material-symbols-rounded" aria-hidden="true">refresh</span>
+        {{ pageState().loading ? "Actualizando..." : "Actualizar" }}
+      </button>
+      <label class="btn btn-primary" [class.is-disabled]="parsing()">
+        <span class="material-symbols-rounded" aria-hidden="true">upload_file</span>
+        {{ parsing() ? "Leyendo..." : "Importar Excel" }}
+        <input type="file" accept=".xlsx,.xls" (change)="onFileSelected($event)" [disabled]="parsing()" hidden />
+      </label>
+    </div>
+  </header>
+
+  @if (importJobs.latestActiveJob(); as job) {
+    <section class="job-panel">
+      <div class="job-head">
+        <span class="material-symbols-rounded" aria-hidden="true">sync</span>
+        <strong>{{ job.file_name }}</strong>
+        <span>{{ job.percent }}%</span>
+      </div>
+      <div class="job-bar"><span [style.width.%]="job.percent"></span></div>
+      <p>{{ job.processed_rows }} de {{ job.valid_rows }} filas importadas. Puedes cambiar de pantalla.</p>
+    </section>
+  }
+
+  @if (error()) {
+    <div class="notice notice-error">
+      <span class="material-symbols-rounded" aria-hidden="true">error</span>
+      <p>{{ error() }}</p>
+    </div>
+  }
+
+  @if (success()) {
+    <div class="notice notice-ok">
+      <span class="material-symbols-rounded" aria-hidden="true">check_circle</span>
+      <p>{{ success() }}</p>
+    </div>
+  }
+
+  @if (headers().length > 0) {
+    <section class="import-panel">
+      <div class="import-panel-head">
+        <div>
+          <h3>{{ fileName() }}</h3>
+          <p>{{ rawRows().length }} fila(s) detectadas · {{ headers().length }} columna(s){{ validating() ? " · Validando..." : "" }}</p>
+        </div>
+        <button type="button" class="btn btn-primary" (click)="importValidRows()" [disabled]="!canImport()">
+          <span class="material-symbols-rounded" aria-hidden="true">cloud_upload</span>
+          {{ validating() ? "Validando..." : importing() ? "Importando..." : "Importar validas" }}
+        </button>
+      </div>
+
+      <div class="stats-grid">
+        <article>
+          <span>Total</span>
+          <strong>{{ preview().total }}</strong>
+        </article>
+        <article>
+          <span>Validas</span>
+          <strong>{{ preview().valid }}</strong>
+        </article>
+        <article>
+          <span>Sin SKU</span>
+          <strong>{{ preview().missingSku }}</strong>
+        </article>
+        <article>
+          <span>SKU duplicado</span>
+          <strong>{{ preview().duplicateSku }}</strong>
+        </article>
+        <article>
+          <span>Valores inválidos</span>
+          <strong>{{ preview().invalidValues }}</strong>
+        </article>
+      </div>
+
+      <div class="mapping-grid">
+        <label class="field">
+          <span>SKU *</span>
+          <select class="input" [ngModel]="mapping().skuColumn" (ngModelChange)="setMappingField('skuColumn', $event)">
+            <option value="">Selecciona columna</option>
+            @for (header of headers(); track header) {
+              <option [value]="header">{{ header }}</option>
+            }
+          </select>
+        </label>
+
+        <div class="field name-field">
+          <span>Nombre (puede combinar columnas)</span>
+          <div class="name-columns">
+            @for (header of headers(); track header) {
+              <label>
+                <input
+                  type="checkbox"
+                  [checked]="isNameColumnSelected(header)"
+                  (change)="toggleNameColumn(header, $any($event.target).checked)"
+                />
+                <span>{{ header }}</span>
+              </label>
+            }
+          </div>
+        </div>
+
+        <label class="field">
+          <span>Proveedor</span>
+          <select class="input" [ngModel]="mapping().supplierColumn" (ngModelChange)="setMappingField('supplierColumn', $event)">
+            <option value="">Sin mapear</option>
+            @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Categoria</span>
+          <select class="input" [ngModel]="mapping().categoryColumn" (ngModelChange)="setMappingField('categoryColumn', $event)">
+            <option value="">Sin mapear</option>
+            @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Color</span>
+          <select class="input" [ngModel]="mapping().colorColumn" (ngModelChange)="setMappingField('colorColumn', $event)">
+            <option value="">Sin mapear</option>
+            @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Talla</span>
+          <select class="input" [ngModel]="mapping().sizeColumn" (ngModelChange)="setMappingField('sizeColumn', $event)">
+            <option value="">Sin mapear</option>
+            @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Precio costo</span>
+          <select class="input" [ngModel]="mapping().priceCostColumn" (ngModelChange)="setMappingField('priceCostColumn', $event)">
+            <option value="">Sin mapear</option>
+            @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Precio venta/clienta</span>
+          <select class="input" [ngModel]="mapping().priceClientaColumn" (ngModelChange)="setMappingField('priceClientaColumn', $event)">
+            <option value="">Sin mapear</option>
+            @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Existencia</span>
+          <select class="input" [ngModel]="mapping().stockColumn" (ngModelChange)="setMappingField('stockColumn', $event)">
+            <option value="">Sin mapear</option>
+            @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Imagen/URL</span>
+          <select class="input" [ngModel]="mapping().imageColumn" (ngModelChange)="setMappingField('imageColumn', $event)">
+            <option value="">Sin mapear</option>
+            @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Notas</span>
+          <select class="input" [ngModel]="mapping().notesColumn" (ngModelChange)="setMappingField('notesColumn', $event)">
+            <option value="">Sin mapear</option>
+            @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
+          </select>
+        </label>
+      </div>
+
+      <div class="preview-wrap">
+        <h3>Vista previa</h3>
+        @if (validating()) {
+          <p class="empty">Validando filas sin congelar la app...</p>
+        }
+        <div class="preview-table-scroll">
+          <table class="preview-table">
+            <thead>
+              <tr>
+                <th>Fila</th>
+                <th>Estado</th>
+                <th>SKU</th>
+                <th>Nombre</th>
+                <th>Proveedor</th>
+                <th>Color</th>
+                <th>Talla</th>
+                <th>Stock</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of preview().sample; track row.rowNumber) {
+                <tr [class.invalid]="!row.valid">
+                  <td>{{ row.rowNumber }}</td>
+                  <td>{{ row.valid ? "OK" : row.issue }}</td>
+                  <td>{{ row.sku || "-" }}</td>
+                  <td>{{ row.name }}</td>
+                  <td>{{ row.supplier_name || "-" }}</td>
+                  <td>{{ row.color || "-" }}</td>
+                  <td>{{ row.size || "-" }}</td>
+                  <td>{{ row.stock_qty ?? "-" }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      @if (rejectedRows().length > 0) {
+        <div class="preview-wrap">
+          <h3>Filas que no se importarán</h3>
+          <div class="preview-table-scroll">
+            <table class="preview-table rejected-table">
+              <thead>
+                <tr>
+                  <th>Fila</th>
+                  <th>Razón</th>
+                  <th>SKU</th>
+                  <th>Nombre</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of rejectedRows().slice(0, 100); track row.rowNumber) {
+                  <tr class="invalid">
+                    <td>{{ row.rowNumber }}</td>
+                    <td>{{ row.issue }}</td>
+                    <td>{{ row.sku || "-" }}</td>
+                    <td>{{ row.name }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          @if (rejectedRows().length > 100) {
+            <p class="empty">Mostrando 100 de {{ rejectedRows().length }} filas rechazadas.</p>
+          }
+        </div>
+      }
+    </section>
+  }
+
+  <section class="products-panel">
+    <div class="products-head">
+      <div>
+        <h3>Productos importados</h3>
+        <p>{{ products().length }} producto(s) en esta vista</p>
+      </div>
+      <label class="field search-field">
+        <span class="material-symbols-rounded" aria-hidden="true">search</span>
+        <input class="input" type="search" [ngModel]="search()" (ngModelChange)="onSearchChange($event)" placeholder="Buscar por SKU..." />
+      </label>
+    </div>
+
+    @if (pageState().error) {
+      <p class="empty">{{ pageState().error }}</p>
+    } @else if (pageState().loading && products().length === 0) {
+      <p class="empty">Cargando productos...</p>
+    } @else if (products().length === 0) {
+      <p class="empty">No hay productos importados para mostrar.</p>
+    } @else {
+      <div class="preview-table-scroll">
+        <table class="preview-table catalog-products-table">
+          <thead>
+            <tr>
+              <th>SKU</th>
+              <th>Nombre</th>
+              <th>Proveedor</th>
+              <th>Categoría</th>
+              <th>Color</th>
+              <th>Talla</th>
+              <th>Stock ref.</th>
+              <th>Costo</th>
+              <th>Clienta</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (product of products(); track product.product_id) {
+              <tr>
+                <td><strong class="sku">{{ product.sku }}</strong></td>
+                <td>{{ product.name }}</td>
+                <td>{{ product.supplier_name || "-" }}</td>
+                <td>{{ product.category || "-" }}</td>
+                <td>{{ product.color || "-" }}</td>
+                <td>{{ product.size || "-" }}</td>
+                <td>{{ productStockLabel(product) }}</td>
+                <td>{{ product.price_cost | currency:'MXN':'symbol-narrow':'1.0-0' }}</td>
+                <td>{{ product.price_clienta | currency:'MXN':'symbol-narrow':'1.0-0' }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      @if (pageState().hasMore) {
+        <button type="button" class="btn btn-ghost more-btn" (click)="loadMoreProducts()" [disabled]="pageState().loading">
+          <span class="material-symbols-rounded" aria-hidden="true">expand_more</span>
+          {{ pageState().loading ? "Cargando..." : "Cargar más" }}
+        </button>
+      }
+    }
+  </section>
+</section>

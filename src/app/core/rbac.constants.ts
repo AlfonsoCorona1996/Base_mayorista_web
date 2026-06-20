@@ -97,15 +97,19 @@ export const CAPABILITY_KEYS = [
 ] as const;
 
 export const ROLE_IDS = ["super_admin", "admin", "administrativo", "operativo", "repartidor"] as const;
+export const BUSINESS_IDS = ["bm", "catalogo"] as const;
 
 export type SectionKey = (typeof SECTION_KEYS)[number];
 export type CapabilityKey = (typeof CAPABILITY_KEYS)[number];
 export type RoleId = (typeof ROLE_IDS)[number];
+export type BusinessId = (typeof BUSINESS_IDS)[number];
+export type BusinessScope = BusinessId | "both";
 
 export type SectionsMap = Record<SectionKey, boolean>;
 export type CapabilitiesMap = Record<CapabilityKey, boolean>;
 export type SectionOverridesMap = Partial<Record<SectionKey, boolean>>;
 export type CapabilityOverridesMap = Partial<Record<CapabilityKey, boolean>>;
+export type BusinessMembershipsMap = Partial<Record<BusinessId, BusinessMembershipDoc>>;
 
 export const USERNAME_AUTH_DOMAIN = "users.base-mayorista.local";
 
@@ -126,8 +130,17 @@ export interface UserDoc {
   capabilities: CapabilitiesMap;
   sectionOverrides: SectionOverridesMap;
   capabilityOverrides: CapabilityOverridesMap;
+  businessMemberships: BusinessMembershipsMap;
   createdAt?: Timestamp | null;
   updatedAt?: Timestamp | null;
+}
+
+export interface BusinessMembershipDoc {
+  businessId: BusinessId;
+  enabled: boolean;
+  roleId: RoleId;
+  sections: SectionsMap;
+  capabilities: CapabilitiesMap;
 }
 
 export interface RoleDoc {
@@ -155,6 +168,68 @@ export function normalizeRoleId(value: unknown): RoleId {
     return value;
   }
   return "operativo";
+}
+
+export function normalizeBusinessId(value: unknown): BusinessId {
+  return value === "catalogo" ? "catalogo" : "bm";
+}
+
+export function businessLabel(value: BusinessId): string {
+  return value === "catalogo" ? "Catalogo" : "Base Mayorista";
+}
+
+export function businessShortLabel(value: BusinessId): string {
+  return value === "catalogo" ? "Catalogo" : "BM";
+}
+
+export function normalizeBusinessMembershipsMap(
+  raw: unknown,
+  fallbackRoleId: RoleId,
+  fallbackSections: SectionsMap,
+  fallbackCapabilities: CapabilitiesMap,
+  includeAllForSuperAdmin = false,
+): BusinessMembershipsMap {
+  const out: BusinessMembershipsMap = {};
+  const source = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+
+  for (const businessId of BUSINESS_IDS) {
+    const rawMembership = source[businessId];
+    if (!rawMembership || typeof rawMembership !== "object") continue;
+    const membership = rawMembership as Record<string, unknown>;
+    const roleId = normalizeRoleId(membership["roleId"] || fallbackRoleId);
+    const preset = buildRolePreset(roleId);
+    out[businessId] = {
+      businessId,
+      enabled: Boolean(membership["enabled"] ?? true),
+      roleId,
+      sections: normalizeSectionsMap((membership["sections"] as Record<string, unknown> | null) || preset.sections),
+      capabilities: normalizeCapabilitiesMap(
+        (membership["capabilities"] as Record<string, unknown> | null) || preset.capabilities,
+      ),
+    };
+  }
+
+  if (!out.bm) {
+    out.bm = {
+      businessId: "bm",
+      enabled: true,
+      roleId: fallbackRoleId,
+      sections: normalizeSectionsMap(fallbackSections),
+      capabilities: normalizeCapabilitiesMap(fallbackCapabilities),
+    };
+  }
+
+  if (includeAllForSuperAdmin && !out.catalogo) {
+    out.catalogo = {
+      businessId: "catalogo",
+      enabled: true,
+      roleId: "super_admin",
+      sections: buildSectionsMap(true),
+      capabilities: buildCapabilitiesMap(true),
+    };
+  }
+
+  return out;
 }
 
 export function normalizeUsername(value: unknown): string {

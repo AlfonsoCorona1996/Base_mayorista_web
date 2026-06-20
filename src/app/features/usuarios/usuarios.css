@@ -364,6 +364,7 @@
 }
 
 .role-pill,
+.business-pill,
 .state-pill {
   border-radius: 999px;
   border: 1px solid var(--border);
@@ -377,6 +378,18 @@
   background: #eef2ff;
   border-color: rgba(99, 102, 241, 0.25);
   color: #4338ca;
+}
+
+.business-pill-bm {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.business-pill-catalogo {
+  background: #ecfdf3;
+  border-color: #bbf7d0;
+  color: #15803d;
 }
 
 .state-pill {
@@ -463,6 +476,52 @@
   margin: 0;
   font-size: 0.93rem;
   color: #1e293b;
+}
+
+.business-access-editor {
+  border: 1px dashed rgba(15, 23, 42, 0.14);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.68);
+  padding: 10px 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.business-access-editor-inline {
+  margin-top: 2px;
+}
+
+.business-access-title {
+  color: #475569;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.business-access-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.business-toggle {
+  width: max-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  color: #475569;
+  min-height: 32px;
+  padding: 0 11px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.business-toggle.active {
+  border-color: rgba(37, 99, 235, 0.22);
+  background: rgba(37, 99, 235, 0.08);
+  color: #1d4ed8;
 }
 
 .permission-list {

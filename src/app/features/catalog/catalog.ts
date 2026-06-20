@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal, ChangeDetectionStrategy } from "@angular/core";
+import { Component, computed, effect, inject, signal, ChangeDetectionStrategy } from "@angular/core";
 import { FormsModule } from "@angular/forms";
 import { Router } from "@angular/router";
 import type { DocumentData, QueryDocumentSnapshot } from "firebase/firestore";
@@ -7,6 +7,8 @@ import { NormalizedListingsService } from "../../core/normalized-listings.servic
 import { SuppliersService } from "../../core/suppliers.service";
 import { ManualProductHistoryService, ManualProductEntry } from "../../core/manual-product-history.service";
 import { FIRESTORE } from "../../core/firebase.providers";
+import { BusinessScopeService } from "../../core/business-scope.service";
+import { CatalogProductsImportComponent } from "./catalog-products-import.component";
 import { CurrencyPipe, DatePipe } from "@angular/common";
 import type {
   NormalizedItemV3,
@@ -19,7 +21,7 @@ import { isNormalizedListingDocV3 } from "../../core/firestore-contracts";
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   selector: "app-catalog",
-  imports: [FormsModule, CurrencyPipe, DatePipe],
+  imports: [FormsModule, CurrencyPipe, DatePipe, CatalogProductsImportComponent],
   templateUrl: "./catalog.html",
   styleUrl: "./catalog.css",
 })
@@ -44,6 +46,7 @@ export default class CatalogPage {
   rows = signal<NormalizedListingDocV3[]>([]);
   loading = signal(false);
   loadingMore = signal(false);
+  catalogLoadedOnce = signal(false);
   error = signal<string | null>(null);
   hasMore = signal(true);
   busyById = signal<Record<string, boolean>>({});
@@ -54,10 +57,11 @@ export default class CatalogPage {
   private suppliers = inject(SuppliersService);
   private router    = inject(Router);
   readonly manualSvc = inject(ManualProductHistoryService);
+  businessScope = inject(BusinessScopeService);
   private firestore = FIRESTORE;
 
   // ── Vista activa ─────────────────────────────────────────
-  activeTab = signal<"catalog" | "manuales">("catalog");
+  activeTab = signal<"catalog" | "catalogo_excel" | "manuales_bm" | "manuales_catalogo">("catalog");
 
   // ── Productos manuales ───────────────────────────────────
   manualSearch = signal("");
@@ -66,22 +70,59 @@ export default class CatalogPage {
 
   manualFiltered = computed(() => {
     const q = this.manualSearch().trim().toLowerCase();
+    const businessId = this.manualBusinessForActiveTab();
     return this.manualSvc.entries().filter(e =>
-      !q || e.title.toLowerCase().includes(q) ||
+      e.business_id === businessId &&
+      (!q || e.title.toLowerCase().includes(q) ||
             e.variant.toLowerCase().includes(q) ||
-            e.color.toLowerCase().includes(q)
+            e.color.toLowerCase().includes(q))
     );
   });
 
+  visibleTabs = computed(() => {
+    const scope = this.businessScope.scope();
+    if (scope === "catalogo") {
+      return [
+        { id: "catalogo_excel" as const, label: "Catálogo", icon: "table" },
+        { id: "manuales_catalogo" as const, label: "Manuales Catálogo", icon: "edit_note" },
+      ];
+    }
+    if (scope === "both") {
+      return [
+        { id: "catalog" as const, label: "Productos BM", icon: "inventory_2" },
+        { id: "catalogo_excel" as const, label: "Catálogo", icon: "table" },
+        { id: "manuales_bm" as const, label: "Manuales BM", icon: "edit_note" },
+        { id: "manuales_catalogo" as const, label: "Manuales Catálogo", icon: "edit_note" },
+      ];
+    }
+    return [
+      { id: "catalog" as const, label: "Productos BM", icon: "inventory_2" },
+      { id: "manuales_bm" as const, label: "Manuales BM", icon: "edit_note" },
+    ];
+  });
+
   constructor() {
-    this.reload();
-    this.manualSvc.load().catch(() => null);
+    effect(() => {
+      const tabs = this.visibleTabs();
+      if (!tabs.some((tab) => tab.id === this.activeTab())) {
+        this.activeTab.set(tabs[0]?.id || "catalog");
+      }
+      const active = this.activeTab();
+      if (active === "catalog" && !this.catalogLoadedOnce() && !this.loading()) {
+        this.reload();
+      }
+      if (active === "manuales_bm" || active === "manuales_catalogo") {
+        this.manualSvc.load(this.manualBusinessForActiveTab()).catch(() => null);
+      }
+    });
   }
 
   // ── Cambio de tab ─────────────────────────────────────────
-  setTab(tab: "catalog" | "manuales"): void {
+  setTab(tab: "catalog" | "catalogo_excel" | "manuales_bm" | "manuales_catalogo"): void {
     this.activeTab.set(tab);
-    if (tab === "manuales") this.manualSvc.load().catch(() => null);
+    if (tab === "manuales_bm" || tab === "manuales_catalogo") {
+      this.manualSvc.load(this.manualBusinessForActiveTab()).catch(() => null);
+    }
   }
 
   suppliersOptions = computed(() => {
@@ -183,6 +224,7 @@ export default class CatalogPage {
     } catch (e: any) {
       this.error.set(e?.message || "Error cargando catalogo");
     } finally {
+      this.catalogLoadedOnce.set(true);
       this.loading.set(false);
     }
   }
@@ -437,6 +479,7 @@ export default class CatalogPage {
       const listingDoc: Record<string, unknown> = {
         normalized_id: id,
         schema_version: "normalized_v3.0",
+        business_id: entry.business_id || "bm",
         status: "needs_review",
         source: "manual_history",
         supplier_id: null,
@@ -481,5 +524,9 @@ export default class CatalogPage {
 
   private setManualBusy(id: string, val: boolean): void {
     this.manualBusy.update(m => ({ ...m, [id]: val }));
+  }
+
+  manualBusinessForActiveTab(): "bm" | "catalogo" {
+    return this.activeTab() === "manuales_catalogo" ? "catalogo" : "bm";
   }
 }

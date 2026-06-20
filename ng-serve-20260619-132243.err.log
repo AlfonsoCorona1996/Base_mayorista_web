@@ -1,0 +1,2250 @@
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '{ uid: string; email: string; authEmail: string; username: string; loginType: UserLoginType; displayName: string; roleId: "super_admin" | "admin" | "administrativo" | "operativo" | "repartidor"; isActive: boolean; mustChangePassword: boolean; sectionOverrides: { ...; }; capabilityOverrides: { ...; }; }' is not assignable to parameter of type 'UserDraft'.
+  Property 'businessMemberships' is missing in type '{ uid: string; email: string; authEmail: string; username: string; loginType: UserLoginType; displayName: string; roleId: "super_admin" | "admin" | "administrativo" | "operativo" | "repartidor"; isActive: boolean; mustChangePassword: boolean; sectionOverrides: { ...; }; capabilityOverrides: { ...; }; }' but required in type 'UserDraft'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:332:23:
+[37m      332 │     this.editDraft.set([32m{[37m
+          ╵                        [32m^[0m
+
+  'businessMemberships' is declared here.
+
+    src/app/features/usuarios/usuarios.ts:72:2:
+[37m      72 │   [32mbusinessMemberships[37m: BusinessMembershipsMap;
+         ╵   [32m~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '{ uid: string; email: string; authEmail: string; username: string; loginType: UserLoginType; displayName: string; roleId: "super_admin" | "admin" | "administrativo" | "operativo" | "repartidor"; isActive: boolean; mustChangePassword: boolean; sectionOverrides: { ...; }; capabilityOverrides: { ...; }; }' is not assignable to parameter of type 'UserDraft'.
+  Property 'businessMemberships' is missing in type '{ uid: string; email: string; authEmail: string; username: string; loginType: UserLoginType; displayName: string; roleId: "super_admin" | "admin" | "administrativo" | "operativo" | "repartidor"; isActive: boolean; mustChangePassword: boolean; sectionOverrides: { ...; }; capabilityOverrides: { ...; }; }' but required in type 'UserDraft'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:334:23:
+[37m      334 │     this.editDraft.set([32m{[37m
+          ╵                        [32m^[0m
+
+  'businessMemberships' is declared here.
+
+    src/app/features/usuarios/usuarios.ts:72:2:
+[37m      72 │   [32mbusinessMemberships[37m: BusinessMembershipsMap;
+         ╵   [32m~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'loadStoredBusinessMemberships' does not exist on type 'UsuariosPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:203:11:
+[37m      203 │       this.[32mloadStoredBusinessMemberships[37m(),
+          ╵            [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS7006: Parameter 'row' implicitly has an 'any' type.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:206:12:
+[37m      206 │       .map(([32mrow[37m) => this.mapApiRowToUser(row, storedMemberships[r...
+          ╵             [32m~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS7006: Parameter 'a' implicitly has an 'any' type.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:207:13:
+[37m      207 │       .sort(([32ma[37m, b) => a.displayName.localeCompare(b.displayName));
+          ╵              [32m^[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS7006: Parameter 'b' implicitly has an 'any' type.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:207:16:
+[37m      207 │       .sort((a, [32mb[37m) => a.displayName.localeCompare(b.displayName));
+          ╵                 [32m^[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '{ uid: string; email: string; authEmail: string; username: string; loginType: UserLoginType; displayName: string; roleId: "super_admin" | "admin" | "administrativo" | "operativo" | "repartidor"; isActive: boolean; mustChangePassword: boolean; sectionOverrides: { ...; }; capabilityOverrides: { ...; }; }' is not assignable to parameter of type 'UserDraft'.
+  Property 'businessMemberships' is missing in type '{ uid: string; email: string; authEmail: string; username: string; loginType: UserLoginType; displayName: string; roleId: "super_admin" | "admin" | "administrativo" | "operativo" | "repartidor"; isActive: boolean; mustChangePassword: boolean; sectionOverrides: { ...; }; capabilityOverrides: { ...; }; }' but required in type 'UserDraft'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:339:23:
+[37m      339 │     this.editDraft.set([32m{[37m
+          ╵                        [32m^[0m
+
+  'businessMemberships' is declared here.
+
+    src/app/features/usuarios/usuarios.ts:72:2:
+[37m      72 │   [32mbusinessMemberships[37m: BusinessMembershipsMap;
+         ╵   [32m~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '{ uid: string; email: string; authEmail: string; username: string; loginType: UserLoginType; displayName: string; roleId: "super_admin" | "admin" | "administrativo" | "operativo" | "repartidor"; isActive: boolean; mustChangePassword: boolean; sectionOverrides: { ...; }; capabilityOverrides: { ...; }; }' is not assignable to parameter of type 'UserDraft'.
+  Property 'businessMemberships' is missing in type '{ uid: string; email: string; authEmail: string; username: string; loginType: UserLoginType; displayName: string; roleId: "super_admin" | "admin" | "administrativo" | "operativo" | "repartidor"; isActive: boolean; mustChangePassword: boolean; sectionOverrides: { ...; }; capabilityOverrides: { ...; }; }' but required in type 'UserDraft'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:355:23:
+[37m      355 │     this.editDraft.set([32m{[37m
+          ╵                        [32m^[0m
+
+  'businessMemberships' is declared here.
+
+    src/app/features/usuarios/usuarios.ts:72:2:
+[37m      72 │   [32mbusinessMemberships[37m: BusinessMembershipsMap;
+         ╵   [32m~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'buildBusinessMemberships' does not exist on type 'UsuariosPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:529:32:
+[37m      529 │ ...sMemberships: this.[32mbuildBusinessMemberships[37m(this.newRoleId(), ...
+          ╵                       [32m~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'saveBusinessMembershipsDirect' does not exist on type 'UsuariosPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:535:17:
+[37m      535 │       await this.[32msaveBusinessMembershipsDirect[37m(result.uid, payloa...
+          ╵                  [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'buildBusinessMemberships' does not exist on type 'UsuariosPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:529:32:
+[37m      529 │ ...sMemberships: this.[32mbuildBusinessMemberships[37m(this.newRoleId(), ...
+          ╵                       [32m~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'saveBusinessMembershipsDirect' does not exist on type 'UsuariosPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:535:17:
+[37m      535 │       await this.[32msaveBusinessMembershipsDirect[37m(result.uid, payloa...
+          ╵                  [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'buildBusinessMemberships' does not exist on type 'UsuariosPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:567:43:
+[37m      567 │       const nextBusinessMemberships = this.[32mbuildBusinessMemberships[37m(
+          ╵                                            [32m~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'businessAccessFromMemberships' does not exist on type 'UsuariosPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:571:13:
+[37m      571 │         this.[32mbusinessAccessFromMemberships[37m(draft.businessMembersh...
+          ╵              [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'businessMembershipsEqual' does not exist on type 'UsuariosPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:573:47:
+[37m      573 │ ...ipsChanged = !this.[32mbusinessMembershipsEqual[37m(row.businessMember...
+          ╵                       [32m~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'saveBusinessMembershipsDirect' does not exist on type 'UsuariosPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:603:19:
+[37m      603 │         await this.[32msaveBusinessMembershipsDirect[37m(row.uid, nextBus...
+          ╵                    [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'buildBusinessMemberships' does not exist on type 'UsuariosPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:529:32:
+[37m      529 │ ...sMemberships: this.[32mbuildBusinessMemberships[37m(this.newRoleId(), ...
+          ╵                       [32m~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'saveBusinessMembershipsDirect' does not exist on type 'UsuariosPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:535:17:
+[37m      535 │       await this.[32msaveBusinessMembershipsDirect[37m(result.uid, payloa...
+          ╵                  [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'buildBusinessMemberships' does not exist on type 'UsuariosPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:567:43:
+[37m      567 │       const nextBusinessMemberships = this.[32mbuildBusinessMemberships[37m(
+          ╵                                            [32m~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'businessAccessFromMemberships' does not exist on type 'UsuariosPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:571:13:
+[37m      571 │         this.[32mbusinessAccessFromMemberships[37m(draft.businessMembersh...
+          ╵              [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'businessMembershipsEqual' does not exist on type 'UsuariosPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:573:47:
+[37m      573 │ ...ipsChanged = !this.[32mbusinessMembershipsEqual[37m(row.businessMember...
+          ╵                       [32m~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'saveBusinessMembershipsDirect' does not exist on type 'UsuariosPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:603:19:
+[37m      603 │         await this.[32msaveBusinessMembershipsDirect[37m(row.uid, nextBus...
+          ╵                    [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'enabledBusinessIds' does not exist on type 'UsuariosPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:294:16:
+[37m      294 │     return this.[32menabledBusinessIds[37m(row.businessMemberships);
+          ╵                 [32m~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'ensureAtLeastOneBusiness' does not exist on type 'UsuariosPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:302:52:
+[37m      302 │ ...((current) => this.[32mensureAtLeastOneBusiness[37m({ ...current, [bus...
+          ╵                       [32m~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'businessAccessFromMemberships' does not exist on type 'UsuariosPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:308:24:
+[37m      308 │ ...urn Boolean(this.[32mbusinessAccessFromMemberships[37m(draft.businessM...
+          ╵                     [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'ensureAtLeastOneBusiness' does not exist on type 'UsuariosPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:314:30:
+[37m      314 │       const nextAccess = this.[32mensureAtLeastOneBusiness[37m({
+          ╵                               [32m~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'businessAccessFromMemberships' does not exist on type 'UsuariosPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:315:16:
+[37m      315 │         ...this.[32mbusinessAccessFromMemberships[37m(draft.businessMembe...
+          ╵                 [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'buildBusinessMemberships' does not exist on type 'UsuariosPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:320:34:
+[37m      320 │         businessMemberships: this.[32mbuildBusinessMemberships[37m(
+          ╵                                   [32m~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'buildBusinessMemberships' does not exist on type 'UsuariosPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:574:32:
+[37m      574 │ ...sMemberships: this.[32mbuildBusinessMemberships[37m(this.newRoleId(), ...
+          ╵                       [32m~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'saveBusinessMembershipsDirect' does not exist on type 'UsuariosPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:580:17:
+[37m      580 │       await this.[32msaveBusinessMembershipsDirect[37m(result.uid, payloa...
+          ╵                  [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'buildBusinessMemberships' does not exist on type 'UsuariosPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:612:43:
+[37m      612 │       const nextBusinessMemberships = this.[32mbuildBusinessMemberships[37m(
+          ╵                                            [32m~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'businessAccessFromMemberships' does not exist on type 'UsuariosPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:616:13:
+[37m      616 │         this.[32mbusinessAccessFromMemberships[37m(draft.businessMembersh...
+          ╵              [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'businessMembershipsEqual' does not exist on type 'UsuariosPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:618:47:
+[37m      618 │ ...ipsChanged = !this.[32mbusinessMembershipsEqual[37m(row.businessMember...
+          ╵                       [32m~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'saveBusinessMembershipsDirect' does not exist on type 'UsuariosPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/usuarios/usuarios.ts:648:19:
+[37m      648 │         await this.[32msaveBusinessMembershipsDirect[37m(row.uid, nextBus...
+          ╵                    [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2304: Cannot find name 'inject'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/manual-product-history.service.ts:35:26:
+[37m      35 │   private businessScope = [32minject[37m(BusinessScopeService);
+         ╵                           [32m~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2304: Cannot find name 'XLSX'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:156:23:
+[37m      156 │       const workbook = [32mXLSX[37m.read(data, { type: "array", cellDates...
+          ╵                        [32m~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2304: Cannot find name 'XLSX'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:160:21:
+[37m      160 │       const matrix = [32mXLSX[37m.utils.sheet_to_json<unknown[]>(sheet, {...
+          ╵                      [32m~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS7006: Parameter 'row' implicitly has an 'any' type.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:161:44:
+[37m      161 │ ...aderIndex = matrix.findIndex(([32mrow[37m) => this.nonEmptyCount(row) ...
+          ╵                                  [32m~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS7006: Parameter 'row' implicitly has an 'any' type.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:167:17:
+[37m      167 │         .filter(([32mrow[37m) => this.nonEmptyCount(row) > 0)
+          ╵                  [32m~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS7006: Parameter 'row' implicitly has an 'any' type.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:168:14:
+[37m      168 │         .map(([32mrow[37m) => this.rowToRecord(headers, row));
+          ╵               [32m~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'parseExcelFile' does not exist on type 'CatalogProductsImportComponent'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:152:32:
+[37m      152 │       const parsed = await this.[32mparseExcelFile[37m(file);
+          ╵                                 [32m~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'parseExcelFile' does not exist on type 'CatalogProductsImportComponent'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:152:32:
+[37m      152 │       const parsed = await this.[32mparseExcelFile[37m(file);
+          ╵                                 [32m~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'yieldToBrowser' does not exist on type 'CatalogProductsImportComponent'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:202:19:
+[37m      202 │         await this.[32myieldToBrowser[37m();
+          ╵                    [32m~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2367: This comparison appears to be unintentional because the types '"catalog" | "catalogo_excel" | "manuales_bm" | "manuales_catalogo"' and '"manuales"' have no overlap.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog.html:45:62:
+[37m      45 │ ...b" [class.active]="[32mactiveTab() === 'manuales'[37m" (click)="setTab(...
+         ╵                       [32m~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogPage.
+
+    src/app/features/catalog/catalog.ts:25:15:
+[37m      25 │   templateUrl: [32m"./catalog.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '"manuales"' is not assignable to parameter of type '"catalog" | "catalogo_excel" | "manuales_bm" | "manuales_catalogo"'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog.html:45:106:
+[37m      45 │ ...active]="activeTab() === 'manuales'" (click)="setTab([32m'manuales'[37m)">
+         ╵                                                         [32m~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogPage.
+
+    src/app/features/catalog/catalog.ts:25:15:
+[37m      25 │   templateUrl: [32m"./catalog.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2367: This comparison appears to be unintentional because the types '"catalog" | "catalogo_excel" | "manuales_bm" | "manuales_catalogo"' and '"manuales"' have no overlap.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog.html:248:7:
+[37m      248 │   @if ([32mactiveTab() === 'manuales'[37m) {
+          ╵        [32m~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogPage.
+
+    src/app/features/catalog/catalog.ts:25:15:
+[37m      25 │   templateUrl: [32m"./catalog.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2367: This comparison appears to be unintentional because the types '"catalog" | "catalogo_excel" | "manuales_bm" | "manuales_catalogo"' and '"manuales"' have no overlap.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog.html:45:62:
+[37m      45 │ ...b" [class.active]="[32mactiveTab() === 'manuales'[37m" (click)="setTab(...
+         ╵                       [32m~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogPage.
+
+    src/app/features/catalog/catalog.ts:25:15:
+[37m      25 │   templateUrl: [32m"./catalog.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '"manuales"' is not assignable to parameter of type '"catalog" | "catalogo_excel" | "manuales_bm" | "manuales_catalogo"'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog.html:45:106:
+[37m      45 │ ...active]="activeTab() === 'manuales'" (click)="setTab([32m'manuales'[37m)">
+         ╵                                                         [32m~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogPage.
+
+    src/app/features/catalog/catalog.ts:25:15:
+[37m      25 │   templateUrl: [32m"./catalog.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2367: This comparison appears to be unintentional because the types '"catalog" | "catalogo_excel" | "manuales_bm" | "manuales_catalogo"' and '"manuales"' have no overlap.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog.html:248:7:
+[37m      248 │   @if ([32mactiveTab() === 'manuales'[37m) {
+          ╵        [32m~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogPage.
+
+    src/app/features/catalog/catalog.ts:25:15:
+[37m      25 │   templateUrl: [32m"./catalog.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'orderBusinessId' does not exist on type 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:419:48:
+[37m      419 │     return this.manualHistory.search(term, this.[32morderBusinessId[37m());
+          ╵                                                 [32m~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'orderBusinessId' does not exist on type 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:419:48:
+[37m      419 │     return this.manualHistory.search(term, this.[32morderBusinessId[37m());
+          ╵                                                 [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'isCatalogoOrder' does not exist on type 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:534:13:
+[37m      534 │     if (this.[32misCatalogoOrder[37m()) return [];
+          ╵              [32m~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'pickCatalogProduct' does not exist on type 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:1852:182:
+[37m      1852 │ ...); beginProductPick();[32m pickCatalogProduc[37mt(p)" (touchstart)="$...
+           ╵                          [32m~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:193:15:
+[37m      193 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'pickCatalogProduct' does not exist on type 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:1852:264:
+[37m      1852 │ ...); beginProductPick();[32m pickCatalogProduc[37mt(p)" (click)="beginP...
+           ╵                          [32m~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:193:15:
+[37m      193 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'pickCatalogProduct' does not exist on type 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:1852:316:
+[37m      1852 │ ...Product(p)" (click)="beginProductPick();[32m pickCatalogProduc[37mt(p)">
+           ╵                                            [32m~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:193:15:
+[37m      193 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'currentActorName' does not exist on type 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:6524:24:
+[37m      6524 │         createdBy: this.[32mcurrentActorName[37m(),
+           ╵                         [32m~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2341: Property 'itemQuantity' is private and only accessible within class 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:1742:64:
+[37m      1742 │ ...="number" min="1" [max]="[32mitemQuantity[37m(returnItem)" [ngModel]=...
+           ╵                             [32m~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:193:15:
+[37m      193 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2341: Property 'itemQuantity' is private and only accessible within class 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:1742:64:
+[37m      1742 │ ...="number" min="1" [max]="[32mitemQuantity[37m(returnItem)" [ngModel]=...
+           ╵                             [32m~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:193:15:
+[37m      193 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2341: Property 'itemQuantity' is private and only accessible within class 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:1742:64:
+[37m      1742 │ ...="number" min="1" [max]="[32mitemQuantity[37m(returnItem)" [ngModel]=...
+           ╵                             [32m~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:193:15:
+[37m      193 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2341: Property 'itemQuantity' is private and only accessible within class 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:1742:64:
+[37m      1742 │ ...="number" min="1" [max]="[32mitemQuantity[37m(returnItem)" [ngModel]=...
+           ╵                             [32m~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:193:15:
+[37m      193 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2341: Property 'itemQuantity' is private and only accessible within class 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:1742:64:
+[37m      1742 │ ...="number" min="1" [max]="[32mitemQuantity[37m(returnItem)" [ngModel]=...
+           ╵                             [32m~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:193:15:
+[37m      193 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2341: Property 'itemQuantity' is private and only accessible within class 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:1742:64:
+[37m      1742 │ ...="number" min="1" [max]="[32mitemQuantity[37m(returnItem)" [ngModel]=...
+           ╵                             [32m~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:193:15:
+[37m      193 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2341: Property 'itemQuantity' is private and only accessible within class 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:1742:64:
+[37m      1742 │ ...="number" min="1" [max]="[32mitemQuantity[37m(returnItem)" [ngModel]=...
+           ╵                             [32m~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:193:15:
+[37m      193 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2341: Property 'itemQuantity' is private and only accessible within class 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:1742:64:
+[37m      1742 │ ...="number" min="1" [max]="[32mitemQuantity[37m(returnItem)" [ngModel]=...
+           ╵                             [32m~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:193:15:
+[37m      193 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2341: Property 'itemQuantity' is private and only accessible within class 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:1742:64:
+[37m      1742 │ ...="number" min="1" [max]="[32mitemQuantity[37m(returnItem)" [ngModel]=...
+           ╵                             [32m~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:193:15:
+[37m      193 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2341: Property 'itemQuantity' is private and only accessible within class 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:1742:64:
+[37m      1742 │ ...="number" min="1" [max]="[32mitemQuantity[37m(returnItem)" [ngModel]=...
+           ╵                             [32m~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:193:15:
+[37m      193 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:204:12:
+[37m      204 │       query([32m...parts[37m),
+          ╵             [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:207:8:
+[37m      207 │         [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵         [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2556: A spread argument must either have a tuple type or be passed to a rest parameter.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:253:39:
+[37m      253 │       const snap = await getDocs(query([32m...parts[37m));
+          ╵                                        [32m~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type 'QueryDocumentSnapshot<unknown, DocumentData>' is not assignable to type 'QueryDocumentSnapshot<DocumentData, DocumentData>'.
+  The types returned by 'data(...)' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'DocumentData'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:255:6:
+[37m      255 │       [32mthis.pageCursor[37m = snap.docs[snap.docs.length - 1] || null;
+          ╵       [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2341: Property 'itemQuantity' is private and only accessible within class 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:1742:64:
+[37m      1742 │ ...="number" min="1" [max]="[32mitemQuantity[37m(returnItem)" [ngModel]=...
+           ╵                             [32m~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:193:15:
+[37m      193 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2341: Property 'itemQuantity' is private and only accessible within class 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:1742:64:
+[37m      1742 │ ...="number" min="1" [max]="[32mitemQuantity[37m(returnItem)" [ngModel]=...
+           ╵                             [32m~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:193:15:
+[37m      193 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS4111: Property '__row_empty' comes from an index signature, so it must be accessed with ['__row_empty'].[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-import.worker.ts:103:12:
+[37m      103 │     if (raw.[32m__row_empty[37m === true || nonEmptyRecordCount(raw) === ...
+          ╵             [32m~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS4111: Property '__row_number' comes from an index signature, so it must be accessed with ['__row_number'].[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-import.worker.ts:111:33:
+[37m      111 │     const rowNumber = Number(raw.[32m__row_number[37m || index + 2);
+          ╵                                  [32m~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS4111: Property '__row_empty' comes from an index signature, so it must be accessed with ['__row_empty'].[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-import.worker.ts:112:25:
+[37m      112 │     const rowEmpty = raw.[32m__row_empty[37m === true || nonEmptyRecordCo...
+          ╵                          [32m~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS4111: Property '__row_empty' comes from an index signature, so it must be accessed with ['__row_empty'].[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-import.worker.ts:103:12:
+[37m      103 │     if (raw.[32m__row_empty[37m === true || nonEmptyRecordCount(raw) === ...
+          ╵             [32m~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS4111: Property '__row_number' comes from an index signature, so it must be accessed with ['__row_number'].[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-import.worker.ts:111:33:
+[37m      111 │     const rowNumber = Number(raw.[32m__row_number[37m || index + 2);
+          ╵                                  [32m~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS4111: Property '__row_empty' comes from an index signature, so it must be accessed with ['__row_empty'].[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-import.worker.ts:112:25:
+[37m      112 │     const rowEmpty = raw.[32m__row_empty[37m === true || nonEmptyRecordCo...
+          ╵                          [32m~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS4111: Property '__row_empty' comes from an index signature, so it must be accessed with ['__row_empty'].[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-import.worker.ts:103:12:
+[37m      103 │     if (raw.[32m__row_empty[37m === true || nonEmptyRecordCount(raw) === ...
+          ╵             [32m~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS4111: Property '__row_number' comes from an index signature, so it must be accessed with ['__row_number'].[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-import.worker.ts:111:33:
+[37m      111 │     const rowNumber = Number(raw.[32m__row_number[37m || index + 2);
+          ╵                                  [32m~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS4111: Property '__row_empty' comes from an index signature, so it must be accessed with ['__row_empty'].[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-import.worker.ts:112:25:
+[37m      112 │     const rowEmpty = raw.[32m__row_empty[37m === true || nonEmptyRecordCo...
+          ╵                          [32m~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS4111: Property '__row_empty' comes from an index signature, so it must be accessed with ['__row_empty'].[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-import.worker.ts:103:12:
+[37m      103 │     if (raw.[32m__row_empty[37m === true || nonEmptyRecordCount(raw) === ...
+          ╵             [32m~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS4111: Property '__row_number' comes from an index signature, so it must be accessed with ['__row_number'].[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-import.worker.ts:111:33:
+[37m      111 │     const rowNumber = Number(raw.[32m__row_number[37m || index + 2);
+          ╵                                  [32m~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS4111: Property '__row_empty' comes from an index signature, so it must be accessed with ['__row_empty'].[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-import.worker.ts:112:25:
+[37m      112 │     const rowEmpty = raw.[32m__row_empty[37m === true || nonEmptyRecordCo...
+          ╵                          [32m~~~~~~~~~~~[0m
+
+[39m[22m

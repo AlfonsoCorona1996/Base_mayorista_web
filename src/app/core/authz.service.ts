@@ -57,6 +57,7 @@ export class AuthzService {
       capabilities: { ...snapshot.capabilities },
       sectionOverrides: { ...snapshot.sectionOverrides },
       capabilityOverrides: { ...snapshot.capabilityOverrides },
+      businessMemberships: { ...snapshot.businessMemberships },
     };
   });
 

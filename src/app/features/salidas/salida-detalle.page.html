@@ -245,18 +245,27 @@
         </div>
       } @else {
         <ul class="sd-stops-list">
-          @for (stop of stops(); track stop.order_id) {
+          @for (stop of stops(); track stop.stop_id) {
             <li class="sd-stop-card" [class.sd-stop-delivered]="stop.stop_status === 'delivered'" [class.sd-stop-failed]="stop.stop_status === 'failed'">
               <div class="sd-stop-top">
                 <div class="sd-stop-info">
                   <p class="stop-name">{{ stop.customer_name }}</p>
                   <p class="stop-sub">
-                    Pedido {{ stop.order_number }}
+                    {{ stop.order_ids.length > 1 ? stop.order_ids.length + ' pedidos' : 'Pedido ' + stop.order_number }}
                     · {{ stop.packages_count }} paquete{{ stop.packages_count !== 1 ? 's' : '' }}
                     @if (stop.balance_due > 0) {
                       · <strong>{{ money(stop.balance_due) }}</strong> por cobrar
                     }
                   </p>
+                  @if (businessSummaries(stop).length > 0) {
+                    <div class="stop-business-list">
+                      @for (summary of businessSummaries(stop); track summary.business_id) {
+                        <span class="stop-business-chip" [ngClass]="businessSummaryClass(summary)">
+                          {{ summary.label }} · {{ summary.packages_count }} paq · {{ money(summary.balance_due) }}
+                        </span>
+                      }
+                    </div>
+                  }
                 </div>
                 <span class="sd-stop-badge" [ngClass]="stopStatusClass(stop.stop_status)">
                   {{ stopStatusLabel(stop.stop_status) }}
@@ -269,8 +278,8 @@
                   <button
                     type="button"
                     class="stop-btn stop-btn--green"
-                    [disabled]="markingStopId() === stop.order_id"
-                    (click)="markStop(stop.order_id, 'delivered')"
+                    [disabled]="markingStopId() === stop.stop_id"
+                    (click)="markStop(stop.stop_id, 'delivered')"
                   >
                     <span class="material-symbols-rounded">check</span>
                     Entregado
@@ -278,8 +287,8 @@
                   <button
                     type="button"
                     class="stop-btn stop-btn--amber"
-                    [disabled]="markingStopId() === stop.order_id"
-                    (click)="markStop(stop.order_id, 'partial')"
+                    [disabled]="markingStopId() === stop.stop_id"
+                    (click)="markStop(stop.stop_id, 'partial')"
                   >
                     <span class="material-symbols-rounded">rule</span>
                     Parcial
@@ -287,8 +296,8 @@
                   <button
                     type="button"
                     class="stop-btn stop-btn--red"
-                    [disabled]="markingStopId() === stop.order_id"
-                    (click)="markStop(stop.order_id, 'failed')"
+                    [disabled]="markingStopId() === stop.stop_id"
+                    (click)="markStop(stop.stop_id, 'failed')"
                   >
                     <span class="material-symbols-rounded">close</span>
                     No entregado
@@ -299,8 +308,8 @@
                 <button
                   type="button"
                   class="stop-btn-undo"
-                  [disabled]="markingStopId() === stop.order_id"
-                  (click)="markStop(stop.order_id, 'pending')"
+                  [disabled]="markingStopId() === stop.stop_id"
+                  (click)="markStop(stop.stop_id, 'pending')"
                 >
                   <span class="material-symbols-rounded">undo</span>
                   Deshacer

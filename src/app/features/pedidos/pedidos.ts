@@ -10,6 +10,8 @@ import { OrdersService, Order, OrderStatus, IncidentSeverity } from "../../core/
 import { RoutesService } from "../../core/routes.service";
 import { ActionChecklist, PrimaryAction, getActionChecklist, getPrimaryAction } from "./order-primary-action.mapper";
 import { SalesNoteRenderRow, SalesNoteRenderService } from "./sales-note-render.service";
+import { BusinessScopeService } from "../../core/business-scope.service";
+import { BusinessId } from "../../core/rbac.constants";
 
 type IntentFilter =
   | "hoy"
@@ -76,6 +78,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   private customers = inject(CustomersService);
   private routes = inject(RoutesService);
   private salesNoteRender = inject(SalesNoteRenderService);
+  businessScope = inject(BusinessScopeService);
   private router = inject(Router);
   private destroyRef = inject(DestroyRef);
   private readonly uiStateStorageKey = "pedidos.ui-state.v1";
@@ -86,6 +89,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   routeFilter = signal<string>("todos");
   creating = signal(false);
   newCustomerId = signal<string>("");
+  newBusinessId = signal<BusinessId>("bm");
   customerQuery = signal<string>("");
   showCustomerList = signal(false);
   newNotes = signal<string>("");
@@ -187,6 +191,17 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
         this.tableMenuPosition.set(null);
       }
     });
+    effect(
+      () => {
+        const writeBusiness = this.businessScope.writeBusinessId();
+        const scope = this.businessScope.scope();
+        const current = this.newBusinessId();
+        if (scope !== "both" || !this.businessScope.canAccessBusiness(current)) {
+          this.newBusinessId.set(writeBusiness);
+        }
+      },
+      { allowSignalWrites: true },
+    );
   }
 
   list = computed(() => this.orders.list());
@@ -1260,6 +1275,13 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   bulkSelectedCount = computed(() => this.bulkReadyOrders().filter((order) => this.bulkSelected()[order.order_id]).length);
 
   routeOptions = computed(() => [{ id: "todos", name: "Todas las rutas" }, ...this.routes.routes().map((r) => ({ id: r.route_id, name: r.name }))]);
+  orderBusinessOptions = computed(() =>
+    this.businessScope.availableBusinessIds().map((id) => ({
+      id,
+      label: this.businessScope.businessShortLabel(id),
+    })),
+  );
+  showOrderBusinessPicker = computed(() => this.businessScope.scope() === "both" && this.orderBusinessOptions().length > 1);
   customerOptions = computed(() => this.customers.getActive());
   customerSuggestions = computed(() => {
     const term = this.normalizeSearchTerm(this.customerQuery());
@@ -1454,7 +1476,12 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
 
     this.creating.set(true);
     try {
-      const orderId = await this.orders.createDraft(customer.customer_id, this.inferredRouteId() || null, this.newNotes());
+      const orderId = await this.orders.createDraft(
+        customer.customer_id,
+        this.inferredRouteId() || null,
+        this.newNotes(),
+        this.newBusinessId(),
+      );
       this.search.set("");
       this.intentFilter.set("por_confirmar");
       this.routeFilter.set("todos");
@@ -1465,6 +1492,14 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     } finally {
       this.creating.set(false);
     }
+  }
+
+  orderBusinessLabel(order: Order): string {
+    return this.businessScope.businessShortLabel(order.business_id || "bm");
+  }
+
+  orderBusinessClass(order: Order): string {
+    return this.businessScope.businessClass(order.business_id);
   }
 
   intentOptions = [

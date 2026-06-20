@@ -41,6 +41,49 @@ service cloud.firestore {
         && userDoc().data.capabilities[capabilityKey] == true;
     }
 
+    function hasBusiness(businessId) {
+      return isActiveUser()
+        && (
+          isSuperAdmin()
+          || (
+            userDoc().data.businessMemberships != null
+            && userDoc().data.businessMemberships[businessId] != null
+            && userDoc().data.businessMemberships[businessId].enabled == true
+          )
+        );
+    }
+
+    function resourceBusinessId() {
+      return resource.data.business_id == null ? "bm" : resource.data.business_id;
+    }
+
+    function incomingBusinessId() {
+      return request.resource.data.business_id == null ? "bm" : request.resource.data.business_id;
+    }
+
+    function canReadBusinessResource() {
+      return hasBusiness(resourceBusinessId());
+    }
+
+    function canCreateBusinessResource() {
+      return hasBusiness(incomingBusinessId());
+    }
+
+    function canUpdateBusinessResource() {
+      return hasBusiness(resourceBusinessId())
+        && hasBusiness(incomingBusinessId())
+        && incomingBusinessId() == resourceBusinessId();
+    }
+
+    function orderBusinessId(orderId) {
+      let orderDoc = get(/databases/$(database)/documents/orders/$(orderId));
+      return orderDoc.data.business_id == null ? "bm" : orderDoc.data.business_id;
+    }
+
+    function canAccessOrder(orderId) {
+      return isActiveUser() && hasBusiness(orderBusinessId(orderId));
+    }
+
     function changedKeys() {
       return request.resource.data.diff(resource.data).affectedKeys();
     }
@@ -79,6 +122,30 @@ service cloud.firestore {
       allow write: if isSuperAdmin();
     }
 
+    match /customers/{customerId} {
+      allow read: if isActiveUser();
+      allow create, update: if isAdmin() || isOperativo();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /routes/{routeId} {
+      allow read: if isActiveUser();
+      allow create, update: if isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /localities/{localityId} {
+      allow read: if isActiveUser();
+      allow create, update: if isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /categories/{categoryId} {
+      allow read: if isActiveUser();
+      allow create, update: if isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
     match /route_runs/{runId} {
       allow read: if isActiveUser();
       allow create: if isAdmin();
@@ -92,14 +159,15 @@ service cloud.firestore {
     }
 
     match /orders/{orderId} {
-      allow read: if isActiveUser();
-      allow create: if isAdmin() || isOperativo();
+      allow read: if canReadBusinessResource();
+      allow create: if (isAdmin() || isOperativo()) && canCreateBusinessResource();
 
       // Operativo can request dispatch and mark packing done.
       // Admin/Super admin can also accept/reject request and assign to route_run.
-      allow update: if isAdmin()
+      allow update: if (isAdmin() && canUpdateBusinessResource())
         || (
           isOperativo()
+          && canUpdateBusinessResource()
           && (
             (
               onlyChanges(["dispatch_request", "updated_at"])
@@ -116,37 +184,93 @@ service cloud.firestore {
       allow delete: if isSuperAdmin();
 
       match /events/{eventId} {
-        allow read: if isActiveUser();
-        allow create: if isAdmin() || isOperativo();
+        allow read: if canAccessOrder(orderId);
+        allow create: if (isAdmin() || isOperativo()) && canAccessOrder(orderId);
         allow update, delete: if isSuperAdmin();
       }
     }
 
     match /finance_accounts/{accountId} {
-      allow read: if hasSection("sections.administracion") || hasCapability("cap.finance.accounts.view");
-      allow create: if hasCapability("cap.finance.accounts.create");
-      allow update: if hasCapability("cap.finance.accounts.edit");
-      allow delete: if hasCapability("cap.finance.accounts.delete");
+      allow read: if canReadBusinessResource() && (hasSection("sections.administracion") || hasCapability("cap.finance.accounts.view"));
+      allow create: if canCreateBusinessResource() && hasCapability("cap.finance.accounts.create");
+      allow update: if canUpdateBusinessResource() && hasCapability("cap.finance.accounts.edit");
+      allow delete: if canReadBusinessResource() && hasCapability("cap.finance.accounts.delete");
     }
 
     match /finance_expenses/{expenseId} {
-      allow read: if hasSection("sections.administracion") || hasCapability("cap.finance.movements.view");
-      allow create: if hasCapability("cap.finance.movements.create");
-      allow update: if hasCapability("cap.finance.movements.edit");
-      allow delete: if hasCapability("cap.finance.movements.delete");
+      allow read: if canReadBusinessResource() && (hasSection("sections.administracion") || hasCapability("cap.finance.movements.view"));
+      allow create: if canCreateBusinessResource() && hasCapability("cap.finance.movements.create");
+      allow update: if canUpdateBusinessResource() && hasCapability("cap.finance.movements.edit");
+      allow delete: if canReadBusinessResource() && hasCapability("cap.finance.movements.delete");
     }
 
     match /finance_withdrawals/{withdrawalId} {
-      allow read: if hasSection("sections.administracion") || hasCapability("cap.finance.movements.view");
-      allow create: if hasCapability("cap.finance.movements.create");
-      allow update: if hasCapability("cap.finance.movements.edit");
-      allow delete: if hasCapability("cap.finance.movements.delete");
+      allow read: if canReadBusinessResource() && (hasSection("sections.administracion") || hasCapability("cap.finance.movements.view"));
+      allow create: if canCreateBusinessResource() && hasCapability("cap.finance.movements.create");
+      allow update: if canUpdateBusinessResource() && hasCapability("cap.finance.movements.edit");
+      allow delete: if canReadBusinessResource() && hasCapability("cap.finance.movements.delete");
     }
 
     match /finance_cuts/{cutId} {
-      allow read: if hasSection("sections.administracion") || hasCapability("cap.finance.reports.view");
-      allow create: if hasCapability("cap.finance.reports.view");
+      allow read: if canReadBusinessResource() && (hasSection("sections.administracion") || hasCapability("cap.finance.reports.view"));
+      allow create: if canCreateBusinessResource() && hasCapability("cap.finance.reports.view");
       allow update, delete: if isSuperAdmin();
+    }
+
+    match /inventory_items/{itemId} {
+      allow read: if canReadBusinessResource() && (hasSection("sections.inventario") || hasCapability("cap.inventory.view"));
+      allow create: if canCreateBusinessResource() && (hasCapability("cap.inventory.adjust") || hasCapability("cap.inventory.receive"));
+      allow update: if canUpdateBusinessResource() && (hasCapability("cap.inventory.adjust") || hasCapability("cap.inventory.receive") || hasCapability("cap.inventory.reserve") || hasCapability("cap.inventory.release"));
+      allow delete: if canReadBusinessResource() && (isSuperAdmin() || hasCapability("cap.inventory.override"));
+    }
+
+    match /suppliers/{supplierId} {
+      allow read: if canReadBusinessResource() && hasSection("sections.proveedores");
+      allow create: if canCreateBusinessResource() && isAdmin();
+      allow update: if canUpdateBusinessResource() && isAdmin();
+      allow delete: if canReadBusinessResource() && isSuperAdmin();
+    }
+
+    match /supplier_operations/{operationId} {
+      allow read: if canReadBusinessResource() && (hasSection("sections.proveedores") || hasCapability("cap.suppliers.ops.view"));
+      allow create: if canCreateBusinessResource() && (isAdmin() || isOperativo());
+      allow update: if canUpdateBusinessResource() && (hasCapability("cap.suppliers.ops.advance_state") || hasCapability("cap.suppliers.ops.partial_process"));
+      allow delete: if canReadBusinessResource() && (isSuperAdmin() || hasCapability("cap.suppliers.ops.override"));
+    }
+
+    match /normalized_listings/{listingId} {
+      allow read: if canReadBusinessResource() && (hasSection("sections.catalogo") || hasSection("sections.validacion"));
+      allow create: if canCreateBusinessResource() && (isAdmin() || isOperativo());
+      allow update: if canUpdateBusinessResource() && (hasCapability("cap.validation.confirm_stock") || hasCapability("cap.validation.override_stock") || hasSection("sections.catalogo"));
+      allow delete: if canReadBusinessResource() && isSuperAdmin();
+    }
+
+    match /catalog_products/{productId} {
+      allow read: if canReadBusinessResource() && hasSection("sections.catalogo");
+      allow create: if canCreateBusinessResource() && hasSection("sections.catalogo");
+      allow update: if canUpdateBusinessResource() && hasSection("sections.catalogo");
+      allow delete: if canReadBusinessResource() && isSuperAdmin();
+    }
+
+    match /manual_product_suggestions/{entryId} {
+      allow read: if canReadBusinessResource() && hasSection("sections.catalogo");
+      allow create: if canCreateBusinessResource() && (isAdmin() || isOperativo());
+      allow update: if canUpdateBusinessResource() && (isAdmin() || isOperativo());
+      allow delete: if canReadBusinessResource() && isAdmin();
+    }
+
+    match /returns/{returnId} {
+      allow read: if canReadBusinessResource() && (hasCapability("cap.returns.view") || hasSection("sections.inventario"));
+      allow create: if canCreateBusinessResource() && hasCapability("cap.returns.create");
+      allow update: if canUpdateBusinessResource() && (hasCapability("cap.returns.restock") || hasCapability("cap.returns.approve"));
+      allow delete: if canReadBusinessResource() && isSuperAdmin();
+    }
+
+    match /catalog_import_jobs/{jobId} {
+      allow read: if canReadBusinessResource() && hasSection("sections.catalogo");
+      allow create: if canCreateBusinessResource() && hasSection("sections.catalogo");
+      allow update: if canUpdateBusinessResource() && hasSection("sections.catalogo");
+      allow delete: if canReadBusinessResource() && isSuperAdmin();
     }
 
     // TODO: migrate these checks to full capabilities-based rules using custom claims

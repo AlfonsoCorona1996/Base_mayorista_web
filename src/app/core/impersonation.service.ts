@@ -22,6 +22,7 @@ export type ImpersonationSnapshot = {
   capabilities: UserDoc["capabilities"];
   sectionOverrides: SectionOverridesMap;
   capabilityOverrides: CapabilityOverridesMap;
+  businessMemberships: UserDoc["businessMemberships"];
 };
 
 const STORAGE_KEY = "bm.users.impersonation";
@@ -47,6 +48,7 @@ export class ImpersonationService {
       capabilities: { ...user.capabilities },
       sectionOverrides: { ...user.sectionOverrides },
       capabilityOverrides: { ...user.capabilityOverrides },
+      businessMemberships: { ...user.businessMemberships },
     };
     this.snapshotState.set(snapshot);
     this.persist(snapshot);
@@ -92,6 +94,10 @@ export class ImpersonationService {
         sectionOverrides: typeof parsed.sectionOverrides === "object" && parsed.sectionOverrides ? parsed.sectionOverrides : {},
         capabilityOverrides:
           typeof parsed.capabilityOverrides === "object" && parsed.capabilityOverrides ? parsed.capabilityOverrides : {},
+        businessMemberships:
+          typeof parsed.businessMemberships === "object" && parsed.businessMemberships
+            ? (parsed.businessMemberships as UserDoc["businessMemberships"])
+            : {},
       };
     } catch {
       return null;

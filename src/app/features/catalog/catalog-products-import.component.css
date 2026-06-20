@@ -1,0 +1,407 @@
+@import url("https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded");
+
+:host {
+  display: block;
+}
+
+.catalog-import-page {
+  display: grid;
+  gap: 14px;
+}
+
+.material-symbols-rounded {
+  font-family: "Material Symbols Rounded";
+  font-size: 19px;
+  line-height: 1;
+}
+
+.import-head,
+.import-panel,
+.products-panel,
+.notice {
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+}
+
+.import-head {
+  padding: 16px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.kicker {
+  margin: 0 0 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #047857;
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}
+
+.import-head h2 {
+  color: #102033;
+  font-size: 1.25rem;
+}
+
+.import-head p,
+.import-panel p,
+.products-head p,
+.meta,
+.empty {
+  color: #64748b;
+  font-size: 0.84rem;
+}
+
+.head-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.btn {
+  border: 1px solid transparent;
+  border-radius: 11px;
+  min-height: 38px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.btn.is-disabled {
+  pointer-events: none;
+  opacity: 0.65;
+}
+
+.btn-primary {
+  background: #047857;
+  color: #ffffff;
+}
+
+.btn-ghost {
+  background: #f8fafc;
+  border-color: #d8e3ef;
+  color: #25415f;
+}
+
+.notice {
+  padding: 11px 13px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.notice-error {
+  color: #b4233c;
+  background: #fff1f2;
+  border-color: #fecdd3;
+}
+
+.notice-ok {
+  color: #047857;
+  background: #ecfdf5;
+  border-color: #bbf7d0;
+}
+
+.job-panel {
+  border: 1px solid #bbf7d0;
+  border-radius: 14px;
+  background: #f0fdf4;
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.job-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #065f46;
+  font-size: 0.84rem;
+}
+
+.job-head strong {
+  flex: 1;
+}
+
+.job-bar {
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #dcfce7;
+}
+
+.job-bar span {
+  display: block;
+  height: 100%;
+  background: #10b981;
+  transition: width 0.24s ease;
+}
+
+.job-panel p {
+  margin: 0;
+  color: #047857;
+  font-size: 0.78rem;
+}
+
+.import-panel,
+.products-panel {
+  padding: 14px;
+  display: grid;
+  gap: 14px;
+}
+
+.import-panel-head,
+.products-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.stats-grid article {
+  border: 1px solid #d8e3ef;
+  border-radius: 12px;
+  padding: 10px;
+  background: #f8fafc;
+}
+
+.stats-grid span {
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.stats-grid strong {
+  margin-top: 4px;
+  display: block;
+  color: #102033;
+  font-size: 1.15rem;
+}
+
+.mapping-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.field {
+  display: grid;
+  gap: 5px;
+}
+
+.field > span,
+.field > label {
+  color: #334155;
+  font-size: 0.77rem;
+  font-weight: 750;
+}
+
+.input {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid #cbd8e6;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 0 10px;
+  color: #102033;
+  font: inherit;
+  font-size: 0.84rem;
+}
+
+.input:focus {
+  outline: none;
+  border-color: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.14);
+}
+
+.name-field {
+  grid-column: span 2;
+}
+
+.name-columns {
+  max-height: 128px;
+  overflow: auto;
+  border: 1px solid #d8e3ef;
+  border-radius: 10px;
+  padding: 8px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.name-columns label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: #334155;
+  font-size: 0.78rem;
+}
+
+.name-columns span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preview-wrap {
+  display: grid;
+  gap: 8px;
+}
+
+.preview-table-scroll {
+  overflow-x: auto;
+  border: 1px solid #d8e3ef;
+  border-radius: 12px;
+}
+
+.preview-table {
+  width: 100%;
+  min-width: 780px;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+
+.catalog-products-table {
+  min-width: 1020px;
+}
+
+.rejected-table {
+  min-width: 640px;
+}
+
+.preview-table th,
+.preview-table td {
+  padding: 9px 10px;
+  border-bottom: 1px solid #edf2f7;
+  text-align: left;
+}
+
+.preview-table th {
+  background: #f8fafc;
+  color: #475569;
+  font-weight: 800;
+}
+
+.preview-table tr.invalid td {
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.search-field {
+  width: min(420px, 100%);
+  position: relative;
+}
+
+.search-field .material-symbols-rounded {
+  position: absolute;
+  left: 10px;
+  bottom: 9px;
+  color: #64748b;
+}
+
+.search-field .input {
+  padding-left: 36px;
+}
+
+.catalog-products-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 10px;
+}
+
+.catalog-product-card {
+  border: 1px solid #d8e3ef;
+  border-left: 4px solid #10b981;
+  border-radius: 12px;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+  background: #ffffff;
+}
+
+.sku {
+  color: #047857;
+  font-size: 0.72rem;
+  font-weight: 850;
+}
+
+.catalog-product-card h4 {
+  margin-top: 3px;
+  color: #102033;
+  font-size: 0.94rem;
+}
+
+.product-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.product-tags span {
+  border-radius: 999px;
+  background: #ecfdf5;
+  color: #047857;
+  padding: 3px 8px;
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.product-prices {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: #64748b;
+  font-size: 0.78rem;
+}
+
+.product-prices strong {
+  color: #102033;
+}
+
+.more-btn {
+  justify-self: center;
+}
+
+@media (max-width: 760px) {
+  .stats-grid,
+  .mapping-grid,
+  .name-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .name-field {
+    grid-column: auto;
+  }
+}

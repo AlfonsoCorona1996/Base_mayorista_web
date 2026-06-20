@@ -2,7 +2,14 @@ import { Component, computed, inject, signal, ChangeDetectionStrategy } from "@a
 import { DatePipe, NgClass } from "@angular/common";
 import { ActivatedRoute, Router, RouterLink } from "@angular/router";
 import { AuthzService } from "../../core/authz.service";
-import { RouteRunDoc, RouteRunStopDoc, RouteRunsService, StopStatus } from "../../services/route-runs.service";
+import {
+  RouteRunDoc,
+  RouteRunStopBusinessSummary,
+  RouteRunStopDoc,
+  RouteRunsService,
+  StopStatus,
+} from "../../services/route-runs.service";
+import { BusinessId } from "../../core/rbac.constants";
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -179,15 +186,15 @@ export default class SalidaDetallePage {
     this.toast.set("Direcciones copiadas.");
   }
 
-  async markStop(orderId: string, status: StopStatus): Promise<void> {
+  async markStop(stopId: string, status: StopStatus): Promise<void> {
     const run = this.run();
     if (!run || this.markingStopId()) return;
-    this.markingStopId.set(orderId);
+    this.markingStopId.set(stopId);
     this.error.set(null);
     try {
-      await this.routeRuns.markStop(run.runId, orderId, status);
+      await this.routeRuns.markStop(run.runId, stopId, status);
       this.stops.update(rows => rows.map(s =>
-        s.order_id === orderId ? { ...s, stop_status: status } : s
+        s.stop_id === stopId ? { ...s, stop_status: status } : s
       ));
     } catch (err: any) {
       this.error.set(err?.message || "No se pudo actualizar la parada.");
@@ -206,6 +213,17 @@ export default class SalidaDetallePage {
 
   money(value: number): string {
     return new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format(value || 0);
+  }
+
+  businessSummaries(stop: RouteRunStopDoc): RouteRunStopBusinessSummary[] {
+    const summaries = stop.business_summaries || {};
+    return (["bm", "catalogo"] as BusinessId[])
+      .map((id) => summaries[id])
+      .filter((summary): summary is RouteRunStopBusinessSummary => Boolean(summary));
+  }
+
+  businessSummaryClass(summary: RouteRunStopBusinessSummary): string {
+    return summary.business_id === "catalogo" ? "business-catalogo" : "business-bm";
   }
 
   statusLabel(status: string): string {

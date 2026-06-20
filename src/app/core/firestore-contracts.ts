@@ -167,6 +167,7 @@ export interface Review {
 export interface NormalizedListingDoc {
   schema_version: "normalized_v1" | "normalized_v1.1" | "normalized_v3.0";
   normalized_id: string;
+  business_id?: "bm" | "catalogo";
   raw_post_id: string;
   supplier_id: string | null;
   
@@ -188,6 +189,7 @@ export interface NormalizedListingDoc {
 export interface NormalizedListingDocV3 {
   schema_version: "normalized_v3.0";
   normalized_id: string;
+  business_id?: "bm" | "catalogo";
   raw_post_id: string;
   supplier_id: string | null;
   cover_images: string[];

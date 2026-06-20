@@ -7,6 +7,9 @@ import { AccessService, AppPermission } from "../../core/access.service";
 import { AuditService } from "../../core/audit.service";
 import { ImpersonationService } from "../../core/impersonation.service";
 import { AuthzService } from "../../core/authz.service";
+import { BusinessScopeService } from "../../core/business-scope.service";
+import { BusinessScope } from "../../core/rbac.constants";
+import { CatalogImportJobsService } from "../../core/catalog-import-jobs.service";
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -25,6 +28,8 @@ export default class MainLayoutPage {
   access = inject(AccessService);
   private audit = inject(AuditService);
   private authz = inject(AuthzService);
+  businessScope = inject(BusinessScopeService);
+  importJobs = inject(CatalogImportJobsService);
   private impersonation = inject(ImpersonationService);
   private destroyRef = inject(DestroyRef);
 
@@ -33,7 +38,7 @@ export default class MainLayoutPage {
 
   ngOnInit() {
     this.syncMenuForViewport();
-    this.access.refreshProfile().catch(() => null);
+    this.access.refreshProfile().finally(() => this.importJobs.watch()).catch(() => null);
     this.router.events
       .pipe(
         filter((event) => event instanceof NavigationEnd),
@@ -102,6 +107,10 @@ export default class MainLayoutPage {
     if (role === "operativo") return "Operativo";
     if (role === "repartidor") return "Repartidor";
     return "Administrador";
+  }
+
+  setBusinessScope(scope: BusinessScope): void {
+    this.businessScope.setScope(scope);
   }
 
   private syncMenuForViewport() {

@@ -18,6 +18,10 @@ import { InventoryService, InventoryItem } from "../../core/inventory.service";
 import { NormalizedListingsService, NormalizedListingDoc } from "../../core/normalized-listings.service";
 import { SupplierOperationsService } from "../../core/supplier-operations.service";
 import { ManualProductHistoryService, ManualProductEntry } from "../../core/manual-product-history.service";
+import { CatalogProduct, CatalogProductsService } from "../../core/catalog-products.service";
+import { ReturnsService, ReturnDisposition } from "../../core/returns.service";
+import { BusinessScopeService } from "../../core/business-scope.service";
+import { BusinessId, normalizeBusinessId } from "../../core/rbac.constants";
 import { UserAdminApiService } from "../../services/user-admin-api.service";
 import { FIRESTORE, STORAGE } from "../../core/firebase.providers";
 import { ActivityLogComponent } from "../../shared/components/activity-log/activity-log.component";
@@ -199,8 +203,11 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   private localities = inject(LocalitiesService);
   private inventory = inject(InventoryService);
   private catalog = inject(NormalizedListingsService);
+  private catalogProducts = inject(CatalogProductsService);
   private supplierOperations = inject(SupplierOperationsService);
   readonly manualHistory = inject(ManualProductHistoryService);
+  private returnsService = inject(ReturnsService);
+  private businessScope = inject(BusinessScopeService);
   private authz = inject(AuthzService);
   private auth = inject(AuthService);
   private salesNoteRender = inject(SalesNoteRenderService);
@@ -409,7 +416,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     if (!this.isManualSource()) return [];
     const term = this.newItemTitle().trim();
     if (term.length < 2) return [];
-    return this.manualHistory.search(term);
+    return this.manualHistory.search(term, this.orderBusinessId());
   });
   newItemVariant = signal("");
   newItemColor = signal("");
@@ -429,6 +436,9 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   supplierDiscountLabel = signal<string | null>(null);
   selectedPreview = signal<{ title: string; variant: string; color: string; image: string | null; source: string } | null>(null);
   selectedCatalogDoc = signal<NormalizedListingDoc | null>(null);
+  catalogProductSuggestions = signal<CatalogProduct[]>([]);
+  catalogProductSearching = signal(false);
+  private catalogProductSearchTimer: ReturnType<typeof setTimeout> | null = null;
   readonly isManualSource = computed(() => this.newItemSource() === "manual");
   readonly isConvertMode = computed(() => this.addItemMode() === "convert");
   readonly isEditMode = computed(() => this.addItemMode() === "edit");
@@ -445,6 +455,12 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   inventoryLoaded = signal(false);
   catalogLoaded = signal(false);
   showProductList = signal(false);
+  returnModalOpen = signal(false);
+  returnTargetItem = signal<OrderItem | null>(null);
+  returnQty = signal(1);
+  returnDisposition = signal<ReturnDisposition>("available");
+  returnReason = signal("");
+  returnSaving = signal(false);
   private actionToastTimer: ReturnType<typeof setTimeout> | null = null;
   private waNoteTimer: ReturnType<typeof setTimeout> | null = null;
   private waProgressTimer: ReturnType<typeof setTimeout> | null = null;
@@ -515,6 +531,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   });
   catalogSuggestions = computed(() => {
     if (this.newItemSource() !== "catalogo") return [];
+    if (this.isCatalogoOrder()) return [];
     const terms = this.buildCatalogSearchTerms(this.newItemSearch());
     if (terms.length === 0) return [];
     const matches: { doc: NormalizedListingDoc; variant: any; color: string; image: string | null }[] = [];
@@ -810,17 +827,15 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       this.inventory.loadFromFirestore().catch(() => null),
       this.supplierOperations.loadFromFirestore().catch(() => null),
       this.loadAssigneeOptions().catch(() => null),
-      this.catalog.listValidated(120).then((page) => {
-        this.catalogRows.set(page.docs);
-        this.catalogLoaded.set(true);
-      }).catch(() => null),
-      this.manualHistory.load().catch(() => null),
     ]).then(() => {
       this.inventoryLoaded.set(true);
-      if (!this.orders.getById(this.orderId())) {
+      const currentOrder = this.orders.getById(this.orderId());
+      if (!currentOrder) {
         this.error.set("Pedido no encontrado");
         return;
       }
+      this.businessScope.lockScope(currentOrder.business_id, `Pedido ${this.businessScope.businessShortLabel(currentOrder.business_id)}`);
+      this.manualHistory.load(currentOrder.business_id).catch(() => null);
       this.loadIncidents();
       this.refreshEvents();
     }).catch(() => {
@@ -858,6 +873,11 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       clearTimeout(this.waProgressTimer);
       this.waProgressTimer = null;
     }
+    if (this.catalogProductSearchTimer) {
+      clearTimeout(this.catalogProductSearchTimer);
+      this.catalogProductSearchTimer = null;
+    }
+    this.businessScope.unlockScope();
   }
 
   async loadIncidents() {
@@ -1102,6 +1122,18 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
   canCap(key: string): boolean {
     return this.authz.canCap(key);
+  }
+
+  orderBusinessId(order: Order | null = this.order()): BusinessId {
+    return normalizeBusinessId(order?.business_id || "bm");
+  }
+
+  isCatalogoOrder(order: Order | null = this.order()): boolean {
+    return this.orderBusinessId(order) === "catalogo";
+  }
+
+  orderBusinessLabel(order: Order | null = this.order()): string {
+    return this.businessScope.businessShortLabel(this.orderBusinessId(order));
   }
 
   canRequestDispatchAction(): boolean {
@@ -2114,7 +2146,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     return Math.max(0, this.itemQuantity(item) - this.confirmedQty(item));
   }
 
-  private itemQuantity(item: OrderItem): number {
+  itemQuantity(item: OrderItem): number {
     const qty = Number(item.quantity);
     if (!Number.isFinite(qty)) return 0;
     return Math.max(0, Math.trunc(qty));
@@ -3242,17 +3274,27 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     if (this.addItemSourcesRefreshPromise) return this.addItemSourcesRefreshPromise;
 
     this.addItemSourcesRefreshPromise = (async () => {
-      await Promise.allSettled([
+      const orderBusiness = this.orderBusinessId();
+      const tasks: Promise<unknown>[] = [
         this.inventory
           .loadFromFirestore()
           .then(() => this.inventoryLoaded.set(true)),
-        this.catalog
-          .listValidated(120)
-          .then((page) => {
-            this.catalogRows.set(page.docs);
-            this.catalogLoaded.set(true);
-          }),
-      ]);
+        this.manualHistory.load(orderBusiness),
+      ];
+      if (orderBusiness === "bm") {
+        tasks.push(
+          this.catalog
+            .listValidated(120)
+            .then((page) => {
+              this.catalogRows.set(page.docs);
+              this.catalogLoaded.set(true);
+            }),
+        );
+      } else {
+        this.catalogRows.set([]);
+        this.catalogLoaded.set(true);
+      }
+      await Promise.allSettled(tasks);
       this.lastAddItemSourcesRefreshAt = Date.now();
     })().finally(() => {
       this.addItemSourcesRefreshPromise = null;
@@ -3347,6 +3389,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.catalogColorOptions.set([]);
     this.selectedPreview.set(null);
     this.selectedCatalogDoc.set(null);
+    this.catalogProductSuggestions.set([]);
+    this.catalogProductSearching.set(false);
     this.selectedPreviewHasColorImage.set(true);
     this.showProductList.set(false);
     this.manualSuggestionsOpen.set(false);
@@ -3362,6 +3406,25 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     if (normalized !== "manual") {
       void this.refreshAddItemSources();
     }
+  }
+
+  onNewItemSearchChange(value: string): void {
+    this.newItemSearch.set(value);
+    if (!this.isCatalogoOrder() || this.newItemSource() !== "catalogo") return;
+    if (this.catalogProductSearchTimer) clearTimeout(this.catalogProductSearchTimer);
+    const term = value.trim();
+    if (term.length < 2) {
+      this.catalogProductSuggestions.set([]);
+      this.catalogProductSearching.set(false);
+      return;
+    }
+    this.catalogProductSearching.set(true);
+    this.catalogProductSearchTimer = setTimeout(() => {
+      this.catalogProducts.searchBySkuPrefix(term, "catalogo", 8)
+        .then((rows) => this.catalogProductSuggestions.set(rows))
+        .catch(() => this.catalogProductSuggestions.set([]))
+        .finally(() => this.catalogProductSearching.set(false));
+    }, 180);
   }
 
   private clearAddItemDraftForSourceChange() {
@@ -3386,6 +3449,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.catalogColorOptions.set([]);
     this.selectedPreview.set(null);
     this.selectedCatalogDoc.set(null);
+    this.catalogProductSuggestions.set([]);
+    this.catalogProductSearching.set(false);
     this.selectedPreviewHasColorImage.set(true);
     this.manualSuggestionsOpen.set(false);
   }
@@ -5611,6 +5676,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   private toDispatchOrder(order: Order): DispatchOrderRow {
     return {
       order_id: order.order_id,
+      business_id: order.business_id || "bm",
       customer_id: order.customer_id,
       route_id: order.route_id,
       status: order.status,
@@ -5944,7 +6010,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
           price_public: item.price_public ?? null,
           price_clienta: item.price_clienta ?? null,
           price_cost: item.price_cost ?? null,
-        });
+        }, order.business_id);
       }
       this.showActionToast("Imagen cargada.");
     } catch {
@@ -6416,6 +6482,75 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     await this.removeItem(order, item);
   }
 
+  canRegisterReturn(order: Order | null, item: OrderItem): boolean {
+    if (!order) return false;
+    if (!this.canCap("cap.returns.create")) return false;
+    return this.itemQuantity(item) > 0;
+  }
+
+  openReturnModal(order: Order, item: OrderItem) {
+    if (!this.canRegisterReturn(order, item)) return;
+    this.closeProductMenus();
+    const alreadyReturned = Math.max(0, Math.trunc(Number(item.returned_qty || 0)));
+    const remaining = Math.max(1, this.itemQuantity(item) - alreadyReturned);
+    this.returnTargetItem.set(item);
+    this.returnQty.set(remaining);
+    this.returnDisposition.set("available");
+    this.returnReason.set("");
+    this.returnModalOpen.set(true);
+  }
+
+  closeReturnModal() {
+    if (this.returnSaving()) return;
+    this.returnModalOpen.set(false);
+    this.returnTargetItem.set(null);
+    this.returnQty.set(1);
+    this.returnDisposition.set("available");
+    this.returnReason.set("");
+  }
+
+  async confirmReturn(order: Order | null) {
+    const item = this.returnTargetItem();
+    if (!order || !item || !this.canRegisterReturn(order, item)) return;
+    const qty = Math.max(1, Math.min(Math.trunc(Number(this.returnQty()) || 1), this.itemQuantity(item)));
+    this.returnSaving.set(true);
+    try {
+      const record = await this.returnsService.registerReturn({
+        order,
+        item,
+        qty,
+        disposition: this.returnDisposition(),
+        reason: this.returnReason(),
+        createdBy: this.currentActorName(),
+      });
+      const nextItems = (order.items || []).map((row) => {
+        if (row.item_id !== item.item_id) return row;
+        const returnedQty = Math.min(this.itemQuantity(row), Math.max(0, Math.trunc(Number(row.returned_qty || 0))) + qty);
+        return {
+          ...row,
+          returned_qty: returnedQty,
+          state: returnedQty >= this.itemQuantity(row) ? "devuelto" as OrderItemState : row.state,
+        };
+      });
+      await this.orders.updateItems(order.order_id, nextItems);
+      await this.orders.logEvent(order.order_id, "RETURN_REGISTERED", `Devolución registrada: ${item.title}`, {
+        returnId: record.return_id,
+        itemId: item.item_id,
+        qty,
+        disposition: this.returnDisposition(),
+        inventoryId: record.inventory_id,
+      });
+      this.showActionToast("Devolución registrada.");
+      this.returnSaving.set(false);
+      this.closeReturnModal();
+      await this.refreshEvents();
+    } catch (error: any) {
+      await this.showPopupAlert(error?.message || "No se pudo registrar la devolución.", "Error en devolución");
+    } finally {
+      this.returnSaving.set(false);
+    }
+  }
+
   editItemFromMenu(item: OrderItem) {
     this.openEditItemModal(item);
   }
@@ -6623,7 +6758,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         price_public: item.price_public ?? null,
         price_clienta: item.price_clienta ?? null,
         price_cost: item.price_cost ?? null,
-      });
+      }, order.business_id);
     }
 
     this.resetAddItemForm();
@@ -6808,7 +6943,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         price_public: updated.price_public ?? null,
         price_clienta: updated.price_clienta ?? null,
         price_cost: updated.price_cost ?? null,
-      });
+      }, order.business_id);
     }
 
     this.resetAddItemForm();
@@ -6823,17 +6958,28 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     state: OrderItemState,
     extra?: Partial<OrderItem>,
   ): OrderItem {
+    const businessId = this.orderBusinessId();
+    const productRefType =
+      source === "manual"
+        ? "manual"
+        : source === "inventario"
+          ? "inventory_item"
+          : businessId === "catalogo"
+            ? "catalog_product"
+            : "normalized_listing";
     const base: OrderItem = {
       item_id: itemId,
+      business_id: businessId,
       title: this.newItemTitle().trim(),
       variant: this.newItemVariant().trim() || null,
       color: this.newItemColor().trim() || null,
       quantity: Math.max(1, this.newItemQty()),
       source,
+      product_ref_type: productRefType,
       state,
       confirmation_state: "pending",
       confirmed_qty: null,
-      supplier_id: source === "manual" ? null : this.newItemSupplierId(),
+      supplier_id: source === "manual" || productRefType === "catalog_product" ? null : this.newItemSupplierId(),
       product_id: source === "manual" ? null : this.newItemProductId(),
       price_clienta: this.newItemPriceClienta(),
       price_public: this.newItemPricePublic(),
@@ -7195,6 +7341,37 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.selectedCatalogDoc.set(doc);
   }
 
+  pickCatalogProduct(product: CatalogProduct) {
+    this.newItemTitle.set(product.name || product.sku || "Producto sin nombre");
+    this.newItemVariant.set(product.size || "");
+    this.newItemColor.set(product.color || "");
+    this.newItemPricePublic.set(product.price_clienta);
+    this.newItemPriceClienta.set(product.price_clienta);
+    this.newItemPriceCost.set(product.price_cost);
+    this.updatePriceDraftFromSignals();
+    this.newItemSource.set("catalogo");
+    this.newItemSearch.set("");
+    this.newItemInventoryId.set(null);
+    this.newItemSupplierId.set(null);
+    this.newItemProductId.set(product.product_id);
+    this.showProductList.set(false);
+    this.lockItemFields.set(true);
+    this.catalogVariantOptions.set([]);
+    this.catalogColorOptions.set([]);
+    this.supplierDiscountPct.set(null);
+    this.supplierDiscountLabel.set(null);
+    this.selectedPreviewHasColorImage.set(Boolean(product.image_url));
+    this.selectedPreview.set({
+      title: this.newItemTitle(),
+      variant: this.newItemVariant(),
+      color: this.newItemColor(),
+      image: product.image_url || null,
+      source: "Catálogo",
+    });
+    this.selectedCatalogDoc.set(null);
+    this.catalogProductSuggestions.set([]);
+  }
+
   closeProductListSoon() {
     if (this.suppressProductBlur()) {
       this.suppressProductBlur.set(false);
@@ -7483,6 +7660,11 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     const clean = String(fullName || "").trim();
     if (!clean) return "Admin";
     return clean.split(/\s+/)[0] || "Admin";
+  }
+
+  private currentActorName(): string {
+    const user = this.auth.user();
+    return user?.displayName || user?.email || "Admin";
   }
 
   private toNameAndFirstSurname(value: string): string {

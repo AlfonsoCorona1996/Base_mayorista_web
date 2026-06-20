@@ -1,6 +1,8 @@
-import { Injectable, signal } from "@angular/core";
-import { collection, deleteDoc, doc, getDocs, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
+import { Injectable, computed, inject, signal } from "@angular/core";
+import { collection, deleteDoc, doc, getDocs, query, serverTimestamp, setDoc, updateDoc, where } from "firebase/firestore";
 import { FIRESTORE } from "./firebase.providers";
+import { BusinessScopeService } from "./business-scope.service";
+import { BusinessId, normalizeBusinessId } from "./rbac.constants";
 
 export type FinanceExpenseCategory =
   | "compra_inversion"
@@ -12,6 +14,7 @@ export type FinanceExpenseCategory =
 
 export interface FinanceAccount {
   account_id: string;
+  business_id: BusinessId;
   name: string;
   balance: number;
   notes: string | null;
@@ -21,6 +24,7 @@ export interface FinanceAccount {
 
 export interface FinanceExpense {
   expense_id: string;
+  business_id: BusinessId;
   category: FinanceExpenseCategory;
   amount: number;
   occurred_at: string;
@@ -45,6 +49,7 @@ export type FinanceWithdrawalPurpose =
 
 export interface FinanceWithdrawal {
   withdrawal_id: string;
+  business_id: BusinessId;
   amount: number;
   occurred_at: string;
   purpose: FinanceWithdrawalPurpose;
@@ -69,6 +74,7 @@ export interface FinanceCutSnapshot {
 
 export interface FinanceCut {
   cut_id: string;
+  business_id: BusinessId;
   label: string;
   route_id: string | null;
   start_at: string;
@@ -78,10 +84,21 @@ export interface FinanceCut {
   updated_at?: unknown;
 }
 
-export type SaveFinanceAccountInput = Omit<FinanceAccount, "account_id"> & { account_id?: string };
-export type SaveFinanceExpenseInput = Omit<FinanceExpense, "expense_id"> & { expense_id?: string };
-export type SaveFinanceWithdrawalInput = Omit<FinanceWithdrawal, "withdrawal_id"> & { withdrawal_id?: string };
-export type SaveFinanceCutInput = Omit<FinanceCut, "cut_id" | "created_at" | "updated_at">;
+export type SaveFinanceAccountInput = Omit<FinanceAccount, "account_id" | "business_id"> & {
+  account_id?: string;
+  business_id?: BusinessId;
+};
+export type SaveFinanceExpenseInput = Omit<FinanceExpense, "expense_id" | "business_id"> & {
+  expense_id?: string;
+  business_id?: BusinessId;
+};
+export type SaveFinanceWithdrawalInput = Omit<FinanceWithdrawal, "withdrawal_id" | "business_id"> & {
+  withdrawal_id?: string;
+  business_id?: BusinessId;
+};
+export type SaveFinanceCutInput = Omit<FinanceCut, "cut_id" | "business_id" | "created_at" | "updated_at"> & {
+  business_id?: BusinessId;
+};
 
 @Injectable({ providedIn: "root" })
 export class FinanceService {
@@ -89,11 +106,16 @@ export class FinanceService {
   private expensesCol = collection(FIRESTORE, "finance_expenses");
   private withdrawalsCol = collection(FIRESTORE, "finance_withdrawals");
   private cutsCol = collection(FIRESTORE, "finance_cuts");
+  private businessScope = inject(BusinessScopeService);
 
-  accounts = signal<FinanceAccount[]>([]);
-  expenses = signal<FinanceExpense[]>([]);
-  withdrawals = signal<FinanceWithdrawal[]>([]);
-  cuts = signal<FinanceCut[]>([]);
+  private accountRows = signal<FinanceAccount[]>([]);
+  private expenseRows = signal<FinanceExpense[]>([]);
+  private withdrawalRows = signal<FinanceWithdrawal[]>([]);
+  private cutRows = signal<FinanceCut[]>([]);
+  accounts = computed(() => this.filterByBusiness(this.accountRows()));
+  expenses = computed(() => this.filterByBusiness(this.expenseRows()));
+  withdrawals = computed(() => this.filterByBusiness(this.withdrawalRows()));
+  cuts = computed(() => this.filterByBusiness(this.cutRows()));
   loading = signal(false);
 
   async loadAll(): Promise<void> {
@@ -106,41 +128,42 @@ export class FinanceService {
   }
 
   async loadAccounts(): Promise<void> {
-    const snap = await getDocs(this.accountsCol);
+    const snap = await getDocs(query(this.accountsCol, where("business_id", "in", this.businessScope.availableBusinessIds())));
     const rows = snap.docs
       .map((entry) => this.normalizeAccount(entry.id, entry.data() as Record<string, unknown>))
       .sort((a, b) => a.name.localeCompare(b.name, "es"));
-    this.accounts.set(rows);
+    this.accountRows.set(rows);
   }
 
   async loadExpenses(): Promise<void> {
-    const snap = await getDocs(this.expensesCol);
+    const snap = await getDocs(query(this.expensesCol, where("business_id", "in", this.businessScope.availableBusinessIds())));
     const rows = snap.docs
       .map((entry) => this.normalizeExpense(entry.id, entry.data() as Record<string, unknown>))
       .sort((a, b) => (a.occurred_at > b.occurred_at ? -1 : 1));
-    this.expenses.set(rows);
+    this.expenseRows.set(rows);
   }
 
   async loadWithdrawals(): Promise<void> {
-    const snap = await getDocs(this.withdrawalsCol);
+    const snap = await getDocs(query(this.withdrawalsCol, where("business_id", "in", this.businessScope.availableBusinessIds())));
     const rows = snap.docs
       .map((entry) => this.normalizeWithdrawal(entry.id, entry.data() as Record<string, unknown>))
       .sort((a, b) => (a.occurred_at > b.occurred_at ? -1 : 1));
-    this.withdrawals.set(rows);
+    this.withdrawalRows.set(rows);
   }
 
   async loadCuts(): Promise<void> {
-    const snap = await getDocs(this.cutsCol);
+    const snap = await getDocs(query(this.cutsCol, where("business_id", "in", this.businessScope.availableBusinessIds())));
     const rows = snap.docs
       .map((entry) => this.normalizeCut(entry.id, entry.data() as Record<string, unknown>))
       .sort((a, b) => (a.end_at > b.end_at ? -1 : 1));
-    this.cuts.set(rows);
+    this.cutRows.set(rows);
   }
 
   async saveAccount(input: SaveFinanceAccountInput): Promise<string> {
     const accountId = (input.account_id || "").trim() || this.createId("acc");
     const payload: FinanceAccount = {
       account_id: accountId,
+      business_id: normalizeBusinessId(input.business_id || this.businessScope.writeBusinessId()),
       name: (input.name || "").trim() || "Cuenta sin nombre",
       balance: this.toSafeAmount(input.balance),
       notes: this.toOptionalText(input.notes),
@@ -171,6 +194,7 @@ export class FinanceService {
     const expenseId = (input.expense_id || "").trim() || this.createId("exp");
     const payload: FinanceExpense = {
       expense_id: expenseId,
+      business_id: normalizeBusinessId(input.business_id || this.businessScope.writeBusinessId()),
       category: this.normalizeExpenseCategory(input.category),
       amount: this.toSafeAmount(input.amount),
       occurred_at: this.normalizeDateInput(input.occurred_at),
@@ -206,6 +230,7 @@ export class FinanceService {
     const withdrawalId = (input.withdrawal_id || "").trim() || this.createId("wdr");
     const payload: FinanceWithdrawal = {
       withdrawal_id: withdrawalId,
+      business_id: normalizeBusinessId(input.business_id || this.businessScope.writeBusinessId()),
       amount: this.toSafeAmount(input.amount),
       occurred_at: this.normalizeDateInput(input.occurred_at),
       purpose: this.normalizeWithdrawalPurpose(input.purpose),
@@ -240,6 +265,7 @@ export class FinanceService {
     const cutId = this.createId("cut");
     const payload: FinanceCut = {
       cut_id: cutId,
+      business_id: normalizeBusinessId(input.business_id || this.businessScope.writeBusinessId()),
       label: (input.label || "").trim() || "Corte",
       route_id: this.toOptionalText(input.route_id),
       start_at: this.normalizeDateInput(input.start_at),
@@ -274,9 +300,15 @@ export class FinanceService {
     await this.loadCuts();
   }
 
+  private filterByBusiness<T extends { business_id: BusinessId }>(rows: T[]): T[] {
+    const active = this.businessScope.activeBusinessIds();
+    return rows.filter((row) => active.includes(row.business_id || "bm"));
+  }
+
   private normalizeAccount(id: string, data: Record<string, unknown>): FinanceAccount {
     return {
       account_id: String(data["account_id"] || id),
+      business_id: normalizeBusinessId(data["business_id"]),
       name: String(data["name"] || "Cuenta"),
       balance: this.toSafeAmount(data["balance"]),
       notes: this.toOptionalText(data["notes"]),
@@ -288,6 +320,7 @@ export class FinanceService {
   private normalizeExpense(id: string, data: Record<string, unknown>): FinanceExpense {
     return {
       expense_id: String(data["expense_id"] || id),
+      business_id: normalizeBusinessId(data["business_id"]),
       category: this.normalizeExpenseCategory(data["category"]),
       amount: this.toSafeAmount(data["amount"]),
       occurred_at: this.normalizeDateInput(data["occurred_at"]),
@@ -304,6 +337,7 @@ export class FinanceService {
   private normalizeWithdrawal(id: string, data: Record<string, unknown>): FinanceWithdrawal {
     return {
       withdrawal_id: String(data["withdrawal_id"] || id),
+      business_id: normalizeBusinessId(data["business_id"]),
       amount: this.toSafeAmount(data["amount"]),
       occurred_at: this.normalizeDateInput(data["occurred_at"]),
       purpose: this.normalizeWithdrawalPurpose(data["purpose"]),
@@ -320,6 +354,7 @@ export class FinanceService {
     const snapshot = (data["snapshot"] || {}) as Record<string, unknown>;
     return {
       cut_id: String(data["cut_id"] || id),
+      business_id: normalizeBusinessId(data["business_id"]),
       label: String(data["label"] || "Corte"),
       route_id: this.toOptionalText(data["route_id"]),
       start_at: this.normalizeDateInput(data["start_at"]),

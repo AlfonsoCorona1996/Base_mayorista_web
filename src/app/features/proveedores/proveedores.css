@@ -192,6 +192,35 @@
   gap: 8px;
 }
 
+.supplier-card.business-bm {
+  border-left: 4px solid #2f80ed;
+}
+
+.supplier-card.business-catalogo {
+  border-left: 4px solid #10b981;
+}
+
+.business-badge {
+  margin-left: 6px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 7px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  vertical-align: middle;
+}
+
+.business-badge.business-bm {
+  background: #e8f2ff;
+  color: #0b56b7;
+}
+
+.business-badge.business-catalogo {
+  background: #e8fff5;
+  color: #047857;
+}
+
 .supplier-card.inactive {
   border-color: #d9d9d9;
   background: #f8fafc;

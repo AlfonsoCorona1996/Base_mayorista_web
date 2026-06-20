@@ -7,6 +7,7 @@ import {
   SECTION_KEYS,
   CapabilitiesMap,
   CapabilityOverridesMap,
+  BusinessMembershipsMap,
   RoleId,
   SectionsMap,
   SectionOverridesMap,
@@ -17,6 +18,7 @@ import {
   isUsernameAuthEmail,
   normalizeCapabilitiesMap,
   normalizeCapabilityOverridesMap,
+  normalizeBusinessMembershipsMap,
   normalizeRoleId,
   normalizeSectionsMap,
   normalizeSectionOverridesMap,
@@ -39,7 +41,7 @@ export type SaveUserInput = Pick<
   | "capabilities"
   | "sectionOverrides"
   | "capabilityOverrides"
->;
+> & { businessMemberships?: BusinessMembershipsMap };
 
 @Injectable({ providedIn: "root" })
 export class UsersService {
@@ -48,6 +50,8 @@ export class UsersService {
   async ensureFromAuth(user: User): Promise<UserDoc> {
     const bootstrap = await this.userAdminApi.getSessionBootstrap();
     const uid = bootstrap.uid || user.uid;
+    const storedUserSnap = await getDoc(doc(FIRESTORE, "users", uid)).catch(() => null);
+    const storedUser = storedUserSnap?.exists() ? (storedUserSnap.data() as Record<string, unknown>) : {};
     const roleId = normalizeRoleId(bootstrap.roleId || "operativo");
     const username =
       normalizeUsername(bootstrap.username) || normalizeUsername(user.displayName || bootstrap.email?.split("@")[0] || uid.slice(0, 10));
@@ -55,6 +59,13 @@ export class UsersService {
     const loginType: UserLoginType = isUsernameAuthEmail(authEmail) ? "username" : "email";
     const sections = this.resolveSectionsMap({}, roleId, {}, bootstrap.sections || null);
     const capabilities = this.resolveCapabilitiesMap({}, roleId, {}, bootstrap.capabilities || null);
+    const businessMemberships = normalizeBusinessMembershipsMap(
+      bootstrap.businessMemberships || storedUser["businessMemberships"] || null,
+      roleId,
+      sections,
+      capabilities,
+      roleId === "super_admin",
+    );
     return {
       uid,
       email: loginType === "email" ? (bootstrap.email || user.email || "").trim().toLowerCase() : "",
@@ -70,6 +81,7 @@ export class UsersService {
       capabilities,
       sectionOverrides: {} as SectionOverridesMap,
       capabilityOverrides: {} as CapabilityOverridesMap,
+      businessMemberships,
       createdAt: null,
       updatedAt: null,
     };
@@ -103,6 +115,13 @@ export class UsersService {
       capabilities: normalizeCapabilitiesMap(input.capabilities),
       sectionOverrides: normalizeSectionOverridesMap(input.sectionOverrides),
       capabilityOverrides: normalizeCapabilityOverridesMap(input.capabilityOverrides),
+      businessMemberships: normalizeBusinessMembershipsMap(
+        input.businessMemberships || null,
+        normalizeRoleId(input.roleId),
+        normalizeSectionsMap(input.sections),
+        normalizeCapabilitiesMap(input.capabilities),
+        normalizeRoleId(input.roleId) === "super_admin",
+      ),
       updatedAt: serverTimestamp(),
     };
     await setDoc(doc(FIRESTORE, "users", input.uid), payload, { merge: true });
@@ -160,6 +179,13 @@ export class UsersService {
     const capabilityOverrides = normalizeCapabilityOverridesMap(data["capabilityOverrides"] || null);
     const sections = this.resolveSectionsMap(data, roleId, sectionOverrides, bootstrap?.sections || null);
     const capabilities = this.resolveCapabilitiesMap(data, roleId, capabilityOverrides, bootstrap?.capabilities || null);
+    const businessMemberships = normalizeBusinessMembershipsMap(
+      bootstrap?.businessMemberships || data["businessMemberships"] || null,
+      roleId,
+      sections,
+      capabilities,
+      roleId === "super_admin",
+    );
     const username =
       normalizeUsername(data["username"]) ||
       (isUsernameAuthEmail(authEmail) ? normalizeUsername(authEmail.split("@")[0]) : normalizeUsername(data["email"]?.split("@")[0]));
@@ -178,6 +204,7 @@ export class UsersService {
       capabilities,
       sectionOverrides,
       capabilityOverrides,
+      businessMemberships,
       createdAt: data["createdAt"] ?? null,
       updatedAt: data["updatedAt"] ?? null,
     };

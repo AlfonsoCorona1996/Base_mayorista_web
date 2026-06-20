@@ -1,4 +1,4 @@
-import { Injectable, signal } from "@angular/core";
+import { Injectable, computed, inject, signal } from "@angular/core";
 import { FIRESTORE } from "./firebase.providers";
 import {
   collection,
@@ -26,6 +26,8 @@ import type {
   StockState,
   WorkflowStatus,
 } from "./firestore-contracts";
+import { BusinessScopeService } from "./business-scope.service";
+import { normalizeBusinessId } from "./rbac.constants";
 
 // Re-exportar tipos para compatibilidad
 export type {
@@ -39,9 +41,11 @@ export type {
 @Injectable({ providedIn: "root" })
 export class NormalizedListingsService {
   private colRef = collection(FIRESTORE, "normalized_listings");
+  private businessScope = inject(BusinessScopeService);
 
   /** Primera página de listings pendientes de revisión, actualizada en tiempo real. */
   readonly liveFirstPage = signal<NormalizedListingDoc[]>([]);
+  readonly scopedLiveFirstPage = computed(() => this.filterByBusiness(this.liveFirstPage()));
   readonly liveFirstPageLoading = signal(false);
   private firstPageUnsub?: Unsubscribe;
 
@@ -57,6 +61,7 @@ export class NormalizedListingsService {
     const q = query(
       this.colRef,
       where("workflow.status", "==", "needs_review"),
+      where("business_id", "in", this.businessScope.availableBusinessIds()),
       orderBy("created_at", "desc"),
       limit(pageSize),
     );
@@ -64,7 +69,7 @@ export class NormalizedListingsService {
     this.firstPageUnsub = onSnapshot(
       q,
       (snap) => {
-        this.liveFirstPage.set(snap.docs.map((d) => d.data() as NormalizedListingDoc));
+        this.liveFirstPage.set(this.filterByBusiness(snap.docs.map((d) => d.data() as NormalizedListingDoc)));
         this.liveFirstPageLoading.set(false);
       },
       (error) => {
@@ -88,6 +93,7 @@ export class NormalizedListingsService {
     let q = query(
       this.colRef,
       where("workflow.status", "==", status),
+      where("business_id", "in", this.businessScope.availableBusinessIds()),
       orderBy("created_at", "desc"),
       limit(fetchSize)
     );
@@ -99,10 +105,15 @@ export class NormalizedListingsService {
     const snap = await getDocs(q);
     const hasMore = snap.docs.length > pageSize;
     const pageDocs = hasMore ? snap.docs.slice(0, pageSize) : snap.docs;
-    const docs = pageDocs.map((d) => d.data() as NormalizedListingDoc);
+    const docs = this.filterByBusiness(pageDocs.map((d) => d.data() as NormalizedListingDoc));
     const nextCursor = hasMore && pageDocs.length ? pageDocs[pageDocs.length - 1] : null;
 
     return { docs, nextCursor };
+  }
+
+  private filterByBusiness<T extends { business_id?: "bm" | "catalogo" }>(rows: T[]): T[] {
+    const active = this.businessScope.activeBusinessIds();
+    return rows.filter((row) => active.includes(normalizeBusinessId(row.business_id)));
   }
 
   async listNeedsReview(

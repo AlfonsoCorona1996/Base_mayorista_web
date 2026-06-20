@@ -1,9 +1,12 @@
-import { Injectable, signal } from "@angular/core";
+import { Injectable, computed, inject, signal } from "@angular/core";
 import { FIRESTORE } from "./firebase.providers";
-import { collection, doc, getDocs, orderBy, query, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
+import { collection, doc, getDocs, query, serverTimestamp, setDoc, updateDoc, where } from "firebase/firestore";
+import { BusinessScopeService } from "./business-scope.service";
+import { BusinessId, normalizeBusinessId } from "./rbac.constants";
 
 export interface Supplier {
   supplier_id: string;
+  business_id: BusinessId;
   display_name: string;
   contact_phone?: string;
   contact_name?: string;
@@ -16,11 +19,13 @@ export interface Supplier {
 @Injectable({ providedIn: "root" })
 export class SuppliersService {
   private colRef = collection(FIRESTORE, "suppliers");
+  private businessScope = inject(BusinessScopeService);
 
   // Fallback local para entorno sin datos remotos.
   private demoSuppliers: Supplier[] = [
     {
       supplier_id: "frodam",
+      business_id: "bm",
       display_name: "Frodam (Tenis)",
       contact_phone: "+52 33 1234 5678",
       contact_name: "Juan Perez",
@@ -30,6 +35,7 @@ export class SuppliersService {
     },
     {
       supplier_id: "corseteria_guadalupana",
+      business_id: "bm",
       display_name: "Corseteria Guadalupana",
       contact_phone: "+52 33 9876 5432",
       contact_name: "Maria Lopez",
@@ -39,7 +45,11 @@ export class SuppliersService {
     },
   ];
 
-  suppliers = signal<Supplier[]>(this.demoSuppliers);
+  private rows = signal<Supplier[]>(this.demoSuppliers);
+  suppliers = computed(() => {
+    const active = this.businessScope.activeBusinessIds();
+    return this.rows().filter((supplier) => active.includes(supplier.business_id || "bm"));
+  });
 
   constructor() {
     this.loadFromFirestore().catch((error) => {
@@ -49,15 +59,17 @@ export class SuppliersService {
 
   async loadFromFirestore(): Promise<void> {
     try {
-      const q = query(this.colRef, orderBy("display_name", "asc"));
+      const q = query(this.colRef, where("business_id", "in", this.businessScope.availableBusinessIds()));
       const snap = await getDocs(q);
 
-      const loaded = snap.docs.map((entry) => {
-        const data = entry.data() as Partial<Supplier>;
-        return this.normalizeSupplier(data, entry.id);
-      });
+      const loaded = snap.docs
+        .map((entry) => {
+          const data = entry.data() as Partial<Supplier>;
+          return this.normalizeSupplier(data, entry.id);
+        })
+        .sort((a, b) => a.display_name.localeCompare(b.display_name, "es", { sensitivity: "base" }));
 
-      this.suppliers.set(loaded);
+      this.rows.set(loaded);
     } catch (error) {
       console.error("Error cargando proveedores:", error);
       // En error real mantenemos la ultima lista disponible.
@@ -80,6 +92,7 @@ export class SuppliersService {
     const payload: Supplier = {
       ...supplier,
       supplier_id: supplierId,
+      business_id: normalizeBusinessId(supplier.business_id || this.businessScope.writeBusinessId()),
       display_name: (supplier.display_name || supplierId).trim(),
       active: supplier.active ?? true,
       created_at: supplier.created_at ?? now,
@@ -107,6 +120,7 @@ export class SuppliersService {
     const supplierId = (data.supplier_id || fallbackId || "").trim();
     return {
       supplier_id: supplierId,
+      business_id: normalizeBusinessId(data.business_id),
       display_name: (data.display_name || supplierId).trim(),
       contact_phone: data.contact_phone || "",
       contact_name: data.contact_name || "",

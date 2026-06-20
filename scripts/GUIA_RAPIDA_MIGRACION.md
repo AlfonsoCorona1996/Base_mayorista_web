@@ -115,7 +115,7 @@ npm install firebase-admin --save-dev
 
 Verifica que existe el archivo:
 ```
-whatsapp-bot/serviceAccountKey.json
+Base Mayorista Backend/Base_Mayorista/serviceAccountKey.json
 ```
 
 ### Error: "Permission denied"

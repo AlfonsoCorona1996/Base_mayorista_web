@@ -8,7 +8,9 @@ Este script migra 150+ categorías estandarizadas a tu proyecto Firebase.
 
 El script ya está configurado para usar tu `serviceAccountKey.json` del backend.
 
-**Ruta esperada**: `../whatsapp-bot/serviceAccountKey.json`
+**Ruta esperada principal**: `..\Base Mayorista Backend\Base_Mayorista\serviceAccountKey.json`
+
+También puedes usar `GOOGLE_APPLICATION_CREDENTIALS` si quieres apuntar a otra credencial.
 
 ✅ **No necesitas editar nada** - el script ya tiene la configuración correcta.
 
@@ -186,7 +188,7 @@ npm install firebase-admin --save-dev
 
 **Solución**: Verifica que el archivo existe en:
 ```
-whatsapp-bot/serviceAccountKey.json
+Base Mayorista Backend/Base_Mayorista/serviceAccountKey.json
 ```
 
 ### Error: "Cannot find module 'tsx'"

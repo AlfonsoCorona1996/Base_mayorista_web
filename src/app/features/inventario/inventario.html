@@ -27,6 +27,18 @@
     </div>
   </header>
 
+  <nav class="inventory-tabs" aria-label="Vista de inventario">
+    <button type="button" [class.active]="activeTab() === 'stock'" (click)="activeTab.set('stock')">
+      <span>Stock</span>
+      <strong>{{ formatCount(totalAvailableUnits()) }}</strong>
+    </button>
+    <button type="button" [class.active]="activeTab() === 'returns'" (click)="activeTab.set('returns')">
+      <span>Devoluciones</span>
+      <strong>{{ formatCount(pendingReturns().length) }}</strong>
+    </button>
+  </nav>
+
+  @if (activeTab() === 'stock') {
   <section class="stats-grid" aria-label="Resumen de inventario">
     <button type="button" class="stat-card stat-card-featured" (click)="applyQuickFilter('all')">
       <div class="stat-head">
@@ -269,11 +281,16 @@
       } @else {
         <div class="inventory-list">
           @for (item of filteredRows(); track item.inventory_id) {
-            <article class="inventory-card" [class.card-out]="onHandQty(item) === 0">
+            <article class="inventory-card" [ngClass]="businessScope.isBothMode() ? itemBusinessClass(item) : ''" [class.card-out]="onHandQty(item) === 0">
               <header class="inventory-card-header">
                 <div>
                   <h3>{{ item.title }}</h3>
-                  <p class="card-category">{{ item.category_hint || "Sin categoria" }}</p>
+                  <p class="card-category">
+                    {{ item.category_hint || "Sin categoria" }}
+                    @if (businessScope.isBothMode()) {
+                      <span class="business-badge" [ngClass]="itemBusinessClass(item)">{{ itemBusinessLabel(item) }}</span>
+                    }
+                  </p>
                 </div>
                 <span class="stock-tag" [class]="'stock-tag ' + stockClass(item)">
                   {{ stockTag(item) }}
@@ -428,6 +445,64 @@
       }
     </article>
   </section>
+  } @else {
+    <section class="returns-panel panel">
+      <div class="list-header">
+        <h2>Devoluciones</h2>
+        <p>{{ returns().length }} registro(s)</p>
+      </div>
+
+      @if (returns().length === 0) {
+        <div class="empty-state">
+          <p class="empty">Aún no hay devoluciones registradas.</p>
+        </div>
+      } @else {
+        <div class="returns-list">
+          @for (row of returns(); track row.return_id) {
+            <article class="return-card" [ngClass]="businessScope.isBothMode() ? returnBusinessClass(row) : ''">
+              <div>
+                <div class="return-title-row">
+                  <h3>{{ returnProductTitle(row) }}</h3>
+                  <span class="stock-tag" [class.tag-ok]="row.status === 'restocked'" [class.tag-low]="row.status === 'pending_review'" [class.tag-out]="row.status === 'damaged'">
+                    {{ returnStatusLabel(row) }}
+                  </span>
+                </div>
+                <p class="card-category">
+                  Pedido {{ row.order_id }} · {{ returnProductMeta(row) }}
+                  @if (businessScope.isBothMode()) {
+                    <span class="business-badge" [ngClass]="returnBusinessClass(row)">{{ returnBusinessLabel(row) }}</span>
+                  }
+                </p>
+              </div>
+              <div class="metrics-row">
+                <article class="metric-box">
+                  <p>Piezas</p>
+                  <strong>{{ formatCount(row.qty) }}</strong>
+                </article>
+                <article class="metric-box">
+                  <p>Destino</p>
+                  <strong>{{ returnStatusLabel(row) }}</strong>
+                </article>
+              </div>
+              @if (row.reason) {
+                <p class="notes">{{ row.reason }}</p>
+              }
+              @if (row.status === 'pending_review') {
+                <div class="card-actions">
+                  <button type="button" class="btn btn-primary" (click)="restockReturn(row)">
+                    <span>Enviar a stock</span>
+                  </button>
+                  <button type="button" class="btn btn-danger" (click)="markReturnDamaged(row)">
+                    <span>Marcar dañado</span>
+                  </button>
+                </div>
+              }
+            </article>
+          }
+        </div>
+      }
+    </section>
+  }
 </section>
 
 @if (imageViewerOpen() && currentViewerImage(); as viewerImage) {

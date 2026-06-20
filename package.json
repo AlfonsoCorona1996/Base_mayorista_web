@@ -12,6 +12,12 @@
     "firebase:migrate-users-canonical:dry": "tsx scripts/migrate-users-canonical-fields.ts",
     "firebase:migrate-users-canonical:apply": "tsx scripts/migrate-users-canonical-fields.ts --apply",
     "firebase:migrate-users-canonical:cleanup": "tsx scripts/migrate-users-canonical-fields.ts --apply --delete-legacy",
+    "firebase:migrate-business-scope:dry": "tsx scripts/migrate-business-scope.ts",
+    "firebase:migrate-business-scope:apply": "tsx scripts/migrate-business-scope.ts --apply",
+    "firebase:migrate-manual-history-business:dry": "tsx scripts/migrate-manual-history-business.ts",
+    "firebase:migrate-manual-history-business:apply": "tsx scripts/migrate-manual-history-business.ts --apply",
+    "firebase:migrate-catalog-products-search:dry": "tsx scripts/migrate-catalog-products-search.ts",
+    "firebase:migrate-catalog-products-search:apply": "tsx scripts/migrate-catalog-products-search.ts --apply",
     "firebase:migrate-manual-history:dry": "tsx scripts/migrate-manual-product-history.ts",
     "firebase:migrate-manual-history:apply": "tsx scripts/migrate-manual-product-history.ts --apply"
   },
@@ -42,6 +48,7 @@
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0",
     "ulid": "^3.0.2",
+    "xlsx": "^0.18.5",
     "zone.js": "~0.15.0"
   },
   "devDependencies": {

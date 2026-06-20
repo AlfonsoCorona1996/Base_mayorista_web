@@ -7,7 +7,13 @@
       </p>
       <h1 class="catalog-title">Catalogo</h1>
       <p class="catalog-subtitle">
-        {{ activeTab() === 'catalog' ? 'Productos publicados y validados.' : 'Productos ingresados manualmente en pedidos.' }}
+        {{
+          activeTab() === 'catalog'
+            ? 'Productos publicados y validados de Base Mayorista.'
+            : activeTab() === 'catalogo_excel'
+              ? 'Productos importados desde Excel para Catalogo.'
+              : 'Productos ingresados manualmente en pedidos.'
+        }}
       </p>
     </div>
 
@@ -16,8 +22,8 @@
         <span class="material-symbols-rounded" aria-hidden="true">refresh</span>
         {{ loading() ? "Actualizando..." : "Actualizar" }}
       </button>
-    } @else {
-      <button type="button" class="btn btn-ghost" (click)="manualSvc.load()">
+    } @else if (activeTab() === 'manuales_bm' || activeTab() === 'manuales_catalogo') {
+      <button type="button" class="btn btn-ghost" (click)="manualSvc.load(manualBusinessForActiveTab())">
         <span class="material-symbols-rounded">refresh</span>
         Actualizar
       </button>
@@ -26,17 +32,12 @@
 
   <!-- ── Tabs ────────────────────────────────────────────── -->
   <nav class="catalog-tabs">
-    <button type="button" class="catalog-tab" [class.active]="activeTab() === 'catalog'" (click)="setTab('catalog')">
-      <span class="material-symbols-rounded">inventory_2</span>
-      Catálogo oficial
-    </button>
-    <button type="button" class="catalog-tab" [class.active]="activeTab() === 'manuales'" (click)="setTab('manuales')">
-      <span class="material-symbols-rounded">edit_note</span>
-      Manuales
-      @if (manualSvc.entries().length) {
-        <span class="tab-badge">{{ manualSvc.entries().length }}</span>
-      }
-    </button>
+    @for (tab of visibleTabs(); track tab.id) {
+      <button type="button" class="catalog-tab" [class.active]="activeTab() === tab.id" (click)="setTab(tab.id)">
+        <span class="material-symbols-rounded">{{ tab.icon }}</span>
+        {{ tab.label }}
+      </button>
+    }
   </nav>
 
   @if (activeTab() === 'catalog') {
@@ -226,10 +227,14 @@
 
   } <!-- /catalog tab -->
 
+  @if (activeTab() === 'catalogo_excel') {
+    <app-catalog-products-import />
+  }
+
   <!-- ────────────────────────────────────────────────────────
        PESTAÑA: PRODUCTOS MANUALES
   ──────────────────────────────────────────────────────────── -->
-  @if (activeTab() === 'manuales') {
+  @if (activeTab() === 'manuales_bm' || activeTab() === 'manuales_catalogo') {
 
     @if (manualError()) {
       <div class="notice notice-error">

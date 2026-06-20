@@ -3,6 +3,7 @@ import { HttpClient, HttpErrorResponse } from "@angular/common/http";
 import { lastValueFrom } from "rxjs";
 import { FIREBASE_AUTH } from "../core/firebase.providers";
 import {
+  BusinessMembershipsMap,
   RoleId,
   UserLoginType,
   buildUsernameAuthEmail,
@@ -36,6 +37,7 @@ export type CreateManagedUserInput = {
   email?: string;
   sendActivationEmail?: boolean;
   permissions: AdminPermissionsPayload;
+  businessMemberships?: BusinessMembershipsMap;
 };
 
 export type CreateManagedUserResult = {
@@ -55,6 +57,7 @@ export type UpdateManagedUserInput = {
   capabilities?: Record<string, boolean>;
   sectionOverrides?: Record<string, boolean>;
   capabilityOverrides?: Record<string, boolean>;
+  businessMemberships?: BusinessMembershipsMap;
 };
 
 export type UpdateProfileInput = {
@@ -90,6 +93,7 @@ export type ListManagedUserRow = {
   capabilities: Record<string, boolean> | null;
   sectionOverrides: Record<string, boolean> | null;
   capabilityOverrides: Record<string, boolean> | null;
+  businessMemberships?: Record<string, unknown> | null;
 };
 
 export type SessionBootstrapUser = {
@@ -103,6 +107,7 @@ export type SessionBootstrapUser = {
   mustChangePassword: boolean;
   sections?: Record<string, boolean> | null;
   capabilities?: Record<string, boolean> | null;
+  businessMemberships?: Record<string, unknown> | null;
 };
 
 type BackendSectionKey =
@@ -217,6 +222,9 @@ export class UserAdminApiService {
     if (input.capabilityOverrides && Object.keys(input.capabilityOverrides).length > 0) {
       payload["capabilityOverrides"] = this.normalizeCapabilitiesForApi(input.capabilityOverrides);
     }
+    if (input.businessMemberships && Object.keys(input.businessMemberships).length > 0) {
+      payload["businessMemberships"] = input.businessMemberships;
+    }
 
     if (!environment.production) {
       console.info("[AUTHZ][UPDATE_ACCESS][PAYLOAD]", payload);
@@ -292,6 +300,7 @@ export class UserAdminApiService {
         mustChangePassword: boolean;
         sections?: Record<string, boolean> | null;
         capabilities?: Record<string, boolean> | null;
+        businessMemberships?: Record<string, unknown> | null;
       };
     }>("/admin/users/session/bootstrap", {
       method: "GET",
@@ -307,6 +316,7 @@ export class UserAdminApiService {
       mustChangePassword: Boolean(result.user.mustChangePassword),
       sections: (result.user.sections || null) as Record<string, boolean> | null,
       capabilities: (result.user.capabilities || null) as Record<string, boolean> | null,
+      businessMemberships: (result.user.businessMemberships || null) as Record<string, unknown> | null,
     };
 
     if (!environment.production) {
@@ -468,6 +478,7 @@ export class UserAdminApiService {
       capabilities: this.normalizeBooleanRecord(row["capabilities"]),
       sectionOverrides: this.normalizeBooleanRecord(row["sectionOverrides"]),
       capabilityOverrides: this.normalizeBooleanRecord(row["capabilityOverrides"]),
+      businessMemberships: this.normalizeUnknownRecord(row["businessMemberships"]),
     };
   }
 
@@ -491,5 +502,10 @@ export class UserAdminApiService {
       if (typeof value === "boolean") out[key] = value;
     }
     return Object.keys(out).length ? out : null;
+  }
+
+  private normalizeUnknownRecord(raw: unknown): Record<string, unknown> | null {
+    if (!raw || typeof raw !== "object") return null;
+    return raw as Record<string, unknown>;
   }
 }

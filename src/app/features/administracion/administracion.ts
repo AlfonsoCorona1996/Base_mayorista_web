@@ -1,4 +1,5 @@
 
+import { NgClass } from "@angular/common";
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from "@angular/core";
 import { FormsModule } from "@angular/forms";
 import { ActivatedRoute, Router } from "@angular/router";
@@ -15,6 +16,8 @@ import {
 import { InventoryItem, InventoryService } from "../../core/inventory.service";
 import { Order, OrderItem, OrderStatus, OrdersService } from "../../core/orders.service";
 import { RoutesService } from "../../core/routes.service";
+import { BusinessScopeService } from "../../core/business-scope.service";
+import { BusinessId } from "../../core/rbac.constants";
 
 type MoneyBucketId =
   | "openDrafts"
@@ -159,6 +162,12 @@ type FinanceSummary = {
   orderBucketRows: BucketOrderRow[];
 };
 
+type BusinessFinanceSummaryRow = {
+  businessId: BusinessId;
+  label: string;
+  summary: FinanceSummary;
+};
+
 type OrderFinancialSnapshot = {
   order: Order;
   status: OrderStatus;
@@ -297,7 +306,7 @@ const DRILLDOWN_COLUMN_DEFAULT_DIRECTION: Record<DrilldownColumn, "asc" | "desc"
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   selector: "app-administracion",
-  imports: [FormsModule],
+  imports: [FormsModule, NgClass],
   templateUrl: "./administracion.html",
   styleUrl: "./administracion.css",
 })
@@ -307,6 +316,7 @@ export default class AdministracionPage {
   private routesService = inject(RoutesService);
   private financeService = inject(FinanceService);
   private customersService = inject(CustomersService);
+  businessScope = inject(BusinessScopeService);
   private authz = inject(AuthzService);
   private router = inject(Router);
   private route = inject(ActivatedRoute);
@@ -418,6 +428,27 @@ export default class AdministracionPage {
       stagnationDays: this.stagnationDays(),
     }),
   );
+
+  businessSummaryRows = computed<BusinessFinanceSummaryRow[]>(() => {
+    if (!this.businessScope.isBothMode()) return [];
+    return this.businessScope.activeBusinessIds().map((businessId) => ({
+      businessId,
+      label: this.businessScope.businessShortLabel(businessId),
+      summary: this.buildSummary({
+        orders: this.filteredOrders().filter((order) => (order.business_id || "bm") === businessId),
+        expenses: this.filteredExpenses().filter((row) => (row.business_id || "bm") === businessId),
+        inventory: this.inventoryItems().filter((item) => (item.business_id || "bm") === businessId),
+        accounts: this.accounts().filter((account) => (account.business_id || "bm") === businessId),
+        projectionDays: this.projectionDays(),
+        averageWindowDays: this.averageWindowDays(),
+        stagnationDays: this.stagnationDays(),
+      }),
+    }));
+  });
+
+  businessSummaryClass(row: BusinessFinanceSummaryRow): string {
+    return row.businessId === "catalogo" ? "business-catalogo" : "business-bm";
+  }
 
   withdrawalSummary = computed(() => {
     const baseDisponible = Math.max(0, this.summary().utilidadNeta);

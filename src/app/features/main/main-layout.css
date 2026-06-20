@@ -403,6 +403,64 @@
   font-weight: 600;
 }
 
+.business-switcher {
+  margin-left: auto;
+  min-height: 36px;
+  border: 1px solid var(--ios-border);
+  border-radius: 12px;
+  background: #f8fafc;
+  padding: 3px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.business-switcher-btn {
+  border: 0;
+  border-radius: 9px;
+  min-height: 28px;
+  padding: 0 10px;
+  background: transparent;
+  color: #52657f;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 650;
+}
+
+.business-switcher-lock {
+  border-radius: 8px;
+  background: #e2e8f0;
+  color: #334155;
+  min-height: 28px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.business-switcher-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.business-switcher-btn.active {
+  color: #142033;
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.14);
+}
+
+.business-switcher-btn.business-bm.active {
+  color: #0b56b7;
+  background: #e8f2ff;
+}
+
+.business-switcher-btn.business-catalogo.active {
+  color: #047857;
+  background: #e8fff5;
+}
+
 .impersonation-banner {
   margin-left: auto;
   min-height: 34px;
@@ -446,6 +504,54 @@
   min-height: 0;
   min-width: 0;
   width: 100%;
+}
+
+.import-progress-toast {
+  position: fixed;
+  right: 16px;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  z-index: 60;
+  width: min(360px, calc(100vw - 32px));
+  border: 1px solid rgba(16, 185, 129, 0.26);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.18);
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.import-progress-toast__head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #064e3b;
+  font-size: 0.82rem;
+}
+
+.import-progress-toast__head strong {
+  flex: 1;
+}
+
+.import-progress-toast__bar {
+  height: 7px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #d1fae5;
+}
+
+.import-progress-toast__bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #10b981;
+  transition: width 0.24s ease;
+}
+
+.import-progress-toast p {
+  margin: 0;
+  color: #475569;
+  font-size: 0.76rem;
 }
 
 .backdrop {
@@ -500,6 +606,17 @@
 @media (max-width: 640px) {
   .sidebar {
     width: min(88vw, 320px);
+  }
+
+  .business-switcher {
+    order: 2;
+    margin-left: 0;
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .business-switcher-btn {
+    flex: 1 1 0;
   }
 
   .impersonation-banner {

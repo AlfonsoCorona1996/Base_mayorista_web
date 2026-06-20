@@ -1,6 +1,8 @@
 import { Component, computed, inject, signal, ChangeDetectionStrategy } from "@angular/core";
+import { NgClass } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { Supplier, SuppliersService } from "../../core/suppliers.service";
+import { BusinessScopeService } from "../../core/business-scope.service";
 
 type SupplierFilter = "all" | "active" | "inactive";
 
@@ -17,7 +19,7 @@ interface SupplierDraft {
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   selector: "app-proveedores",
-  imports: [FormsModule],
+  imports: [FormsModule, NgClass],
   templateUrl: "./proveedores.html",
   styleUrl: "./proveedores.css",
 })
@@ -35,6 +37,7 @@ export default class ProveedoresPage {
   draft: SupplierDraft = this.emptyDraft();
 
   private suppliersService = inject(SuppliersService);
+  businessScope = inject(BusinessScopeService);
 
   constructor() {
     this.reload();
@@ -148,6 +151,7 @@ export default class ProveedoresPage {
 
       const payload: Supplier = {
         supplier_id: resolvedId,
+        business_id: existing?.business_id || this.businessScope.writeBusinessId(),
         display_name: displayName,
         contact_name: this.draft.contact_name.trim(),
         contact_phone: this.draft.contact_phone.trim(),
@@ -196,6 +200,14 @@ export default class ProveedoresPage {
 
   isBusy(supplierId: string): boolean {
     return this.togglingId() === supplierId;
+  }
+
+  supplierBusinessLabel(supplier: Supplier): string {
+    return this.businessScope.businessShortLabel(supplier.business_id || "bm");
+  }
+
+  supplierBusinessClass(supplier: Supplier): string {
+    return this.businessScope.businessClass(supplier.business_id);
   }
 
   private emptyDraft(): SupplierDraft {

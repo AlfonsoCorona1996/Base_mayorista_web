@@ -154,11 +154,16 @@
       } @else {
         <div class="supplier-list">
           @for (supplier of filteredSuppliers(); track supplier.supplier_id) {
-            <article class="supplier-card" [class.inactive]="!supplier.active">
+            <article class="supplier-card" [ngClass]="businessScope.isBothMode() ? supplierBusinessClass(supplier) : ''" [class.inactive]="!supplier.active">
               <header>
                 <div>
                   <h3>{{ supplier.display_name }}</h3>
-                  <p class="supplier-id">ID: {{ supplier.supplier_id }}</p>
+                  <p class="supplier-id">
+                    ID: {{ supplier.supplier_id }}
+                    @if (businessScope.isBothMode()) {
+                      <span class="business-badge" [ngClass]="supplierBusinessClass(supplier)">{{ supplierBusinessLabel(supplier) }}</span>
+                    }
+                  </p>
                 </div>
                 <span class="status-pill" [class.status-off]="!supplier.active">
                   {{ supplier.active ? "Activo" : "Inactivo" }}

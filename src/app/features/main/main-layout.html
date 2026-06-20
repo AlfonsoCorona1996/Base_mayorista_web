@@ -202,6 +202,40 @@
         <span>{{ menuOpen() ? 'Cerrar' : 'Menu' }}</span>
       </button>
       <span class="topbar-title">Administracion</span>
+      @if (businessScope.showSwitcher()) {
+      <div class="business-switcher" role="group" aria-label="Seleccionar negocio">
+        @if (businessScope.scopeLock(); as lock) {
+          <span class="business-switcher-lock">{{ lock.reason }}</span>
+        }
+        <button
+          type="button"
+          class="business-switcher-btn business-bm"
+          [class.active]="businessScope.scope() === 'bm'"
+          [disabled]="businessScope.isScopeLocked()"
+          (click)="setBusinessScope('bm')"
+        >
+          BM
+        </button>
+        <button
+          type="button"
+          class="business-switcher-btn business-catalogo"
+          [class.active]="businessScope.scope() === 'catalogo'"
+          [disabled]="businessScope.isScopeLocked()"
+          (click)="setBusinessScope('catalogo')"
+        >
+          Catalogo
+        </button>
+        <button
+          type="button"
+          class="business-switcher-btn"
+          [class.active]="businessScope.scope() === 'both'"
+          [disabled]="businessScope.isScopeLocked()"
+          (click)="setBusinessScope('both')"
+        >
+          Ambos
+        </button>
+      </div>
+      }
       @if (isImpersonating()) {
       <div class="impersonation-banner">
         <span class="material-symbols-rounded" aria-hidden="true">visibility</span>
@@ -219,6 +253,20 @@
     </main>
   </div>
 </div>
+
+@if (importJobs.latestActiveJob(); as job) {
+<aside class="import-progress-toast" role="status" aria-live="polite">
+  <div class="import-progress-toast__head">
+    <span class="material-symbols-rounded" aria-hidden="true">cloud_upload</span>
+    <strong>Importando Catálogo</strong>
+    <span>{{ job.percent }}%</span>
+  </div>
+  <div class="import-progress-toast__bar" aria-hidden="true">
+    <span [style.width.%]="job.percent"></span>
+  </div>
+  <p>{{ job.processed_rows }} de {{ job.valid_rows }} filas · {{ job.file_name }}</p>
+</aside>
+}
 
 @if (menuOpen()) {
 <button type="button" class="backdrop" aria-label="Cerrar menu" (click)="closeMenu()"></button>

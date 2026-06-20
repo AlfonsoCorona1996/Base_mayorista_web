@@ -1,20 +1,23 @@
-import { Injectable, signal } from "@angular/core";
+import { Injectable, computed, inject, signal } from "@angular/core";
 import { FIRESTORE } from "./firebase.providers";
+import { BusinessScopeService } from "./business-scope.service";
+import { BusinessId, normalizeBusinessId } from "./rbac.constants";
 import {
   collection,
   deleteDoc,
   doc,
   getDocs,
-  orderBy,
   query,
   runTransaction,
   serverTimestamp,
   setDoc,
   Timestamp,
+  where,
 } from "firebase/firestore";
 
 export interface InventoryItem {
   inventory_id: string;
+  business_id: BusinessId;
   title: string;
   sku?: string;
   category_hint: string | null;
@@ -70,6 +73,7 @@ export interface ConsumeOnDeliveryInput {
 
 export interface ReceiveInboundInput {
   sku: string;
+  business_id?: BusinessId;
   qty: number;
   supplierOperationId: string;
   lineId: string;
@@ -81,22 +85,49 @@ export interface ReceiveInboundInput {
   image_url?: string | null;
 }
 
+export interface ReceiveReturnInput {
+  inventoryId: string;
+  business_id?: BusinessId;
+  qty: number;
+  returnId: string;
+  orderId: string;
+  orderItemId: string;
+  idempotencyKey: string;
+  title: string;
+  sku?: string | null;
+  supplier_id?: string | null;
+  category_hint?: string | null;
+  variant_name?: string | null;
+  color_name?: string | null;
+  size_label?: string | null;
+  unit_price?: number | null;
+  image_url?: string | null;
+  notes?: string | null;
+}
+
 @Injectable({ providedIn: "root" })
 export class InventoryService {
   private colRef = collection(FIRESTORE, "inventory_items");
+  private businessScope = inject(BusinessScopeService);
+  private rows = signal<InventoryItem[]>([]);
 
-  items = signal<InventoryItem[]>([]);
+  items = computed(() => {
+    const active = this.businessScope.activeBusinessIds();
+    return this.rows().filter((item) => active.includes(item.business_id || "bm"));
+  });
 
   async loadFromFirestore(): Promise<void> {
-    const q = query(this.colRef, orderBy("updated_at", "desc"));
+    const q = query(this.colRef, where("business_id", "in", this.businessScope.availableBusinessIds()));
     const snapshot = await getDocs(q);
 
-    const rows = snapshot.docs.map((entry) => {
-      const data = entry.data() as Partial<InventoryItem>;
-      return this.normalizeItem(data, entry.id);
-    });
+    const rows = snapshot.docs
+      .map((entry) => {
+        const data = entry.data() as Partial<InventoryItem>;
+        return this.normalizeItem(data, entry.id);
+      })
+      .sort((a, b) => this.toMillis(b.updated_at) - this.toMillis(a.updated_at));
 
-    this.items.set(rows);
+    this.rows.set(rows);
   }
 
   async save(item: InventoryItem, idempotencyKey?: string): Promise<string> {
@@ -116,6 +147,7 @@ export class InventoryService {
       const payload: InventoryItem = {
         ...item,
         inventory_id: itemId,
+        business_id: normalizeBusinessId(item.business_id || this.businessScope.writeBusinessId()),
         title: (item.title || "").trim(),
         sku: (item.sku || this.generateSku(item.title)).trim(),
         category_hint: item.category_hint || null,
@@ -317,6 +349,7 @@ export class InventoryService {
         const available = onHand;
         const created: InventoryItem = {
           inventory_id: inventoryId,
+          business_id: normalizeBusinessId(input.business_id || this.businessScope.writeBusinessId()),
           title: (input.title || "Producto sin nombre").trim(),
           sku: inventoryId,
           category_hint: null,
@@ -361,6 +394,66 @@ export class InventoryService {
     await this.loadFromFirestore();
   }
 
+  async receiveReturn(input: ReceiveReturnInput): Promise<void> {
+    const inventoryId = (input.inventoryId || "").trim();
+    if (!inventoryId) throw new Error("inventoryId requerido para devolución");
+    const qty = this.toSafeQty(input.qty);
+    if (qty <= 0) throw new Error("Cantidad de devolución inválida");
+    const idKey = this.safeIdempotencyKey(input.idempotencyKey);
+    const ref = doc(this.colRef, inventoryId);
+
+    await runTransaction(FIRESTORE, async (tx) => {
+      const snap = await tx.get(ref);
+      const nowIso = new Date().toISOString();
+
+      if (!snap.exists()) {
+        const created: InventoryItem = {
+          inventory_id: inventoryId,
+          business_id: normalizeBusinessId(input.business_id || this.businessScope.writeBusinessId()),
+          title: (input.title || "Producto devuelto").trim(),
+          sku: (input.sku || inventoryId).trim(),
+          category_hint: input.category_hint || null,
+          supplier_id: input.supplier_id ?? null,
+          variant_name: input.variant_name ?? null,
+          color_name: input.color_name ?? null,
+          size_label: input.size_label ?? null,
+          quantity_on_hand: qty,
+          on_hand_qty: qty,
+          reserved_qty: 0,
+          available_qty: qty,
+          unit_price: this.toSafePrice(input.unit_price),
+          notes: input.notes || `Alta automática por devolución ${input.returnId}.`,
+          image_urls: input.image_url ? [input.image_url] : [],
+          source_reason: "devolucion",
+          reservations: {},
+          created_at: nowIso,
+          updated_at: nowIso,
+          idempotency_keys: this.withIdempotency({}, idKey, nowIso),
+        };
+        tx.set(ref, { ...created, created_at: serverTimestamp(), updated_at: serverTimestamp() }, { merge: true });
+        return;
+      }
+
+      const row = this.normalizeItem(snap.data() as Partial<InventoryItem>, snap.id);
+      if (row.idempotency_keys?.[idKey]) return;
+      const onHand = this.toSafeQty(row.on_hand_qty ?? row.available_qty ?? row.quantity_on_hand);
+      const reserved = this.toSafeQty(row.reserved_qty ?? 0);
+      const nextOnHand = onHand + qty;
+      const nextAvailable = Math.max(0, nextOnHand - reserved);
+      tx.update(ref, {
+        on_hand_qty: nextOnHand,
+        reserved_qty: reserved,
+        available_qty: nextAvailable,
+        quantity_on_hand: nextAvailable,
+        source_reason: row.source_reason || "devolucion",
+        updated_at: serverTimestamp(),
+        idempotency_keys: this.withIdempotency(row.idempotency_keys || {}, idKey, nowIso),
+      });
+    });
+
+    await this.loadFromFirestore();
+  }
+
   generateSku(title: string): string {
     const base = this.slugify(title).slice(0, 8).toUpperCase() || "INV";
     const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
@@ -375,6 +468,7 @@ export class InventoryService {
 
     return {
       inventory_id: data.inventory_id || fallbackId,
+      business_id: normalizeBusinessId(data.business_id),
       title,
       sku: (data.sku || this.generateSku(title)).trim(),
       category_hint: data.category_hint || null,
@@ -395,6 +489,16 @@ export class InventoryService {
       created_at: data.created_at,
       updated_at: data.updated_at,
     };
+  }
+
+  private toMillis(value: unknown): number {
+    if (!value) return 0;
+    if (value instanceof Date) return value.getTime();
+    if (typeof value === "object" && value !== null && typeof (value as { toMillis?: unknown }).toMillis === "function") {
+      return ((value as { toMillis: () => number }).toMillis());
+    }
+    const parsed = new Date(String(value));
+    return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime();
   }
 
   private buildInventoryId(title: string): string {

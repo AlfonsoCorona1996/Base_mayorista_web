@@ -6560,3 +6560,21 @@ code {
   gap: 4px;
   flex-wrap: wrap;
 }
+
+.return-sheet {
+  max-width: 620px;
+}
+
+.return-form {
+  display: grid;
+  gap: 14px;
+}
+
+.return-toggle {
+  width: 100%;
+  flex-wrap: wrap;
+}
+
+.return-toggle label {
+  flex: 1 1 130px;
+}

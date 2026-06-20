@@ -520,6 +520,30 @@
   color: var(--muted);
 }
 
+.stop-business-list {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.stop-business-chip {
+  border-radius: 999px;
+  padding: 4px 9px;
+  font-size: 0.7rem;
+  font-weight: 750;
+}
+
+.stop-business-chip.business-bm {
+  background: #e8f2ff;
+  color: #0b56b7;
+}
+
+.stop-business-chip.business-catalogo {
+  background: #e8fff5;
+  color: #047857;
+}
+
 .sd-stop-badge {
   font-size: 0.7rem;
   font-weight: 700;

@@ -120,6 +120,22 @@
               }
             </div>
 
+            <div class="business-access-editor">
+              <span class="business-access-title">Negocios</span>
+              <div class="business-access-options">
+                @for (businessId of businessIds; track businessId) {
+                  <label class="business-toggle" [class.active]="newBusinessAccessEnabled(businessId)">
+                    <input
+                      type="checkbox"
+                      [checked]="newBusinessAccessEnabled(businessId)"
+                      (change)="setNewBusinessAccess(businessId, $any($event.target).checked)"
+                    />
+                    {{ businessName(businessId) }}
+                  </label>
+                }
+              </div>
+            </div>
+
             <div class="actions">
               <button type="button" class="btn btn-primary" [disabled]="saving()" (click)="createUser()">
                 {{ saving() ? "Creando..." : "Crear usuario" }}
@@ -168,6 +184,15 @@
                     </div>
                   </div>
                   <div class="chips">
+                    @for (businessId of userBusinessIds(row); track businessId) {
+                      <span
+                        class="business-pill"
+                        [class.business-pill-bm]="businessId === 'bm'"
+                        [class.business-pill-catalogo]="businessId === 'catalogo'"
+                      >
+                        {{ businessName(businessId) }}
+                      </span>
+                    }
                     <span class="role-pill">{{ roleName(row.roleId) }}</span>
                     <span class="state-pill" [class.off]="!row.isActive">{{ row.isActive ? "Activo" : "Inactivo" }}</span>
                     @if (row.mustChangePassword) {
@@ -282,6 +307,22 @@
                         />
                         Requerir cambio de contrasena
                       </label>
+                    </div>
+
+                    <div class="business-access-editor business-access-editor-inline">
+                      <span class="business-access-title">Acceso a negocios</span>
+                      <div class="business-access-options">
+                        @for (businessId of businessIds; track businessId) {
+                          <label class="business-toggle" [class.active]="editBusinessAccessEnabled(businessId)">
+                            <input
+                              type="checkbox"
+                              [checked]="editBusinessAccessEnabled(businessId)"
+                              (change)="setEditBusinessAccess(businessId, $any($event.target).checked)"
+                            />
+                            {{ businessName(businessId) }}
+                          </label>
+                        }
+                      </div>
                     </div>
                   </section>
 

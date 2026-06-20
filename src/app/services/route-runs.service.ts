@@ -1,4 +1,4 @@
-import { Injectable } from "@angular/core";
+import { Injectable, inject } from "@angular/core";
 import {
   Timestamp,
   collection,
@@ -15,6 +15,8 @@ import {
 } from "firebase/firestore";
 import { ulid } from "ulid";
 import { FIRESTORE } from "../core/firebase.providers";
+import { BusinessScopeService } from "../core/business-scope.service";
+import { BusinessId, businessShortLabel, normalizeBusinessId } from "../core/rbac.constants";
 
 export type RouteRunStatus = "draft" | "scheduled" | "in_transit" | "completed" | "cancelled";
 export type DispatchRequestStatus = "none" | "requested" | "accepted" | "rejected";
@@ -46,7 +48,11 @@ export interface RouteRunDoc {
 }
 
 export interface RouteRunStopDoc {
+  stop_id: string;
   order_id: string;
+  order_ids: string[];
+  business_id: BusinessId;
+  business_summaries: Partial<Record<BusinessId, RouteRunStopBusinessSummary>>;
   order_number: string;
   customer_id: string;
   customer_name: string;
@@ -61,8 +67,20 @@ export interface RouteRunStopDoc {
   createdAt?: string | null;
 }
 
+export interface RouteRunStopBusinessSummary {
+  business_id: BusinessId;
+  label: string;
+  order_ids: string[];
+  orders_total: number;
+  packages_count: number;
+  total_amount: number;
+  paid_amount: number;
+  balance_due: number;
+}
+
 export interface DispatchOrderRow {
   order_id: string;
+  business_id: BusinessId;
   customer_id: string;
   route_id: string | null;
   status: string;
@@ -97,6 +115,8 @@ export interface AcceptRequestParams {
 
 @Injectable({ providedIn: "root" })
 export class RouteRunsService {
+  private businessScope = inject(BusinessScopeService);
+
   async createDraftRun(
     routeId: string,
     routeName: string,
@@ -140,8 +160,13 @@ export class RouteRunsService {
   }
 
   async listDispatchOrders(): Promise<DispatchOrderRow[]> {
-    const snap = await getDocs(collection(FIRESTORE, "orders"));
-    return snap.docs.map((entry) => this.normalizeDispatchOrder(entry.id, entry.data() as Record<string, any>));
+    const snap = await getDocs(
+      query(collection(FIRESTORE, "orders"), where("business_id", "in", this.businessScope.availableBusinessIds())),
+    );
+    const active = this.businessScope.activeBusinessIds();
+    return snap.docs
+      .map((entry) => this.normalizeDispatchOrder(entry.id, entry.data() as Record<string, any>))
+      .filter((row) => active.includes(row.business_id));
   }
 
   async requestDispatch(orderId: string, actor: RunActor, note?: string): Promise<void> {
@@ -209,7 +234,9 @@ export class RouteRunsService {
       runId = runCandidate?.runId || `run_${ulid()}`;
     }
     const runRef = doc(FIRESTORE, "route_runs", runId);
-    const stopRef = doc(FIRESTORE, "route_runs", runId, "stops", params.order.order_id);
+    const stopId = params.order.customer_id || params.order.order_id;
+    const businessId = params.order.business_id;
+    const stopRef = doc(FIRESTORE, "route_runs", runId, "stops", stopId);
     const orderRef = doc(FIRESTORE, "orders", params.order.order_id);
     const eventId = `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const eventRef = doc(FIRESTORE, "orders", params.order.order_id, "events", eventId);
@@ -241,7 +268,16 @@ export class RouteRunsService {
       }
 
       const stopPayload = {
+        stop_id: stopId,
         order_id: params.order.order_id,
+        order_ids: [params.order.order_id],
+        business_id: businessId,
+        orders_by_business: {
+          [businessId]: [params.order.order_id],
+        },
+        business_summaries: {
+          [businessId]: this.buildStopBusinessSummary(businessId, [params.order.order_id], params.order),
+        },
         order_number: params.order.order_id,
         customer_id: params.order.customer_id,
         customer_name: params.customerName,
@@ -253,8 +289,36 @@ export class RouteRunsService {
         createdAt: serverTimestamp(),
       };
 
+      const alreadyIncluded = stopSnap.exists() && this.stopIncludesOrder(stopSnap.data() as Record<string, any>, params.order.order_id);
       if (!stopSnap.exists()) {
         tx.set(stopRef, stopPayload);
+      } else if (!alreadyIncluded) {
+        const currentStop = stopSnap.data() as Record<string, any>;
+        const nextOrderIds = this.appendUniqueString(currentStop["order_ids"], params.order.order_id);
+        const nextBusinessOrderIds = this.appendUniqueString(
+          currentStop["orders_by_business"]?.[businessId],
+          params.order.order_id,
+        );
+        const currentSummary = currentStop["business_summaries"]?.[businessId] || null;
+        tx.set(
+          stopRef,
+          {
+            order_ids: nextOrderIds,
+            orders_by_business: {
+              ...(currentStop["orders_by_business"] || {}),
+              [businessId]: nextBusinessOrderIds,
+            },
+            business_summaries: {
+              ...(currentStop["business_summaries"] || {}),
+              [businessId]: this.mergeStopBusinessSummary(businessId, nextBusinessOrderIds, currentSummary, params.order),
+            },
+            packages_count: Number(currentStop["packages_count"] || 0) + stopPayload.packages_count,
+            total_amount: Number(currentStop["total_amount"] || 0) + stopPayload.total_amount,
+            paid_amount: Number(currentStop["paid_amount"] || 0) + stopPayload.paid_amount,
+            balance_due: Number(currentStop["balance_due"] || 0) + stopPayload.balance_due,
+          },
+          { merge: true },
+        );
       }
 
       const runData = runSnap.exists()
@@ -266,7 +330,6 @@ export class RouteRunsService {
       const currentOrders = Number(runCounts["orders_total"] || 0);
       const currentPackages = Number(runCounts["packages_total"] || 0);
       const currentBalance = Number(runCounts["balance_total"] || 0);
-      const alreadyIncluded = stopSnap.exists();
       const addOrders = alreadyIncluded ? 0 : 1;
       const addPackages = alreadyIncluded ? 0 : stopPayload.packages_count;
       const addBalance = alreadyIncluded ? 0 : stopPayload.balance_due;
@@ -424,8 +487,49 @@ export class RouteRunsService {
   }
 
   private normalizeStop(data: Record<string, any>): RouteRunStopDoc {
+    const businessId = normalizeBusinessId(data["business_id"]);
+    const orderId = (data["order_id"] || "").toString();
+    const orderIds = Array.isArray(data["order_ids"])
+      ? data["order_ids"].map((value: unknown) => String(value || "")).filter(Boolean)
+      : orderId
+        ? [orderId]
+        : [];
+    const summariesRaw = (data["business_summaries"] || {}) as Record<string, any>;
+    const business_summaries: Partial<Record<BusinessId, RouteRunStopBusinessSummary>> = {};
+    for (const id of ["bm", "catalogo"] as BusinessId[]) {
+      const raw = summariesRaw[id];
+      if (!raw) continue;
+      business_summaries[id] = {
+        business_id: id,
+        label: raw["label"] || businessShortLabel(id),
+        order_ids: Array.isArray(raw["order_ids"]) ? raw["order_ids"].map((value: unknown) => String(value || "")).filter(Boolean) : [],
+        orders_total: Number(raw["orders_total"] || 0),
+        packages_count: Number(raw["packages_count"] || 0),
+        total_amount: Number(raw["total_amount"] || 0),
+        paid_amount: Number(raw["paid_amount"] || 0),
+        balance_due: Number(raw["balance_due"] || 0),
+      };
+    }
+
+    if (Object.keys(business_summaries).length === 0 && orderId) {
+      business_summaries[businessId] = {
+        business_id: businessId,
+        label: businessShortLabel(businessId),
+        order_ids: orderIds,
+        orders_total: orderIds.length || 1,
+        packages_count: Number(data["packages_count"] || 0),
+        total_amount: Number(data["total_amount"] || 0),
+        paid_amount: Number(data["paid_amount"] || 0),
+        balance_due: Number(data["balance_due"] || 0),
+      };
+    }
+
     return {
-      order_id: (data["order_id"] || "").toString(),
+      stop_id: (data["stop_id"] || data["customer_id"] || orderId).toString(),
+      order_id: orderId,
+      order_ids: orderIds,
+      business_id: businessId,
+      business_summaries,
       order_number: (data["order_number"] || data["order_id"] || "").toString(),
       customer_id: (data["customer_id"] || "").toString(),
       customer_name: (data["customer_name"] || "Cliente").toString(),
@@ -451,6 +555,7 @@ export class RouteRunsService {
     const balanceDue = Number(totalsRaw["balance_due"] || 0) || Math.max(0, totalAmount - paidAmount);
     return {
       order_id: orderId,
+      business_id: normalizeBusinessId(data["business_id"]),
       customer_id: (data["customer_id"] || "").toString(),
       route_id: (data["route_id"] || null) as string | null,
       status: (data["status"] || "borrador").toString(),
@@ -473,6 +578,60 @@ export class RouteRunsService {
       },
       updated_at: toIso(data["updated_at"]) || new Date().toISOString(),
     };
+  }
+
+  private buildStopBusinessSummary(
+    businessId: BusinessId,
+    orderIds: string[],
+    order: DispatchOrderRow,
+  ): RouteRunStopBusinessSummary {
+    return {
+      business_id: businessId,
+      label: businessShortLabel(businessId),
+      order_ids: orderIds,
+      orders_total: orderIds.length,
+      packages_count: Math.max(0, Math.trunc(order.packing.packages_count || 0)),
+      total_amount: Number(order.totals.total_amount || 0),
+      paid_amount: Number(order.totals.paid_amount || 0),
+      balance_due: Number(order.totals.balance_due || 0),
+    };
+  }
+
+  private mergeStopBusinessSummary(
+    businessId: BusinessId,
+    orderIds: string[],
+    rawSummary: Record<string, any> | null,
+    order: DispatchOrderRow,
+  ): RouteRunStopBusinessSummary {
+    const current = rawSummary || {};
+    return {
+      business_id: businessId,
+      label: businessShortLabel(businessId),
+      order_ids: orderIds,
+      orders_total: orderIds.length,
+      packages_count: Number(current["packages_count"] || 0) + Math.max(0, Math.trunc(order.packing.packages_count || 0)),
+      total_amount: Number(current["total_amount"] || 0) + Number(order.totals.total_amount || 0),
+      paid_amount: Number(current["paid_amount"] || 0) + Number(order.totals.paid_amount || 0),
+      balance_due: Number(current["balance_due"] || 0) + Number(order.totals.balance_due || 0),
+    };
+  }
+
+  private stopIncludesOrder(data: Record<string, any>, orderId: string): boolean {
+    const orderIds = Array.isArray(data["order_ids"]) ? data["order_ids"] : [];
+    return orderIds.some((value) => String(value || "") === orderId) || String(data["order_id"] || "") === orderId;
+  }
+
+  private appendUniqueString(source: unknown, value: string): string[] {
+    const set = new Set<string>();
+    if (Array.isArray(source)) {
+      for (const entry of source) {
+        const normalized = String(entry || "").trim();
+        if (normalized) set.add(normalized);
+      }
+    }
+    const normalizedValue = String(value || "").trim();
+    if (normalizedValue) set.add(normalizedValue);
+    return [...set];
   }
 }
 

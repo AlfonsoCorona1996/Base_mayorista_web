@@ -55,6 +55,23 @@
   @if (loading()) {
     <article class="glass-card loading-card">Cargando resumen financiero...</article>
   } @else {
+    @if (businessSummaryRows().length > 0) {
+      <section class="business-finance-grid">
+        @for (row of businessSummaryRows(); track row.businessId) {
+          <article class="business-finance-card glass-card" [ngClass]="businessSummaryClass(row)">
+            <header>
+              <span>{{ row.label }}</span>
+              <strong>{{ formatCurrency(row.summary.cajaActual) }}</strong>
+            </header>
+            <div>
+              <p>Por cobrar <strong>{{ formatCurrency(row.summary.porCobrar) }}</strong></p>
+              <p>Pipeline <strong>{{ formatCurrency(row.summary.pipelineClienta) }}</strong></p>
+              <p>Utilidad neta <strong>{{ formatCurrency(row.summary.utilidadNeta) }}</strong></p>
+            </div>
+          </article>
+        }
+      </section>
+    }
     @if (summary(); as m) {
       <section class="kpi-grid">
         <article class="kpi-card glass-card kpi-card-primary">

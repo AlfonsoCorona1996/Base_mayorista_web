@@ -5,13 +5,18 @@ import {
   deleteDoc,
   doc,
   getDocs,
+  query,
   serverTimestamp,
   setDoc,
   updateDoc,
+  where,
 } from "firebase/firestore";
+import { BusinessScopeService } from "./business-scope.service";
+import { BusinessId, normalizeBusinessId } from "./rbac.constants";
 
 export interface ManualProductEntry {
   id: string;
+  business_id: BusinessId;
   title: string;
   variant: string;
   color: string;
@@ -27,15 +32,17 @@ export interface ManualProductEntry {
 @Injectable({ providedIn: "root" })
 export class ManualProductHistoryService {
   private colRef = collection(FIRESTORE, "manual_product_suggestions");
+  constructor(private businessScope: BusinessScopeService) {}
 
   readonly entries = signal<ManualProductEntry[]>([]);
   readonly loading = signal(false);
 
-  async load(): Promise<void> {
+  async load(businessId?: BusinessId): Promise<void> {
     this.loading.set(true);
     try {
       // Fetch all docs and sort in client-side to avoid index-dependent failures.
-      const snap = await getDocs(this.colRef);
+      const businessIds = businessId ? [normalizeBusinessId(businessId)] : this.businessScope.activeBusinessIds();
+      const snap = await getDocs(query(this.colRef, where("business_id", "in", businessIds)));
       const rows = snap.docs
         .map((d) => this.normalize(d.id, d.data()))
         .sort((a, b) => {
@@ -56,9 +63,10 @@ export class ManualProductHistoryService {
    * - With query: search in title/variant/color.
    * Returns up to 20 rows.
    */
-  search(queryText: string): ManualProductEntry[] {
+  search(queryText: string, businessId?: BusinessId): ManualProductEntry[] {
     const q = this.normalizeSearchValue(queryText);
-    const rows = this.entries();
+    const active = businessId ? [normalizeBusinessId(businessId)] : this.businessScope.activeBusinessIds();
+    const rows = this.entries().filter((entry) => active.includes(entry.business_id || "bm"));
     if (!q) return rows.slice(0, 20);
 
     return rows
@@ -71,12 +79,14 @@ export class ManualProductHistoryService {
    */
   async record(
     entry: Pick<ManualProductEntry, "title" | "variant" | "color" | "image_url" | "price_public" | "price_clienta" | "price_cost">,
+    businessId?: BusinessId,
   ): Promise<void> {
     const title = entry.title?.trim();
     if (!title) return;
 
+    const resolvedBusinessId = normalizeBusinessId(businessId || this.businessScope.writeBusinessId());
     const normalized = this.normalizeSearchValue(title);
-    const existing = this.entries().find((e) => this.normalizeSearchValue(e.title) === normalized);
+    const existing = this.entries().find((e) => e.business_id === resolvedBusinessId && this.normalizeSearchValue(e.title) === normalized);
     const imageUrl = this.normalizeImageUrl(entry.image_url);
 
     const now = new Date().toISOString();
@@ -121,6 +131,7 @@ export class ManualProductHistoryService {
       const id = `mp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
       const newEntry: ManualProductEntry = {
         id,
+        business_id: resolvedBusinessId,
         title,
         variant: entry.variant || "",
         color: entry.color || "",
@@ -135,6 +146,7 @@ export class ManualProductHistoryService {
 
       await setDoc(doc(this.colRef, id), {
         ...newEntry,
+        business_id: resolvedBusinessId,
         last_used_at: serverTimestamp(),
         created_at: serverTimestamp(),
       });
@@ -151,6 +163,7 @@ export class ManualProductHistoryService {
   private normalize(id: string, data: any): ManualProductEntry {
     return {
       id,
+      business_id: normalizeBusinessId(data.business_id),
       title: String(data.title ?? ""),
       variant: String(data.variant ?? ""),
       color: String(data.color ?? ""),

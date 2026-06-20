@@ -1,11 +1,16 @@
 import { Component, computed, inject, signal, ChangeDetectionStrategy } from "@angular/core";
 import { FormsModule } from "@angular/forms";
+import { collection, doc, getDocs, serverTimestamp, setDoc } from "firebase/firestore";
 import { environment } from "../../../environments/environment";
 import { AuthzService } from "../../core/authz.service";
+import { FIRESTORE } from "../../core/firebase.providers";
 import {
+  BUSINESS_IDS,
   CAPABILITY_KEYS,
   CAPABILITY_KEYS as ALL_CAPABILITY_KEYS,
   CAPABILITY_LABELS,
+  BusinessId,
+  BusinessMembershipsMap,
   CapabilityKey,
   CapabilityOverridesMap,
   RoleDoc,
@@ -23,9 +28,11 @@ import {
   buildRolePreset,
   buildUsernameAuthEmail,
   normalizeCapabilitiesMap,
+  normalizeBusinessMembershipsMap,
   normalizeSectionOverridesMap,
   normalizeSectionsMap,
   normalizeUsername,
+  businessShortLabel,
   roleLabel,
 } from "../../core/rbac.constants";
 import { RolesService } from "../../services/roles.service";
@@ -62,7 +69,10 @@ type UserDraft = {
   mustChangePassword: boolean;
   sectionOverrides: SectionOverridesMap;
   capabilityOverrides: CapabilityOverridesMap;
+  businessMemberships: BusinessMembershipsMap;
 };
+
+type BusinessAccessDraft = Record<BusinessId, boolean>;
 
 const CAPABILITY_GROUPS: CapabilityGroup[] = [
   { title: "Usuarios y roles", keys: CAPABILITY_KEYS.filter((key) => key.startsWith("cap.users.") || key.startsWith("cap.roles.")) },
@@ -134,12 +144,14 @@ export default class UsuariosPage {
   newRoleId = signal<RoleId>("operativo");
   newLoginType = signal<UserLoginType>("email");
   newSendActivationEmail = signal(true);
+  newBusinessAccess = signal<BusinessAccessDraft>({ bm: true, catalogo: false });
 
   selectedRoleId = signal<RoleId>("operativo");
   roleDraft = signal<RoleDoc>(buildRolePreset("operativo"));
 
   readonly roleIds = ROLE_IDS;
   readonly sectionKeys = SECTION_KEYS;
+  readonly businessIds = BUSINESS_IDS;
   readonly capGroups = CAPABILITY_GROUPS;
   readonly userPermissionGroups = this.buildUserPermissionGroups();
 
@@ -186,11 +198,16 @@ export default class UsuariosPage {
   }
 
   private async loadUsersFromBestSource(): Promise<UserDoc[]> {
-    const rows = await this.userAdminApi.listManagedUsers();
-    return rows.map((row) => this.mapApiRowToUser(row)).sort((a, b) => a.displayName.localeCompare(b.displayName));
+    const [rows, storedMemberships] = await Promise.all([
+      this.userAdminApi.listManagedUsers(),
+      this.loadStoredBusinessMemberships(),
+    ]);
+    return rows
+      .map((row) => this.mapApiRowToUser(row, storedMemberships[row.uid] || null))
+      .sort((a, b) => a.displayName.localeCompare(b.displayName));
   }
 
-  private mapApiRowToUser(row: ListManagedUserRow): UserDoc {
+  private mapApiRowToUser(row: ListManagedUserRow, storedBusinessMemberships: unknown = null): UserDoc {
     const roleId = this.isRoleId(row.roleId) ? row.roleId : "operativo";
     const username = normalizeUsername(row.username);
     const loginType: UserLoginType = row.email ? "email" : "username";
@@ -217,9 +234,32 @@ export default class UsuariosPage {
       capabilities,
       sectionOverrides,
       capabilityOverrides,
+      businessMemberships: normalizeBusinessMembershipsMap(
+        storedBusinessMemberships || row.businessMemberships || null,
+        roleId,
+        sections,
+        capabilities,
+        roleId === "super_admin",
+      ),
       createdAt: null,
       updatedAt: null,
     };
+  }
+
+  private async loadStoredBusinessMemberships(): Promise<Record<string, unknown>> {
+    try {
+      const snap = await getDocs(collection(FIRESTORE, "users"));
+      const out: Record<string, unknown> = {};
+      for (const docSnap of snap.docs) {
+        const data = docSnap.data() as Record<string, unknown>;
+        if (data["businessMemberships"]) {
+          out[docSnap.id] = data["businessMemberships"];
+        }
+      }
+      return out;
+    } catch {
+      return {};
+    }
   }
 
   setTab(tab: UsersTab) {
@@ -240,6 +280,51 @@ export default class UsuariosPage {
 
   userLoginLabel(row: UserDoc): string {
     return row.loginType === "username" ? "Usuario" : "Correo";
+  }
+
+  businessName(businessId: BusinessId): string {
+    return businessShortLabel(businessId);
+  }
+
+  businessChipClass(businessId: BusinessId): string {
+    return businessId === "catalogo" ? "business-pill-catalogo" : "business-pill-bm";
+  }
+
+  userBusinessIds(row: UserDoc): BusinessId[] {
+    return this.enabledBusinessIds(row.businessMemberships);
+  }
+
+  newBusinessAccessEnabled(businessId: BusinessId): boolean {
+    return Boolean(this.newBusinessAccess()[businessId]);
+  }
+
+  setNewBusinessAccess(businessId: BusinessId, checked: boolean) {
+    this.newBusinessAccess.update((current) => this.ensureAtLeastOneBusiness({ ...current, [businessId]: checked }));
+  }
+
+  editBusinessAccessEnabled(businessId: BusinessId): boolean {
+    const draft = this.editDraft();
+    if (!draft) return false;
+    return Boolean(this.businessAccessFromMemberships(draft.businessMemberships)[businessId]);
+  }
+
+  setEditBusinessAccess(businessId: BusinessId, checked: boolean) {
+    this.editDraft.update((draft) => {
+      if (!draft) return draft;
+      const nextAccess = this.ensureAtLeastOneBusiness({
+        ...this.businessAccessFromMemberships(draft.businessMemberships),
+        [businessId]: checked,
+      });
+      return {
+        ...draft,
+        businessMemberships: this.buildBusinessMemberships(
+          draft.roleId,
+          draft.sectionOverrides,
+          draft.capabilityOverrides,
+          nextAccess,
+        ),
+      };
+    });
   }
 
   canManageUsers(): boolean {
@@ -324,6 +409,7 @@ export default class UsuariosPage {
       mustChangePassword: row.mustChangePassword,
       sectionOverrides: { ...row.sectionOverrides },
       capabilityOverrides: { ...row.capabilityOverrides },
+      businessMemberships: { ...row.businessMemberships },
     });
     if (!environment.production) {
       console.info("[AUTHZ][EDIT_USER]", {
@@ -485,11 +571,13 @@ export default class UsuariosPage {
       email: this.newLoginType() === "email" ? this.newEmail().trim().toLowerCase() : undefined,
       sendActivationEmail: this.newLoginType() === "email" ? this.newSendActivationEmail() : false,
       permissions: this.buildAdminPermissions(this.newRoleId(), {}),
+      businessMemberships: this.buildBusinessMemberships(this.newRoleId(), {}, {}, this.newBusinessAccess()),
     };
 
     this.saving.set(true);
     try {
       const result = await this.userAdminApi.createManagedUser(payload);
+      await this.saveBusinessMembershipsDirect(result.uid, payload.businessMemberships || {});
       this.success.set("Usuario creado.");
       if (result.temporaryPassword) {
         this.tempPasswordOut.set({ uid: result.uid, password: result.temporaryPassword });
@@ -521,6 +609,13 @@ export default class UsuariosPage {
       const sectionOverridesPayload = this.buildChangedSectionOverridesPayload(row, draft);
       const capabilityOverridesPayload = this.buildChangedCapabilityOverridesPayload(row, draft);
       const profileChanged = this.hasProfileChanges(row, draft);
+      const nextBusinessMemberships = this.buildBusinessMemberships(
+        draft.roleId,
+        draft.sectionOverrides,
+        draft.capabilityOverrides,
+        this.businessAccessFromMemberships(draft.businessMemberships),
+      );
+      const businessMembershipsChanged = !this.businessMembershipsEqual(row.businessMemberships, nextBusinessMemberships);
       const accessChanged =
         draft.roleId !== row.roleId ||
         draft.isActive !== row.isActive ||
@@ -547,9 +642,15 @@ export default class UsuariosPage {
         if (capabilityOverridesPayload) {
           accessPayload.capabilityOverrides = capabilityOverridesPayload;
         }
+        if (businessMembershipsChanged) {
+          accessPayload.businessMemberships = nextBusinessMemberships;
+        }
         await this.userAdminApi.updateManagedUser(row.uid, accessPayload);
       }
-      const nextRow = this.buildUserFromDraft(row, draft);
+      if (businessMembershipsChanged) {
+        await this.saveBusinessMembershipsDirect(row.uid, nextBusinessMemberships);
+      }
+      const nextRow = this.buildUserFromDraft(row, { ...draft, businessMemberships: nextBusinessMemberships });
       this.users.update((current) =>
         current
           .map((entry) => (entry.uid === row.uid ? nextRow : entry))
@@ -784,6 +885,87 @@ export default class UsuariosPage {
     return this.isSectionToggleDisabled(key);
   }
 
+  private enabledBusinessIds(memberships: BusinessMembershipsMap): BusinessId[] {
+    const enabled = this.businessIds.filter((businessId) => memberships[businessId]?.enabled === true);
+    return enabled.length > 0 ? enabled : ["bm"];
+  }
+
+  private businessAccessFromMemberships(memberships: BusinessMembershipsMap): BusinessAccessDraft {
+    return this.ensureAtLeastOneBusiness({
+      bm: memberships.bm?.enabled === true,
+      catalogo: memberships.catalogo?.enabled === true,
+    });
+  }
+
+  private ensureAtLeastOneBusiness(access: BusinessAccessDraft): BusinessAccessDraft {
+    if (access.bm || access.catalogo) return access;
+    return { ...access, bm: true };
+  }
+
+  private buildBusinessMemberships(
+    roleId: RoleId,
+    sectionOverrides: SectionOverridesMap,
+    capabilityOverrides: CapabilityOverridesMap,
+    access: BusinessAccessDraft,
+  ): BusinessMembershipsMap {
+    const normalizedSectionOverrides = this.normalizeDraftSectionOverrides(roleId, sectionOverrides);
+    const normalizedCapabilityOverrides = this.normalizeDraftCapabilityOverrides(roleId, capabilityOverrides);
+    const sections = this.resolveSectionsForRole(roleId, normalizedSectionOverrides);
+    const capabilities = this.resolveCapabilitiesForRole(roleId, normalizedCapabilityOverrides);
+    const out: BusinessMembershipsMap = {};
+    for (const businessId of this.businessIds) {
+      if (!access[businessId]) continue;
+      out[businessId] = {
+        businessId,
+        enabled: true,
+        roleId,
+        sections: { ...sections },
+        capabilities: { ...capabilities },
+      };
+    }
+    if (!out.bm && !out.catalogo) {
+      out.bm = {
+        businessId: "bm",
+        enabled: true,
+        roleId,
+        sections: { ...sections },
+        capabilities: { ...capabilities },
+      };
+    }
+    return out;
+  }
+
+  private businessMembershipsEqual(left: BusinessMembershipsMap, right: BusinessMembershipsMap): boolean {
+    return JSON.stringify(this.toPlainBusinessMemberships(left)) === JSON.stringify(this.toPlainBusinessMemberships(right));
+  }
+
+  private toPlainBusinessMemberships(memberships: BusinessMembershipsMap): Record<string, unknown> {
+    const out: Record<string, unknown> = {};
+    for (const businessId of this.businessIds) {
+      const membership = memberships[businessId];
+      if (!membership?.enabled) continue;
+      out[businessId] = {
+        businessId,
+        enabled: true,
+        roleId: membership.roleId,
+        sections: { ...membership.sections },
+        capabilities: { ...membership.capabilities },
+      };
+    }
+    return out;
+  }
+
+  private async saveBusinessMembershipsDirect(uid: string, memberships: BusinessMembershipsMap): Promise<void> {
+    await setDoc(
+      doc(FIRESTORE, "users", uid),
+      {
+        businessMemberships: this.toPlainBusinessMemberships(memberships),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+  }
+
   private buildAdminPermissions(roleId: RoleId, sectionOverrides: SectionOverridesMap): AdminPermissionsPayload {
     return {
       dashboard: this.resolveSectionValue(roleId, sectionOverrides, "sections.dashboard"),
@@ -951,6 +1133,7 @@ export default class UsuariosPage {
       capabilities,
       sectionOverrides,
       capabilityOverrides,
+      businessMemberships: { ...draft.businessMemberships },
     };
   }
 
@@ -1067,6 +1250,7 @@ export default class UsuariosPage {
     this.newRoleId.set("operativo");
     this.newLoginType.set("email");
     this.newSendActivationEmail.set(true);
+    this.newBusinessAccess.set({ bm: true, catalogo: false });
   }
 
   private isRoleId(value: string): value is RoleId {
