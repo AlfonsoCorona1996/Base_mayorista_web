@@ -2,9 +2,9 @@ import { Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild, comp
 import { DatePipe, DecimalPipe, NgStyle, UpperCasePipe } from "@angular/common";
 import { HttpErrorResponse } from "@angular/common/http";
 import { FormsModule } from "@angular/forms";
-import { ActivatedRoute, Router, RouterLink } from "@angular/router";
+import { ActivatedRoute, NavigationStart, Router, RouterLink } from "@angular/router";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
-import { lastValueFrom } from "rxjs";
+import { filter, lastValueFrom } from "rxjs";
 import { collection, getDocs, limit, orderBy, query } from "firebase/firestore";
 import { getBlob, ref as storageRef } from "firebase/storage";
 import { PDFDocument, PDFFont, PDFPage, StandardFonts, rgb } from "pdf-lib";
@@ -23,6 +23,7 @@ import { ReturnsService, ReturnDisposition } from "../../core/returns.service";
 import { BusinessScopeService } from "../../core/business-scope.service";
 import { BusinessId, normalizeBusinessId } from "../../core/rbac.constants";
 import { BarcodeProductLookupService, BarcodeProductMatch } from "../../core/barcode-product-lookup.service";
+import { PhysicalBarcodeMode, PhysicalBarcodeScannerService } from "../../core/physical-barcode-scanner.service";
 import { UserAdminApiService } from "../../services/user-admin-api.service";
 import { FIRESTORE, STORAGE } from "../../core/firebase.providers";
 import { ActivityLogComponent } from "../../shared/components/activity-log/activity-log.component";
@@ -207,6 +208,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   private catalog = inject(NormalizedListingsService);
   private catalogProducts = inject(CatalogProductsService);
   private barcodeLookup = inject(BarcodeProductLookupService);
+  private physicalBarcodeScanner = inject(PhysicalBarcodeScannerService);
   private supplierOperations = inject(SupplierOperationsService);
   readonly manualHistory = inject(ManualProductHistoryService);
   private returnsService = inject(ReturnsService);
@@ -217,6 +219,9 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   private routeRuns = inject(RouteRunsService);
   private destroyRef = inject(DestroyRef);
   private api = inject(UserAdminApiService);
+
+  readonly physicalScannerMode = this.physicalBarcodeScanner.activeMode;
+  readonly physicalScannerLastCode = this.physicalBarcodeScanner.lastCode;
 
   @ViewChild("incidentsSection") incidentsSection?: ElementRef<HTMLElement>;
   @ViewChild("packagesSection") packagesSection?: ElementRef<HTMLElement>;
@@ -863,6 +868,21 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         setTimeout(() => this.applyFocus(focus), 60);
       });
 
+    this.physicalBarcodeScanner.codeScanned$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((code) => {
+        void this.onPhysicalBarcodeScanned(code);
+      });
+
+    this.router.events
+      .pipe(
+        filter((event): event is NavigationStart => event instanceof NavigationStart),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe(() => {
+        this.stopPhysicalBarcodeScanner();
+      });
+
     // Capture scroll from window/body and nested scroll containers.
     window.addEventListener("scroll", this.onAnyScroll, true);
     document.addEventListener("visibilitychange", this.onVisibilityChange);
@@ -887,6 +907,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       clearTimeout(this.catalogProductSearchTimer);
       this.catalogProductSearchTimer = null;
     }
+    this.stopPhysicalBarcodeScanner();
     this.businessScope.unlockScope();
   }
 
@@ -3280,6 +3301,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     if (!current) return;
     if (mode === "add" && !this.canEditItems(current)) return;
     if (mode === "packing" && !this.canUsePackingMenuActions(current)) return;
+    this.stopPhysicalBarcodeScanner();
     this.barcodeScannerMode.set(mode);
     this.barcodeScannerMessage.set(null);
     this.barcodeMatches.set([]);
@@ -3293,6 +3315,48 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.barcodeScannerMessage.set(null);
     this.barcodeMatches.set([]);
     this.barcodePendingCode.set("");
+  }
+
+  togglePhysicalBarcodeScanner(mode: PhysicalBarcodeMode) {
+    if (this.physicalScannerMode() === mode) {
+      this.stopPhysicalBarcodeScanner();
+      return;
+    }
+    this.startPhysicalBarcodeScanner(mode);
+  }
+
+  startPhysicalBarcodeScanner(mode: PhysicalBarcodeMode) {
+    const current = this.order();
+    if (!current) return;
+    if (mode === "add" && !this.canEditItems(current)) return;
+    if (mode === "packing" && !this.canUsePackingMenuActions(current)) return;
+
+    this.closeBarcodeScanner();
+    this.barcodeScannerMode.set(mode);
+    this.barcodeScannerBusy.set(false);
+    this.barcodeScannerMessage.set(mode === "packing" ? "Scanner PC listo para empacar." : "Scanner PC listo para agregar productos.");
+    this.barcodeMatches.set([]);
+    this.barcodePendingCode.set("");
+    this.physicalBarcodeScanner.start(mode);
+    this.showActionToast(mode === "packing" ? "Scanner PC activo para empaque." : "Scanner PC activo para agregar productos.");
+  }
+
+  stopPhysicalBarcodeScanner() {
+    if (!this.physicalScannerMode()) return;
+    this.physicalBarcodeScanner.stop();
+    this.barcodeMatches.set([]);
+    this.barcodePendingCode.set("");
+  }
+
+  physicalScannerModeLabel(): string {
+    return this.physicalScannerMode() === "packing" ? "Empaque" : "Agregar producto";
+  }
+
+  async onPhysicalBarcodeScanned(code: string) {
+    const mode = this.physicalScannerMode();
+    if (!mode) return;
+    this.barcodeScannerMode.set(mode);
+    await this.onBarcodeScanned(code);
   }
 
   async onBarcodeScanned(code: string) {

@@ -3595,10 +3595,39 @@
   height: 12px;
 }
 
+.scanCta .material-symbols-rounded {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.scanCta--pc {
+  background: #ffffff;
+  color: #0f172a;
+  border-color: #cbd5e1;
+}
+
+.scanCta--pc.active,
+.physical-scan-btn.active {
+  background: #ecfdf5;
+  color: #047857;
+  border-color: #34d399;
+}
+
+.packHeaderActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+}
+
 .barcode-btn {
   width: 44px;
   min-width: 44px;
   padding-inline: 0;
+}
+
+.physical-scan-btn {
+  white-space: nowrap;
 }
 
 .scanner-sheet {
@@ -3661,6 +3690,102 @@
   margin-top: 2px;
   color: #64748b;
   font-weight: 700;
+}
+
+.physical-scanner-panel {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 95;
+  width: min(420px, calc(100vw - 32px));
+  max-height: min(76vh, 560px);
+  overflow: auto;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 22px 60px rgba(15, 23, 42, 0.22);
+}
+
+.physical-scanner-panel__head {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 34px;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: #eff6ff;
+  color: #0f172a;
+}
+
+.physical-scanner-panel__head > .material-symbols-rounded {
+  color: #2563eb;
+  font-size: 24px;
+}
+
+.physical-scanner-panel__head strong,
+.physical-scanner-panel__head small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.physical-scanner-panel__head strong {
+  font-size: 0.95rem;
+  font-weight: 900;
+}
+
+.physical-scanner-panel__head small {
+  margin-top: 2px;
+  color: #475569;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.physical-scanner-panel__close {
+  width: 34px;
+  height: 34px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #0f172a;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.physical-scanner-panel__close .material-symbols-rounded {
+  font-size: 20px;
+}
+
+.physical-scanner-panel__body {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.physical-scanner-panel__body p {
+  margin: 0;
+  color: #334155;
+  font-size: 0.86rem;
+  font-weight: 750;
+}
+
+.physical-scanner-panel__status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.physical-scanner-panel__status .material-symbols-rounded {
+  font-size: 18px;
+}
+
+.barcode-match-list--physical {
+  margin-top: 0;
 }
 
 .sr-only {

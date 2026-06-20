@@ -498,6 +498,15 @@
             <button type="button" class="btn ghost icon-only barcode-btn" aria-label="Escanear codigo de producto" (click)="openBarcodeScanner('add')">
               <span class="material-symbols-rounded btn-icon" aria-hidden="true">photo_camera</span>
             </button>
+            <button
+              type="button"
+              class="btn ghost with-icon physical-scan-btn"
+              [class.active]="physicalScannerMode() === 'add'"
+              (click)="togglePhysicalBarcodeScanner('add')"
+            >
+              <span class="material-symbols-rounded btn-icon" aria-hidden="true">barcode_scanner</span>
+              {{ physicalScannerMode() === "add" ? "PC activo" : "Scanner PC" }}
+            </button>
           }
           @if (!isOrderClosed(current)) {
             <button type="button" class="discount-card-btn" (click)="openDiscountModal()">
@@ -821,6 +830,18 @@
         <header class="packHeader">
           <h2>Empacando Pedido</h2>
           <p>{{ packing.unpackedCount }} pendientes por empacar</p>
+          <div class="packHeaderActions">
+            <button
+              type="button"
+              class="scanCta scanCta--pc"
+              [class.active]="physicalScannerMode() === 'packing'"
+              [disabled]="packingBusy() || !canUsePackingMenuActions(current)"
+              (click)="$event.stopPropagation(); togglePhysicalBarcodeScanner('packing')"
+            >
+              <span class="material-symbols-rounded" aria-hidden="true">barcode_scanner</span>
+              {{ physicalScannerMode() === "packing" ? "Scanner PC activo" : "Scanner PC" }}
+            </button>
+          </div>
         </header>
         <div class="packPage" (click)="closePackingMenus()">
 
@@ -1818,6 +1839,52 @@
         }
       </div>
     </div>
+  }
+
+  @if (physicalScannerMode()) {
+    <aside class="physical-scanner-panel" aria-live="polite">
+      <div class="physical-scanner-panel__head">
+        <span class="material-symbols-rounded" aria-hidden="true">barcode_scanner</span>
+        <div>
+          <strong>Scanner PC activo</strong>
+          <small>{{ physicalScannerModeLabel() }}</small>
+        </div>
+        <button type="button" class="physical-scanner-panel__close" aria-label="Desactivar scanner PC" (click)="stopPhysicalBarcodeScanner()">
+          <span class="material-symbols-rounded" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <div class="physical-scanner-panel__body">
+        @if (physicalScannerLastCode()) {
+          <p>Ultimo codigo: <strong>{{ physicalScannerLastCode() }}</strong></p>
+        } @else {
+          <p>Listo para escanear.</p>
+        }
+        @if (barcodeScannerBusy()) {
+          <p class="physical-scanner-panel__status">
+            <span class="material-symbols-rounded" aria-hidden="true">progress_activity</span>
+            Procesando codigo...
+          </p>
+        } @else if (barcodeScannerMessage()) {
+          <p class="physical-scanner-panel__status">{{ barcodeScannerMessage() }}</p>
+        }
+        @if (barcodeMatches().length > 1) {
+          <div class="barcode-match-list barcode-match-list--physical">
+            <p>Elige el producto correcto</p>
+            @for (match of barcodeMatches(); track barcodeMatchMeta(match)) {
+              <button type="button" class="barcode-match-btn" [disabled]="barcodeScannerBusy()" (click)="selectBarcodeMatch(match)">
+                <span class="material-symbols-rounded" aria-hidden="true">
+                  {{ match.kind === "inventory" ? "inventory_2" : "storefront" }}
+                </span>
+                <span>
+                  <strong>{{ barcodeMatchTitle(match) }}</strong>
+                  <small>{{ barcodeMatchMeta(match) }}</small>
+                </span>
+              </button>
+            }
+          </div>
+        }
+      </div>
+    </aside>
   }
 
   @if (addItemModalOpen()) {
