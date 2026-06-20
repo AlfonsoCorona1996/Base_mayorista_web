@@ -168,6 +168,7 @@ export interface NormalizedListingDoc {
   schema_version: "normalized_v1" | "normalized_v1.1" | "normalized_v3.0";
   normalized_id: string;
   business_id?: "bm" | "catalogo";
+  variant_skus_normalized?: string[];
   raw_post_id: string;
   supplier_id: string | null;
   
@@ -190,6 +191,7 @@ export interface NormalizedListingDocV3 {
   schema_version: "normalized_v3.0";
   normalized_id: string;
   business_id?: "bm" | "catalogo";
+  variant_skus_normalized?: string[];
   raw_post_id: string;
   supplier_id: string | null;
   cover_images: string[];
@@ -226,6 +228,7 @@ export interface PartialNormalizedUpdate {
   preview_image_url?: string | null;
   cover_images?: string[];
   product_colors?: ProductColor[];
+  variant_skus_normalized?: string[];
   listing?: NormalizedListing | NormalizedListingV3;
 }
 

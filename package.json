@@ -18,6 +18,8 @@
     "firebase:migrate-manual-history-business:apply": "tsx scripts/migrate-manual-history-business.ts --apply",
     "firebase:migrate-catalog-products-search:dry": "tsx scripts/migrate-catalog-products-search.ts",
     "firebase:migrate-catalog-products-search:apply": "tsx scripts/migrate-catalog-products-search.ts --apply",
+    "firebase:migrate-normalized-listings-sku-index:dry": "tsx scripts/migrate-normalized-listings-sku-index.ts",
+    "firebase:migrate-normalized-listings-sku-index:apply": "tsx scripts/migrate-normalized-listings-sku-index.ts --apply",
     "firebase:migrate-manual-history:dry": "tsx scripts/migrate-manual-product-history.ts",
     "firebase:migrate-manual-history:apply": "tsx scripts/migrate-manual-product-history.ts --apply"
   },
@@ -41,6 +43,9 @@
     "@angular/forms": "^20.3.0",
     "@angular/platform-browser": "^20.3.0",
     "@angular/router": "^20.3.0",
+    "@angular/service-worker": "^20.3.0",
+    "@zxing/browser": "^0.2.0",
+    "@zxing/library": "^0.21.3",
     "firebase": "^12.7.0",
     "jszip": "^3.10.1",
     "pdf-lib": "^1.17.1",

@@ -1,0 +1,151 @@
+.scanner {
+  display: grid;
+  gap: 16px;
+  color: #0f172a;
+}
+
+.scanner-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.scanner-head p {
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.scanner-head h2 {
+  margin: 2px 0 0;
+  font-size: 1.25rem;
+}
+
+.icon-btn {
+  display: inline-grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #0f172a;
+  cursor: pointer;
+}
+
+.video-shell {
+  position: relative;
+  min-height: 320px;
+  overflow: hidden;
+  border-radius: 10px;
+  background: #0f172a;
+}
+
+video {
+  display: block;
+  width: 100%;
+  height: min(62vh, 520px);
+  min-height: 320px;
+  object-fit: cover;
+}
+
+.scan-frame {
+  position: absolute;
+  inset: 20%;
+  border: 2px solid rgba(255, 255, 255, 0.92);
+  border-radius: 10px;
+  box-shadow: 0 0 0 999px rgba(15, 23, 42, 0.32);
+}
+
+.scanner-status,
+.scanner-error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-weight: 700;
+}
+
+.scanner-status {
+  background: #ecfeff;
+  color: #155e75;
+}
+
+.scanner-error {
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.manual-entry {
+  display: grid;
+  gap: 8px;
+}
+
+.manual-entry label {
+  color: #475569;
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.manual-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.input {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  padding: 0 12px;
+  font: inherit;
+}
+
+.scanner-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  padding: 0 14px;
+  background: #ffffff;
+  color: #0f172a;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.btn.primary {
+  border-color: #1e293b;
+  background: #1e293b;
+  color: #ffffff;
+}
+
+.btn.ghost {
+  background: #f8fafc;
+}
+
+@media (max-width: 640px) {
+  .video-shell,
+  video {
+    min-height: 300px;
+  }
+
+  .scan-frame {
+    inset: 24% 12%;
+  }
+
+  .manual-row {
+    grid-template-columns: 1fr;
+  }
+}

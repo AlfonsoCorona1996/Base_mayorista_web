@@ -6,7 +6,9 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
+  limit,
   query,
   runTransaction,
   serverTimestamp,
@@ -128,6 +130,29 @@ export class InventoryService {
       .sort((a, b) => this.toMillis(b.updated_at) - this.toMillis(a.updated_at));
 
     this.rows.set(rows);
+  }
+
+  async getBySku(sku: string, businessId?: BusinessId): Promise<InventoryItem | null> {
+    const cleanSku = String(sku || "").trim();
+    if (!cleanSku) return null;
+    const resolvedBusinessId = normalizeBusinessId(businessId || this.businessScope.writeBusinessId());
+
+    const directSnap = await getDoc(doc(this.colRef, cleanSku));
+    if (directSnap.exists()) {
+      const item = this.normalizeItem(directSnap.data() as Partial<InventoryItem>, directSnap.id);
+      if (item.business_id === resolvedBusinessId) return item;
+    }
+
+    const snapshot = await getDocs(query(
+      this.colRef,
+      where("business_id", "==", resolvedBusinessId),
+      where("sku", "==", cleanSku),
+      limit(5),
+    ));
+    const item = snapshot.docs
+      .map((entry) => this.normalizeItem(entry.data() as Partial<InventoryItem>, entry.id))
+      .find((row) => row.business_id === resolvedBusinessId) || null;
+    return item;
   }
 
   async save(item: InventoryItem, idempotencyKey?: string): Promise<string> {

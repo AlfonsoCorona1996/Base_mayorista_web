@@ -2248,3 +2248,165 @@
           ╵                          [32m~~~~~~~~~~~[0m
 
 [39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module '@angular/service-worker' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/main.ts:6:37:
+[37m      6 │ import { provideServiceWorker } from [32m'@angular/service-worker'[37m;
+        ╵                                      [32m~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2304: Cannot find name 'limit'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/inventory.service.ts:149:6:
+[37m      149 │       [32mlimit[37m(5),
+          ╵       [32m~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2552: Cannot find name 'NormalizedListingDocV3'. Did you mean 'NormalizedListingDoc'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/normalized-listings.service.ts:165:72:
+[37m      165 │ ...ingDoc["listing"] | [32mNormalizedListingDocV3[37m["listing"] | null |...
+          ╵                        [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2552: Cannot find name 'NormalizedListingDocV3'. Did you mean 'NormalizedListingDoc'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/normalized-listings.service.ts:165:72:
+[37m      165 │ ...ingDoc["listing"] | [32mNormalizedListingDocV3[37m["listing"] | null |...
+          ╵                        [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[33m[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8113: BarcodeScannerComponent is not used within the template of PedidoDetallePage[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:194:106:
+[37m      194 │ ...asePipe, NgStyle, ActivityLogComponent, [32mBarcodeScannerComponent[37m],
+          ╵                                            [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2352: Conversion of type 'NormalizedItem[]' to type 'Record<string, unknown>[]' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Type 'NormalizedItem' is not comparable to type 'Record<string, unknown>'.
+    Index signature for type 'string' is missing in type 'NormalizedItem'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/barcode-product-lookup.service.ts:101:12:
+[37m      101 │     return ([32mitems as Array<Record<string, unknown>>[37m).filter((item...
+          ╵             [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2552: Cannot find name 'NormalizedListingDocV3'. Did you mean 'NormalizedListingDoc'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/normalized-listings.service.ts:165:72:
+[37m      165 │ ...ingDoc["listing"] | [32mNormalizedListingDocV3[37m["listing"] | null |...
+          ╵                        [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[33m[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8113: BarcodeScannerComponent is not used within the template of PedidoDetallePage[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:194:106:
+[37m      194 │ ...asePipe, NgStyle, ActivityLogComponent, [32mBarcodeScannerComponent[37m],
+          ╵                                            [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2352: Conversion of type 'NormalizedItem[]' to type 'Record<string, unknown>[]' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Type 'NormalizedItem' is not comparable to type 'Record<string, unknown>'.
+    Index signature for type 'string' is missing in type 'NormalizedItem'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/barcode-product-lookup.service.ts:101:12:
+[37m      101 │     return ([32mitems as Array<Record<string, unknown>>[37m).filter((item...
+          ╵             [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2552: Cannot find name 'NormalizedListingDocV3'. Did you mean 'NormalizedListingDoc'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/normalized-listings.service.ts:165:72:
+[37m      165 │ ...ingDoc["listing"] | [32mNormalizedListingDocV3[37m["listing"] | null |...
+          ╵                        [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[33m[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8113: BarcodeScannerComponent is not used within the template of PedidoDetallePage[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:194:106:
+[37m      194 │ ...asePipe, NgStyle, ActivityLogComponent, [32mBarcodeScannerComponent[37m],
+          ╵                                            [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2352: Conversion of type 'NormalizedItem[]' to type 'Record<string, unknown>[]' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Type 'NormalizedItem' is not comparable to type 'Record<string, unknown>'.
+    Index signature for type 'string' is missing in type 'NormalizedItem'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/barcode-product-lookup.service.ts:101:12:
+[37m      101 │     return ([32mitems as Array<Record<string, unknown>>[37m).filter((item...
+          ╵             [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2552: Cannot find name 'NormalizedListingDocV3'. Did you mean 'NormalizedListingDoc'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/normalized-listings.service.ts:165:72:
+[37m      165 │ ...ingDoc["listing"] | [32mNormalizedListingDocV3[37m["listing"] | null |...
+          ╵                        [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[33m[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8113: BarcodeScannerComponent is not used within the template of PedidoDetallePage[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:194:106:
+[37m      194 │ ...asePipe, NgStyle, ActivityLogComponent, [32mBarcodeScannerComponent[37m],
+          ╵                                            [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2352: Conversion of type 'NormalizedItem[]' to type 'Record<string, unknown>[]' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Type 'NormalizedItem' is not comparable to type 'Record<string, unknown>'.
+    Index signature for type 'string' is missing in type 'NormalizedItem'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/barcode-product-lookup.service.ts:101:12:
+[37m      101 │     return ([32mitems as Array<Record<string, unknown>>[37m).filter((item...
+          ╵             [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2552: Cannot find name 'NormalizedListingDocV3'. Did you mean 'NormalizedListingDoc'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/normalized-listings.service.ts:165:72:
+[37m      165 │ ...ingDoc["listing"] | [32mNormalizedListingDocV3[37m["listing"] | null |...
+          ╵                        [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2352: Conversion of type 'NormalizedItem[]' to type 'Record<string, unknown>[]' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Type 'NormalizedItem' is not comparable to type 'Record<string, unknown>'.
+    Index signature for type 'string' is missing in type 'NormalizedItem'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/barcode-product-lookup.service.ts:101:12:
+[37m      101 │     return ([32mitems as Array<Record<string, unknown>>[37m).filter((item...
+          ╵             [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2552: Cannot find name 'NormalizedListingDocV3'. Did you mean 'NormalizedListingDoc'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/normalized-listings.service.ts:165:72:
+[37m      165 │ ...ingDoc["listing"] | [32mNormalizedListingDocV3[37m["listing"] | null |...
+          ╵                        [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2352: Conversion of type 'NormalizedItem[]' to type 'Record<string, unknown>[]' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Type 'NormalizedItem' is not comparable to type 'Record<string, unknown>'.
+    Index signature for type 'string' is missing in type 'NormalizedItem'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/barcode-product-lookup.service.ts:101:12:
+[37m      101 │     return ([32mitems as Array<Record<string, unknown>>[37m).filter((item...
+          ╵             [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2552: Cannot find name 'NormalizedListingDocV3'. Did you mean 'NormalizedListingDoc'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/normalized-listings.service.ts:165:72:
+[37m      165 │ ...ingDoc["listing"] | [32mNormalizedListingDocV3[37m["listing"] | null |...
+          ╵                        [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2352: Conversion of type 'NormalizedItem[] | NormalizedItemV3[]' to type 'Record<string, unknown>[]' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Type 'NormalizedItemV3[]' is not comparable to type 'Record<string, unknown>[]'.
+    Type 'NormalizedItemV3' is not comparable to type 'Record<string, unknown>'.
+      Index signature for type 'string' is missing in type 'NormalizedItemV3'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/normalized-listings.service.ts:169:23:
+[37m      169 │     for (const item of [32mitems as Array<Record<string, unknown>>[37m) {
+          ╵                        [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m

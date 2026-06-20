@@ -22,9 +22,11 @@ import { CatalogProduct, CatalogProductsService } from "../../core/catalog-produ
 import { ReturnsService, ReturnDisposition } from "../../core/returns.service";
 import { BusinessScopeService } from "../../core/business-scope.service";
 import { BusinessId, normalizeBusinessId } from "../../core/rbac.constants";
+import { BarcodeProductLookupService, BarcodeProductMatch } from "../../core/barcode-product-lookup.service";
 import { UserAdminApiService } from "../../services/user-admin-api.service";
 import { FIRESTORE, STORAGE } from "../../core/firebase.providers";
 import { ActivityLogComponent } from "../../shared/components/activity-log/activity-log.component";
+import { BarcodeScannerComponent } from "../../shared/barcode-scanner/barcode-scanner.component";
 import { AuthzService } from "../../core/authz.service";
 import { AuthService } from "../../core/auth.service";
 import { DispatchOrderRow, RouteRunDoc, RouteRunsService } from "../../services/route-runs.service";
@@ -189,7 +191,7 @@ const CATALOG_QUERY_SYNONYMS: Record<string, string[]> = {
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   selector: "app-pedido-detalle",
-  imports: [FormsModule, RouterLink, DatePipe, DecimalPipe, UpperCasePipe, NgStyle, ActivityLogComponent],
+  imports: [FormsModule, RouterLink, DatePipe, DecimalPipe, UpperCasePipe, NgStyle, ActivityLogComponent, BarcodeScannerComponent],
   templateUrl: "./pedido-detalle.html",
   styleUrls: ["./pedido-detalle.css"],
 })
@@ -204,6 +206,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   private inventory = inject(InventoryService);
   private catalog = inject(NormalizedListingsService);
   private catalogProducts = inject(CatalogProductsService);
+  private barcodeLookup = inject(BarcodeProductLookupService);
   private supplierOperations = inject(SupplierOperationsService);
   readonly manualHistory = inject(ManualProductHistoryService);
   private returnsService = inject(ReturnsService);
@@ -379,6 +382,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   editTargetItemId = signal<string | null>(null);
   newItemSupplierId = signal<string | null>(null);
   newItemProductId = signal<string | null>(null);
+  newItemSku = signal<string | null>(null);
   selectedPreviewHasColorImage = signal(true);
 
   pendingItems = computed(() => (this.order()?.items || []).filter((item) => item.state !== "entregado" && item.state !== "pagado"));
@@ -438,6 +442,12 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   selectedCatalogDoc = signal<NormalizedListingDoc | null>(null);
   catalogProductSuggestions = signal<CatalogProduct[]>([]);
   catalogProductSearching = signal(false);
+  barcodeScannerOpen = signal(false);
+  barcodeScannerMode = signal<"add" | "packing">("add");
+  barcodeScannerBusy = signal(false);
+  barcodeScannerMessage = signal<string | null>(null);
+  barcodeMatches = signal<BarcodeProductMatch[]>([]);
+  barcodePendingCode = signal("");
   private catalogProductSearchTimer: ReturnType<typeof setTimeout> | null = null;
   readonly isManualSource = computed(() => this.newItemSource() === "manual");
   readonly isConvertMode = computed(() => this.addItemMode() === "convert");
@@ -3265,6 +3275,235 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.plannedModalOpen.set(false);
   }
 
+  openBarcodeScanner(mode: "add" | "packing") {
+    const current = this.order();
+    if (!current) return;
+    if (mode === "add" && !this.canEditItems(current)) return;
+    if (mode === "packing" && !this.canUsePackingMenuActions(current)) return;
+    this.barcodeScannerMode.set(mode);
+    this.barcodeScannerMessage.set(null);
+    this.barcodeMatches.set([]);
+    this.barcodePendingCode.set("");
+    this.barcodeScannerOpen.set(true);
+  }
+
+  closeBarcodeScanner() {
+    this.barcodeScannerOpen.set(false);
+    this.barcodeScannerBusy.set(false);
+    this.barcodeScannerMessage.set(null);
+    this.barcodeMatches.set([]);
+    this.barcodePendingCode.set("");
+  }
+
+  async onBarcodeScanned(code: string) {
+    const cleanCode = this.barcodeLookup.cleanCode(code);
+    const current = this.order();
+    if (!cleanCode || !current || this.barcodeScannerBusy()) return;
+
+    this.barcodeScannerBusy.set(true);
+    this.barcodeScannerMessage.set(`Buscando ${cleanCode}...`);
+    this.barcodeMatches.set([]);
+    this.barcodePendingCode.set(cleanCode);
+    try {
+      if (this.barcodeScannerMode() === "packing") {
+        await this.handlePackingBarcode(current, cleanCode);
+      } else {
+        await this.handleAddProductBarcode(current, cleanCode);
+      }
+    } catch (error: any) {
+      this.barcodeScannerMessage.set(error?.message || "No se pudo procesar el codigo.");
+    } finally {
+      this.barcodeScannerBusy.set(false);
+    }
+  }
+
+  async selectBarcodeMatch(match: BarcodeProductMatch) {
+    const current = this.order();
+    const code = this.barcodePendingCode();
+    if (!current || !code || this.barcodeScannerBusy()) return;
+    this.barcodeScannerBusy.set(true);
+    try {
+      if (this.barcodeScannerMode() === "packing") {
+        await this.handlePackingBarcode(current, code, match);
+      } else {
+        await this.addBarcodeMatchToOrder(current, match, code);
+      }
+      this.barcodeMatches.set([]);
+    } catch (error: any) {
+      this.barcodeScannerMessage.set(error?.message || "No se pudo procesar el codigo.");
+    } finally {
+      this.barcodeScannerBusy.set(false);
+    }
+  }
+
+  barcodeMatchTitle(match: BarcodeProductMatch): string {
+    if (match.kind === "inventory") return match.item.title;
+    if (match.kind === "catalog_product") return match.product.name;
+    return match.doc.listing?.title || "Producto BM";
+  }
+
+  barcodeMatchMeta(match: BarcodeProductMatch): string {
+    if (match.kind === "inventory") {
+      return `${match.item.sku || match.item.inventory_id} · Inventario`;
+    }
+    if (match.kind === "catalog_product") {
+      return `${match.product.sku} · Catálogo`;
+    }
+    return `${String(match.variant["sku"] || match.code)} · ${String(match.variant["variant_name"] || "Variante")}`;
+  }
+
+  private async handleAddProductBarcode(order: Order, code: string) {
+    const matches = await this.barcodeLookup.findMatches(code, this.orderBusinessId(order));
+    if (matches.length === 0) {
+      this.barcodeScannerMessage.set(`No encontramos producto con codigo ${code}.`);
+      this.showActionToast(`No encontramos producto con codigo ${code}.`);
+      return;
+    }
+    if (matches.length > 1) {
+      this.barcodeMatches.set(matches);
+      this.barcodeScannerMessage.set(`Encontramos ${matches.length} coincidencias. Elige una.`);
+      return;
+    }
+    await this.addBarcodeMatchToOrder(order, matches[0], code);
+  }
+
+  private async addBarcodeMatchToOrder(order: Order, match: BarcodeProductMatch, code: string) {
+    this.resetAddItemForm();
+    this.addItemMode.set("add");
+    this.error.set(null);
+    await this.applyBarcodeMatchToForm(match, code);
+    if (!this.selectedPreview()) {
+      this.barcodeScannerMessage.set(`No se puede agregar ${code}; no hay producto disponible.`);
+      return;
+    }
+    this.newItemQty.set(1);
+    await this.addItem(order);
+    if (this.error()) {
+      this.barcodeScannerMessage.set(this.error());
+      return;
+    }
+    this.barcodeScannerMessage.set(`Agregado: ${this.barcodeMatchTitle(match)}.`);
+    this.showActionToast(`Agregado por codigo ${code}.`);
+  }
+
+  private async applyBarcodeMatchToForm(match: BarcodeProductMatch, code: string): Promise<void> {
+    if (match.kind === "inventory") {
+      await this.pickInventory(match.item);
+      this.newItemSku.set(match.item.sku || match.item.inventory_id || code);
+      return;
+    }
+    if (match.kind === "catalog_product") {
+      this.pickCatalogProduct(match.product);
+      this.newItemSku.set(match.product.sku || code);
+      return;
+    }
+    this.pickCatalog(match.doc, match.variant, match.color);
+    this.newItemSku.set(String(match.variant["sku"] || code).trim() || code);
+  }
+
+  private async handlePackingBarcode(order: Order, code: string, selectedMatch?: BarcodeProductMatch) {
+    let current = this.orders.getById(order.order_id) || order;
+    let item = await this.findOrderItemByBarcode(current, code, selectedMatch);
+    if (!item) {
+      this.barcodeScannerMessage.set(`No hay producto en este pedido para ${code}.`);
+      this.showActionToast(`Codigo ${code} sin pendiente por empacar.`);
+      return;
+    }
+
+    await this.ensureItemReadyForPackingScan(current, item);
+    current = this.orders.getById(order.order_id) || current;
+    item = (current.items || []).find((row) => row.item_id === item?.item_id) || item;
+    const row = this.unpackedItems(current).find((entry) => entry.item.item_id === item?.item_id) || null;
+    if (!row) {
+      this.barcodeScannerMessage.set(`El producto ${code} ya no tiene piezas pendientes.`);
+      this.showActionToast("Producto ya empacado completo.");
+      return;
+    }
+
+    if (!this.activeOpenBox(current)) {
+      await this.createPackage(current);
+      current = this.orders.getById(order.order_id) || current;
+    }
+
+    await this.addItemToOpenBox(current, row, 1);
+    this.barcodeScannerMessage.set(`Empacado: ${row.item.title}.`);
+  }
+
+  private async findOrderItemByBarcode(order: Order, code: string, selectedMatch?: BarcodeProductMatch): Promise<OrderItem | null> {
+    const items = (order.items || []).filter((item) => !this.isItemCancelledOrReturned(item));
+    const normalized = this.barcodeLookup.normalizeCode(code);
+    const direct = items.find((item) => this.itemBarcodeKeys(item).includes(normalized));
+    if (direct) return direct;
+
+    const matches = selectedMatch ? [selectedMatch] : await this.barcodeLookup.findMatches(code, this.orderBusinessId(order));
+    for (const match of matches) {
+      const found = items.find((item) => this.orderItemMatchesBarcodeMatch(item, match));
+      if (found) return found;
+    }
+    return null;
+  }
+
+  private itemBarcodeKeys(item: OrderItem): string[] {
+    return [
+      item.sku,
+      item.inventory_id,
+      item.product_id,
+    ]
+      .map((value) => this.barcodeLookup.normalizeCode(value))
+      .filter(Boolean);
+  }
+
+  private orderItemMatchesBarcodeMatch(item: OrderItem, match: BarcodeProductMatch): boolean {
+    if (match.kind === "inventory") {
+      return item.inventory_id === match.item.inventory_id || this.barcodeLookup.normalizeCode(item.sku) === this.barcodeLookup.normalizeCode(match.item.sku || match.item.inventory_id);
+    }
+    if (match.kind === "catalog_product") {
+      return item.product_id === match.product.product_id || this.barcodeLookup.normalizeCode(item.sku) === this.barcodeLookup.normalizeCode(match.product.sku);
+    }
+    return item.product_id === match.doc.normalized_id
+      && this.isCompatibleVariant(item.variant, String(match.variant["variant_name"] || ""))
+      && this.isCompatibleVariant(item.sku, String(match.variant["sku"] || match.code));
+  }
+
+  private async ensureItemReadyForPackingScan(order: Order, item: OrderItem): Promise<void> {
+    if (this.isItemReadyForPack(order, item)) return;
+    const qty = this.itemQuantity(item);
+
+    if (this.isLateAddedItem(item) && !this.isLateArrivalConfirmed(item)) {
+      const inventoryId = await this.ensureLateArrivalReservedInInventory(order, item, qty);
+      const current = this.orders.getById(order.order_id) || order;
+      const nextItems: OrderItem[] = (current.items || []).map((row): OrderItem =>
+        row.item_id === item.item_id
+          ? {
+              ...row,
+              confirmation_state: "confirmed",
+              confirmed_qty: qty,
+              state: row.state === "cancelado" || row.state === "devuelto" ? "recibido_qa" : row.state,
+              source: row.source === "inventario" || this.isSupplierManagedItem(row) ? row.source : "inventario",
+              inventory_id: inventoryId || row.inventory_id || null,
+              late_addition_status: "arrived",
+            }
+          : row,
+      );
+      await this.orders.updateItems(order.order_id, nextItems);
+      await this.orders.syncDerivedStatus(order.order_id).catch(() => null);
+      return;
+    }
+
+    if (this.isSupplierManagedItem(item) && !this.isSupplierItemReceived(order, item)) {
+      await this.receiveItem(order, item, { silentToast: true });
+    }
+
+    const current = this.orders.getById(order.order_id) || order;
+    const latest = (current.items || []).find((row) => row.item_id === item.item_id) || item;
+    if (latest.confirmation_state !== "confirmed" || this.confirmedQty(latest) <= 0) {
+      await this.orders.updateItemConfirmation(order.order_id, item.item_id, {
+        confirmation_state: "confirmed",
+        confirmed_qty: qty,
+      });
+    }
+  }
+
   private async refreshAddItemSources(opts?: { force?: boolean; onlyWhenModalOpen?: boolean }): Promise<void> {
     if (opts?.onlyWhenModalOpen && !this.addItemModalOpen()) return;
 
@@ -3346,6 +3585,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.newItemInventoryId.set(item.inventory_id || null);
     this.newItemSupplierId.set(item.supplier_id || null);
     this.newItemProductId.set(item.product_id || null);
+    this.newItemSku.set(item.sku || item.inventory_id || null);
     this.updatePriceDraftFromSignals();
     this.selectedPreviewHasColorImage.set(Boolean(item.image_url));
     this.selectedPreview.set({
@@ -3384,6 +3624,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.newItemInventoryId.set(null);
     this.newItemSupplierId.set(null);
     this.newItemProductId.set(null);
+    this.newItemSku.set(null);
     this.lockItemFields.set(false);
     this.catalogVariantOptions.set([]);
     this.catalogColorOptions.set([]);
@@ -3443,6 +3684,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.newItemInventoryId.set(null);
     this.newItemSupplierId.set(null);
     this.newItemProductId.set(null);
+    this.newItemSku.set(null);
     this.showProductList.set(false);
     this.lockItemFields.set(false);
     this.catalogVariantOptions.set([]);
@@ -6981,6 +7223,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       confirmed_qty: null,
       supplier_id: source === "manual" || productRefType === "catalog_product" ? null : this.newItemSupplierId(),
       product_id: source === "manual" ? null : this.newItemProductId(),
+      sku: source === "manual" ? null : this.newItemSku(),
       price_clienta: this.newItemPriceClienta(),
       price_public: this.newItemPricePublic(),
       price_cost: this.newItemPriceCost(),
@@ -7287,6 +7530,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.newItemInventoryId.set(item.inventory_id);
     this.newItemSupplierId.set(item.supplier_id || null);
     this.newItemProductId.set(item.inventory_id || null);
+    this.newItemSku.set(item.sku || item.inventory_id || null);
     this.showProductList.set(false);
     this.lockItemFields.set(true);
     this.catalogVariantOptions.set([]);
@@ -7324,6 +7568,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.newItemInventoryId.set(null);
     this.newItemSupplierId.set(doc.supplier_id || null);
     this.newItemProductId.set(doc.normalized_id || null);
+    this.newItemSku.set(String(variant?.sku || "").trim() || null);
     this.showProductList.set(false);
     this.lockItemFields.set(true);
     this.catalogVariantOptions.set([...new Set(variants)]);
@@ -7354,6 +7599,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.newItemInventoryId.set(null);
     this.newItemSupplierId.set(null);
     this.newItemProductId.set(product.product_id);
+    this.newItemSku.set(product.sku || null);
     this.showProductList.set(false);
     this.lockItemFields.set(true);
     this.catalogVariantOptions.set([]);

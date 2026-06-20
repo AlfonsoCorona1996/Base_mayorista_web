@@ -20,6 +20,7 @@ import {
 } from "firebase/firestore";
 import type {
   NormalizedListingDoc,
+  NormalizedListingDocV3,
   ListPage,
   ReviewPatch,
   PartialNormalizedUpdate,
@@ -27,7 +28,7 @@ import type {
   WorkflowStatus,
 } from "./firestore-contracts";
 import { BusinessScopeService } from "./business-scope.service";
-import { normalizeBusinessId } from "./rbac.constants";
+import { BusinessId, normalizeBusinessId } from "./rbac.constants";
 
 // Re-exportar tipos para compatibilidad
 export type {
@@ -130,6 +131,19 @@ export class NormalizedListingsService {
     return this.listByWorkflowStatus("validated", pageSize, cursor);
   }
 
+  async findValidatedByVariantSku(sku: string, businessId: BusinessId = "bm", pageSize = 8): Promise<NormalizedListingDoc[]> {
+    const normalizedSku = this.normalizeSku(sku);
+    if (!normalizedSku) return [];
+    const snap = await getDocs(query(
+      this.colRef,
+      where("business_id", "==", normalizeBusinessId(businessId)),
+      where("workflow.status", "==", "validated"),
+      where("variant_skus_normalized", "array-contains", normalizedSku),
+      limit(Math.max(1, Math.min(pageSize, 20))),
+    ));
+    return this.filterByBusiness(snap.docs.map((d) => d.data() as NormalizedListingDoc));
+  }
+
   async getById(id: string): Promise<NormalizedListingDoc> {
     const ref = doc(this.colRef, id);
     const snap = await getDoc(ref);
@@ -139,10 +153,32 @@ export class NormalizedListingsService {
 
   async updateListing(id: string, patch: PartialNormalizedUpdate): Promise<void> {
     const ref = doc(this.colRef, id);
+    const skuPatch = patch.listing
+      ? { variant_skus_normalized: this.variantSkuIndexFromListing(patch.listing) }
+      : {};
     await updateDoc(ref, {
       ...(patch as any),
+      ...skuPatch,
       updated_at: serverTimestamp(),
     });
+  }
+
+  variantSkuIndexFromListing(listing: NormalizedListingDoc["listing"] | NormalizedListingDocV3["listing"] | null | undefined): string[] {
+    const items = Array.isArray(listing?.items) ? listing.items : [];
+    const skus = new Set<string>();
+    for (const item of items as unknown as Array<Record<string, unknown>>) {
+      const sku = this.normalizeSku(item["sku"]);
+      if (sku) skus.add(sku);
+    }
+    return [...skus].slice(0, 500);
+  }
+
+  normalizeSku(value: unknown): string {
+    return String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+      .toLowerCase();
   }
 
   async updateReview(id: string, patch: ReviewPatch) {
@@ -160,10 +196,13 @@ export class NormalizedListingsService {
 
   async validate(id: string, uid: string): Promise<void> {
     const ref = doc(this.colRef, id);
+    const snap = await getDoc(ref);
+    const current = snap.exists() ? snap.data() as NormalizedListingDoc : null;
     await updateDoc(ref, {
       "workflow.status": "validated",
       "workflow.validated_by": uid,
       "workflow.validated_at": serverTimestamp(),
+      ...(current?.listing ? { variant_skus_normalized: this.variantSkuIndexFromListing(current.listing) } : {}),
     } as any);
   }
 

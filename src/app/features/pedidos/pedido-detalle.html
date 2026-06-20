@@ -495,6 +495,9 @@
               <span class="material-symbols-rounded btn-icon" aria-hidden="true">add</span>
               Agregar producto
             </button>
+            <button type="button" class="btn ghost icon-only barcode-btn" aria-label="Escanear codigo de producto" (click)="openBarcodeScanner('add')">
+              <span class="material-symbols-rounded btn-icon" aria-hidden="true">photo_camera</span>
+            </button>
           }
           @if (!isOrderClosed(current)) {
             <button type="button" class="discount-card-btn" (click)="openDiscountModal()">
@@ -912,7 +915,7 @@
 
                     <div class="boxCard__actions">
                       @if (openBox.isActive) {
-                        <button type="button" class="scanCta" [disabled]="packingBusy()" (click)="$event.stopPropagation()">
+                        <button type="button" class="scanCta" [disabled]="packingBusy()" (click)="$event.stopPropagation(); openBarcodeScanner('packing')">
                           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3H7a2 2 0 0 0-2 2v2m12-4h2a2 2 0 0 1 2 2v2M9 21H7a2 2 0 0 1-2-2v-2m12 4h2a2 2 0 0 0 2-2v-2M6 12h12M12 6v12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
                           Escanear producto
                         </button>
@@ -1777,6 +1780,42 @@
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  }
+
+  @if (barcodeScannerOpen()) {
+    <div class="sheet-backdrop sheet-backdrop--add-item scanner-backdrop" (click)="closeBarcodeScanner()">
+      <div class="sheet scanner-sheet" role="dialog" aria-modal="true" aria-labelledby="barcode-scanner-title" (click)="$event.stopPropagation()">
+        <h2 id="barcode-scanner-title" class="sr-only">Escanear codigo</h2>
+        <app-barcode-scanner
+          (codeScanned)="onBarcodeScanned($event)"
+          (closed)="closeBarcodeScanner()"
+        />
+        @if (barcodeScannerBusy()) {
+          <p class="scanner-parent-status">
+            <span class="material-symbols-rounded" aria-hidden="true">progress_activity</span>
+            Procesando codigo...
+          </p>
+        } @else if (barcodeScannerMessage()) {
+          <p class="scanner-parent-status">{{ barcodeScannerMessage() }}</p>
+        }
+        @if (barcodeMatches().length > 1) {
+          <div class="barcode-match-list">
+            <p>Elige el producto correcto</p>
+            @for (match of barcodeMatches(); track barcodeMatchMeta(match)) {
+              <button type="button" class="barcode-match-btn" [disabled]="barcodeScannerBusy()" (click)="selectBarcodeMatch(match)">
+                <span class="material-symbols-rounded" aria-hidden="true">
+                  {{ match.kind === "inventory" ? "inventory_2" : "storefront" }}
+                </span>
+                <span>
+                  <strong>{{ barcodeMatchTitle(match) }}</strong>
+                  <small>{{ barcodeMatchMeta(match) }}</small>
+                </span>
+              </button>
+            }
+          </div>
+        }
       </div>
     </div>
   }

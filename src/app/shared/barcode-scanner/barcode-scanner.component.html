@@ -1,0 +1,55 @@
+<section class="scanner">
+  <header class="scanner-head">
+    <div>
+      <p>Scanner</p>
+      <h2>Escanear codigo</h2>
+    </div>
+    <button type="button" class="icon-btn" aria-label="Cerrar scanner" (click)="close()">
+      <span class="material-symbols-rounded" aria-hidden="true">close</span>
+    </button>
+  </header>
+
+  <div class="video-shell">
+    <video #video autoplay muted playsinline></video>
+    <div class="scan-frame" aria-hidden="true"></div>
+  </div>
+
+  @if (error()) {
+    <p class="scanner-error">{{ error() }}</p>
+  } @else {
+    <p class="scanner-status">{{ status() }}</p>
+  }
+
+  @if (manualMode()) {
+    <form class="manual-entry" (ngSubmit)="submitManual()">
+      <label for="manual-barcode">Codigo</label>
+      <div class="manual-row">
+        <input
+          id="manual-barcode"
+          class="input"
+          type="text"
+          autocomplete="off"
+          inputmode="text"
+          [ngModel]="manualCode()"
+          (ngModelChange)="manualCode.set($event)"
+          name="manualBarcode"
+          placeholder="SKU o codigo de barras"
+        />
+        <button type="submit" class="btn primary">Usar</button>
+      </div>
+    </form>
+  }
+
+  <div class="scanner-actions">
+    @if (error()) {
+      <button type="button" class="btn ghost" (click)="start()">
+        <span class="material-symbols-rounded" aria-hidden="true">photo_camera</span>
+        Reintentar camara
+      </button>
+    }
+    <button type="button" class="btn ghost" (click)="showManualEntry()">
+      <span class="material-symbols-rounded" aria-hidden="true">keyboard</span>
+      Ingresar codigo manualmente
+    </button>
+  </div>
+</section>

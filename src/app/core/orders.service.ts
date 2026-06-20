@@ -67,6 +67,7 @@ export interface OrderItem {
   confirmation_state?: "confirmed" | "out_of_stock" | "substitute" | "pending";
   supplier_id?: string | null;
   product_id?: string | null;
+  sku?: string | null;
   price_clienta?: number | null;
   price_public?: number | null;
   price_cost?: number | null;
