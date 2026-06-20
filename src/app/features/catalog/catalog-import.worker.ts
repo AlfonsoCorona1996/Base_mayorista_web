@@ -19,30 +19,30 @@ type WorkerRequest = ParseRequest | ValidateRequest;
 interface ImportMapping {
   skuColumn: string;
   nameColumns: string[];
-  supplierColumn: string;
+  brandColumn: string;
   categoryColumn: string;
   colorColumn: string;
   sizeColumn: string;
   priceCostColumn: string;
-  priceClientaColumn: string;
-  stockColumn: string;
-  imageColumn: string;
-  notesColumn: string;
+  priceCostDiscountPct: number;
+  priceClientaMarkupPct: number;
 }
 
 interface PreviewRow {
   rowNumber: number;
   sku: string;
   name: string;
+  brand_name: string | null;
+  supplier_id: string | null;
   supplier_name: string | null;
   category: string | null;
   color: string | null;
   size: string | null;
+  price_cost_excel: number | null;
+  price_cost_discount_pct: number | null;
   price_cost: number | null;
+  price_clienta_markup_pct: number | null;
   price_clienta: number | null;
-  stock_qty: number | null;
-  image_url: string | null;
-  notes: string | null;
   original_row: Record<string, unknown>;
   valid: boolean;
   issue: string | null;
@@ -87,10 +87,20 @@ function numberFromColumn(row: Record<string, unknown>, column: string): { value
   return { value: Number(number.toFixed(2)), invalid: false };
 }
 
-function integerFromColumn(row: Record<string, unknown>, column: string): { value: number | null; invalid: boolean } {
-  const parsed = numberFromColumn(row, column);
-  if (parsed.invalid || parsed.value === null) return parsed;
-  return { value: Math.trunc(parsed.value), invalid: false };
+function clampPercent(value: unknown): number {
+  const number = Number(value ?? 0);
+  if (!Number.isFinite(number)) return 0;
+  return Math.max(0, Math.min(100, Number(number.toFixed(2))));
+}
+
+function applyDiscount(value: number | null, percent: number): number | null {
+  if (value === null) return null;
+  return Number(Math.max(0, value * (1 - clampPercent(percent) / 100)).toFixed(2));
+}
+
+function applyMarkup(value: number | null, percent: number): number | null {
+  if (value === null) return null;
+  return Number(Math.max(0, value * (1 + clampPercent(percent) / 100)).toFixed(2));
 }
 
 function originalRow(row: Record<string, unknown>): Record<string, unknown> {
@@ -112,36 +122,36 @@ function buildPreview(rows: Record<string, unknown>[], mapping: ImportMapping) {
     const rowEmpty = raw["__row_empty"] === true || nonEmptyRecordCount(raw) === 0;
     const sku = textFromColumn(raw, mapping.skuColumn);
     const duplicate = sku ? (skuCounts.get(sku.toLowerCase()) || 0) > 1 : false;
-    const priceCost = numberFromColumn(raw, mapping.priceCostColumn);
-    const priceClienta = numberFromColumn(raw, mapping.priceClientaColumn);
-    const stock = integerFromColumn(raw, mapping.stockColumn);
+    const priceCostExcel = numberFromColumn(raw, mapping.priceCostColumn);
+    const priceCostDiscountPct = clampPercent(mapping.priceCostDiscountPct);
+    const priceClientaMarkupPct = clampPercent(mapping.priceClientaMarkupPct);
+    const priceCost = applyDiscount(priceCostExcel.value, priceCostDiscountPct);
+    const priceClienta = applyMarkup(priceCostExcel.value, priceClientaMarkupPct);
     const issue = rowEmpty
       ? "Fila sin datos"
       : !sku
         ? "SKU vacio"
         : duplicate
           ? "SKU duplicado"
-          : priceCost.invalid
+          : priceCostExcel.invalid
             ? "Precio costo invalido"
-            : priceClienta.invalid
-              ? "Precio venta invalido"
-              : stock.invalid
-                ? "Stock invalido"
-                : null;
+            : null;
     const name = mapping.nameColumns.map((column) => textFromColumn(raw, column)).filter(Boolean).join(" ").trim();
     return {
       rowNumber,
       sku,
       name: rowEmpty ? "Fila sin datos" : name || sku || "Producto sin nombre",
-      supplier_name: textFromColumn(raw, mapping.supplierColumn) || null,
+      brand_name: textFromColumn(raw, mapping.brandColumn) || null,
+      supplier_id: null,
+      supplier_name: null,
       category: textFromColumn(raw, mapping.categoryColumn) || null,
       color: textFromColumn(raw, mapping.colorColumn) || null,
       size: textFromColumn(raw, mapping.sizeColumn) || null,
-      price_cost: priceCost.value,
-      price_clienta: priceClienta.value,
-      stock_qty: stock.value,
-      image_url: textFromColumn(raw, mapping.imageColumn) || null,
-      notes: textFromColumn(raw, mapping.notesColumn) || null,
+      price_cost_excel: priceCostExcel.value,
+      price_cost_discount_pct: priceCostDiscountPct,
+      price_cost: priceCost,
+      price_clienta_markup_pct: priceClientaMarkupPct,
+      price_clienta: priceClienta,
       original_row: originalRow(raw),
       valid: !issue,
       issue,

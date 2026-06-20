@@ -27,11 +27,16 @@ export interface CatalogProduct {
   sku: string;
   sku_normalized: string;
   name: string;
+  brand_name: string | null;
+  supplier_id: string | null;
   supplier_name: string | null;
   category: string | null;
   color: string | null;
   size: string | null;
+  price_cost_excel: number | null;
+  price_cost_discount_pct: number | null;
   price_cost: number | null;
+  price_clienta_markup_pct: number | null;
   price_clienta: number | null;
   stock_qty: number | null;
   image_url: string | null;
@@ -46,11 +51,16 @@ export interface CatalogProduct {
 export interface CatalogProductImportRow {
   sku: string;
   name: string;
+  brand_name?: string | null;
+  supplier_id?: string | null;
   supplier_name?: string | null;
   category?: string | null;
   color?: string | null;
   size?: string | null;
+  price_cost_excel?: number | null;
+  price_cost_discount_pct?: number | null;
   price_cost?: number | null;
+  price_clienta_markup_pct?: number | null;
   price_clienta?: number | null;
   stock_qty?: number | null;
   image_url?: string | null;
@@ -131,11 +141,16 @@ export class CatalogProductsService {
           sku,
           sku_normalized: this.normalizeSku(sku),
           name: row.name.trim() || sku,
+          brand_name: this.nullableText(row.brand_name),
+          supplier_id: this.nullableText(row.supplier_id),
           supplier_name: this.nullableText(row.supplier_name),
           category: this.nullableText(row.category),
           color: this.nullableText(row.color),
           size: this.nullableText(row.size),
+          price_cost_excel: this.nullableNumber(row.price_cost_excel),
+          price_cost_discount_pct: this.nullablePercent(row.price_cost_discount_pct),
           price_cost: this.nullableNumber(row.price_cost),
+          price_clienta_markup_pct: this.nullablePercent(row.price_clienta_markup_pct),
           price_clienta: this.nullableNumber(row.price_clienta),
           stock_qty: this.nullableInteger(row.stock_qty),
           image_url: this.nullableText(row.image_url),
@@ -306,11 +321,16 @@ export class CatalogProductsService {
       sku: String(data["sku"] || ""),
       sku_normalized: this.normalizeSku(String(data["sku_normalized"] || data["sku"] || "")),
       name: String(data["name"] || data["sku"] || "Producto sin nombre"),
+      brand_name: this.nullableText(data["brand_name"]),
+      supplier_id: this.nullableText(data["supplier_id"]),
       supplier_name: this.nullableText(data["supplier_name"]),
       category: this.nullableText(data["category"]),
       color: this.nullableText(data["color"]),
       size: this.nullableText(data["size"]),
+      price_cost_excel: this.nullableNumber(data["price_cost_excel"]),
+      price_cost_discount_pct: this.nullablePercent(data["price_cost_discount_pct"]),
       price_cost: this.nullableNumber(data["price_cost"]),
+      price_clienta_markup_pct: this.nullablePercent(data["price_clienta_markup_pct"]),
       price_clienta: this.nullableNumber(data["price_clienta"]),
       stock_qty: this.nullableInteger(data["stock_qty"]),
       image_url: this.nullableText(data["image_url"]),
@@ -334,6 +354,11 @@ export class CatalogProductsService {
     const number = typeof value === "number" ? value : Number(String(value).replace(/[$,\s]/g, ""));
     if (!Number.isFinite(number)) return null;
     return Number(Math.max(0, number).toFixed(2));
+  }
+
+  private nullablePercent(value: unknown): number | null {
+    const number = this.nullableNumber(value);
+    return number === null ? null : Math.max(0, Math.min(100, number));
   }
 
   private nullableInteger(value: unknown): number | null {

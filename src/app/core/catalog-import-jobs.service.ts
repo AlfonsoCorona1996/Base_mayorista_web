@@ -26,6 +26,10 @@ export interface CatalogImportJob {
   processed_rows: number;
   percent: number;
   error: string | null;
+  supplier_id: string | null;
+  supplier_name: string | null;
+  price_cost_discount_pct: number | null;
+  price_clienta_markup_pct: number | null;
   created_at?: unknown;
   updated_at?: unknown;
   completed_at?: unknown;
@@ -37,6 +41,10 @@ export interface CreateCatalogImportJobInput {
   total_rows: number;
   valid_rows: number;
   rejected_rows: number;
+  supplier_id: string;
+  supplier_name: string;
+  price_cost_discount_pct: number;
+  price_clienta_markup_pct: number;
 }
 
 export interface CreateCatalogImportJobResult {
@@ -132,6 +140,10 @@ export class CatalogImportJobsService {
       processed_rows: processed,
       percent,
       error: typeof data["error"] === "string" && data["error"].trim() ? String(data["error"]) : null,
+      supplier_id: this.nullableText(data["supplier_id"]),
+      supplier_name: this.nullableText(data["supplier_name"]),
+      price_cost_discount_pct: this.safeNullablePercent(data["price_cost_discount_pct"]),
+      price_clienta_markup_pct: this.safeNullablePercent(data["price_clienta_markup_pct"]),
       created_at: data["created_at"] ?? null,
       updated_at: data["updated_at"] ?? null,
       completed_at: data["completed_at"] ?? null,
@@ -142,6 +154,19 @@ export class CatalogImportJobsService {
     const number = Number(value || 0);
     if (!Number.isFinite(number)) return 0;
     return Math.max(0, Math.trunc(number));
+  }
+
+  private safeNullablePercent(value: unknown): number | null {
+    if (value === null || value === undefined || value === "") return null;
+    const number = Number(value);
+    if (!Number.isFinite(number)) return null;
+    return Math.max(0, Math.min(100, Number(number.toFixed(2))));
+  }
+
+  private nullableText(value: unknown): string | null {
+    if (value === null || value === undefined) return null;
+    const text = String(value).trim();
+    return text ? text : null;
   }
 
   private toMillis(value: unknown): number {

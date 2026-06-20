@@ -71,6 +71,81 @@ p {
   align-items: flex-start;
 }
 
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.import-modal {
+  width: min(520px, 100%);
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.28);
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.icon-btn {
+  width: 36px;
+  height: 36px;
+  border: 1px solid #d8e3ef;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #102033;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.icon-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.modal-hint {
+  color: #64748b;
+  font-size: 0.82rem;
+}
+
+.error-text {
+  color: #b4233c;
+}
+
+.file-picker {
+  min-height: 48px;
+  border: 1px dashed #10b981;
+  border-radius: 12px;
+  background: #ecfdf5;
+  color: #047857;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.file-picker.is-disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .btn {
   border: 1px solid transparent;
   border-radius: 11px;
@@ -208,15 +283,22 @@ p {
   font-size: 1.15rem;
 }
 
+.mapping-layout {
+  display: grid;
+  gap: 12px;
+}
+
 .mapping-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
+  align-items: start;
 }
 
 .field {
   display: grid;
   gap: 5px;
+  align-content: start;
 }
 
 .field > span,
@@ -224,11 +306,14 @@ p {
   color: #334155;
   font-size: 0.77rem;
   font-weight: 750;
+  line-height: 1.2;
+  min-height: 16px;
 }
 
 .input {
   width: 100%;
-  min-height: 38px;
+  height: 40px;
+  min-height: 40px;
   border: 1px solid #cbd8e6;
   border-radius: 10px;
   background: #ffffff;
@@ -244,19 +329,47 @@ p {
   box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.14);
 }
 
+.price-field {
+  gap: 5px;
+}
+
+.price-cost-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 140px;
+  gap: 8px;
+  align-items: end;
+}
+
+.percent-input {
+  display: grid;
+  gap: 5px;
+}
+
+.percent-input span {
+  color: #334155;
+  font-size: 0.72rem;
+  font-weight: 750;
+  line-height: 1.2;
+  min-height: 16px;
+}
+
 .name-field {
-  grid-column: span 2;
+  border: 1px solid #d8e3ef;
+  border-radius: 12px;
+  padding: 10px;
+  background: #f8fafc;
 }
 
 .name-columns {
-  max-height: 128px;
+  max-height: 150px;
   overflow: auto;
-  border: 1px solid #d8e3ef;
+  border: 1px solid #cbd8e6;
   border-radius: 10px;
   padding: 8px;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
+  background: #ffffff;
 }
 
 .name-columns label {
@@ -294,7 +407,7 @@ p {
 }
 
 .catalog-products-table {
-  min-width: 1020px;
+  min-width: 1120px;
 }
 
 .rejected-table {
@@ -312,11 +425,52 @@ p {
   background: #f8fafc;
   color: #475569;
   font-weight: 800;
+  text-align: center;
+  vertical-align: middle;
 }
 
 .preview-table tr.invalid td {
   background: #fff7ed;
   color: #9a3412;
+}
+
+.price-formula {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.price-formula span,
+.price-formula strong {
+  border-radius: 999px;
+  padding: 2px 7px;
+  font-weight: 850;
+}
+
+.price-formula span:first-child {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+.price-formula--cost span:nth-child(2) {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.price-formula--clienta span:nth-child(2) {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.price-formula--cost strong {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.price-formula--clienta strong {
+  background: #f0f9ff;
+  color: #0369a1;
 }
 
 .search-field {
@@ -403,5 +557,14 @@ p {
 
   .name-field {
     grid-column: auto;
+  }
+
+  .price-field {
+    grid-template-columns: 1fr;
+  }
+
+  .price-cost-row,
+  .name-columns {
+    grid-template-columns: 1fr;
   }
 }

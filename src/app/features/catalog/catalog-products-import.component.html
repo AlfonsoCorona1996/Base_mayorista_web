@@ -13,13 +13,57 @@
         <span class="material-symbols-rounded" aria-hidden="true">refresh</span>
         {{ pageState().loading ? "Actualizando..." : "Actualizar" }}
       </button>
-      <label class="btn btn-primary" [class.is-disabled]="parsing()">
+      <button type="button" class="btn btn-primary" (click)="openImportModal()" [disabled]="parsing()">
         <span class="material-symbols-rounded" aria-hidden="true">upload_file</span>
         {{ parsing() ? "Leyendo..." : "Importar Excel" }}
-        <input type="file" accept=".xlsx,.xls" (change)="onFileSelected($event)" [disabled]="parsing()" hidden />
-      </label>
+      </button>
     </div>
   </header>
+
+  @if (importModalOpen()) {
+    <div class="modal-backdrop" (click)="closeImportModal()">
+      <section class="import-modal" role="dialog" aria-modal="true" aria-labelledby="catalog-import-modal-title" (click)="$event.stopPropagation()">
+        <div class="modal-head">
+          <div>
+            <p class="kicker">
+              <span class="material-symbols-rounded" aria-hidden="true">storefront</span>
+              Proveedor del catalogo
+            </p>
+            <h3 id="catalog-import-modal-title">Importar catalogo</h3>
+          </div>
+          <button type="button" class="icon-btn" aria-label="Cerrar" (click)="closeImportModal()" [disabled]="parsing() || importing()">
+            <span class="material-symbols-rounded" aria-hidden="true">close</span>
+          </button>
+        </div>
+
+        <label class="field">
+          <span>Proveedor padre *</span>
+          <select class="input" [ngModel]="selectedSupplierId()" (ngModelChange)="onSupplierSelected($event)" [disabled]="parsing() || importing()">
+            <option value="">Selecciona proveedor</option>
+            @for (supplier of catalogSuppliers(); track supplier.supplier_id) {
+              <option [value]="supplier.supplier_id">{{ supplier.display_name }}</option>
+            }
+          </select>
+        </label>
+
+        @if (catalogSuppliers().length === 0) {
+          <p class="modal-hint error-text">No hay proveedores activos de Catalogo. Crea o activa el proveedor antes de importar.</p>
+        } @else {
+          <p class="modal-hint">Este proveedor se guardara como padre de todos los articulos importados.</p>
+        }
+
+        @if (supplierPickerError()) {
+          <p class="modal-hint error-text">{{ supplierPickerError() }}</p>
+        }
+
+        <label class="file-picker" [class.is-disabled]="!selectedSupplier() || parsing()">
+          <span class="material-symbols-rounded" aria-hidden="true">upload_file</span>
+          <span>{{ parsing() ? "Leyendo Excel..." : "Elegir archivo Excel" }}</span>
+          <input type="file" accept=".xlsx,.xls" (change)="onFileSelected($event)" [disabled]="!selectedSupplier() || parsing()" hidden />
+        </label>
+      </section>
+    </div>
+  }
 
   @if (importJobs.latestActiveJob(); as job) {
     <section class="job-panel">
@@ -83,16 +127,69 @@
         </article>
       </div>
 
-      <div class="mapping-grid">
-        <label class="field">
-          <span>SKU *</span>
-          <select class="input" [ngModel]="mapping().skuColumn" (ngModelChange)="setMappingField('skuColumn', $event)">
-            <option value="">Selecciona columna</option>
-            @for (header of headers(); track header) {
-              <option [value]="header">{{ header }}</option>
-            }
-          </select>
-        </label>
+      <div class="mapping-layout">
+        <div class="mapping-grid mapping-grid--compact">
+          <label class="field">
+            <span>SKU *</span>
+            <select class="input" [ngModel]="mapping().skuColumn" (ngModelChange)="setMappingField('skuColumn', $event)">
+              <option value="">Selecciona columna</option>
+              @for (header of headers(); track header) {
+                <option [value]="header">{{ header }}</option>
+              }
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Marca</span>
+            <select class="input" [ngModel]="mapping().brandColumn" (ngModelChange)="setMappingField('brandColumn', $event)">
+              <option value="">Sin mapear</option>
+              @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Categoria</span>
+            <select class="input" [ngModel]="mapping().categoryColumn" (ngModelChange)="setMappingField('categoryColumn', $event)">
+              <option value="">Sin mapear</option>
+              @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Color</span>
+            <select class="input" [ngModel]="mapping().colorColumn" (ngModelChange)="setMappingField('colorColumn', $event)">
+              <option value="">Sin mapear</option>
+              @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Talla</span>
+            <select class="input" [ngModel]="mapping().sizeColumn" (ngModelChange)="setMappingField('sizeColumn', $event)">
+              <option value="">Sin mapear</option>
+              @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
+            </select>
+          </label>
+
+          <div class="field price-field">
+            <span>Precio costo</span>
+            <div class="price-cost-row">
+              <select class="input" [ngModel]="mapping().priceCostColumn" (ngModelChange)="setMappingField('priceCostColumn', $event)">
+                <option value="">Sin mapear</option>
+                @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
+              </select>
+              <label class="percent-input">
+                <span>Descuento %</span>
+                <input class="input" type="number" min="0" max="100" step="0.01" [ngModel]="mapping().priceCostDiscountPct" (ngModelChange)="setPercentField('priceCostDiscountPct', $event)" />
+              </label>
+            </div>
+          </div>
+
+          <label class="field">
+            <span>Precio clienta - aumento %</span>
+            <input class="input" type="number" min="0" max="100" step="0.01" [ngModel]="mapping().priceClientaMarkupPct" (ngModelChange)="setPercentField('priceClientaMarkupPct', $event)" />
+          </label>
+        </div>
 
         <div class="field name-field">
           <span>Nombre (puede combinar columnas)</span>
@@ -109,78 +206,6 @@
             }
           </div>
         </div>
-
-        <label class="field">
-          <span>Proveedor</span>
-          <select class="input" [ngModel]="mapping().supplierColumn" (ngModelChange)="setMappingField('supplierColumn', $event)">
-            <option value="">Sin mapear</option>
-            @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
-          </select>
-        </label>
-
-        <label class="field">
-          <span>Categoria</span>
-          <select class="input" [ngModel]="mapping().categoryColumn" (ngModelChange)="setMappingField('categoryColumn', $event)">
-            <option value="">Sin mapear</option>
-            @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
-          </select>
-        </label>
-
-        <label class="field">
-          <span>Color</span>
-          <select class="input" [ngModel]="mapping().colorColumn" (ngModelChange)="setMappingField('colorColumn', $event)">
-            <option value="">Sin mapear</option>
-            @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
-          </select>
-        </label>
-
-        <label class="field">
-          <span>Talla</span>
-          <select class="input" [ngModel]="mapping().sizeColumn" (ngModelChange)="setMappingField('sizeColumn', $event)">
-            <option value="">Sin mapear</option>
-            @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
-          </select>
-        </label>
-
-        <label class="field">
-          <span>Precio costo</span>
-          <select class="input" [ngModel]="mapping().priceCostColumn" (ngModelChange)="setMappingField('priceCostColumn', $event)">
-            <option value="">Sin mapear</option>
-            @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
-          </select>
-        </label>
-
-        <label class="field">
-          <span>Precio venta/clienta</span>
-          <select class="input" [ngModel]="mapping().priceClientaColumn" (ngModelChange)="setMappingField('priceClientaColumn', $event)">
-            <option value="">Sin mapear</option>
-            @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
-          </select>
-        </label>
-
-        <label class="field">
-          <span>Existencia</span>
-          <select class="input" [ngModel]="mapping().stockColumn" (ngModelChange)="setMappingField('stockColumn', $event)">
-            <option value="">Sin mapear</option>
-            @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
-          </select>
-        </label>
-
-        <label class="field">
-          <span>Imagen/URL</span>
-          <select class="input" [ngModel]="mapping().imageColumn" (ngModelChange)="setMappingField('imageColumn', $event)">
-            <option value="">Sin mapear</option>
-            @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
-          </select>
-        </label>
-
-        <label class="field">
-          <span>Notas</span>
-          <select class="input" [ngModel]="mapping().notesColumn" (ngModelChange)="setMappingField('notesColumn', $event)">
-            <option value="">Sin mapear</option>
-            @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
-          </select>
-        </label>
       </div>
 
       <div class="preview-wrap">
@@ -196,10 +221,12 @@
                 <th>Estado</th>
                 <th>SKU</th>
                 <th>Nombre</th>
-                <th>Proveedor</th>
+                <th>Marca</th>
+                <th>Categoria</th>
+                <th>Precio costo</th>
+                <th>Precio clienta</th>
                 <th>Color</th>
                 <th>Talla</th>
-                <th>Stock</th>
               </tr>
             </thead>
             <tbody>
@@ -209,10 +236,32 @@
                   <td>{{ row.valid ? "OK" : row.issue }}</td>
                   <td>{{ row.sku || "-" }}</td>
                   <td>{{ row.name }}</td>
-                  <td>{{ row.supplier_name || "-" }}</td>
+                  <td>{{ row.brand_name || "-" }}</td>
+                  <td>{{ row.category || "-" }}</td>
+                  <td>
+                    @if (row.price_cost_excel !== null && row.price_cost_excel !== undefined) {
+                      <span class="price-formula price-formula--cost">
+                        <span>{{ row.price_cost_excel | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+                        <span>- {{ row.price_cost_discount_pct || 0 }}%</span>
+                        <strong>{{ row.price_cost | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong>
+                      </span>
+                    } @else {
+                      -
+                    }
+                  </td>
+                  <td>
+                    @if (row.price_cost_excel !== null && row.price_cost_excel !== undefined) {
+                      <span class="price-formula price-formula--clienta">
+                        <span>{{ row.price_cost_excel | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+                        <span>+ {{ row.price_clienta_markup_pct || 0 }}%</span>
+                        <strong>{{ row.price_clienta | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong>
+                      </span>
+                    } @else {
+                      -
+                    }
+                  </td>
                   <td>{{ row.color || "-" }}</td>
                   <td>{{ row.size || "-" }}</td>
-                  <td>{{ row.stock_qty ?? "-" }}</td>
                 </tr>
               }
             </tbody>
@@ -278,11 +327,11 @@
             <tr>
               <th>SKU</th>
               <th>Nombre</th>
+              <th>Marca</th>
               <th>Proveedor</th>
               <th>Categoría</th>
               <th>Color</th>
               <th>Talla</th>
-              <th>Stock ref.</th>
               <th>Costo</th>
               <th>Clienta</th>
             </tr>
@@ -292,11 +341,11 @@
               <tr>
                 <td><strong class="sku">{{ product.sku }}</strong></td>
                 <td>{{ product.name }}</td>
+                <td>{{ product.brand_name || "-" }}</td>
                 <td>{{ product.supplier_name || "-" }}</td>
                 <td>{{ product.category || "-" }}</td>
                 <td>{{ product.color || "-" }}</td>
                 <td>{{ product.size || "-" }}</td>
-                <td>{{ productStockLabel(product) }}</td>
                 <td>{{ product.price_cost | currency:'MXN':'symbol-narrow':'1.0-0' }}</td>
                 <td>{{ product.price_clienta | currency:'MXN':'symbol-narrow':'1.0-0' }}</td>
               </tr>

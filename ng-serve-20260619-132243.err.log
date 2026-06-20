@@ -63968,3 +63968,1096 @@
          ╵                  [32m~~~~~~~~~[0m
 
 [39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2739: Type '{ product_id: string; business_id: "bm" | "catalogo"; sku: string; sku_normalized: string; name: string; supplier_name: string | null; category: string | null; color: string | null; size: string | null; ... 9 more ...; updated_at: {} | null; }' is missing the following properties from type 'CatalogProduct': brand_name, supplier_id, price_cost_excel, price_cost_discount_pct, price_clienta_markup_pct[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:313:4:
+[37m      313 │     [32mreturn[37m {
+          ╵     [32m~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module '@zxing/browser' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/shared/barcode-scanner/barcode-scanner.component.ts:12:59:
+[37m      12 │ ...rowserMultiFormatReader, IScannerControls } from [32m"@zxing/browser"[37m;
+         ╵                                                     [32m~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module '@zxing/library' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/shared/barcode-scanner/barcode-scanner.component.ts:13:46:
+[37m      13 │ import { BarcodeFormat, DecodeHintType } from [32m"@zxing/library"[37m;
+         ╵                                               [32m~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS7006: Parameter 'result' implicitly has an 'any' type.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/shared/barcode-scanner/barcode-scanner.component.ts:91:9:
+[37m      91 │         ([32mresult[37m, scanError) => {
+         ╵          [32m~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS7006: Parameter 'scanError' implicitly has an 'any' type.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/shared/barcode-scanner/barcode-scanner.component.ts:91:17:
+[37m      91 │         (result, [32mscanError[37m) => {
+         ╵                  [32m~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'nullablePercent' does not exist on type 'CatalogProductsService'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:151:40:
+[37m      151 │ ...cost_discount_pct: this.[32mnullablePercent[37m(row.price_cost_discoun...
+          ╵                            [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'nullablePercent' does not exist on type 'CatalogProductsService'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:153:41:
+[37m      153 │ ...lienta_markup_pct: this.[32mnullablePercent[37m(row.price_clienta_mark...
+          ╵                            [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2739: Type '{ product_id: string; business_id: "bm" | "catalogo"; sku: string; sku_normalized: string; name: string; supplier_name: string | null; category: string | null; color: string | null; size: string | null; ... 9 more ...; updated_at: {} | null; }' is missing the following properties from type 'CatalogProduct': brand_name, supplier_id, price_cost_excel, price_cost_discount_pct, price_clienta_markup_pct[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:318:4:
+[37m      318 │     [32mreturn[37m {
+          ╵     [32m~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module '@zxing/browser' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/shared/barcode-scanner/barcode-scanner.component.ts:12:59:
+[37m      12 │ ...rowserMultiFormatReader, IScannerControls } from [32m"@zxing/browser"[37m;
+         ╵                                                     [32m~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module '@zxing/library' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/shared/barcode-scanner/barcode-scanner.component.ts:13:46:
+[37m      13 │ import { BarcodeFormat, DecodeHintType } from [32m"@zxing/library"[37m;
+         ╵                                               [32m~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS7006: Parameter 'result' implicitly has an 'any' type.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/shared/barcode-scanner/barcode-scanner.component.ts:91:9:
+[37m      91 │         ([32mresult[37m, scanError) => {
+         ╵          [32m~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS7006: Parameter 'scanError' implicitly has an 'any' type.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/shared/barcode-scanner/barcode-scanner.component.ts:91:17:
+[37m      91 │         (result, [32mscanError[37m) => {
+         ╵                  [32m~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'nullablePercent' does not exist on type 'CatalogProductsService'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:151:40:
+[37m      151 │ ...cost_discount_pct: this.[32mnullablePercent[37m(row.price_cost_discoun...
+          ╵                            [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'nullablePercent' does not exist on type 'CatalogProductsService'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:153:41:
+[37m      153 │ ...lienta_markup_pct: this.[32mnullablePercent[37m(row.price_clienta_mark...
+          ╵                            [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'nullablePercent' does not exist on type 'CatalogProductsService'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:331:36:
+[37m      331 │ ...cost_discount_pct: this.[32mnullablePercent[37m(data["price_cost_disco...
+          ╵                            [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'nullablePercent' does not exist on type 'CatalogProductsService'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/catalog-products.service.ts:333:37:
+[37m      333 │ ...lienta_markup_pct: this.[32mnullablePercent[37m(data["price_clienta_ma...
+          ╵                            [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module '@zxing/browser' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/shared/barcode-scanner/barcode-scanner.component.ts:12:59:
+[37m      12 │ ...rowserMultiFormatReader, IScannerControls } from [32m"@zxing/browser"[37m;
+         ╵                                                     [32m~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module '@zxing/library' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/shared/barcode-scanner/barcode-scanner.component.ts:13:46:
+[37m      13 │ import { BarcodeFormat, DecodeHintType } from [32m"@zxing/library"[37m;
+         ╵                                               [32m~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS7006: Parameter 'result' implicitly has an 'any' type.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/shared/barcode-scanner/barcode-scanner.component.ts:91:9:
+[37m      91 │         ([32mresult[37m, scanError) => {
+         ╵          [32m~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS7006: Parameter 'scanError' implicitly has an 'any' type.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/shared/barcode-scanner/barcode-scanner.component.ts:91:17:
+[37m      91 │         (result, [32mscanError[37m) => {
+         ╵                  [32m~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module '@zxing/browser' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/shared/barcode-scanner/barcode-scanner.component.ts:12:59:
+[37m      12 │ ...rowserMultiFormatReader, IScannerControls } from [32m"@zxing/browser"[37m;
+         ╵                                                     [32m~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module '@zxing/library' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/shared/barcode-scanner/barcode-scanner.component.ts:13:46:
+[37m      13 │ import { BarcodeFormat, DecodeHintType } from [32m"@zxing/library"[37m;
+         ╵                                               [32m~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS7006: Parameter 'result' implicitly has an 'any' type.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/shared/barcode-scanner/barcode-scanner.component.ts:91:9:
+[37m      91 │         ([32mresult[37m, scanError) => {
+         ╵          [32m~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS7006: Parameter 'scanError' implicitly has an 'any' type.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/shared/barcode-scanner/barcode-scanner.component.ts:91:17:
+[37m      91 │         (result, [32mscanError[37m) => {
+         ╵                  [32m~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '{ business_id: "catalogo"; file_name: string; total_rows: number; valid_rows: number; rejected_rows: number; }' is not assignable to parameter of type 'CreateCatalogImportJobInput'.
+  Type '{ business_id: "catalogo"; file_name: string; total_rows: number; valid_rows: number; rejected_rows: number; }' is missing the following properties from type 'CreateCatalogImportJobInput': supplier_id, supplier_name, price_cost_discount_pct, price_clienta_markup_pct[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:164:50:
+[37m      164 │       const job = await this.importJobs.createJob([32m{[37m
+          ╵                                                   [32m^[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module '@zxing/browser' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/shared/barcode-scanner/barcode-scanner.component.ts:12:59:
+[37m      12 │ ...rowserMultiFormatReader, IScannerControls } from [32m"@zxing/browser"[37m;
+         ╵                                                     [32m~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module '@zxing/library' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/shared/barcode-scanner/barcode-scanner.component.ts:13:46:
+[37m      13 │ import { BarcodeFormat, DecodeHintType } from [32m"@zxing/library"[37m;
+         ╵                                               [32m~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS7006: Parameter 'result' implicitly has an 'any' type.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/shared/barcode-scanner/barcode-scanner.component.ts:91:9:
+[37m      91 │         ([32mresult[37m, scanError) => {
+         ╵          [32m~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS7006: Parameter 'scanError' implicitly has an 'any' type.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/shared/barcode-scanner/barcode-scanner.component.ts:91:17:
+[37m      91 │         (result, [32mscanError[37m) => {
+         ╵                  [32m~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '{ business_id: "catalogo"; file_name: string; total_rows: number; valid_rows: number; rejected_rows: number; }' is not assignable to parameter of type 'CreateCatalogImportJobInput'.
+  Type '{ business_id: "catalogo"; file_name: string; total_rows: number; valid_rows: number; rejected_rows: number; }' is missing the following properties from type 'CreateCatalogImportJobInput': supplier_id, supplier_name, price_cost_discount_pct, price_clienta_markup_pct[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:164:50:
+[37m      164 │       const job = await this.importJobs.createJob([32m{[37m
+          ╵                                                   [32m^[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module '@zxing/browser' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/shared/barcode-scanner/barcode-scanner.component.ts:12:59:
+[37m      12 │ ...rowserMultiFormatReader, IScannerControls } from [32m"@zxing/browser"[37m;
+         ╵                                                     [32m~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module '@zxing/library' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/shared/barcode-scanner/barcode-scanner.component.ts:13:46:
+[37m      13 │ import { BarcodeFormat, DecodeHintType } from [32m"@zxing/library"[37m;
+         ╵                                               [32m~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS7006: Parameter 'result' implicitly has an 'any' type.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/shared/barcode-scanner/barcode-scanner.component.ts:91:9:
+[37m      91 │         ([32mresult[37m, scanError) => {
+         ╵          [32m~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS7006: Parameter 'scanError' implicitly has an 'any' type.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/shared/barcode-scanner/barcode-scanner.component.ts:91:17:
+[37m      91 │         (result, [32mscanError[37m) => {
+         ╵                  [32m~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'supplierColumn' does not exist on type 'ImportMapping'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.html:115:53:
+[37m      115 │ ...t" [ngModel]="mapping().[32msupplierColumn[37m" (ngModelChange)="setMa...
+          ╵                            [32m~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogProductsImportComponent.
+
+    src/app/features/catalog/catalog-products-import.component.ts:62:15:
+[37m      62 │   templateUrl: [32m"./catalog-products-import.component.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '"supplierColumn"' is not assignable to parameter of type 'MappingKey'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.html:115:102:
+[37m      115 │ ...umn" (ngModelChange)="setMappingField([32m'supplierColumn'[37m, $event)">
+          ╵                                          [32m~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogProductsImportComponent.
+
+    src/app/features/catalog/catalog-products-import.component.ts:62:15:
+[37m      62 │   templateUrl: [32m"./catalog-products-import.component.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'priceClientaColumn' does not exist on type 'ImportMapping'. Did you mean 'priceCostColumn'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.html:155:53:
+[37m      155 │ ... [ngModel]="mapping().[32mpriceClientaColumn[37m" (ngModelChange)="set...
+          ╵                          [32m~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogProductsImportComponent.
+
+    src/app/features/catalog/catalog-products-import.component.ts:62:15:
+[37m      62 │   templateUrl: [32m"./catalog-products-import.component.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '"priceClientaColumn"' is not assignable to parameter of type 'MappingKey'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.html:155:106:
+[37m      155 │ ... (ngModelChange)="setMappingField([32m'priceClientaColumn'[37m, $event)">
+          ╵                                      [32m~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogProductsImportComponent.
+
+    src/app/features/catalog/catalog-products-import.component.ts:62:15:
+[37m      62 │   templateUrl: [32m"./catalog-products-import.component.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '{ business_id: "catalogo"; file_name: string; total_rows: number; valid_rows: number; rejected_rows: number; }' is not assignable to parameter of type 'CreateCatalogImportJobInput'.
+  Type '{ business_id: "catalogo"; file_name: string; total_rows: number; valid_rows: number; rejected_rows: number; }' is missing the following properties from type 'CreateCatalogImportJobInput': supplier_id, supplier_name, price_cost_discount_pct, price_clienta_markup_pct[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:167:50:
+[37m      167 │       const job = await this.importJobs.createJob([32m{[37m
+          ╵                                                   [32m^[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'priceClientaColumn' does not exist on type 'ImportMapping'. Did you mean 'priceCostColumn'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:326:62:
+[37m      326 │ ...Clienta = this.numberFromColumn(raw, mapping.[32mpriceClientaColumn[37m);
+          ╵                                                 [32m~~~~~~~~~~~~~~~~~~[0m
+
+  'priceCostColumn' is declared here.
+
+    src/app/features/catalog/catalog-products-import.component.ts:32:2:
+[37m      32 │   [32mpriceCostColumn[37m: string;
+         ╵   [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'supplierColumn' does not exist on type 'ImportMapping'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:346:56:
+[37m      346 │ ...r_name: this.textFromColumn(raw, mapping.[32msupplierColumn[37m) || null,
+          ╵                                             [32m~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2353: Object literal may only specify known properties, and 'supplierColumn' does not exist in type 'ImportMapping'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:395:6:
+[37m      395 │       [32msupplierColumn[37m: "",
+          ╵       [32m~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2353: Object literal may only specify known properties, and 'supplierColumn' does not exist in type 'ImportMapping'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:413:6:
+[37m      413 │       [32msupplierColumn[37m: this.guessHeader(headers, ["proveedor", "ma...
+          ╵       [32m~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'supplierColumn' does not exist on type 'ImportMapping'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.html:115:53:
+[37m      115 │ ...t" [ngModel]="mapping().[32msupplierColumn[37m" (ngModelChange)="setMa...
+          ╵                            [32m~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogProductsImportComponent.
+
+    src/app/features/catalog/catalog-products-import.component.ts:62:15:
+[37m      62 │   templateUrl: [32m"./catalog-products-import.component.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '"supplierColumn"' is not assignable to parameter of type 'MappingKey'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.html:115:102:
+[37m      115 │ ...umn" (ngModelChange)="setMappingField([32m'supplierColumn'[37m, $event)">
+          ╵                                          [32m~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogProductsImportComponent.
+
+    src/app/features/catalog/catalog-products-import.component.ts:62:15:
+[37m      62 │   templateUrl: [32m"./catalog-products-import.component.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'priceClientaColumn' does not exist on type 'ImportMapping'. Did you mean 'priceCostColumn'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.html:155:53:
+[37m      155 │ ... [ngModel]="mapping().[32mpriceClientaColumn[37m" (ngModelChange)="set...
+          ╵                          [32m~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogProductsImportComponent.
+
+    src/app/features/catalog/catalog-products-import.component.ts:62:15:
+[37m      62 │   templateUrl: [32m"./catalog-products-import.component.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '"priceClientaColumn"' is not assignable to parameter of type 'MappingKey'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.html:155:106:
+[37m      155 │ ... (ngModelChange)="setMappingField([32m'priceClientaColumn'[37m, $event)">
+          ╵                                      [32m~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogProductsImportComponent.
+
+    src/app/features/catalog/catalog-products-import.component.ts:62:15:
+[37m      62 │   templateUrl: [32m"./catalog-products-import.component.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '{ business_id: "catalogo"; file_name: string; total_rows: number; valid_rows: number; rejected_rows: number; }' is not assignable to parameter of type 'CreateCatalogImportJobInput'.
+  Type '{ business_id: "catalogo"; file_name: string; total_rows: number; valid_rows: number; rejected_rows: number; }' is missing the following properties from type 'CreateCatalogImportJobInput': supplier_id, supplier_name, price_cost_discount_pct, price_clienta_markup_pct[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:177:50:
+[37m      177 │       const job = await this.importJobs.createJob([32m{[37m
+          ╵                                                   [32m^[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'priceClientaColumn' does not exist on type 'ImportMapping'. Did you mean 'priceCostColumn'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:336:62:
+[37m      336 │ ...Clienta = this.numberFromColumn(raw, mapping.[32mpriceClientaColumn[37m);
+          ╵                                                 [32m~~~~~~~~~~~~~~~~~~[0m
+
+  'priceCostColumn' is declared here.
+
+    src/app/features/catalog/catalog-products-import.component.ts:32:2:
+[37m      32 │   [32mpriceCostColumn[37m: string;
+         ╵   [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'supplierColumn' does not exist on type 'ImportMapping'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:356:56:
+[37m      356 │ ...r_name: this.textFromColumn(raw, mapping.[32msupplierColumn[37m) || null,
+          ╵                                             [32m~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2353: Object literal may only specify known properties, and 'supplierColumn' does not exist in type 'ImportMapping'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:405:6:
+[37m      405 │       [32msupplierColumn[37m: "",
+          ╵       [32m~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2353: Object literal may only specify known properties, and 'supplierColumn' does not exist in type 'ImportMapping'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:423:6:
+[37m      423 │       [32msupplierColumn[37m: this.guessHeader(headers, ["proveedor", "ma...
+          ╵       [32m~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'supplierColumn' does not exist on type 'ImportMapping'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.html:115:53:
+[37m      115 │ ...t" [ngModel]="mapping().[32msupplierColumn[37m" (ngModelChange)="setMa...
+          ╵                            [32m~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogProductsImportComponent.
+
+    src/app/features/catalog/catalog-products-import.component.ts:62:15:
+[37m      62 │   templateUrl: [32m"./catalog-products-import.component.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '"supplierColumn"' is not assignable to parameter of type 'MappingKey'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.html:115:102:
+[37m      115 │ ...umn" (ngModelChange)="setMappingField([32m'supplierColumn'[37m, $event)">
+          ╵                                          [32m~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogProductsImportComponent.
+
+    src/app/features/catalog/catalog-products-import.component.ts:62:15:
+[37m      62 │   templateUrl: [32m"./catalog-products-import.component.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'priceClientaColumn' does not exist on type 'ImportMapping'. Did you mean 'priceCostColumn'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.html:155:53:
+[37m      155 │ ... [ngModel]="mapping().[32mpriceClientaColumn[37m" (ngModelChange)="set...
+          ╵                          [32m~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogProductsImportComponent.
+
+    src/app/features/catalog/catalog-products-import.component.ts:62:15:
+[37m      62 │   templateUrl: [32m"./catalog-products-import.component.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '"priceClientaColumn"' is not assignable to parameter of type 'MappingKey'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.html:155:106:
+[37m      155 │ ... (ngModelChange)="setMappingField([32m'priceClientaColumn'[37m, $event)">
+          ╵                                      [32m~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogProductsImportComponent.
+
+    src/app/features/catalog/catalog-products-import.component.ts:62:15:
+[37m      62 │   templateUrl: [32m"./catalog-products-import.component.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '{ business_id: "catalogo"; file_name: string; total_rows: number; valid_rows: number; rejected_rows: number; }' is not assignable to parameter of type 'CreateCatalogImportJobInput'.
+  Type '{ business_id: "catalogo"; file_name: string; total_rows: number; valid_rows: number; rejected_rows: number; }' is missing the following properties from type 'CreateCatalogImportJobInput': supplier_id, supplier_name, price_cost_discount_pct, price_clienta_markup_pct[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:201:50:
+[37m      201 │       const job = await this.importJobs.createJob([32m{[37m
+          ╵                                                   [32m^[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'priceClientaColumn' does not exist on type 'ImportMapping'. Did you mean 'priceCostColumn'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:360:62:
+[37m      360 │ ...Clienta = this.numberFromColumn(raw, mapping.[32mpriceClientaColumn[37m);
+          ╵                                                 [32m~~~~~~~~~~~~~~~~~~[0m
+
+  'priceCostColumn' is declared here.
+
+    src/app/features/catalog/catalog-products-import.component.ts:32:2:
+[37m      32 │   [32mpriceCostColumn[37m: string;
+         ╵   [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'supplierColumn' does not exist on type 'ImportMapping'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:380:56:
+[37m      380 │ ...r_name: this.textFromColumn(raw, mapping.[32msupplierColumn[37m) || null,
+          ╵                                             [32m~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2353: Object literal may only specify known properties, and 'supplierColumn' does not exist in type 'ImportMapping'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:429:6:
+[37m      429 │       [32msupplierColumn[37m: "",
+          ╵       [32m~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2353: Object literal may only specify known properties, and 'supplierColumn' does not exist in type 'ImportMapping'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:447:6:
+[37m      447 │       [32msupplierColumn[37m: this.guessHeader(headers, ["proveedor", "ma...
+          ╵       [32m~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'supplierColumn' does not exist on type 'ImportMapping'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.html:115:53:
+[37m      115 │ ...t" [ngModel]="mapping().[32msupplierColumn[37m" (ngModelChange)="setMa...
+          ╵                            [32m~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogProductsImportComponent.
+
+    src/app/features/catalog/catalog-products-import.component.ts:62:15:
+[37m      62 │   templateUrl: [32m"./catalog-products-import.component.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '"supplierColumn"' is not assignable to parameter of type 'MappingKey'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.html:115:102:
+[37m      115 │ ...umn" (ngModelChange)="setMappingField([32m'supplierColumn'[37m, $event)">
+          ╵                                          [32m~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogProductsImportComponent.
+
+    src/app/features/catalog/catalog-products-import.component.ts:62:15:
+[37m      62 │   templateUrl: [32m"./catalog-products-import.component.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'priceClientaColumn' does not exist on type 'ImportMapping'. Did you mean 'priceCostColumn'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.html:155:53:
+[37m      155 │ ... [ngModel]="mapping().[32mpriceClientaColumn[37m" (ngModelChange)="set...
+          ╵                          [32m~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogProductsImportComponent.
+
+    src/app/features/catalog/catalog-products-import.component.ts:62:15:
+[37m      62 │   templateUrl: [32m"./catalog-products-import.component.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '"priceClientaColumn"' is not assignable to parameter of type 'MappingKey'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.html:155:106:
+[37m      155 │ ... (ngModelChange)="setMappingField([32m'priceClientaColumn'[37m, $event)">
+          ╵                                      [32m~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogProductsImportComponent.
+
+    src/app/features/catalog/catalog-products-import.component.ts:62:15:
+[37m      62 │   templateUrl: [32m"./catalog-products-import.component.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'clampPercent' does not exist on type 'CatalogProductsImportComponent'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:181:66:
+[37m      181 │ ...current) => ({ ...current, [field]: this.[32mclampPercent[37m(value) }));
+          ╵                                             [32m~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '{ business_id: "catalogo"; file_name: string; total_rows: number; valid_rows: number; rejected_rows: number; }' is not assignable to parameter of type 'CreateCatalogImportJobInput'.
+  Type '{ business_id: "catalogo"; file_name: string; total_rows: number; valid_rows: number; rejected_rows: number; }' is missing the following properties from type 'CreateCatalogImportJobInput': supplier_id, supplier_name, price_cost_discount_pct, price_clienta_markup_pct[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:206:50:
+[37m      206 │       const job = await this.importJobs.createJob([32m{[37m
+          ╵                                                   [32m^[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'priceClientaColumn' does not exist on type 'ImportMapping'. Did you mean 'priceCostColumn'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:365:62:
+[37m      365 │ ...Clienta = this.numberFromColumn(raw, mapping.[32mpriceClientaColumn[37m);
+          ╵                                                 [32m~~~~~~~~~~~~~~~~~~[0m
+
+  'priceCostColumn' is declared here.
+
+    src/app/features/catalog/catalog-products-import.component.ts:32:2:
+[37m      32 │   [32mpriceCostColumn[37m: string;
+         ╵   [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'supplierColumn' does not exist on type 'ImportMapping'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:385:56:
+[37m      385 │ ...r_name: this.textFromColumn(raw, mapping.[32msupplierColumn[37m) || null,
+          ╵                                             [32m~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2353: Object literal may only specify known properties, and 'supplierColumn' does not exist in type 'ImportMapping'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:434:6:
+[37m      434 │       [32msupplierColumn[37m: "",
+          ╵       [32m~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2353: Object literal may only specify known properties, and 'supplierColumn' does not exist in type 'ImportMapping'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:452:6:
+[37m      452 │       [32msupplierColumn[37m: this.guessHeader(headers, ["proveedor", "ma...
+          ╵       [32m~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'supplierColumn' does not exist on type 'ImportMapping'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.html:115:53:
+[37m      115 │ ...t" [ngModel]="mapping().[32msupplierColumn[37m" (ngModelChange)="setMa...
+          ╵                            [32m~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogProductsImportComponent.
+
+    src/app/features/catalog/catalog-products-import.component.ts:62:15:
+[37m      62 │   templateUrl: [32m"./catalog-products-import.component.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '"supplierColumn"' is not assignable to parameter of type 'MappingKey'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.html:115:102:
+[37m      115 │ ...umn" (ngModelChange)="setMappingField([32m'supplierColumn'[37m, $event)">
+          ╵                                          [32m~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogProductsImportComponent.
+
+    src/app/features/catalog/catalog-products-import.component.ts:62:15:
+[37m      62 │   templateUrl: [32m"./catalog-products-import.component.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'priceClientaColumn' does not exist on type 'ImportMapping'. Did you mean 'priceCostColumn'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.html:155:53:
+[37m      155 │ ... [ngModel]="mapping().[32mpriceClientaColumn[37m" (ngModelChange)="set...
+          ╵                          [32m~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogProductsImportComponent.
+
+    src/app/features/catalog/catalog-products-import.component.ts:62:15:
+[37m      62 │   templateUrl: [32m"./catalog-products-import.component.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '"priceClientaColumn"' is not assignable to parameter of type 'MappingKey'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.html:155:106:
+[37m      155 │ ... (ngModelChange)="setMappingField([32m'priceClientaColumn'[37m, $event)">
+          ╵                                      [32m~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogProductsImportComponent.
+
+    src/app/features/catalog/catalog-products-import.component.ts:62:15:
+[37m      62 │   templateUrl: [32m"./catalog-products-import.component.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'clampPercent' does not exist on type 'CatalogProductsImportComponent'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:181:66:
+[37m      181 │ ...current) => ({ ...current, [field]: this.[32mclampPercent[37m(value) }));
+          ╵                                             [32m~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'priceClientaColumn' does not exist on type 'ImportMapping'. Did you mean 'priceCostColumn'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:376:62:
+[37m      376 │ ...Clienta = this.numberFromColumn(raw, mapping.[32mpriceClientaColumn[37m);
+          ╵                                                 [32m~~~~~~~~~~~~~~~~~~[0m
+
+  'priceCostColumn' is declared here.
+
+    src/app/features/catalog/catalog-products-import.component.ts:32:2:
+[37m      32 │   [32mpriceCostColumn[37m: string;
+         ╵   [32m~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'supplierColumn' does not exist on type 'ImportMapping'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:396:56:
+[37m      396 │ ...r_name: this.textFromColumn(raw, mapping.[32msupplierColumn[37m) || null,
+          ╵                                             [32m~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2353: Object literal may only specify known properties, and 'supplierColumn' does not exist in type 'ImportMapping'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:445:6:
+[37m      445 │       [32msupplierColumn[37m: "",
+          ╵       [32m~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2353: Object literal may only specify known properties, and 'supplierColumn' does not exist in type 'ImportMapping'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:463:6:
+[37m      463 │       [32msupplierColumn[37m: this.guessHeader(headers, ["proveedor", "ma...
+          ╵       [32m~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'supplierColumn' does not exist on type 'ImportMapping'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.html:115:53:
+[37m      115 │ ...t" [ngModel]="mapping().[32msupplierColumn[37m" (ngModelChange)="setMa...
+          ╵                            [32m~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogProductsImportComponent.
+
+    src/app/features/catalog/catalog-products-import.component.ts:62:15:
+[37m      62 │   templateUrl: [32m"./catalog-products-import.component.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '"supplierColumn"' is not assignable to parameter of type 'MappingKey'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.html:115:102:
+[37m      115 │ ...umn" (ngModelChange)="setMappingField([32m'supplierColumn'[37m, $event)">
+          ╵                                          [32m~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogProductsImportComponent.
+
+    src/app/features/catalog/catalog-products-import.component.ts:62:15:
+[37m      62 │   templateUrl: [32m"./catalog-products-import.component.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'priceClientaColumn' does not exist on type 'ImportMapping'. Did you mean 'priceCostColumn'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.html:155:53:
+[37m      155 │ ... [ngModel]="mapping().[32mpriceClientaColumn[37m" (ngModelChange)="set...
+          ╵                          [32m~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogProductsImportComponent.
+
+    src/app/features/catalog/catalog-products-import.component.ts:62:15:
+[37m      62 │   templateUrl: [32m"./catalog-products-import.component.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '"priceClientaColumn"' is not assignable to parameter of type 'MappingKey'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.html:155:106:
+[37m      155 │ ... (ngModelChange)="setMappingField([32m'priceClientaColumn'[37m, $event)">
+          ╵                                      [32m~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogProductsImportComponent.
+
+    src/app/features/catalog/catalog-products-import.component.ts:62:15:
+[37m      62 │   templateUrl: [32m"./catalog-products-import.component.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'clampPercent' does not exist on type 'CatalogProductsImportComponent'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:181:66:
+[37m      181 │ ...current) => ({ ...current, [field]: this.[32mclampPercent[37m(value) }));
+          ╵                                             [32m~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'applyDiscount' does not exist on type 'CatalogProductsImportComponent'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:376:29:
+[37m      376 │ ...  const priceCost = this.[32mapplyDiscount[37m(priceCostExcel.value, m...
+          ╵                             [32m~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'applyMarkup' does not exist on type 'CatalogProductsImportComponent'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:377:32:
+[37m      377 │ ...const priceClienta = this.[32mapplyMarkup[37m(priceCostExcel.value, ma...
+          ╵                              [32m~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2353: Object literal may only specify known properties, and 'supplierColumn' does not exist in type 'ImportMapping'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:449:6:
+[37m      449 │       [32msupplierColumn[37m: "",
+          ╵       [32m~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2353: Object literal may only specify known properties, and 'supplierColumn' does not exist in type 'ImportMapping'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:467:6:
+[37m      467 │       [32msupplierColumn[37m: this.guessHeader(headers, ["proveedor", "ma...
+          ╵       [32m~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'supplierColumn' does not exist on type 'ImportMapping'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.html:115:53:
+[37m      115 │ ...t" [ngModel]="mapping().[32msupplierColumn[37m" (ngModelChange)="setMa...
+          ╵                            [32m~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogProductsImportComponent.
+
+    src/app/features/catalog/catalog-products-import.component.ts:62:15:
+[37m      62 │   templateUrl: [32m"./catalog-products-import.component.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '"supplierColumn"' is not assignable to parameter of type 'MappingKey'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.html:115:102:
+[37m      115 │ ...umn" (ngModelChange)="setMappingField([32m'supplierColumn'[37m, $event)">
+          ╵                                          [32m~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogProductsImportComponent.
+
+    src/app/features/catalog/catalog-products-import.component.ts:62:15:
+[37m      62 │   templateUrl: [32m"./catalog-products-import.component.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'priceClientaColumn' does not exist on type 'ImportMapping'. Did you mean 'priceCostColumn'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.html:155:53:
+[37m      155 │ ... [ngModel]="mapping().[32mpriceClientaColumn[37m" (ngModelChange)="set...
+          ╵                          [32m~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogProductsImportComponent.
+
+    src/app/features/catalog/catalog-products-import.component.ts:62:15:
+[37m      62 │   templateUrl: [32m"./catalog-products-import.component.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '"priceClientaColumn"' is not assignable to parameter of type 'MappingKey'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.html:155:106:
+[37m      155 │ ... (ngModelChange)="setMappingField([32m'priceClientaColumn'[37m, $event)">
+          ╵                                      [32m~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogProductsImportComponent.
+
+    src/app/features/catalog/catalog-products-import.component.ts:62:15:
+[37m      62 │   templateUrl: [32m"./catalog-products-import.component.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'clampPercent' does not exist on type 'CatalogProductsImportComponent'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:181:66:
+[37m      181 │ ...current) => ({ ...current, [field]: this.[32mclampPercent[37m(value) }));
+          ╵                                             [32m~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'applyDiscount' does not exist on type 'CatalogProductsImportComponent'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:376:29:
+[37m      376 │ ...  const priceCost = this.[32mapplyDiscount[37m(priceCostExcel.value, m...
+          ╵                             [32m~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'applyMarkup' does not exist on type 'CatalogProductsImportComponent'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:377:32:
+[37m      377 │ ...const priceClienta = this.[32mapplyMarkup[37m(priceCostExcel.value, ma...
+          ╵                              [32m~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2353: Object literal may only specify known properties, and 'supplierColumn' does not exist in type 'ImportMapping'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:455:6:
+[37m      455 │       [32msupplierColumn[37m: "",
+          ╵       [32m~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2353: Object literal may only specify known properties, and 'supplierColumn' does not exist in type 'ImportMapping'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:473:6:
+[37m      473 │       [32msupplierColumn[37m: this.guessHeader(headers, ["proveedor", "ma...
+          ╵       [32m~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'supplierColumn' does not exist on type 'ImportMapping'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.html:115:53:
+[37m      115 │ ...t" [ngModel]="mapping().[32msupplierColumn[37m" (ngModelChange)="setMa...
+          ╵                            [32m~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogProductsImportComponent.
+
+    src/app/features/catalog/catalog-products-import.component.ts:62:15:
+[37m      62 │   templateUrl: [32m"./catalog-products-import.component.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '"supplierColumn"' is not assignable to parameter of type 'MappingKey'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.html:115:102:
+[37m      115 │ ...umn" (ngModelChange)="setMappingField([32m'supplierColumn'[37m, $event)">
+          ╵                                          [32m~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogProductsImportComponent.
+
+    src/app/features/catalog/catalog-products-import.component.ts:62:15:
+[37m      62 │   templateUrl: [32m"./catalog-products-import.component.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'priceClientaColumn' does not exist on type 'ImportMapping'. Did you mean 'priceCostColumn'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.html:155:53:
+[37m      155 │ ... [ngModel]="mapping().[32mpriceClientaColumn[37m" (ngModelChange)="set...
+          ╵                          [32m~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogProductsImportComponent.
+
+    src/app/features/catalog/catalog-products-import.component.ts:62:15:
+[37m      62 │   templateUrl: [32m"./catalog-products-import.component.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '"priceClientaColumn"' is not assignable to parameter of type 'MappingKey'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.html:155:106:
+[37m      155 │ ... (ngModelChange)="setMappingField([32m'priceClientaColumn'[37m, $event)">
+          ╵                                      [32m~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogProductsImportComponent.
+
+    src/app/features/catalog/catalog-products-import.component.ts:62:15:
+[37m      62 │   templateUrl: [32m"./catalog-products-import.component.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'clampPercent' does not exist on type 'CatalogProductsImportComponent'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:181:66:
+[37m      181 │ ...current) => ({ ...current, [field]: this.[32mclampPercent[37m(value) }));
+          ╵                                             [32m~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'applyDiscount' does not exist on type 'CatalogProductsImportComponent'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:376:29:
+[37m      376 │ ...  const priceCost = this.[32mapplyDiscount[37m(priceCostExcel.value, m...
+          ╵                             [32m~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'applyMarkup' does not exist on type 'CatalogProductsImportComponent'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:377:32:
+[37m      377 │ ...const priceClienta = this.[32mapplyMarkup[37m(priceCostExcel.value, ma...
+          ╵                              [32m~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'supplierColumn' does not exist on type 'ImportMapping'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.html:115:53:
+[37m      115 │ ...t" [ngModel]="mapping().[32msupplierColumn[37m" (ngModelChange)="setMa...
+          ╵                            [32m~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogProductsImportComponent.
+
+    src/app/features/catalog/catalog-products-import.component.ts:62:15:
+[37m      62 │   templateUrl: [32m"./catalog-products-import.component.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '"supplierColumn"' is not assignable to parameter of type 'MappingKey'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.html:115:102:
+[37m      115 │ ...umn" (ngModelChange)="setMappingField([32m'supplierColumn'[37m, $event)">
+          ╵                                          [32m~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogProductsImportComponent.
+
+    src/app/features/catalog/catalog-products-import.component.ts:62:15:
+[37m      62 │   templateUrl: [32m"./catalog-products-import.component.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'priceClientaColumn' does not exist on type 'ImportMapping'. Did you mean 'priceCostColumn'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.html:155:53:
+[37m      155 │ ... [ngModel]="mapping().[32mpriceClientaColumn[37m" (ngModelChange)="set...
+          ╵                          [32m~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogProductsImportComponent.
+
+    src/app/features/catalog/catalog-products-import.component.ts:62:15:
+[37m      62 │   templateUrl: [32m"./catalog-products-import.component.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '"priceClientaColumn"' is not assignable to parameter of type 'MappingKey'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.html:155:106:
+[37m      155 │ ... (ngModelChange)="setMappingField([32m'priceClientaColumn'[37m, $event)">
+          ╵                                      [32m~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogProductsImportComponent.
+
+    src/app/features/catalog/catalog-products-import.component.ts:62:15:
+[37m      62 │   templateUrl: [32m"./catalog-products-import.component.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'stockColumn' does not exist on type 'ImportMapping'. Did you mean 'skuColumn'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.html:208:53:
+[37m      208 │ ...put" [ngModel]="mapping().[32mstockColumn[37m" (ngModelChange)="setMap...
+          ╵                              [32m~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogProductsImportComponent.
+
+    src/app/features/catalog/catalog-products-import.component.ts:56:15:
+[37m      56 │   templateUrl: [32m"./catalog-products-import.component.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '"stockColumn"' is not assignable to parameter of type 'MappingKey'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.html:208:99:
+[37m      208 │ ...Column" (ngModelChange)="setMappingField([32m'stockColumn'[37m, $event)">
+          ╵                                             [32m~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogProductsImportComponent.
+
+    src/app/features/catalog/catalog-products-import.component.ts:56:15:
+[37m      56 │   templateUrl: [32m"./catalog-products-import.component.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'imageColumn' does not exist on type 'ImportMapping'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.html:216:53:
+[37m      216 │ ...put" [ngModel]="mapping().[32mimageColumn[37m" (ngModelChange)="setMap...
+          ╵                              [32m~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogProductsImportComponent.
+
+    src/app/features/catalog/catalog-products-import.component.ts:56:15:
+[37m      56 │   templateUrl: [32m"./catalog-products-import.component.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '"imageColumn"' is not assignable to parameter of type 'MappingKey'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.html:216:99:
+[37m      216 │ ...Column" (ngModelChange)="setMappingField([32m'imageColumn'[37m, $event)">
+          ╵                                             [32m~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogProductsImportComponent.
+
+    src/app/features/catalog/catalog-products-import.component.ts:56:15:
+[37m      56 │   templateUrl: [32m"./catalog-products-import.component.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'notesColumn' does not exist on type 'ImportMapping'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.html:224:53:
+[37m      224 │ ...put" [ngModel]="mapping().[32mnotesColumn[37m" (ngModelChange)="setMap...
+          ╵                              [32m~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogProductsImportComponent.
+
+    src/app/features/catalog/catalog-products-import.component.ts:56:15:
+[37m      56 │   templateUrl: [32m"./catalog-products-import.component.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type '"notesColumn"' is not assignable to parameter of type 'MappingKey'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.html:224:99:
+[37m      224 │ ...Column" (ngModelChange)="setMappingField([32m'notesColumn'[37m, $event)">
+          ╵                                             [32m~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component CatalogProductsImportComponent.
+
+    src/app/features/catalog/catalog-products-import.component.ts:56:15:
+[37m      56 │   templateUrl: [32m"./catalog-products-import.component.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m

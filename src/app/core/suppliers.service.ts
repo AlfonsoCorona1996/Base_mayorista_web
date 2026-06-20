@@ -80,6 +80,11 @@ export class SuppliersService {
     return this.suppliers().filter((supplier) => supplier.active);
   }
 
+  getActiveByBusiness(businessId: BusinessId): Supplier[] {
+    const resolvedBusinessId = normalizeBusinessId(businessId);
+    return this.rows().filter((supplier) => supplier.active && supplier.business_id === resolvedBusinessId);
+  }
+
   getById(id: string): Supplier | null {
     return this.suppliers().find((supplier) => supplier.supplier_id === id) || null;
   }

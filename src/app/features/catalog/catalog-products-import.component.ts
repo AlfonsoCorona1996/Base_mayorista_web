@@ -7,31 +7,28 @@ import {
   CatalogProductsService,
 } from "../../core/catalog-products.service";
 import { CatalogImportJobsService } from "../../core/catalog-import-jobs.service";
+import { Supplier, SuppliersService } from "../../core/suppliers.service";
 
 type MappingKey =
   | "skuColumn"
-  | "supplierColumn"
+  | "brandColumn"
   | "categoryColumn"
   | "colorColumn"
   | "sizeColumn"
-  | "priceCostColumn"
-  | "priceClientaColumn"
-  | "stockColumn"
-  | "imageColumn"
-  | "notesColumn";
+  | "priceCostColumn";
+
+type PercentMappingKey = "priceCostDiscountPct" | "priceClientaMarkupPct";
 
 interface ImportMapping {
   skuColumn: string;
   nameColumns: string[];
-  supplierColumn: string;
+  brandColumn: string;
   categoryColumn: string;
   colorColumn: string;
   sizeColumn: string;
   priceCostColumn: string;
-  priceClientaColumn: string;
-  stockColumn: string;
-  imageColumn: string;
-  notesColumn: string;
+  priceCostDiscountPct: number;
+  priceClientaMarkupPct: number;
 }
 
 interface PreviewRow extends CatalogProductImportRow {
@@ -61,14 +58,18 @@ interface PreviewSummary {
 })
 export class CatalogProductsImportComponent implements OnDestroy {
   private catalogProducts = inject(CatalogProductsService);
+  private suppliers = inject(SuppliersService);
   readonly importJobs = inject(CatalogImportJobsService);
 
   loading = signal(false);
   parsing = signal(false);
   importing = signal(false);
+  importModalOpen = signal(false);
+  supplierPickerError = signal<string | null>(null);
   error = signal<string | null>(null);
   success = signal<string | null>(null);
   fileName = signal("");
+  selectedSupplierId = signal("");
   headers = signal<string[]>([]);
   rawRows = signal<Record<string, unknown>[]>([]);
   search = signal("");
@@ -87,11 +88,17 @@ export class CatalogProductsImportComponent implements OnDestroy {
 
   preview = computed(() => this.previewState());
 
+  catalogSuppliers = computed(() => this.suppliers.getActiveByBusiness("catalogo"));
+  selectedSupplier = computed<Supplier | null>(() =>
+    this.catalogSuppliers().find((supplier) => supplier.supplier_id === this.selectedSupplierId()) || null,
+  );
+
   rejectedRows = computed(() => this.preview().rows.filter((row) => !row.valid));
-  canImport = computed(() => Boolean(this.mapping().skuColumn) && this.preview().valid > 0 && !this.validating() && !this.importing());
+  canImport = computed(() => Boolean(this.mapping().skuColumn) && Boolean(this.selectedSupplier()) && this.preview().valid > 0 && !this.validating() && !this.importing());
 
   constructor() {
     this.importJobs.watch();
+    this.suppliers.loadFromFirestore().catch(() => null);
     this.catalogProducts.watchCatalogPage({ businessId: "catalogo" });
   }
 
@@ -106,14 +113,38 @@ export class CatalogProductsImportComponent implements OnDestroy {
     this.catalogProducts.watchCatalogPage({ businessId: "catalogo", searchSku: this.search() });
   }
 
+  openImportModal(): void {
+    this.error.set(null);
+    this.success.set(null);
+    this.supplierPickerError.set(null);
+    this.importModalOpen.set(true);
+  }
+
+  closeImportModal(): void {
+    if (this.parsing() || this.importing()) return;
+    this.importModalOpen.set(false);
+    this.supplierPickerError.set(null);
+  }
+
+  onSupplierSelected(supplierId: string): void {
+    this.selectedSupplierId.set(supplierId);
+    this.supplierPickerError.set(null);
+    if (this.rawRows().length > 0) this.schedulePreviewValidation();
+  }
+
   async onFileSelected(event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0] || null;
     input.value = "";
     if (!file) return;
+    if (!this.selectedSupplier()) {
+      this.supplierPickerError.set("Elige el proveedor padre de este catalogo antes de cargar el Excel.");
+      return;
+    }
 
     this.error.set(null);
     this.success.set(null);
+    this.supplierPickerError.set(null);
     this.fileName.set(file.name);
 
     this.parsing.set(true);
@@ -123,6 +154,7 @@ export class CatalogProductsImportComponent implements OnDestroy {
       this.rawRows.set(parsed.rawRows);
       this.mapping.set(this.autodetectMapping(parsed.headers));
       this.previewState.set(this.emptyPreview());
+      this.importModalOpen.set(false);
       this.schedulePreviewValidation(0);
     } catch (error: any) {
       this.headers.set([]);
@@ -137,6 +169,11 @@ export class CatalogProductsImportComponent implements OnDestroy {
 
   setMappingField(field: MappingKey, value: string): void {
     this.mapping.update((current) => ({ ...current, [field]: value }));
+    this.schedulePreviewValidation();
+  }
+
+  setPercentField(field: PercentMappingKey, value: number | string): void {
+    this.mapping.update((current) => ({ ...current, [field]: this.clampPercent(value) }));
     this.schedulePreviewValidation();
   }
 
@@ -156,10 +193,17 @@ export class CatalogProductsImportComponent implements OnDestroy {
 
   async importValidRows(): Promise<void> {
     if (!this.canImport()) return;
+    const supplier = this.selectedSupplier();
+    if (!supplier) {
+      this.supplierPickerError.set("Elige el proveedor padre de este catalogo antes de importar.");
+      this.importModalOpen.set(true);
+      return;
+    }
     this.importing.set(true);
     this.error.set(null);
     this.success.set(null);
     try {
+      const mapping = this.mapping();
       const validRows = this.preview().validRows.map((row) => this.toImportRow(row));
       const job = await this.importJobs.createJob({
         business_id: "catalogo",
@@ -167,6 +211,10 @@ export class CatalogProductsImportComponent implements OnDestroy {
         total_rows: this.preview().total,
         valid_rows: validRows.length,
         rejected_rows: this.rejectedRows().length,
+        supplier_id: supplier.supplier_id,
+        supplier_name: supplier.display_name,
+        price_cost_discount_pct: mapping.priceCostDiscountPct,
+        price_clienta_markup_pct: mapping.priceClientaMarkupPct,
       });
       const chunkSize = 400;
       for (let start = 0, chunkIndex = 0; start < validRows.length; start += chunkSize, chunkIndex += 1) {
@@ -319,36 +367,34 @@ export class CatalogProductsImportComponent implements OnDestroy {
       const rowEmpty = raw["__row_empty"] === true || this.nonEmptyRecordCount(raw) === 0;
       const sku = this.textFromColumn(raw, mapping.skuColumn);
       const duplicate = sku ? (skuCounts.get(sku.toLowerCase()) || 0) > 1 : false;
-      const priceCost = this.numberFromColumn(raw, mapping.priceCostColumn);
-      const priceClienta = this.numberFromColumn(raw, mapping.priceClientaColumn);
-      const stock = this.integerFromColumn(raw, mapping.stockColumn);
+      const priceCostExcel = this.numberFromColumn(raw, mapping.priceCostColumn);
+      const priceCost = this.applyDiscount(priceCostExcel.value, mapping.priceCostDiscountPct);
+      const priceClienta = this.applyMarkup(priceCostExcel.value, mapping.priceClientaMarkupPct);
       const issue = rowEmpty
         ? "Fila sin datos"
         : !sku
           ? "SKU vacio"
           : duplicate
             ? "SKU duplicado"
-            : priceCost.invalid
+            : priceCostExcel.invalid
               ? "Precio costo invalido"
-              : priceClienta.invalid
-                ? "Precio venta invalido"
-                : stock.invalid
-                  ? "Stock invalido"
-                  : null;
+              : null;
       const name = mapping.nameColumns.map((column) => this.textFromColumn(raw, column)).filter(Boolean).join(" ").trim();
       return {
         rowNumber,
         sku,
         name: rowEmpty ? "Fila sin datos" : name || sku || "Producto sin nombre",
-        supplier_name: this.textFromColumn(raw, mapping.supplierColumn) || null,
+        brand_name: this.textFromColumn(raw, mapping.brandColumn) || null,
+        supplier_id: this.selectedSupplier()?.supplier_id || null,
+        supplier_name: this.selectedSupplier()?.display_name || null,
         category: this.textFromColumn(raw, mapping.categoryColumn) || null,
         color: this.textFromColumn(raw, mapping.colorColumn) || null,
         size: this.textFromColumn(raw, mapping.sizeColumn) || null,
-        price_cost: priceCost.value,
-        price_clienta: priceClienta.value,
-        stock_qty: stock.value,
-        image_url: this.textFromColumn(raw, mapping.imageColumn) || null,
-        notes: this.textFromColumn(raw, mapping.notesColumn) || null,
+        price_cost_excel: priceCostExcel.value,
+        price_cost_discount_pct: mapping.priceCostDiscountPct,
+        price_cost: priceCost,
+        price_clienta_markup_pct: mapping.priceClientaMarkupPct,
+        price_clienta: priceClienta,
         original_row: this.originalRow(raw),
         valid: !issue,
         issue,
@@ -369,18 +415,21 @@ export class CatalogProductsImportComponent implements OnDestroy {
   }
 
   private toImportRow(row: PreviewRow): CatalogProductImportRow {
+    const supplier = this.selectedSupplier();
     return {
       sku: row.sku,
       name: row.name,
-      supplier_name: row.supplier_name,
+      brand_name: row.brand_name,
+      supplier_id: supplier?.supplier_id || row.supplier_id || null,
+      supplier_name: supplier?.display_name || row.supplier_name || null,
       category: row.category,
       color: row.color,
       size: row.size,
+      price_cost_excel: row.price_cost_excel,
+      price_cost_discount_pct: row.price_cost_discount_pct,
       price_cost: row.price_cost,
+      price_clienta_markup_pct: row.price_clienta_markup_pct,
       price_clienta: row.price_clienta,
-      stock_qty: row.stock_qty,
-      image_url: row.image_url,
-      notes: row.notes,
       original_row: row.original_row,
     };
   }
@@ -389,15 +438,13 @@ export class CatalogProductsImportComponent implements OnDestroy {
     return {
       skuColumn: "",
       nameColumns: [],
-      supplierColumn: "",
+      brandColumn: "",
       categoryColumn: "",
       colorColumn: "",
       sizeColumn: "",
       priceCostColumn: "",
-      priceClientaColumn: "",
-      stockColumn: "",
-      imageColumn: "",
-      notesColumn: "",
+      priceCostDiscountPct: 0,
+      priceClientaMarkupPct: 0,
     };
   }
 
@@ -407,15 +454,13 @@ export class CatalogProductsImportComponent implements OnDestroy {
     return {
       skuColumn: sku,
       nameColumns: name ? [name] : headers.filter((header) => header !== sku).slice(0, 1),
-      supplierColumn: this.guessHeader(headers, ["proveedor", "marca", "fabricante"]),
+      brandColumn: this.guessHeader(headers, ["marca", "brand", "fabricante"]),
       categoryColumn: this.guessHeader(headers, ["categoria", "departamento", "linea", "familia"]),
       colorColumn: this.guessHeader(headers, ["color", "tono"]),
       sizeColumn: this.guessHeader(headers, ["talla", "medida", "size"]),
       priceCostColumn: this.guessHeader(headers, ["costo", "precio costo", "cost"]),
-      priceClientaColumn: this.guessHeader(headers, ["precio", "venta", "precio venta", "clienta", "publico"]),
-      stockColumn: this.guessHeader(headers, ["stock", "existencia", "existencias", "inventario", "cantidad"]),
-      imageColumn: this.guessHeader(headers, ["imagen", "foto", "url", "image"]),
-      notesColumn: this.guessHeader(headers, ["notas", "observaciones", "comentarios"]),
+      priceCostDiscountPct: 0,
+      priceClientaMarkupPct: 0,
     };
   }
 
@@ -464,6 +509,22 @@ export class CatalogProductsImportComponent implements OnDestroy {
     const number = Number(value);
     if (!Number.isFinite(number) || number < 0) return { value: null, invalid: true };
     return { value: Number(number.toFixed(2)), invalid: false };
+  }
+
+  private clampPercent(value: unknown): number {
+    const number = Number(value ?? 0);
+    if (!Number.isFinite(number)) return 0;
+    return Math.max(0, Math.min(100, Number(number.toFixed(2))));
+  }
+
+  private applyDiscount(value: number | null, percent: number): number | null {
+    if (value === null) return null;
+    return Number(Math.max(0, value * (1 - this.clampPercent(percent) / 100)).toFixed(2));
+  }
+
+  private applyMarkup(value: number | null, percent: number): number | null {
+    if (value === null) return null;
+    return Number(Math.max(0, value * (1 + this.clampPercent(percent) / 100)).toFixed(2));
   }
 
   private integerFromColumn(row: Record<string, unknown>, column: string): { value: number | null; invalid: boolean } {

@@ -7285,7 +7285,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       state,
       confirmation_state: "pending",
       confirmed_qty: null,
-      supplier_id: source === "manual" || productRefType === "catalog_product" ? null : this.newItemSupplierId(),
+      supplier_id: source === "manual" ? null : this.newItemSupplierId(),
       product_id: source === "manual" ? null : this.newItemProductId(),
       sku: source === "manual" ? null : this.newItemSku(),
       price_clienta: this.newItemPriceClienta(),
@@ -7661,7 +7661,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.newItemSource.set("catalogo");
     this.newItemSearch.set("");
     this.newItemInventoryId.set(null);
-    this.newItemSupplierId.set(null);
+    this.newItemSupplierId.set(product.supplier_id || null);
     this.newItemProductId.set(product.product_id);
     this.newItemSku.set(product.sku || null);
     this.showProductList.set(false);
