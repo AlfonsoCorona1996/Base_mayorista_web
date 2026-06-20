@@ -63940,3 +63940,31 @@
          ╵                  [32m~~~~~~~~~[0m
 
 [39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module '@zxing/browser' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/shared/barcode-scanner/barcode-scanner.component.ts:12:59:
+[37m      12 │ ...rowserMultiFormatReader, IScannerControls } from [32m"@zxing/browser"[37m;
+         ╵                                                     [32m~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module '@zxing/library' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/shared/barcode-scanner/barcode-scanner.component.ts:13:46:
+[37m      13 │ import { BarcodeFormat, DecodeHintType } from [32m"@zxing/library"[37m;
+         ╵                                               [32m~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS7006: Parameter 'result' implicitly has an 'any' type.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/shared/barcode-scanner/barcode-scanner.component.ts:91:9:
+[37m      91 │         ([32mresult[37m, scanError) => {
+         ╵          [32m~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS7006: Parameter 'scanError' implicitly has an 'any' type.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/shared/barcode-scanner/barcode-scanner.component.ts:91:17:
+[37m      91 │         (result, [32mscanError[37m) => {
+         ╵                  [32m~~~~~~~~~[0m
+
+[39m[22m
