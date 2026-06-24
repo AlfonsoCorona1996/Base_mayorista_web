@@ -12,6 +12,11 @@
   <div class="video-shell">
     <video #video autoplay muted playsinline></video>
     <div class="scan-frame" aria-hidden="true"></div>
+    @if (ocrFallbackAvailable()) {
+      <div class="ocr-guide" aria-hidden="true">
+        <span>Numero inferior</span>
+      </div>
+    }
   </div>
 
   @if (error()) {
@@ -45,6 +50,12 @@
       <button type="button" class="btn ghost" (click)="start()">
         <span class="material-symbols-rounded" aria-hidden="true">photo_camera</span>
         Reintentar camara
+      </button>
+    }
+    @if (ocrFallbackAvailable() && !error()) {
+      <button type="button" class="btn accent" (click)="readPrintedCode()" [disabled]="ocrReading() || !running()">
+        <span class="material-symbols-rounded" aria-hidden="true">document_scanner</span>
+        {{ ocrReading() ? "Leyendo..." : "Leer numero inferior" }}
       </button>
     }
     <button type="button" class="btn ghost" (click)="showManualEntry()">

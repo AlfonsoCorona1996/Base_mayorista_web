@@ -65061,3 +65061,144 @@
          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
 
 [39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type 'string' is not assignable to parameter of type 'never'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/shared/barcode-scanner/barcode-scanner.component.ts:240:48:
+[37m      240 │     if (digitsOnly.length >= 4) candidates.push([32mdigitsOnly[37m);
+          ╵                                                 [32m~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type 'string' is not assignable to parameter of type 'never'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/shared/barcode-scanner/barcode-scanner.component.ts:240:48:
+[37m      240 │     if (digitsOnly.length >= 4) candidates.push([32mdigitsOnly[37m);
+          ╵                                                 [32m~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type 'string' is not assignable to parameter of type 'never'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/shared/barcode-scanner/barcode-scanner.component.ts:240:48:
+[37m      240 │     if (digitsOnly.length >= 4) candidates.push([32mdigitsOnly[37m);
+          ╵                                                 [32m~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'onPrintedBarcodeScanned' does not exist on type 'PedidoDetallePage'. Did you mean 'onBarcodeScanned'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:1815:32:
+[37m      1815 │           (printedCodeScanned)="[32monPrintedBarcodeScanned[37m($event)"
+           ╵                                 [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:197:15:
+[37m      197 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type 'string' is not assignable to parameter of type 'never'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/shared/barcode-scanner/barcode-scanner.component.ts:240:48:
+[37m      240 │     if (digitsOnly.length >= 4) candidates.push([32mdigitsOnly[37m);
+          ╵                                                 [32m~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'saveOcrAliasForMatch' does not exist on type 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:3428:17:
+[37m      3428 │       await this.[32msaveOcrAliasForMatch[37m(matches[0], aliasSourceCode);
+           ╵                  [32m~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'saveOcrAliasForMatch' does not exist on type 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:3447:17:
+[37m      3447 │       await this.[32msaveOcrAliasForMatch[37m(match, this.barcodeAliasSo...
+           ╵                  [32m~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type 'string' is not assignable to parameter of type 'never'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/shared/barcode-scanner/barcode-scanner.component.ts:240:48:
+[37m      240 │     if (digitsOnly.length >= 4) candidates.push([32mdigitsOnly[37m);
+          ╵                                                 [32m~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type 'string' is not assignable to parameter of type 'never'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/shared/barcode-scanner/barcode-scanner.component.ts:240:48:
+[37m      240 │     if (digitsOnly.length >= 4) candidates.push([32mdigitsOnly[37m);
+          ╵                                                 [32m~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2345: Argument of type 'string' is not assignable to parameter of type 'never'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/shared/barcode-scanner/barcode-scanner.component.ts:240:48:
+[37m      240 │     if (digitsOnly.length >= 4) candidates.push([32mdigitsOnly[37m);
+          ╵                                                 [32m~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2741: Property 'impulsProductIdColumn' is missing in type '{ skuColumn: string; nameColumns: never[]; brandColumn: string; categoryColumn: string; colorColumn: string; sizeColumn: string; priceCostColumn: string; priceCostDiscountPct: number; priceClientaMarkupPct: number; }' but required in type 'ImportMapping'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:440:4:
+[37m      440 │     [32mreturn[37m {
+          ╵     [32m~~~~~~[0m
+
+  'impulsProductIdColumn' is declared here.
+
+    src/app/features/catalog/catalog-products-import.component.ts:31:2:
+[37m      31 │   [32mimpulsProductIdColumn[37m: string;
+         ╵   [32m~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2741: Property 'impulsProductIdColumn' is missing in type '{ skuColumn: string; nameColumns: string[]; brandColumn: string; categoryColumn: string; colorColumn: string; sizeColumn: string; priceCostColumn: string; priceCostDiscountPct: number; priceClientaMarkupPct: number; }' but required in type 'ImportMapping'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/catalog/catalog-products-import.component.ts:456:4:
+[37m      456 │     [32mreturn[37m {
+          ╵     [32m~~~~~~[0m
+
+  'impulsProductIdColumn' is declared here.
+
+    src/app/features/catalog/catalog-products-import.component.ts:31:2:
+[37m      31 │   [32mimpulsProductIdColumn[37m: string;
+         ╵   [32m~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'ensureSelectedCatalogProductImage' does not exist on type 'PedidoDetallePage'. Did you mean 'selectedCatalogProduct'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:7080:17:
+[37m      7080 │       await this.[32mensureSelectedCatalogProductImage[37m();
+           ╵                  [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  'selectedCatalogProduct' is declared here.
+
+    src/app/features/pedidos/pedido-detalle.ts:450:2:
+[37m      450 │   [32mselectedCatalogProduct[37m = signal<CatalogProduct | null>(null);
+          ╵   [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'ensureSelectedCatalogProductImage' does not exist on type 'PedidoDetallePage'. Did you mean 'selectedCatalogProduct'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:7218:17:
+[37m      7218 │       await this.[32mensureSelectedCatalogProductImage[37m();
+           ╵                  [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  'selectedCatalogProduct' is declared here.
+
+    src/app/features/pedidos/pedido-detalle.ts:450:2:
+[37m      450 │   [32mselectedCatalogProduct[37m = signal<CatalogProduct | null>(null);
+          ╵   [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'ensureSelectedCatalogProductImage' does not exist on type 'PedidoDetallePage'. Did you mean 'selectedCatalogProduct'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.ts:7272:17:
+[37m      7272 │       await this.[32mensureSelectedCatalogProductImage[37m();
+           ╵                  [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  'selectedCatalogProduct' is declared here.
+
+    src/app/features/pedidos/pedido-detalle.ts:450:2:
+[37m      450 │   [32mselectedCatalogProduct[37m = signal<CatalogProduct | null>(null);
+          ╵   [32m~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m

@@ -333,24 +333,25 @@ p {
   gap: 5px;
 }
 
+.price-cost-labels {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 140px;
+  gap: 8px;
+  min-height: 16px;
+}
+
+.price-cost-labels span {
+  color: #334155;
+  font-size: 0.77rem;
+  font-weight: 750;
+  line-height: 1.2;
+}
+
 .price-cost-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 140px;
   gap: 8px;
-  align-items: end;
-}
-
-.percent-input {
-  display: grid;
-  gap: 5px;
-}
-
-.percent-input span {
-  color: #334155;
-  font-size: 0.72rem;
-  font-weight: 750;
-  line-height: 1.2;
-  min-height: 16px;
+  align-items: stretch;
 }
 
 .name-field {
@@ -559,10 +560,7 @@ p {
     grid-column: auto;
   }
 
-  .price-field {
-    grid-template-columns: 1fr;
-  }
-
+  .price-cost-labels,
   .price-cost-row,
   .name-columns {
     grid-template-columns: 1fr;

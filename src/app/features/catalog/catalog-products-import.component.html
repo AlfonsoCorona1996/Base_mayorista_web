@@ -172,22 +172,22 @@
           </label>
 
           <div class="field price-field">
-            <span>Precio costo</span>
+            <div class="price-cost-labels">
+              <span>Precio costo</span>
+              <span>Descuento %</span>
+            </div>
             <div class="price-cost-row">
               <select class="input" [ngModel]="mapping().priceCostColumn" (ngModelChange)="setMappingField('priceCostColumn', $event)">
                 <option value="">Sin mapear</option>
                 @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
               </select>
-              <label class="percent-input">
-                <span>Descuento %</span>
-                <input class="input" type="number" min="0" max="100" step="0.01" [ngModel]="mapping().priceCostDiscountPct" (ngModelChange)="setPercentField('priceCostDiscountPct', $event)" />
-              </label>
+              <input class="input" type="number" min="0" max="100" step="1" [ngModel]="mapping().priceCostDiscountPct" (ngModelChange)="setPercentField('priceCostDiscountPct', $event)" />
             </div>
           </div>
 
           <label class="field">
             <span>Precio clienta - aumento %</span>
-            <input class="input" type="number" min="0" max="100" step="0.01" [ngModel]="mapping().priceClientaMarkupPct" (ngModelChange)="setPercentField('priceClientaMarkupPct', $event)" />
+            <input class="input" type="number" min="0" max="100" step="1" [ngModel]="mapping().priceClientaMarkupPct" (ngModelChange)="setPercentField('priceClientaMarkupPct', $event)" />
           </label>
         </div>
 

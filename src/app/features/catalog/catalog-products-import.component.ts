@@ -15,7 +15,8 @@ type MappingKey =
   | "categoryColumn"
   | "colorColumn"
   | "sizeColumn"
-  | "priceCostColumn";
+  | "priceCostColumn"
+  | "impulsProductIdColumn";
 
 type PercentMappingKey = "priceCostDiscountPct" | "priceClientaMarkupPct";
 
@@ -27,6 +28,7 @@ interface ImportMapping {
   colorColumn: string;
   sizeColumn: string;
   priceCostColumn: string;
+  impulsProductIdColumn: string;
   priceCostDiscountPct: number;
   priceClientaMarkupPct: number;
 }
@@ -390,6 +392,7 @@ export class CatalogProductsImportComponent implements OnDestroy {
         category: this.textFromColumn(raw, mapping.categoryColumn) || null,
         color: this.textFromColumn(raw, mapping.colorColumn) || null,
         size: this.textFromColumn(raw, mapping.sizeColumn) || null,
+        impuls_product_id: this.textFromColumn(raw, mapping.impulsProductIdColumn) || null,
         price_cost_excel: priceCostExcel.value,
         price_cost_discount_pct: mapping.priceCostDiscountPct,
         price_cost: priceCost,
@@ -425,6 +428,7 @@ export class CatalogProductsImportComponent implements OnDestroy {
       category: row.category,
       color: row.color,
       size: row.size,
+      impuls_product_id: row.impuls_product_id,
       price_cost_excel: row.price_cost_excel,
       price_cost_discount_pct: row.price_cost_discount_pct,
       price_cost: row.price_cost,
@@ -443,6 +447,7 @@ export class CatalogProductsImportComponent implements OnDestroy {
       colorColumn: "",
       sizeColumn: "",
       priceCostColumn: "",
+      impulsProductIdColumn: "",
       priceCostDiscountPct: 0,
       priceClientaMarkupPct: 0,
     };
@@ -459,6 +464,7 @@ export class CatalogProductsImportComponent implements OnDestroy {
       colorColumn: this.guessHeader(headers, ["color", "tono"]),
       sizeColumn: this.guessHeader(headers, ["talla", "medida", "size"]),
       priceCostColumn: this.guessHeader(headers, ["costo", "precio costo", "cost"]),
+      impulsProductIdColumn: this.guessHeader(headers, ["generico", "genérico", "id generico", "id genérico", "productid", "product id"]),
       priceCostDiscountPct: 0,
       priceClientaMarkupPct: 0,
     };

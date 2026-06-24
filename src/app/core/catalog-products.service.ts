@@ -1,4 +1,5 @@
 import { Injectable, computed, inject, signal } from "@angular/core";
+import { lastValueFrom } from "rxjs";
 import {
   DocumentData,
   QueryDocumentSnapshot,
@@ -20,9 +21,13 @@ import {
 import { FIRESTORE } from "./firebase.providers";
 import { BusinessScopeService } from "./business-scope.service";
 import { BusinessId, normalizeBusinessId } from "./rbac.constants";
+import { UserAdminApiService } from "../services/user-admin-api.service";
+
+export type CatalogProductImageStatus = "PENDING" | "FETCHED" | "NOT_FOUND" | "NO_IMAGE" | "ERROR";
 
 export interface CatalogProduct {
   product_id: string;
+  catalog_product_id: string;
   business_id: BusinessId;
   sku: string;
   sku_normalized: string;
@@ -39,7 +44,14 @@ export interface CatalogProduct {
   price_clienta_markup_pct: number | null;
   price_clienta: number | null;
   stock_qty: number | null;
+  impuls_product_id: string | null;
+  image_status: CatalogProductImageStatus | null;
   image_url: string | null;
+  image_storage_path: string | null;
+  image_provider: string | null;
+  impuls_image_source_url: string | null;
+  impuls_image_fetched_at?: unknown;
+  impuls_image_error: string | null;
   notes: string | null;
   original_row?: Record<string, unknown>;
   last_import_id?: string | null;
@@ -62,6 +74,7 @@ export interface CatalogProductImportRow {
   price_cost?: number | null;
   price_clienta_markup_pct?: number | null;
   price_clienta?: number | null;
+  impuls_product_id?: string | null;
   stock_qty?: number | null;
   image_url?: string | null;
   notes?: string | null;
@@ -81,10 +94,21 @@ export interface CatalogProductsPageState {
   hasMore: boolean;
 }
 
+export interface ResolveImpulsImageResult {
+  ok?: boolean;
+  found?: boolean;
+  reason?: string | null;
+  images?: string[];
+  image_url?: string | null;
+  image_storage_path?: string | null;
+  image_status?: CatalogProductImageStatus | string | null;
+}
+
 @Injectable({ providedIn: "root" })
 export class CatalogProductsService {
   private colRef = collection(FIRESTORE, "catalog_products");
   private businessScope = inject(BusinessScopeService);
+  private api = inject(UserAdminApiService);
   private rows = signal<CatalogProduct[]>([]);
   private pageRows = signal<CatalogProduct[]>([]);
   private pageCursor: QueryDocumentSnapshot<DocumentData> | null = null;
@@ -137,6 +161,7 @@ export class CatalogProductsService {
         ref,
         {
           product_id: productId,
+          catalog_product_id: productId,
           business_id: resolvedBusinessId,
           sku,
           sku_normalized: this.normalizeSku(sku),
@@ -147,6 +172,7 @@ export class CatalogProductsService {
           category: this.nullableText(row.category),
           color: this.nullableText(row.color),
           size: this.nullableText(row.size),
+          impuls_product_id: this.nullableText(row.impuls_product_id),
           price_cost_excel: this.nullableNumber(row.price_cost_excel),
           price_cost_discount_pct: this.nullablePercent(row.price_cost_discount_pct),
           price_cost: this.nullableNumber(row.price_cost),
@@ -184,6 +210,7 @@ export class CatalogProductsService {
         return this.normalizeProduct(this.productDocId(resolvedBusinessId, sku), {
           ...row,
           product_id: this.productDocId(resolvedBusinessId, sku),
+          catalog_product_id: this.productDocId(resolvedBusinessId, sku),
           business_id: resolvedBusinessId,
           sku,
           sku_normalized: this.normalizeSku(sku),
@@ -308,6 +335,27 @@ export class CatalogProductsService {
     return rows;
   }
 
+  async resolveImpulsImage(product: CatalogProduct): Promise<ResolveImpulsImageResult> {
+    const catalogProductId = product.catalog_product_id || product.product_id;
+    if (!catalogProductId) return { ok: true, found: false, reason: "MISSING_CATALOG_PRODUCT_ID", images: [] };
+    const result = await lastValueFrom(
+      this.api.post<ResolveImpulsImageResult>("/api/admin/catalog-products/resolve-impuls-image", {
+        business_id: "catalogo",
+        catalog_product_id: catalogProductId,
+      }),
+    );
+    const imageUrl = this.nullableText(result.image_url);
+    const patch: Partial<CatalogProduct> = {
+      ...product,
+      image_url: imageUrl ?? product.image_url,
+      image_storage_path: this.nullableText(result.image_storage_path) ?? product.image_storage_path,
+      image_status: this.normalizeImageStatus(result.image_status) ?? product.image_status,
+      image_provider: imageUrl ? "impuls" : product.image_provider,
+    };
+    this.mergeRows([{ ...product, ...patch }]);
+    return result;
+  }
+
   productDocId(businessId: BusinessId, sku: string): string {
     const encoded = encodeURIComponent(sku.trim()).replace(/\./g, "%2E");
     const safe = encoded.length <= 900 ? encoded : this.hashSku(sku);
@@ -317,6 +365,7 @@ export class CatalogProductsService {
   private normalizeProduct(id: string, data: Record<string, unknown>): CatalogProduct {
     return {
       product_id: String(data["product_id"] || id),
+      catalog_product_id: String(data["catalog_product_id"] || data["product_id"] || id),
       business_id: normalizeBusinessId(data["business_id"] || "catalogo"),
       sku: String(data["sku"] || ""),
       sku_normalized: this.normalizeSku(String(data["sku_normalized"] || data["sku"] || "")),
@@ -333,7 +382,14 @@ export class CatalogProductsService {
       price_clienta_markup_pct: this.nullablePercent(data["price_clienta_markup_pct"]),
       price_clienta: this.nullableNumber(data["price_clienta"]),
       stock_qty: this.nullableInteger(data["stock_qty"]),
+      impuls_product_id: this.nullableText(data["impuls_product_id"]),
+      image_status: this.normalizeImageStatus(data["image_status"]),
       image_url: this.nullableText(data["image_url"]),
+      image_storage_path: this.nullableText(data["image_storage_path"]),
+      image_provider: this.nullableText(data["image_provider"]),
+      impuls_image_source_url: this.nullableText(data["impuls_image_source_url"]),
+      impuls_image_fetched_at: data["impuls_image_fetched_at"] ?? null,
+      impuls_image_error: this.nullableText(data["impuls_image_error"]),
       notes: this.nullableText(data["notes"]),
       original_row: (data["original_row"] || {}) as Record<string, unknown>,
       last_import_id: this.nullableText(data["last_import_id"]),
@@ -364,6 +420,12 @@ export class CatalogProductsService {
   private nullableInteger(value: unknown): number | null {
     const number = this.nullableNumber(value);
     return number === null ? null : Math.max(0, Math.trunc(number));
+  }
+
+  private normalizeImageStatus(value: unknown): CatalogProductImageStatus | null {
+    const status = String(value || "").trim().toUpperCase();
+    if (status === "PENDING" || status === "FETCHED" || status === "NOT_FOUND" || status === "NO_IMAGE" || status === "ERROR") return status;
+    return null;
   }
 
   private hashSku(value: string): string {

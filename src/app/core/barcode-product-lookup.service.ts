@@ -1,5 +1,6 @@
 import { Injectable, inject } from "@angular/core";
 import { CatalogProduct, CatalogProductsService } from "./catalog-products.service";
+import { CatalogBarcodeAliasService } from "./catalog-barcode-alias.service";
 import { InventoryItem, InventoryService } from "./inventory.service";
 import { NormalizedListingDoc, NormalizedListingsService } from "./normalized-listings.service";
 import { BusinessId, normalizeBusinessId } from "./rbac.constants";
@@ -32,6 +33,7 @@ export type BarcodeProductMatch =
 @Injectable({ providedIn: "root" })
 export class BarcodeProductLookupService {
   private catalogProducts = inject(CatalogProductsService);
+  private catalogBarcodeAliases = inject(CatalogBarcodeAliasService);
   private inventory = inject(InventoryService);
   private normalizedListings = inject(NormalizedListingsService);
 
@@ -62,6 +64,20 @@ export class BarcodeProductLookupService {
           business_id: "catalogo",
           product,
         });
+      } else {
+        const alias = await this.catalogBarcodeAliases.getByBarcode(cleanCode, "catalogo").catch(() => null);
+        const aliasedProduct = alias?.sku
+          ? await this.catalogProducts.getBySku(alias.sku, "catalogo").catch(() => null)
+          : null;
+        if (aliasedProduct) {
+          matches.push({
+            kind: "catalog_product",
+            code: cleanCode,
+            label: `${aliasedProduct.name} · ${aliasedProduct.sku}`,
+            business_id: "catalogo",
+            product: aliasedProduct,
+          });
+        }
       }
     } else {
       const docs = await this.normalizedListings.findValidatedByVariantSku(cleanCode, "bm", 8).catch(() => []);

@@ -252,6 +252,18 @@ service cloud.firestore {
       allow delete: if canReadBusinessResource() && isSuperAdmin();
     }
 
+    match /catalog_barcode_aliases/{aliasId} {
+      allow read: if canReadBusinessResource() && hasSection("sections.catalogo");
+      allow create: if canCreateBusinessResource()
+        && incomingBusinessId() == "catalogo"
+        && hasSection("sections.catalogo");
+      allow update: if canUpdateBusinessResource()
+        && resourceBusinessId() == "catalogo"
+        && incomingBusinessId() == "catalogo"
+        && hasSection("sections.catalogo");
+      allow delete: if canReadBusinessResource() && isSuperAdmin();
+    }
+
     match /manual_product_suggestions/{entryId} {
       allow read: if canReadBusinessResource() && hasSection("sections.catalogo");
       allow create: if canCreateBusinessResource() && (isAdmin() || isOperativo());

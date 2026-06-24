@@ -19,6 +19,7 @@ import { NormalizedListingsService, NormalizedListingDoc } from "../../core/norm
 import { SupplierOperationsService } from "../../core/supplier-operations.service";
 import { ManualProductHistoryService, ManualProductEntry } from "../../core/manual-product-history.service";
 import { CatalogProduct, CatalogProductsService } from "../../core/catalog-products.service";
+import { CatalogBarcodeAliasService } from "../../core/catalog-barcode-alias.service";
 import { ReturnsService, ReturnDisposition } from "../../core/returns.service";
 import { BusinessScopeService } from "../../core/business-scope.service";
 import { BusinessId, normalizeBusinessId } from "../../core/rbac.constants";
@@ -208,6 +209,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   private catalog = inject(NormalizedListingsService);
   private catalogProducts = inject(CatalogProductsService);
   private barcodeLookup = inject(BarcodeProductLookupService);
+  private catalogBarcodeAliases = inject(CatalogBarcodeAliasService);
   private physicalBarcodeScanner = inject(PhysicalBarcodeScannerService);
   private supplierOperations = inject(SupplierOperationsService);
   readonly manualHistory = inject(ManualProductHistoryService);
@@ -445,6 +447,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   supplierDiscountLabel = signal<string | null>(null);
   selectedPreview = signal<{ title: string; variant: string; color: string; image: string | null; source: string } | null>(null);
   selectedCatalogDoc = signal<NormalizedListingDoc | null>(null);
+  selectedCatalogProduct = signal<CatalogProduct | null>(null);
   catalogProductSuggestions = signal<CatalogProduct[]>([]);
   catalogProductSearching = signal(false);
   barcodeScannerOpen = signal(false);
@@ -453,6 +456,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   barcodeScannerMessage = signal<string | null>(null);
   barcodeMatches = signal<BarcodeProductMatch[]>([]);
   barcodePendingCode = signal("");
+  barcodeOcrFallbackAvailable = signal(false);
+  private barcodeAliasSourceCode = signal("");
   private catalogProductSearchTimer: ReturnType<typeof setTimeout> | null = null;
   readonly isManualSource = computed(() => this.newItemSource() === "manual");
   readonly isConvertMode = computed(() => this.addItemMode() === "convert");
@@ -3306,6 +3311,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.barcodeScannerMessage.set(null);
     this.barcodeMatches.set([]);
     this.barcodePendingCode.set("");
+    this.barcodeOcrFallbackAvailable.set(false);
+    this.barcodeAliasSourceCode.set("");
     this.barcodeScannerOpen.set(true);
   }
 
@@ -3315,6 +3322,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.barcodeScannerMessage.set(null);
     this.barcodeMatches.set([]);
     this.barcodePendingCode.set("");
+    this.barcodeOcrFallbackAvailable.set(false);
+    this.barcodeAliasSourceCode.set("");
   }
 
   togglePhysicalBarcodeScanner(mode: PhysicalBarcodeMode) {
@@ -3337,6 +3346,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.barcodeScannerMessage.set(mode === "packing" ? "Scanner PC listo para empacar." : "Scanner PC listo para agregar productos.");
     this.barcodeMatches.set([]);
     this.barcodePendingCode.set("");
+    this.barcodeOcrFallbackAvailable.set(false);
+    this.barcodeAliasSourceCode.set("");
     this.physicalBarcodeScanner.start(mode);
     this.showActionToast(mode === "packing" ? "Scanner PC activo para empaque." : "Scanner PC activo para agregar productos.");
   }
@@ -3346,6 +3357,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.physicalBarcodeScanner.stop();
     this.barcodeMatches.set([]);
     this.barcodePendingCode.set("");
+    this.barcodeOcrFallbackAvailable.set(false);
+    this.barcodeAliasSourceCode.set("");
   }
 
   physicalScannerModeLabel(): string {
@@ -3368,6 +3381,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.barcodeScannerMessage.set(`Buscando ${cleanCode}...`);
     this.barcodeMatches.set([]);
     this.barcodePendingCode.set(cleanCode);
+    this.barcodeOcrFallbackAvailable.set(false);
+    this.barcodeAliasSourceCode.set("");
     try {
       if (this.barcodeScannerMode() === "packing") {
         await this.handlePackingBarcode(current, cleanCode);
@@ -3376,6 +3391,45 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       }
     } catch (error: any) {
       this.barcodeScannerMessage.set(error?.message || "No se pudo procesar el codigo.");
+    } finally {
+      this.barcodeScannerBusy.set(false);
+    }
+  }
+
+  async onPrintedBarcodeScanned(code: string) {
+    const cleanCode = this.barcodeLookup.cleanCode(code);
+    const current = this.order();
+    const aliasSourceCode = this.barcodePendingCode();
+    if (!cleanCode || !current || !aliasSourceCode || this.barcodeScannerBusy()) return;
+
+    this.barcodeScannerBusy.set(true);
+    this.barcodeScannerMessage.set(`Buscando numero inferior ${cleanCode}...`);
+    this.barcodeMatches.set([]);
+    this.barcodePendingCode.set(cleanCode);
+    this.barcodeOcrFallbackAvailable.set(false);
+    this.barcodeAliasSourceCode.set(aliasSourceCode);
+    try {
+      const matches = await this.barcodeLookup.findMatches(cleanCode, this.orderBusinessId(current));
+      if (matches.length === 0) {
+        this.barcodeScannerMessage.set(`No encontramos producto con numero ${cleanCode}.`);
+        this.showActionToast(`No encontramos producto con numero ${cleanCode}.`);
+        return;
+      }
+      if (matches.length > 1) {
+        this.barcodeMatches.set(matches);
+        this.barcodeScannerMessage.set(`Encontramos ${matches.length} coincidencias. Elige una.`);
+        return;
+      }
+
+      if (this.barcodeScannerMode() === "packing") {
+        await this.handlePackingBarcode(current, cleanCode, matches[0]);
+      } else {
+        await this.addBarcodeMatchToOrder(current, matches[0], cleanCode);
+      }
+      await this.saveOcrAliasForMatch(matches[0], aliasSourceCode);
+      this.barcodeAliasSourceCode.set("");
+    } catch (error: any) {
+      this.barcodeScannerMessage.set(error?.message || "No se pudo procesar el numero inferior.");
     } finally {
       this.barcodeScannerBusy.set(false);
     }
@@ -3392,6 +3446,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       } else {
         await this.addBarcodeMatchToOrder(current, match, code);
       }
+      await this.saveOcrAliasForMatch(match, this.barcodeAliasSourceCode());
+      this.barcodeAliasSourceCode.set("");
       this.barcodeMatches.set([]);
     } catch (error: any) {
       this.barcodeScannerMessage.set(error?.message || "No se pudo procesar el codigo.");
@@ -3419,10 +3475,16 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   private async handleAddProductBarcode(order: Order, code: string) {
     const matches = await this.barcodeLookup.findMatches(code, this.orderBusinessId(order));
     if (matches.length === 0) {
-      this.barcodeScannerMessage.set(`No encontramos producto con codigo ${code}.`);
+      const canReadPrintedCode = this.enablePrintedCodeFallback(order, code);
+      this.barcodeScannerMessage.set(
+        canReadPrintedCode
+          ? `No encontramos producto con codigo ${code}. Puedes leer el numero inferior.`
+          : `No encontramos producto con codigo ${code}.`,
+      );
       this.showActionToast(`No encontramos producto con codigo ${code}.`);
       return;
     }
+    this.barcodeOcrFallbackAvailable.set(false);
     if (matches.length > 1) {
       this.barcodeMatches.set(matches);
       this.barcodeScannerMessage.set(`Encontramos ${matches.length} coincidencias. Elige una.`);
@@ -3446,6 +3508,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       this.barcodeScannerMessage.set(this.error());
       return;
     }
+    this.barcodeOcrFallbackAvailable.set(false);
     this.barcodeScannerMessage.set(`Agregado: ${this.barcodeMatchTitle(match)}.`);
     this.showActionToast(`Agregado por codigo ${code}.`);
   }
@@ -3469,7 +3532,12 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     let current = this.orders.getById(order.order_id) || order;
     let item = await this.findOrderItemByBarcode(current, code, selectedMatch);
     if (!item) {
-      this.barcodeScannerMessage.set(`No hay producto en este pedido para ${code}.`);
+      const canReadPrintedCode = selectedMatch ? false : this.enablePrintedCodeFallback(order, code);
+      this.barcodeScannerMessage.set(
+        canReadPrintedCode
+          ? `No hay producto en este pedido para ${code}. Puedes leer el numero inferior.`
+          : `No hay producto en este pedido para ${code}.`,
+      );
       this.showActionToast(`Codigo ${code} sin pendiente por empacar.`);
       return;
     }
@@ -3490,7 +3558,34 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     }
 
     await this.addItemToOpenBox(current, row, 1);
+    this.barcodeOcrFallbackAvailable.set(false);
     this.barcodeScannerMessage.set(`Empacado: ${row.item.title}.`);
+  }
+
+  private enablePrintedCodeFallback(order: Order, code: string): boolean {
+    if (!this.barcodeScannerOpen() || this.orderBusinessId(order) !== "catalogo") return false;
+    const cleanCode = this.barcodeLookup.cleanCode(code);
+    if (!cleanCode) return false;
+    this.barcodePendingCode.set(cleanCode);
+    this.barcodeOcrFallbackAvailable.set(true);
+    return true;
+  }
+
+  private async saveOcrAliasForMatch(match: BarcodeProductMatch, aliasSourceCode: string): Promise<void> {
+    const cleanAlias = this.barcodeLookup.cleanCode(aliasSourceCode);
+    if (!cleanAlias || match.kind !== "catalog_product") return;
+    if (this.barcodeLookup.normalizeCode(cleanAlias) === this.barcodeLookup.normalizeCode(match.product.sku)) return;
+
+    try {
+      const saved = await this.catalogBarcodeAliases.saveOcrAlias(cleanAlias, match.product);
+      if (!saved) return;
+      const aliasMessage = `Guardamos ${cleanAlias} como alias de ${match.product.sku}.`;
+      const currentMessage = this.barcodeScannerMessage();
+      this.barcodeScannerMessage.set(currentMessage ? `${currentMessage} ${aliasMessage}` : aliasMessage);
+      this.showActionToast(aliasMessage);
+    } catch (error) {
+      this.showActionToast("No se pudo guardar el alias del codigo.");
+    }
   }
 
   private async findOrderItemByBarcode(order: Order, code: string, selectedMatch?: BarcodeProductMatch): Promise<OrderItem | null> {
@@ -3694,6 +3789,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.catalogColorOptions.set([]);
     this.selectedPreview.set(null);
     this.selectedCatalogDoc.set(null);
+    this.selectedCatalogProduct.set(null);
     this.catalogProductSuggestions.set([]);
     this.catalogProductSearching.set(false);
     this.selectedPreviewHasColorImage.set(true);
@@ -3755,6 +3851,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.catalogColorOptions.set([]);
     this.selectedPreview.set(null);
     this.selectedCatalogDoc.set(null);
+    this.selectedCatalogProduct.set(null);
     this.catalogProductSuggestions.set([]);
     this.catalogProductSearching.set(false);
     this.selectedPreviewHasColorImage.set(true);
@@ -4919,6 +5016,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       image: entry.image_url || null,
       source: "Manual",
     });
+    this.selectedCatalogProduct.set(null);
     this.manualSuggestionsOpen.set(false);
     this.manualSuggestionsStyle.set({});
   }
@@ -6981,6 +7079,9 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     if (needsLateNote && !lateNote) return;
 
     const source = this.newItemSource();
+    if (source === "catalogo") {
+      await this.ensureSelectedCatalogProductImage();
+    }
     const state: OrderItemState = source === "inventario" ? "reservado_inventario" : "confirmando_proveedor";
     const lateMeta: Partial<OrderItem> | undefined = lateNote
       ? {
@@ -7116,6 +7217,9 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       return;
     }
     const state: OrderItemState = source === "inventario" ? "reservado_inventario" : "confirmando_proveedor";
+    if (source === "catalogo") {
+      await this.ensureSelectedCatalogProductImage();
+    }
     const converted = this.buildOrderItemFromForm(target.item_id, source, state);
     const nextItems = (order.items || []).map((item) => (item.item_id === target.item_id ? converted : item));
     await this.orders.updateItems(order.order_id, nextItems);
@@ -7166,6 +7270,9 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     if (this.isClientaBelowCosto()) {
       await this.showClientaBelowCostoPopup();
       return;
+    }
+    if (this.newItemSource() === "catalogo") {
+      await this.ensureSelectedCatalogProductImage();
     }
 
     const nextQty = Math.max(1, this.newItemQty());
@@ -7296,6 +7403,46 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       image_url: this.selectedPreview()?.image || null,
     };
     return { ...base, ...(extra || {}) };
+  }
+
+  private async ensureSelectedCatalogProductImage(): Promise<string | null> {
+    return this.ensureCatalogProductImage(this.selectedCatalogProduct());
+  }
+
+  private async ensureCatalogProductImage(product: CatalogProduct | null): Promise<string | null> {
+    if (!product || this.orderBusinessId() !== "catalogo") return this.selectedPreview()?.image || null;
+    const currentImage = (this.selectedPreview()?.image || product.image_url || "").trim();
+    if (currentImage) return currentImage;
+
+    try {
+      const result = await this.catalogProducts.resolveImpulsImage(product);
+      const imageUrl = String(result.image_url || result.images?.[0] || "").trim();
+      if (!imageUrl) {
+        if (result.reason === "MISSING_IMPULS_PRODUCT_ID") {
+          this.showActionToast("Producto sin Generico de Impuls; se agregara sin imagen.");
+        } else if (result.found === false) {
+          this.showActionToast("No encontramos imagen en Impuls; se agregara sin imagen.");
+        } else {
+          this.showActionToast("Impuls no regreso imagen; se agregara sin imagen.");
+        }
+        return null;
+      }
+
+      const updated: CatalogProduct = {
+        ...product,
+        image_url: imageUrl,
+        image_storage_path: result.image_storage_path || product.image_storage_path,
+        image_status: "FETCHED",
+        image_provider: "impuls",
+      };
+      this.selectedCatalogProduct.set(updated);
+      this.selectedPreview.update((preview) => preview ? { ...preview, image: imageUrl } : preview);
+      this.selectedPreviewHasColorImage.set(true);
+      return imageUrl;
+    } catch (error) {
+      this.showActionToast("No se pudo obtener imagen de Impuls; se agregara sin imagen.");
+      return null;
+    }
   }
 
   private canMergeIntoExistingRow(order: Order, existing: OrderItem): boolean {
@@ -7610,6 +7757,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       source: "Inventario",
     });
     this.selectedCatalogDoc.set(null);
+    this.selectedCatalogProduct.set(null);
   }
 
   pickCatalog(doc: NormalizedListingDoc, variant: any, color: string) {
@@ -7648,6 +7796,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       source: "Catálogo",
     });
     this.selectedCatalogDoc.set(doc);
+    this.selectedCatalogProduct.set(null);
   }
 
   pickCatalogProduct(product: CatalogProduct) {
@@ -7679,6 +7828,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       source: "Catálogo",
     });
     this.selectedCatalogDoc.set(null);
+    this.selectedCatalogProduct.set(product);
     this.catalogProductSuggestions.set([]);
   }
 

@@ -24,6 +24,7 @@ interface ImportMapping {
   colorColumn: string;
   sizeColumn: string;
   priceCostColumn: string;
+  impulsProductIdColumn: string;
   priceCostDiscountPct: number;
   priceClientaMarkupPct: number;
 }
@@ -38,6 +39,7 @@ interface PreviewRow {
   category: string | null;
   color: string | null;
   size: string | null;
+  impuls_product_id: string | null;
   price_cost_excel: number | null;
   price_cost_discount_pct: number | null;
   price_cost: number | null;
@@ -147,6 +149,7 @@ function buildPreview(rows: Record<string, unknown>[], mapping: ImportMapping) {
       category: textFromColumn(raw, mapping.categoryColumn) || null,
       color: textFromColumn(raw, mapping.colorColumn) || null,
       size: textFromColumn(raw, mapping.sizeColumn) || null,
+      impuls_product_id: textFromColumn(raw, mapping.impulsProductIdColumn) || null,
       price_cost_excel: priceCostExcel.value,
       price_cost_discount_pct: priceCostDiscountPct,
       price_cost: priceCost,
