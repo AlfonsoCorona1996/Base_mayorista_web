@@ -5121,6 +5121,26 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       .trim();
   }
 
+  manualSuggestionDateLabel(entry: ManualProductEntry): string {
+    const rawDate = entry.last_used_at || entry.created_at;
+    const date = this.toDateValue(rawDate);
+    if (!date) return "Sin fecha";
+    return new Intl.DateTimeFormat("es-MX", {
+      day: "2-digit",
+      month: "short",
+      year: "2-digit",
+    }).format(date);
+  }
+
+  private toDateValue(value: unknown): Date | null {
+    if (!value) return null;
+    if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+    const firestoreDate = (value as any)?.toDate?.();
+    if (firestoreDate instanceof Date) return Number.isNaN(firestoreDate.getTime()) ? null : firestoreDate;
+    const date = new Date(String(value));
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
   private parseMoneyInput(raw: string): number | null {
     const normalized = String(raw || "").replace(/,/g, "").trim();
     if (!normalized) return 0;

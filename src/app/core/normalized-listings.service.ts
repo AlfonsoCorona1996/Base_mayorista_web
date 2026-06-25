@@ -199,6 +199,7 @@ export class NormalizedListingsService {
     const snap = await getDoc(ref);
     const current = snap.exists() ? snap.data() as NormalizedListingDoc : null;
     await updateDoc(ref, {
+      business_id: normalizeBusinessId(current?.business_id || "bm"),
       "workflow.status": "validated",
       "workflow.validated_by": uid,
       "workflow.validated_at": serverTimestamp(),

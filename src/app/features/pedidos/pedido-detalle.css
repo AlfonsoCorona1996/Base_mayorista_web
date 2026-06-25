@@ -2760,6 +2760,7 @@
   border-radius: 18px;
   border: 1px solid #dbe6f4;
   background: #ffffff;
+  color: #0f172a;
   box-shadow: 0 12px 26px rgba(15, 23, 42, 0.06);
   padding: 12px;
   gap: 0.65rem;
@@ -3026,6 +3027,28 @@
 .sheet-add-item-ios .input,
 .sheet-add-item-ios .money {
   border-radius: 14px;
+}
+
+.sheet-add-item-ios .input,
+.sheet-add-item-ios select.input,
+.sheet-add-item-ios textarea.input,
+.sheet-add-item-ios .money .input,
+.sheet-add-item-ios .listbox-option,
+.sheet-add-item-ios .card-title,
+.sheet-add-item-ios .preview-title {
+  color: #0f172a;
+  -webkit-text-fill-color: #0f172a;
+}
+
+.sheet-add-item-ios .input::placeholder,
+.sheet-add-item-ios .money .input::placeholder {
+  color: #8aa0b9;
+  -webkit-text-fill-color: #8aa0b9;
+}
+
+.sheet-add-item-ios .input:disabled,
+.sheet-add-item-ios .money .input:disabled {
+  opacity: 1;
 }
 
 .sheet-add-item-ios .sheet-footer {
@@ -6749,13 +6772,29 @@ code {
   color: #0f172a;
 }
 
+.msug-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+}
+
+.msug-date,
 .msug-uses {
   font-size: 0.72rem;
-  color: #94a3b8;
-  background: #f1f5f9;
   border-radius: 999px;
   padding: 1px 7px;
   white-space: nowrap;
+}
+
+.msug-date {
+  color: #475569;
+  background: #eaf3ff;
+}
+
+.msug-uses {
+  color: #64748b;
+  background: #f1f5f9;
 }
 
 .msug-meta {

@@ -2289,7 +2289,10 @@
             >
               <div class="msug-top">
                 <span class="msug-title">{{ cleanDisplayText(entry.title) }}</span>
-                <span class="msug-uses">{{ entry.used_count }}x</span>
+                <span class="msug-badges">
+                  <span class="msug-date">{{ manualSuggestionDateLabel(entry) }}</span>
+                  <span class="msug-uses">{{ entry.used_count }}x</span>
+                </span>
               </div>
               @if (entry.variant || entry.color) {
                 <div class="msug-meta">

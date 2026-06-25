@@ -65202,3 +65202,29 @@
           ╵   [32m~~~~~~~~~~~~~~~~~~~~~~[0m
 
 [39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'manualSuggestionDateLabel' does not exist on type 'PedidoDetallePage'. Did you mean 'manualSuggestionsStyle'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:2293:45:
+[37m      2293 │ ... class="msug-date">{{ [32mmanualSuggestionDateLabel[37m(entry) }}</span>
+           ╵                          [32m~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:197:15:
+[37m      197 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'manualSuggestionDateLabel' does not exist on type 'PedidoDetallePage'. Did you mean 'manualSuggestionsStyle'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:2293:45:
+[37m      2293 │ ... class="msug-date">{{ [32mmanualSuggestionDateLabel[37m(entry) }}</span>
+           ╵                          [32m~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:197:15:
+[37m      197 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
