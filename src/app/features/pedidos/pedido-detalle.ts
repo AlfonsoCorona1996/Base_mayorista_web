@@ -109,6 +109,8 @@ type SalesNoteRowVm = {
   item: OrderItem;
   qty: number;
   unitPrice: number;
+  finalUnitPrice: number | null;
+  discountPct: number | null;
   lineTotal: number;
   imageUrl: string | null;
 };
@@ -3890,10 +3892,13 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         const unitRaw = item.price_clienta ?? item.price_public ?? legacyUnitPrice ?? 0;
         const unitParsed = Number(typeof unitRaw === "string" ? unitRaw.replace(/,/g, "").trim() : unitRaw);
         const unitPrice = Number.isFinite(unitParsed) && unitParsed > 0 ? Number(unitParsed.toFixed(2)) : 0;
+        const finalPrice = this.toSalesNotePositiveNumber(item.price_public);
         return {
           item,
           qty,
           unitPrice,
+          finalUnitPrice: finalPrice,
+          discountPct: this.salesNoteDiscountPct(item.discount_pct, finalPrice, unitPrice),
           lineTotal: unitPrice * qty,
           imageUrl: this.itemImage(item),
         };
@@ -4018,6 +4023,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         color: row.item.color || null,
         qty: row.qty,
         unitPrice: row.unitPrice,
+        finalUnitPrice: row.finalUnitPrice,
+        discountPct: row.discountPct,
         lineTotal: row.lineTotal,
         imageUrl: row.imageUrl || null,
       })),
@@ -4025,6 +4032,19 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       balanceDue,
       resolveRowImage: async (row) => imageByItemId.get(row.rowId) ?? null,
     });
+  }
+
+  private salesNoteDiscountPct(rawPct: unknown, finalPrice: number | null, clientaPrice: number): number | null {
+    const explicit = this.toSalesNotePositiveNumber(rawPct);
+    if (explicit !== null) return Math.round(explicit);
+    if (finalPrice === null || finalPrice <= clientaPrice || finalPrice <= 0) return null;
+    return Math.max(1, Math.round((1 - clientaPrice / finalPrice) * 100));
+  }
+
+  private toSalesNotePositiveNumber(value: unknown): number | null {
+    const n = Number(typeof value === "string" ? value.replace(/,/g, "").trim() : value);
+    if (!Number.isFinite(n) || n <= 0) return null;
+    return Number(n.toFixed(2));
   }
 
   private drawRoundedRect(

@@ -6595,6 +6595,40 @@ code {
   }
 }
 
+/* El modal de agregar producto vive sobre fondos claros; algunos estados de iOS/Safari
+   y reglas globales pueden dejar inputs con texto blanco. Esta regla final blinda el modal. */
+.sheet-add-item-ios input.input,
+.sheet-add-item-ios select.input,
+.sheet-add-item-ios textarea.input,
+.sheet-add-item-ios .money input.input,
+.sheet-add-item-ios input.input:disabled,
+.sheet-add-item-ios select.input:disabled,
+.sheet-add-item-ios textarea.input:disabled,
+.sheet-add-item-ios input.input[readonly],
+.sheet-add-item-ios textarea.input[readonly],
+.sheet-add-item-ios .money input.input:disabled,
+.sheet-add-item-ios .money input.input[readonly],
+.sheet-add-item-ios option {
+  color: #0f172a !important;
+  -webkit-text-fill-color: #0f172a !important;
+  caret-color: #0f172a !important;
+  opacity: 1 !important;
+}
+
+.sheet-add-item-ios input.input::placeholder,
+.sheet-add-item-ios textarea.input::placeholder,
+.sheet-add-item-ios .money input.input::placeholder {
+  color: #8aa0b9 !important;
+  -webkit-text-fill-color: #8aa0b9 !important;
+}
+
+.sheet-add-item-ios input.input:-webkit-autofill,
+.sheet-add-item-ios textarea.input:-webkit-autofill,
+.sheet-add-item-ios select.input:-webkit-autofill {
+  -webkit-text-fill-color: #0f172a !important;
+  box-shadow: 0 0 0 1000px #ffffff inset !important;
+}
+
 /* ── Sheet de pago ── */
 .payment-sheet {
   max-width: 440px;

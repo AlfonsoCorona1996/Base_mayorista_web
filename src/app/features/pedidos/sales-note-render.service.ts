@@ -7,6 +7,8 @@ export type SalesNoteRenderRow = {
   color?: string | null;
   qty: number;
   unitPrice: number;
+  finalUnitPrice?: number | null;
+  discountPct?: number | null;
   lineTotal: number;
   imageUrl?: string | null;
 };
@@ -151,7 +153,8 @@ export class SalesNoteRenderService {
 
     const IMG_SIZE = 80;
     const TEXT_X = IX + IMG_SIZE + 20;
-    const TEXT_W = IW - IMG_SIZE - 20 - 220;
+    const PRICE_W = 270;
+    const TEXT_W = IW - IMG_SIZE - 20 - PRICE_W;
 
     for (let index = 0; index < rows.length; index += 1) {
       const row = rows[index];
@@ -192,14 +195,7 @@ export class SalesNoteRenderService {
         ctx.fillText(this.truncateForNote(ctx, variantText, TEXT_W, VAR_FONT), TEXT_X, y + 74);
       }
 
-      ctx.fillStyle = "#8fabbe";
-      ctx.font = "400 24px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-      ctx.textAlign = "right";
-      ctx.fillText(`${row.qty} × ${this.formatCurrency(row.unitPrice)}`, IR, y + 50);
-
-      ctx.fillStyle = "#1a2e44";
-      ctx.font = "700 32px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-      ctx.fillText(this.formatCurrency(row.lineTotal), IR, y + 86);
+      this.drawRowPricing(ctx, row, IR, y);
 
       y += ITEM_H + ITEM_GAP;
     }
@@ -256,6 +252,66 @@ export class SalesNoteRenderService {
       return Promise.all(rows.map((row) => this.loadImageElement(String(row.imageUrl || ""), true, 7000).catch(() => null)));
     }
     return Promise.all(rows.map((row) => resolver(row)));
+  }
+
+  private drawRowPricing(ctx: CanvasRenderingContext2D, row: SalesNoteRenderRow, rightX: number, rowY: number): void {
+    const finalPrice = this.safePositiveNumber(row.finalUnitPrice);
+    const clientaPrice = this.safePositiveNumber(row.unitPrice) || 0;
+    const discountPct = this.resolveDiscountPct(row, finalPrice, clientaPrice);
+    const showDiscount = finalPrice !== null && finalPrice > clientaPrice && discountPct !== null && discountPct > 0;
+
+    if (showDiscount) {
+      const pctText = `-${discountPct}%`;
+      const finalText = this.formatCurrency(finalPrice);
+      const topY = rowY + 27;
+      const pillH = 26;
+      const pillPadX = 10;
+
+      ctx.font = "700 19px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+      const pctW = Math.ceil(ctx.measureText(pctText).width) + pillPadX * 2;
+      const pctX = rightX - pctW;
+
+      this.drawRoundedRect(ctx, pctX, topY - 20, pctW, pillH, 13, "#fee2e2");
+      ctx.fill();
+      ctx.fillStyle = "#dc2626";
+      ctx.textAlign = "center";
+      ctx.fillText(pctText, pctX + pctW / 2, topY);
+
+      ctx.font = "600 20px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+      ctx.fillStyle = "#b45309";
+      ctx.textAlign = "right";
+      ctx.fillText(finalText, pctX - 9, topY);
+
+      const strikeW = ctx.measureText(finalText).width;
+      ctx.strokeStyle = "#ef4444";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(pctX - 9 - strikeW, topY - 7);
+      ctx.lineTo(pctX - 9, topY - 7);
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = "#0f172a";
+    ctx.font = "700 29px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    ctx.textAlign = "right";
+    ctx.fillText(`${row.qty} × ${this.formatCurrency(clientaPrice)}`, rightX, rowY + 60);
+
+    ctx.fillStyle = "#020617";
+    ctx.font = "800 35px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    ctx.fillText(this.formatCurrency(row.lineTotal), rightX, rowY + 95);
+  }
+
+  private resolveDiscountPct(row: SalesNoteRenderRow, finalPrice: number | null, clientaPrice: number): number | null {
+    const explicit = this.safePositiveNumber(row.discountPct);
+    if (explicit !== null) return Math.round(explicit);
+    if (finalPrice === null || finalPrice <= clientaPrice || finalPrice <= 0) return null;
+    return Math.max(1, Math.round((1 - clientaPrice / finalPrice) * 100));
+  }
+
+  private safePositiveNumber(value: unknown): number | null {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n <= 0) return null;
+    return Number(n.toFixed(2));
   }
 
   private loadImageElement(url: string, withCrossOrigin: boolean, timeoutMs = 6000): Promise<HTMLImageElement | null> {
