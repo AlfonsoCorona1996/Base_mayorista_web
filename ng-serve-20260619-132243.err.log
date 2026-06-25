@@ -65228,3 +65228,40 @@
           ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
 
 [39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type '{ rowId: string; title: string; variant: string | null; color: string | null; qty: number; unitPrice: number; lineTotal: number; imageUrl: string | null; }[]' is not assignable to type 'SalesNoteRow[]'.
+  Type '{ rowId: string; title: string; variant: string | null; color: string | null; qty: number; unitPrice: number; lineTotal: number; imageUrl: string | null; }' is not assignable to type 'SalesNoteRow'.
+    Property 'item' is missing in type '{ rowId: string; title: string; variant: string | null; color: string | null; qty: number; unitPrice: number; lineTotal: number; imageUrl: string | null; }' but required in type '{ item: OrderItem; }'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.ts:2187:4:
+[37m      2187 │     [32mreturn[37m (order.items || [])
+           ╵     [32m~~~~~~[0m
+
+  'item' is declared here.
+
+    src/app/features/pedidos/pedidos.ts:45:43:
+[37m      45 │ type SalesNoteRow = SalesNoteRenderRow & { [32mitem[37m: OrderItem };
+         ╵                                            [32m~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2322: Type '{ rowId: string; title: string; variant: string | null; color: string | null; qty: number; unitPrice: number; lineTotal: number; imageUrl: string | null; }[]' is not assignable to type 'SalesNoteRow[]'.
+  Type '{ rowId: string; title: string; variant: string | null; color: string | null; qty: number; unitPrice: number; lineTotal: number; imageUrl: string | null; }' is not assignable to type 'SalesNoteRow'.
+    Property 'item' is missing in type '{ rowId: string; title: string; variant: string | null; color: string | null; qty: number; unitPrice: number; lineTotal: number; imageUrl: string | null; }' but required in type '{ item: OrderItem; }'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.ts:2202:4:
+[37m      2202 │     [32mreturn[37m (order.items || [])
+           ╵     [32m~~~~~~[0m
+
+  'item' is declared here.
+
+    src/app/features/pedidos/pedidos.ts:45:43:
+[37m      45 │ type SalesNoteRow = SalesNoteRenderRow & { [32mitem[37m: OrderItem };
+         ╵                                            [32m~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'itemImage' does not exist on type 'PedidosPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.ts:2219:25:
+[37m      2219 │           imageUrl: this.[32mitemImage[37m(item),
+           ╵                          [32m~~~~~~~~~[0m
+
+[39m[22m

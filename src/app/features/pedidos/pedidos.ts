@@ -4,14 +4,18 @@ import { CurrencyPipe, DatePipe, NgClass } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { Router } from "@angular/router";
 import JSZip from "jszip";
+import { getBlob, ref as storageRef } from "firebase/storage";
 import { PDFDocument, StandardFonts, rgb, type PDFFont } from "pdf-lib";
 import { CustomersService } from "../../core/customers.service";
-import { OrdersService, Order, OrderStatus, IncidentSeverity } from "../../core/orders.service";
+import { OrdersService, Order, OrderItem, OrderStatus, IncidentSeverity } from "../../core/orders.service";
 import { RoutesService } from "../../core/routes.service";
+import { InventoryItem, InventoryService } from "../../core/inventory.service";
+import { NormalizedListingsService, NormalizedListingDoc } from "../../core/normalized-listings.service";
 import { ActionChecklist, PrimaryAction, getActionChecklist, getPrimaryAction } from "./order-primary-action.mapper";
 import { SalesNoteRenderRow, SalesNoteRenderService } from "./sales-note-render.service";
 import { BusinessScopeService } from "../../core/business-scope.service";
 import { BusinessId } from "../../core/rbac.constants";
+import { STORAGE } from "../../core/firebase.providers";
 
 type IntentFilter =
   | "hoy"
@@ -38,7 +42,7 @@ type OrderCardMeta = {
   ariaLabel: string;
 };
 
-type SalesNoteRow = SalesNoteRenderRow;
+type SalesNoteRow = SalesNoteRenderRow & { item: OrderItem };
 type SalesNoteFile = { fileName: string; blob: Blob };
 
 type TableRangePreset = "today" | "last7" | "last30";
@@ -77,6 +81,8 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   private orders = inject(OrdersService);
   private customers = inject(CustomersService);
   private routes = inject(RoutesService);
+  private inventory = inject(InventoryService);
+  private catalog = inject(NormalizedListingsService);
   private salesNoteRender = inject(SalesNoteRenderService);
   businessScope = inject(BusinessScopeService);
   private router = inject(Router);
@@ -109,6 +115,19 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   bulkNotesLoading = signal(false);
   bulkSelected = signal<Record<string, boolean>>({});
   bulkNotesMessage = signal<string | null>(null);
+  private inventoryLoaded = signal(false);
+  private catalogLoaded = signal(false);
+  private catalogRows = signal<NormalizedListingDoc[]>([]);
+  private catalogById = computed(() => {
+    const map = new Map<string, NormalizedListingDoc>();
+    for (const row of this.catalogRows()) map.set(row.normalized_id, row);
+    return map;
+  });
+  private inventoryById = computed(() => {
+    const map = new Map<string, InventoryItem>();
+    for (const row of this.inventory.items()) map.set(row.inventory_id, row);
+    return map;
+  });
 
   // â”€â”€ Vista tabla â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   viewMode = signal<"cards" | "table">("cards");
@@ -2189,6 +2208,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
         const unitParsed = Number(typeof unitRaw === "string" ? unitRaw.replace(/,/g, "").trim() : unitRaw);
         const unitPrice = Number.isFinite(unitParsed) && unitParsed > 0 ? Number(unitParsed.toFixed(2)) : 0;
         return {
+          item,
           rowId: item.item_id || `${order.order_id}-${item.title || "item"}`,
           title: item.title || "Producto",
           variant: item.variant || null,
@@ -2196,7 +2216,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
           qty,
           unitPrice,
           lineTotal: unitPrice * qty,
-          imageUrl: item.image_url || null,
+          imageUrl: this.itemImage(item),
         };
       })
       .filter((row) => row.qty > 0);
@@ -2601,6 +2621,13 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private async buildSalesNoteImage(order: Order, rows: SalesNoteRow[]): Promise<Blob> {
+    await this.ensureSalesNoteImageSourcesReady(rows);
+    const imageResults = await Promise.all(rows.map((row) => this.loadSalesNoteRowImage(row)));
+    const imageByRowId = new Map<string, HTMLImageElement | null>();
+    for (const result of imageResults) {
+      imageByRowId.set(result.rowId, result.image);
+    }
+
     const subtotal = rows.reduce((sum, row) => sum + row.lineTotal, 0);
     const discount = Math.min(subtotal, this.orderDiscountAmount(order));
     const totalAmount = Math.max(0, subtotal - discount);
@@ -2608,10 +2635,368 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     return this.salesNoteRender.buildSalesNoteImage({
       orderId: order.order_id,
       customerName: this.customerName(order.customer_id),
-      rows,
+      rows: rows.map((row) => ({
+        rowId: row.rowId,
+        title: row.title,
+        variant: row.variant || null,
+        color: row.color || null,
+        qty: row.qty,
+        unitPrice: row.unitPrice,
+        lineTotal: row.lineTotal,
+        imageUrl: row.imageUrl || null,
+      })),
       discountAmount: discount,
       balanceDue,
+      resolveRowImage: async (row) => imageByRowId.get(row.rowId) ?? null,
     });
+  }
+
+  private itemImage(item: OrderItem): string | null {
+    return this.resolveItemImage(item);
+  }
+
+  private resolveItemImage(item: OrderItem): string | null {
+    if (item.image_url) return item.image_url;
+
+    if (item.source === "inventario" && item.inventory_id) {
+      return this.inventoryById().get(item.inventory_id)?.image_urls?.[0] || null;
+    }
+
+    if (item.source === "catalogo" && item.product_id) {
+      const doc = this.catalogById().get(item.product_id) || null;
+      if (!doc) return null;
+      const listing: any = doc.listing || { items: [] };
+      const variant = (listing.items || []).find((entry: any) => (entry.variant_name || "") === (item.variant || "")) || null;
+      const colorImage = this.resolveColorImage(doc, item.color);
+      return colorImage || variant?.image_url || doc.cover_images?.[0] || doc.preview_image_url || null;
+    }
+
+    return null;
+  }
+
+  private async ensureSalesNoteImageSourcesReady(rows: SalesNoteRow[]): Promise<void> {
+    const tasks: Promise<void>[] = [];
+
+    if (!this.inventoryLoaded() || this.inventory.items().length === 0) {
+      tasks.push(
+        this.inventory
+          .loadFromFirestore()
+          .catch(() => undefined)
+          .then(() => {
+            this.inventoryLoaded.set(true);
+          }),
+      );
+    }
+
+    const normalizedProductIds = rows
+      .map((row) => row.item.product_id || "")
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .filter((productId) => !productId.startsWith("catalogo_"));
+
+    if (!this.catalogLoaded() || normalizedProductIds.some((productId) => !this.catalogById().has(productId))) {
+      tasks.push(this.loadSalesNoteCatalogDocs(normalizedProductIds));
+    }
+
+    if (tasks.length > 0) await Promise.all(tasks);
+  }
+
+  private async loadSalesNoteCatalogDocs(productIds: string[]): Promise<void> {
+    const current = new Map(this.catalogById());
+    try {
+      if (!this.catalogLoaded()) {
+        const page = await this.catalog.listValidated(160);
+        for (const doc of page.docs) current.set(doc.normalized_id, doc as NormalizedListingDoc);
+        this.catalogLoaded.set(true);
+      }
+
+      const uniqueIds = [...new Set(productIds)].filter((productId) => !current.has(productId));
+      await Promise.all(
+        uniqueIds.map(async (productId) => {
+          try {
+            const doc = await this.catalog.getById(productId);
+            current.set(doc.normalized_id, doc as NormalizedListingDoc);
+          } catch {
+            // Some order items point to catalog_products, not normalized_listings.
+          }
+        }),
+      );
+    } catch {
+      this.catalogLoaded.set(true);
+    } finally {
+      this.catalogRows.set([...current.values()]);
+    }
+  }
+
+  private async loadSalesNoteRowImage(row: SalesNoteRow): Promise<{ rowId: string; image: HTMLImageElement | null }> {
+    const candidates = this.salesNoteImageCandidates(row);
+    return {
+      rowId: row.rowId,
+      image: await this.loadSalesNoteImageCandidates(candidates),
+    };
+  }
+
+  private async loadSalesNoteImageCandidates(candidates: string[]): Promise<HTMLImageElement | null> {
+    if (candidates.length === 0) return null;
+    const attempts = candidates.map(async (candidate) => {
+      const image = await this.loadNoteImageWithRetries(candidate, 2);
+      if (!image) throw new Error("image_not_loaded");
+      return image;
+    });
+    try {
+      return await this.withTimeout(Promise.any(attempts), 20000, "Tiempo de espera agotado al descargar imagen.");
+    } catch {
+      return null;
+    }
+  }
+
+  private async loadNoteImageWithRetries(url: string, maxAttempts: number): Promise<HTMLImageElement | null> {
+    const attempts = Math.max(1, Math.trunc(maxAttempts || 1));
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      const image = await this.loadNoteImage(url);
+      if (image) return image;
+      if (attempt < attempts) await this.sleep(180 * attempt);
+    }
+    return null;
+  }
+
+  private salesNoteImageCandidates(row: SalesNoteRow): string[] {
+    const item = row.item;
+    const candidates: Array<string | null | undefined> = [
+      row.imageUrl,
+      item.image_url,
+      this.resolveItemImage(item),
+      this.resolveSalesNoteCatalogImage(item),
+      this.resolveSalesNoteInventoryImage(item),
+      this.resolveSalesNoteImageByLabel(item),
+    ];
+    return this.uniqueNoteImageCandidates(candidates);
+  }
+
+  private resolveSalesNoteCatalogImage(item: OrderItem): string | null {
+    const productId = (item.product_id || "").trim();
+    if (!productId) return null;
+    const doc = this.catalogById().get(productId) || null;
+    if (!doc) return null;
+    const listing: any = doc.listing || { items: [] };
+    const targetVariant = (item.variant || "").trim().toLowerCase();
+    const variant = (listing.items || []).find((entry: any) => {
+      const variantName = String(entry?.variant_name || "").trim().toLowerCase();
+      return variantName && variantName === targetVariant;
+    }) || (listing.items || [])[0] || null;
+    const colorImage = this.resolveColorImage(doc, item.color);
+    return colorImage || variant?.image_url || doc.cover_images?.[0] || doc.preview_image_url || null;
+  }
+
+  private resolveSalesNoteInventoryImage(item: OrderItem): string | null {
+    const inventoryId = (item.inventory_id || "").trim();
+    if (!inventoryId) return null;
+    return this.inventoryById().get(inventoryId)?.image_urls?.[0] || null;
+  }
+
+  private resolveSalesNoteImageByLabel(item: OrderItem): string | null {
+    const title = String(item.title || "").trim().toLowerCase();
+    if (!title) return null;
+    const variant = String(item.variant || "").trim().toLowerCase();
+    const color = String(item.color || "").trim().toLowerCase();
+
+    const invHit = this.inventory.items().find((row) => {
+      const rowTitle = String(row.title || "").trim().toLowerCase();
+      if (!rowTitle || rowTitle !== title) return false;
+      if (variant && String(row.variant_name || row.size_label || "").trim().toLowerCase() !== variant) return false;
+      if (color && String(row.color_name || "").trim().toLowerCase() !== color) return false;
+      return true;
+    });
+    if (invHit?.image_urls?.[0]) return invHit.image_urls[0];
+
+    for (const doc of this.catalogRows()) {
+      const listing: any = doc.listing || { items: [] };
+      const listingTitle = String(listing.title || "").trim().toLowerCase();
+      if (!listingTitle || listingTitle !== title) continue;
+
+      const variantRows = Array.isArray(listing.items) ? listing.items : [];
+      const variantRow = variantRows.find((entry: any) => {
+        const variantName = String(entry?.variant_name || "").trim().toLowerCase();
+        return !variant || variantName === variant;
+      }) || variantRows[0] || null;
+      if (!variantRow) continue;
+      const colorImage = this.resolveColorImage(doc, item.color);
+      const image = colorImage || variantRow.image_url || doc.cover_images?.[0] || doc.preview_image_url || null;
+      if (image) return image;
+    }
+
+    return null;
+  }
+
+  private resolveColorImage(doc: NormalizedListingDoc, colorName: string | null | undefined): string | null {
+    const target = (colorName || "").trim().toLowerCase();
+    if (!target) return null;
+    return (doc.product_colors || []).find((color) => (color.name || "").trim().toLowerCase() === target)?.image_url || null;
+  }
+
+  private uniqueNoteImageCandidates(values: Array<string | null | undefined>): string[] {
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const raw of values) {
+      const normalized = this.normalizeNoteImageUrl(raw);
+      if (!normalized) continue;
+      const key = normalized.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(normalized);
+    }
+    return out;
+  }
+
+  private normalizeNoteImageUrl(value: string | null | undefined): string | null {
+    const raw = String(value || "").trim();
+    if (!raw) return null;
+    if (raw.startsWith("data:") || raw.startsWith("blob:")) return raw;
+    if (raw.startsWith("//")) return `${window.location.protocol}${raw}`;
+    if (raw.startsWith("gs://")) {
+      const gsPath = raw.slice("gs://".length);
+      const firstSlash = gsPath.indexOf("/");
+      if (firstSlash <= 0) return null;
+      const bucket = gsPath.slice(0, firstSlash);
+      const objectPath = gsPath.slice(firstSlash + 1);
+      const firebaseUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodeURIComponent(objectPath)}?alt=media`;
+      return this.toStorageProxyUrl(firebaseUrl);
+    }
+    return this.toStorageProxyUrl(raw);
+  }
+
+  private toStorageProxyUrl(url: string): string {
+    try {
+      const parsed = new URL(url, window.location.origin);
+      if (!parsed.hostname.includes("firebasestorage.googleapis.com")) return parsed.toString();
+      return `/__storage_proxy${parsed.pathname}${parsed.search}`;
+    } catch {
+      return url;
+    }
+  }
+
+  private async loadNoteImage(url: string | null): Promise<HTMLImageElement | null> {
+    if (!url) return null;
+    const normalizedUrl = this.normalizeNoteImageUrl(url);
+    if (!normalizedUrl) return null;
+
+    const fromStorageSdk = await this.loadImageFromStorageBlob(normalizedUrl);
+    if (fromStorageSdk) return fromStorageSdk;
+
+    const fetched = await this.loadImageFromFetchBlob(normalizedUrl);
+    if (fetched) return fetched;
+
+    const directCors = await this.loadImageElement(normalizedUrl, true);
+    if (directCors) return directCors;
+
+    return null;
+  }
+
+  private looksLikeFirebaseStorageUrl(url: string): boolean {
+    return (
+      !!url
+      && (
+        url.startsWith("gs://")
+        || url.includes("firebasestorage.googleapis.com/")
+        || url.includes("storage.googleapis.com/")
+      )
+    );
+  }
+
+  private async loadImageFromStorageBlob(url: string): Promise<HTMLImageElement | null> {
+    if (!this.looksLikeFirebaseStorageUrl(url)) return null;
+    try {
+      const blob = await this.withTimeout(
+        getBlob(storageRef(STORAGE, url)),
+        7000,
+        "Tiempo de espera agotado al descargar imagen de Storage.",
+      );
+      if (!blob || blob.size <= 0) return null;
+      const dataUrl = await this.blobToDataUrl(blob);
+      return this.loadImageElement(dataUrl, false);
+    } catch {
+      return null;
+    }
+  }
+
+  private async loadImageFromFetchBlob(url: string): Promise<HTMLImageElement | null> {
+    const attempts: Array<{ credentials: RequestCredentials; mode: RequestMode }> = [
+      { credentials: "include", mode: "cors" },
+      { credentials: "omit", mode: "cors" },
+    ];
+    for (const attempt of attempts) {
+      try {
+        const response = await this.fetchWithTimeout(
+          url,
+          { mode: attempt.mode, credentials: attempt.credentials, cache: "force-cache" },
+          6500,
+        );
+        if (!response.ok) continue;
+        const blob = await response.blob();
+        if (!blob || blob.size <= 0) continue;
+        const dataUrl = await this.blobToDataUrl(blob);
+        const image = await this.loadImageElement(dataUrl, false);
+        if (image) return image;
+      } catch {
+        // Try the next image loading strategy.
+      }
+    }
+    return null;
+  }
+
+  private blobToDataUrl(blob: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error("No se pudo convertir imagen."));
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  private async fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), Math.max(1000, Math.trunc(timeoutMs || 0)));
+    try {
+      return await fetch(url, { ...init, signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  private async loadImageElement(url: string, withCrossOrigin: boolean, timeoutMs = 6000): Promise<HTMLImageElement | null> {
+    return new Promise((resolve) => {
+      const image = new Image();
+      let done = false;
+      const finish = (value: HTMLImageElement | null) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        resolve(value);
+      };
+      const timer = setTimeout(() => finish(null), Math.max(1000, timeoutMs));
+      if (withCrossOrigin) {
+        image.crossOrigin = "anonymous";
+        image.referrerPolicy = "no-referrer";
+      }
+      image.onload = () => finish(image);
+      image.onerror = () => finish(null);
+      image.src = url;
+    });
+  }
+
+  private async withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+    const waitMs = Math.max(1000, Math.trunc(timeoutMs || 0));
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    try {
+      return await Promise.race([
+        promise,
+        new Promise<T>((_, reject) => {
+          timer = setTimeout(() => reject(new Error(message)), waitMs);
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   }
 
   private orderDiscountAmount(order: Order | null): number {
