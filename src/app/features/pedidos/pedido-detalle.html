@@ -368,6 +368,9 @@
           <span>MXN</span>
           <strong class="summary-value">{{ formatCurrency(vm.totals.totalClienta) }}</strong>
         </p>
+        @if (totals().devoluciones > 0) {
+          <p class="summary-note summary-note--return">Devuelto: -{{ formatCurrency(totals().devoluciones) }}</p>
+        }
       </article>
 
       <article class="summary-card summary-card--profit">
@@ -594,6 +597,8 @@
             [class.status--partial]="card.isConfirmed && card.hasPartial"
             [class.status--out]="card.isOutOfStock"
             [class.status--alert]="card.hasInsufficientStock && !card.isOutOfStock"
+            [class.status--returned]="card.isReturned"
+            [class.status--return-partial]="card.returnedQty > 0 && !card.isReturned"
           >
             <div class="product-menu-wrap">
               <button
@@ -723,6 +728,11 @@
                     @if (isManualItem(item)) {
                       <span class="registration-chip">Pendiente de registro</span>
                     }
+                    @if (card.returnedQty > 0) {
+                      <span class="return-status-chip" [class.return-status-chip--full]="card.isReturned">
+                        {{ card.isReturned ? "Devuelto" : card.returnedQty + " devuelta(s) · " + card.netQty + " neta(s)" }}
+                      </span>
+                    }
                   </div>
 
                   <div class="specs-grid">
@@ -736,7 +746,9 @@
                     </div>
                     <div class="spec-status-row">
                       <div class="spec-item spec-item--pieces">
-                        @if (card.isOutOfStock) {
+                        @if (card.returnedQty > 0) {
+                          <span>Piezas netas: <strong>{{ card.netQty }}</strong> · Devueltas: <strong>{{ card.returnedQty }}</strong></span>
+                        } @else if (card.isOutOfStock) {
                           <span>Piezas: <strong>{{ item.quantity }}</strong></span>
                         } @else if (item.quantity > 1) {
                           <span>Piezas: <strong>{{ card.confirmedQty }}</strong> de <strong>{{ item.quantity }}</strong></span>
@@ -746,6 +758,15 @@
                       </div>
                     </div>
                   </div>
+                  @if (returnsForItem(item); as itemReturns) {
+                    @if (itemReturns.length > 0) {
+                      <div class="return-history-inline">
+                        @for (returnRow of itemReturns; track returnRow.return_id) {
+                          <span>{{ returnRow.qty }} pza · {{ returnDestination(returnRow) }} · {{ returnRow.created_at | date:'dd/MM/yy' }}</span>
+                        }
+                      </div>
+                    }
+                  }
                 </div>
               </div>
 
@@ -1763,7 +1784,7 @@
 
             <label class="field">
               <span>Cantidad</span>
-              <input class="input" type="number" min="1" [max]="itemQuantity(returnItem)" [ngModel]="returnQty()" (ngModelChange)="returnQty.set($event)" />
+              <input class="input" type="number" min="1" [max]="remainingReturnQty(returnItem)" [ngModel]="returnQty()" (ngModelChange)="returnQty.set($event)" />
             </label>
 
             <div class="field">
@@ -1791,6 +1812,48 @@
               <span>Razón / notas</span>
               <textarea class="input" rows="3" [ngModel]="returnReason()" (ngModelChange)="returnReason.set($event)" placeholder="Opcional"></textarea>
             </label>
+
+            @if (returnResolutionAmount(current, returnItem) > 0) {
+              <div class="return-payment-box">
+                <p><strong>{{ formatCurrency(returnResolutionAmount(current, returnItem)) }}</strong> pagados de más</p>
+                <div class="pill source-toggle return-toggle">
+                  <label>
+                    <input type="radio" name="returnPaymentResolution" value="credit" [ngModel]="returnPaymentResolution()" (ngModelChange)="returnPaymentResolution.set($event)" />
+                    <span>Saldo a favor</span>
+                  </label>
+                  @if (canRefundReturn()) {
+                    <label>
+                      <input type="radio" name="returnPaymentResolution" value="refund" [ngModel]="returnPaymentResolution()" (ngModelChange)="returnPaymentResolution.set($event)" />
+                      <span>Devolver dinero</span>
+                    </label>
+                  }
+                </div>
+                @if (returnPaymentResolution() === 'refund') {
+                  <label class="field">
+                    <span>Cuenta de salida</span>
+                    <select class="input" [ngModel]="returnRefundAccountId()" (ngModelChange)="returnRefundAccountId.set($event)">
+                      <option value="">Selecciona una cuenta</option>
+                      @for (account of financeAccounts(); track account.account_id) {
+                        <option [value]="account.account_id">{{ account.name }}</option>
+                      }
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span>Método</span>
+                    <select class="input" [ngModel]="returnRefundMethod()" (ngModelChange)="returnRefundMethod.set($event)">
+                      <option value="">Selecciona método</option>
+                      <option value="efectivo">Efectivo</option>
+                      <option value="transferencia">Transferencia</option>
+                      <option value="otro">Otro</option>
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span>Referencia</span>
+                    <input class="input" [ngModel]="returnRefundReference()" (ngModelChange)="returnRefundReference.set($event)" placeholder="Opcional" />
+                  </label>
+                }
+              </div>
+            }
 
             <div class="sheet-actions">
               <button type="button" class="btn ghost" (click)="closeReturnModal()" [disabled]="returnSaving()">Cancelar</button>

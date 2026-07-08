@@ -65272,3 +65272,17 @@
           ╵            [32m~~~~~~~~~~~~~~[0m
 
 [39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'totalClientProfit' does not exist on type 'SalesNoteRenderService'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/sales-note-render.service.ts:36:35:
+[37m      36 │     const totalClientProfit = this.[32mtotalClientProfit[37m(rows);
+         ╵                                    [32m~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'drawTotalClientProfit' does not exist on type 'SalesNoteRenderService'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/sales-note-render.service.ts:238:11:
+[37m      238 │       this.[32mdrawTotalClientProfit[37m(ctx, totalClientProfit, IR, bala...
+          ╵            [32m~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m

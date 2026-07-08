@@ -21,7 +21,9 @@
     "firebase:migrate-normalized-listings-sku-index:dry": "tsx scripts/migrate-normalized-listings-sku-index.ts",
     "firebase:migrate-normalized-listings-sku-index:apply": "tsx scripts/migrate-normalized-listings-sku-index.ts --apply",
     "firebase:migrate-manual-history:dry": "tsx scripts/migrate-manual-product-history.ts",
-    "firebase:migrate-manual-history:apply": "tsx scripts/migrate-manual-product-history.ts --apply"
+    "firebase:migrate-manual-history:apply": "tsx scripts/migrate-manual-product-history.ts --apply",
+    "firebase:migrate-returns-crm:dry": "tsx scripts/migrate-returns-inventory-crm.ts",
+    "firebase:migrate-returns-crm:apply": "tsx scripts/migrate-returns-inventory-crm.ts --apply"
   },
   "prettier": {
     "printWidth": 100,

@@ -108,6 +108,20 @@
           </select>
         </label>
 
+        <label class="field select-field" for="commercial-filter">
+          <span class="material-symbols-rounded" aria-hidden="true">query_stats</span>
+          <select id="commercial-filter" class="input" [ngModel]="commercialFilter()" (ngModelChange)="commercialFilter.set($event)">
+            <option value="">Indicador comercial (todos)</option>
+            <option value="unprofitable">Sin rentabilidad</option>
+            <option value="high_returns">Devolución alta</option>
+            <option value="low_stock">Bajo stock</option>
+            <option value="no_cost">Sin costo</option>
+            <option value="no_sku">Sin SKU</option>
+            <option value="slow">Baja rotación</option>
+            <option value="reorder">Reposición sugerida</option>
+          </select>
+        </label>
+
         <label class="toggle-field" for="hide-out-of-stock">
           <input
             id="hide-out-of-stock"
@@ -186,6 +200,12 @@
                   </li>
                 }
               </ul>
+              <div class="product-commercial-line">
+                <span>{{ productStats(doc).units }} uds. netas</span>
+                <span>{{ productStats(doc).sales | currency:'MXN':'symbol':'1.0-0' }}</span>
+                <span>{{ productStats(doc).available }} en tu stock</span>
+                @if (productStats(doc).returned > 0) { <span>{{ productStats(doc).returned }} devueltas</span> }
+              </div>
             </div>
 
             <div class="card-footer">

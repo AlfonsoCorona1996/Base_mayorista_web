@@ -18,6 +18,7 @@ import { Order, OrderItem, OrderStatus, OrdersService } from "../../core/orders.
 import { RoutesService } from "../../core/routes.service";
 import { BusinessScopeService } from "../../core/business-scope.service";
 import { BusinessId } from "../../core/rbac.constants";
+import { calculateOrderFinancials, calculateItemFinancials } from "../../core/order-financials";
 
 type MoneyBucketId =
   | "openDrafts"
@@ -125,6 +126,8 @@ type DrilldownState = {
 
 type FinanceSummary = {
   ventasBrutas: number;
+  descuentos: number;
+  ventasNetas: number;
   ingresosCobrados: number;
   egresos: number;
   utilidadBruta: number;
@@ -149,6 +152,7 @@ type FinanceSummary = {
   perdidoDano: number;
   devolucionesMonto: number;
   devolucionRate: number;
+  devolucionUnidadesRate: number;
   devolucionImpacto: number;
   pedidosPendientes: number;
   pedidosBorrador: number;
@@ -176,6 +180,8 @@ type OrderFinancialSnapshot = {
   totalClienta: number;
   cost: number;
   grossProfit: number;
+  grossSales: number;
+  returnsAmount: number;
   paid: number;
   balance: number;
   remaining: number;
@@ -270,7 +276,7 @@ const STATUS_LABELS: Record<string, string> = {
   devuelto: "Devuelto",
 };
 
-const DELIVERED_STATUSES = new Set<OrderStatus>(["entregado", "delivered", "delivered_partial", "pago_pendiente", "pagado", "closed"]);
+const DELIVERED_STATUSES = new Set<OrderStatus>(["entregado", "delivered", "delivered_partial", "pago_pendiente", "pagado_parcial", "pagado", "closed"]);
 const RETURNED_STATUSES = new Set<OrderStatus>(["devuelto"]);
 const CANCELLED_STATUSES = new Set<OrderStatus>(["cancelado"]);
 const NEED_INVEST_STATUSES = new Set<OrderStatus>(["confirmando_proveedor", "reservado_inventario", "solicitado_proveedor", "supplier_processing"]);
@@ -374,7 +380,10 @@ export default class AdministracionPage {
   expenses = computed(() => this.financeService.expenses());
   withdrawals = computed(() => this.financeService.withdrawals());
   cuts = computed(() => this.financeService.cuts());
+  refunds = computed(() => this.financeService.refunds());
   customers = computed(() => this.customersService.customers());
+  refundsTotal = computed(() => this.refunds().reduce((sum, row) => sum + Number(row.amount || 0), 0));
+  customerCreditsTotal = computed(() => this.customers().reduce((sum, row) => sum + Number(row.credit_balance || 0), 0));
 
   canViewAccounts = computed(() => this.authz.canCap("cap.finance.accounts.view"));
   canCreateAccounts = computed(() => this.authz.canCap("cap.finance.accounts.create"));
@@ -1277,6 +1286,7 @@ export default class AdministracionPage {
     const orderBucketRows: BucketOrderRow[] = [];
 
     let ventasBrutas = 0;
+    let descuentos = 0;
     let ingresosCobrados = 0;
     let utilidadBruta = 0;
     let potencialBorradores = 0;
@@ -1284,6 +1294,8 @@ export default class AdministracionPage {
     let perdidoDano = 0;
     let devolucionesMonto = 0;
     let baseVentasDevolucion = 0;
+    let unidadesBrutas = 0;
+    let unidadesDevueltas = 0;
     let pedidosBorrador = 0;
     let recentSales = 0;
     let costOfDelivered = 0;
@@ -1292,16 +1304,25 @@ export default class AdministracionPage {
       const snapshot = this.toOrderSnapshot(order);
       const status = snapshot.status;
       const isCancelled = CANCELLED_STATUSES.has(status);
-      const isDelivered = DELIVERED_STATUSES.has(status);
+      const isDelivered = DELIVERED_STATUSES.has(status) || Boolean(order.delivered_at);
+      const financials = calculateOrderFinancials(order);
 
       if (!isCancelled) {
-        ventasBrutas += snapshot.totalClienta;
+        perdidoDano += financials.items.reduce((sum, item) => sum + item.damagedReturnedQty * item.unitCost, 0);
+      }
+
+      if (isDelivered) {
+        ventasBrutas += snapshot.grossSales;
+        devolucionesMonto += snapshot.returnsAmount;
+        descuentos += financials.remainingDiscount;
+        unidadesBrutas += financials.recognizedUnits;
+        unidadesDevueltas += financials.returnedUnits;
       }
 
       if (isDelivered) {
         ingresosCobrados += snapshot.paid > 0 ? snapshot.paid : snapshot.balance <= 0 ? snapshot.totalClienta : 0;
         utilidadBruta += snapshot.grossProfit;
-        baseVentasDevolucion += snapshot.totalClienta;
+        baseVentasDevolucion += snapshot.grossSales;
         costOfDelivered += snapshot.cost;
         if (this.isDateWithinWindow(order.updated_at, input.averageWindowDays)) {
           recentSales += snapshot.totalClienta;
@@ -1337,9 +1358,6 @@ export default class AdministracionPage {
       for (const item of order.items || []) {
         const rowValue = this.resolveItemSaleValue(item);
         if (rowValue <= 0) continue;
-        if (item.state === "devuelto") {
-          devolucionesMonto += rowValue;
-        }
         const stockLoss = item.confirmation_state === "out_of_stock" || item.late_addition_status === "missing";
         const damageLoss = item.late_addition_status === "damaged";
         if (damageLoss) perdidoDano += rowValue;
@@ -1432,6 +1450,8 @@ export default class AdministracionPage {
       (promedioVentaDiaria - promedioEgresoDiario) * Math.max(1, input.projectionDays);
 
     const devolucionRate = baseVentasDevolucion > 0 ? devolucionesMonto / baseVentasDevolucion : 0;
+    const devolucionUnidadesRate = unidadesBrutas > 0 ? unidadesDevueltas / unidadesBrutas : 0;
+    const ventasNetas = ventasBrutas - descuentos - devolucionesMonto;
     const devolucionImpacto = devolucionesMonto + perdidasRegistradas;
     const dsoDias = recentSales > 0 ? (porCobrar / recentSales) * averageWindowDays : 0;
     const inventoryTurnover = inventarioCosto > 0 ? costOfDelivered / inventarioCosto : 0;
@@ -1439,6 +1459,8 @@ export default class AdministracionPage {
 
     return {
       ventasBrutas,
+      descuentos,
+      ventasNetas,
       ingresosCobrados,
       egresos,
       utilidadBruta,
@@ -1463,6 +1485,7 @@ export default class AdministracionPage {
       perdidoDano,
       devolucionesMonto,
       devolucionRate,
+      devolucionUnidadesRate,
       devolucionImpacto,
       pedidosPendientes,
       pedidosBorrador,
@@ -1656,9 +1679,10 @@ export default class AdministracionPage {
   }
 
   private toOrderSnapshot(order: Order): OrderFinancialSnapshot {
-    const totalClienta = this.resolveOrderTotal(order);
-    const cost = this.resolveOrderCost(order);
-    const grossProfit = Math.max(0, totalClienta - cost);
+    const financials = calculateOrderFinancials(order);
+    const totalClienta = financials.netAmount;
+    const cost = financials.netCost;
+    const grossProfit = financials.grossProfit;
 
     const paidRaw = Math.max(0, this.toSafeNumber(order.totals?.paid_amount));
     const paid = Math.min(totalClienta, paidRaw);
@@ -1677,6 +1701,8 @@ export default class AdministracionPage {
       totalClienta,
       cost,
       grossProfit,
+      grossSales: financials.grossClient,
+      returnsAmount: financials.returnsAmount,
       paid,
       balance,
       remaining: balance,
@@ -1722,9 +1748,7 @@ export default class AdministracionPage {
   }
 
   private resolveOrderTotal(order: Order): number {
-    const totals = this.toSafeNumber(order.totals?.total_amount);
-    if (totals > 0) return totals;
-    return this.estimateOrderValue(order);
+    return calculateOrderFinancials(order).netAmount;
   }
 
   private estimateOrderValue(order: Order): number {
@@ -1732,12 +1756,11 @@ export default class AdministracionPage {
   }
 
   private resolveOrderCost(order: Order): number {
-    return (order.items || []).reduce((sum, item) => sum + this.resolveItemCostValue(item), 0);
+    return calculateOrderFinancials(order).netCost;
   }
 
   private resolveItemQty(item: OrderItem): number {
-    const candidate = item.confirmed_qty ?? item.quantity;
-    return Math.max(1, Math.trunc(this.toSafeNumber(candidate)));
+    return calculateItemFinancials(item).netQty;
   }
 
   private resolveItemSaleUnit(item: OrderItem): number {

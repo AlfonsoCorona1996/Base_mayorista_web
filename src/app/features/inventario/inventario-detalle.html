@@ -1,0 +1,68 @@
+<section class="inventory-detail-page">
+  <a routerLink="/main/inventario" class="back-link">← Volver a inventario</a>
+  @if (loading()) {
+    <p class="state">Cargando inventario…</p>
+  } @else if (item(); as row) {
+    <header class="detail-head">
+      <div>
+        <p class="eyebrow">{{ row.sku }}</p>
+        <h1>{{ row.title }}</h1>
+        <p>{{ row.variant_name || 'Sin variante' }} · {{ row.color_name || 'Sin color' }}</p>
+      </div>
+      <strong>{{ row.unit_price | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong>
+    </header>
+
+    <div class="qty-grid">
+      <article><span>Existencia física</span><strong>{{ qty(row.on_hand_qty) }}</strong></article>
+      <article><span>Disponible</span><strong>{{ qty(row.available_qty) }}</strong></article>
+      <article><span>Reservado</span><strong>{{ qty(row.reserved_qty) }}</strong></article>
+      <article><span>En revisión</span><strong>{{ qty(row.in_review_qty) }}</strong></article>
+      <article><span>Dañado</span><strong>{{ qty(row.damaged_qty) }}</strong></article>
+    </div>
+    @if (qty(row.damaged_qty) > 0) {
+      <button type="button" class="back-link" [disabled]="scrapping()" (click)="discardDamaged()">{{ scrapping() ? 'Procesando…' : 'Dar de baja mercancía dañada' }}</button>
+    }
+
+    <section class="movement-panel item-profile">
+      <h2>Ficha del artículo</h2>
+      @if (row.image_urls[0]) { <img class="item-photo" [src]="row.image_urls[0]" [alt]="row.title" /> }
+      <div class="qty-grid">
+        <article><span>Producto / variante</span><strong>{{ row.product_id || 'Sin enlazar' }}</strong><small>{{ row.variant_id || 'Sin variante estable' }}</small></article>
+        <article><span>Reposición</span><strong>{{ qty(row.min_stock) }} mín. · {{ qty(row.max_stock) }} máx.</strong><small>{{ qty(row.supplier_lead_days) }} días de entrega</small></article>
+        <article><span>Origen</span><strong>{{ row.source_reason }}</strong><small>Alta {{ row.created_at | date:'mediumDate' }}</small></article>
+      </div>
+      @if (reservations().length > 0) {
+        <h3>Reservas activas</h3>
+        @for (reservation of reservations(); track reservation.key) {
+          <a [routerLink]="['/main/pedidos', reservation.orderId]">{{ reservation.order_number || reservation.orderId }} · {{ reservation.qty }} pza(s)</a>
+        }
+      }
+    </section>
+
+    <section class="movement-panel">
+      <h2>Movimientos</h2>
+      @for (movement of movements(); track movement.movement_id) {
+        <article class="movement-row">
+          <div>
+            <strong>{{ movementLabel(movement.type) }}</strong>
+            <span>{{ movement.reason || movement.order_id || 'Movimiento de inventario' }}</span>
+          </div>
+          <div class="movement-values">
+            @if (movement.delta_on_hand) { <span>Físico {{ movement.delta_on_hand > 0 ? '+' : '' }}{{ movement.delta_on_hand }}</span> }
+            @if (movement.delta_available) { <span>Disponible {{ movement.delta_available > 0 ? '+' : '' }}{{ movement.delta_available }}</span> }
+            @if (movement.delta_reserved) { <span>Reservado {{ movement.delta_reserved > 0 ? '+' : '' }}{{ movement.delta_reserved }}</span> }
+            @if (movement.delta_in_review) { <span>Revisión {{ movement.delta_in_review > 0 ? '+' : '' }}{{ movement.delta_in_review }}</span> }
+            @if (movement.delta_damaged) { <span>Dañado {{ movement.delta_damaged > 0 ? '+' : '' }}{{ movement.delta_damaged }}</span> }
+            @if (movement.order_id) { <a [routerLink]="['/main/pedidos', movement.order_id]">Pedido {{ movement.order_id }}</a> }
+            @if (movement.actor) { <small>Actor: {{ movement.actor }}</small> }
+            <small>{{ movement.created_at | date:'short' }}</small>
+          </div>
+        </article>
+      } @empty {
+        <p class="state">Aún no hay movimientos registrados para este artículo.</p>
+      }
+    </section>
+  } @else {
+    <p class="state">Artículo no encontrado.</p>
+  }
+</section>

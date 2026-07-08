@@ -23,6 +23,8 @@ import { SupplierOperationsService } from "./supplier-operations.service";
 import { ulid } from "ulid";
 import { BusinessScopeService } from "./business-scope.service";
 import { BusinessId, normalizeBusinessId } from "./rbac.constants";
+import { calculateOrderFinancials, toPersistedOrderTotals } from "./order-financials";
+import { InventoryService } from "./inventory.service";
 
 export type OrderStatus =
   | "borrador"
@@ -60,6 +62,8 @@ export interface OrderItem {
   color?: string | null;
   quantity: number;
   returned_qty?: number | null;
+  returned_restockable_qty?: number | null;
+  returned_damaged_qty?: number | null;
   confirmed_qty?: number | null;
   source: "catalogo" | "inventario" | "manual";
   product_ref_type?: "normalized_listing" | "catalog_product" | "inventory_item" | "manual" | null;
@@ -67,6 +71,7 @@ export interface OrderItem {
   confirmation_state?: "confirmed" | "out_of_stock" | "substitute" | "pending";
   supplier_id?: string | null;
   product_id?: string | null;
+  variant_id?: string | null;
   sku?: string | null;
   price_clienta?: number | null;
   price_public?: number | null;
@@ -130,6 +135,12 @@ export interface OrderTotals {
   paid_amount: number;
   balance_due: number;
   discount_amount?: number;
+  gross_amount?: number;
+  returns_amount?: number;
+  net_amount?: number;
+  cost_amount?: number;
+  gross_profit?: number;
+  overpayment_amount?: number;
 }
 
 export interface Order {
@@ -152,6 +163,11 @@ export interface Order {
   packing: OrderPackingInfo;
   dispatch_request: OrderDispatchRequest;
   route_run_id?: string | null;
+  route_stop_id?: string | null;
+  has_returns?: boolean;
+  delivered_at?: string | null;
+  paid_at?: string | null;
+  closed_at?: string | null;
   totals: OrderTotals;
 }
 
@@ -256,6 +272,7 @@ export class OrdersService {
   private colRef = collection(FIRESTORE, "orders");
   private rows = signal<Order[]>([]);
   private supplierOperations = inject(SupplierOperationsService);
+  private inventory = inject(InventoryService);
   private businessScope = inject(BusinessScopeService);
   loading = signal(false);
   private unsubscribeOrders?: Unsubscribe;
@@ -552,6 +569,7 @@ export class OrdersService {
 
   async updateStatus(orderId: string, status: OrderStatus, note?: string) {
     const now = new Date().toISOString();
+    const marksDelivered = status === "entregado" || status === "delivered" || status === "closed";
     this.rows.update((current) =>
       current.map((order) => {
         if (order.order_id !== orderId) return order;
@@ -559,6 +577,7 @@ export class OrdersService {
           ...order,
           status,
           updated_at: now,
+          delivered_at: marksDelivered ? (order.delivered_at || now) : order.delivered_at,
           timeline: [
             ...order.timeline,
             {
@@ -577,9 +596,13 @@ export class OrdersService {
       updated_at: serverTimestamp(),
       timeline: this.getById(orderId)?.timeline || [],
       notes: note ?? this.getById(orderId)?.notes ?? "",
+      ...(marksDelivered ? { delivered_at: serverTimestamp() } : {}),
     });
-    if (status === "entregado") {
+    if (marksDelivered) {
+      await this.consumeInventoryForDelivery(orderId);
       await this.supplierOperations.removeByOrder(orderId).catch(() => null);
+    } else if (status === "cancelado") {
+      await this.releaseInventoryForOrder(orderId);
     }
   }
 
@@ -657,10 +680,26 @@ export class OrdersService {
 
   /** Cierra el pedido registrando el pago total o parcial. */
   async closeWithPayment(orderId: string, paidAmount: number, totalAmount: number, discountAmount = 0): Promise<void> {
-    const safePaid = Math.max(0, Number.isFinite(paidAmount) ? paidAmount : 0);
-    const safeTotal = Math.max(0, Number.isFinite(totalAmount) ? totalAmount : 0);
+    const currentOrder = this.getById(orderId);
+    const previousPaid = Math.max(0, Number(currentOrder?.totals?.paid_amount || 0));
+    const paymentReceived = Math.max(0, Number.isFinite(paidAmount) ? paidAmount : 0);
+    const safePaid = Number((previousPaid + paymentReceived).toFixed(2));
     const safeDiscount = Math.max(0, Number.isFinite(discountAmount) ? discountAmount : 0);
-    const balanceDue = Math.max(0, safeTotal - safePaid);
+    const calculated = currentOrder
+      ? calculateOrderFinancials({ ...currentOrder, totals: { ...currentOrder.totals, discount_amount: safeDiscount, paid_amount: safePaid } })
+      : null;
+    const safeTotal = calculated?.netAmount ?? Math.max(0, Number.isFinite(totalAmount) ? totalAmount : 0);
+    const balanceDue = calculated?.balanceDue ?? Math.max(0, safeTotal - safePaid);
+    const persistedTotals = currentOrder
+      ? toPersistedOrderTotals({ ...currentOrder, totals: { ...currentOrder.totals, discount_amount: safeDiscount, paid_amount: safePaid } })
+      : {
+          total_amount: safeTotal,
+          net_amount: safeTotal,
+          paid_amount: safePaid,
+          balance_due: balanceDue,
+          discount_amount: safeDiscount,
+          overpayment_amount: Math.max(0, safePaid - safeTotal),
+        };
 
     let nextStatus: OrderStatus;
     if (safePaid <= 0) {
@@ -679,15 +718,13 @@ export class OrdersService {
           ...order,
           status: nextStatus,
           updated_at: now,
-          totals: {
-            total_amount: safeTotal,
-            paid_amount: safePaid,
-            balance_due: balanceDue,
-            discount_amount: safeDiscount,
-          },
+          paid_at: nextStatus === "pagado" ? now : order.paid_at || null,
+          closed_at: now,
+          delivered_at: order.delivered_at || now,
+          totals: persistedTotals as unknown as OrderTotals,
           timeline: [
             ...order.timeline,
-            { id: `t-${Date.now()}`, label: `Pago registrado: $${safePaid}`, created_at: now },
+            { id: `t-${Date.now()}`, label: `Pago registrado: $${paymentReceived}`, created_at: now },
           ],
         };
       }),
@@ -696,32 +733,79 @@ export class OrdersService {
     await updateDoc(doc(this.colRef, orderId), {
       status: nextStatus,
       updated_at: serverTimestamp(),
-      "totals.total_amount": safeTotal,
-      "totals.paid_amount": safePaid,
-      "totals.balance_due": balanceDue,
-      "totals.discount_amount": safeDiscount,
+      totals: persistedTotals,
+      paid_at: nextStatus === "pagado" ? serverTimestamp() : currentOrder?.paid_at || null,
+      closed_at: serverTimestamp(),
+      delivered_at: currentOrder?.delivered_at || serverTimestamp(),
     });
+    await this.consumeInventoryForDelivery(orderId).catch((error) => {
+      console.error("[OrdersService] No se pudo consumir inventario al cerrar", error);
+    });
+  }
+
+  async consumeInventoryForDelivery(orderId: string, packageId?: string | null): Promise<void> {
+    const order = this.getById(orderId);
+    if (!order) return;
+    const packageRow = packageId ? (order.packages || []).find((pkg) => pkg.package_id === packageId) : null;
+    const qtyByItem = new Map<string, number>();
+    for (const entry of packageRow?.items || []) {
+      qtyByItem.set(entry.orderItemId, Math.max(0, Math.trunc(Number(entry.qty || 0))));
+    }
+    for (const item of order.items || []) {
+      const inventoryId = String(item.inventory_id || "").trim();
+      if (!inventoryId) continue;
+      const qty = packageRow
+        ? Math.max(0, qtyByItem.get(item.item_id) ?? ((packageRow.item_ids || []).includes(item.item_id) ? Number(item.confirmed_qty ?? item.quantity ?? 0) : 0))
+        : Math.max(0, Number(item.confirmed_qty ?? item.quantity ?? 0) - Number(item.returned_qty || 0));
+      if (qty <= 0) continue;
+      await this.inventory.consumeOnDelivery({
+        sku: inventoryId,
+        qty,
+        orderId: order.order_id,
+        orderItemId: item.item_id,
+        idempotencyKey: `delivery_${order.order_id}_${packageId || "close"}_${item.item_id}`,
+      });
+    }
+  }
+
+  async releaseInventoryForOrder(orderId: string): Promise<void> {
+    const order = this.getById(orderId);
+    if (!order) return;
+    for (const item of order.items || []) {
+      const inventoryId = String(item.inventory_id || "").trim();
+      const qty = Math.max(0, Number(item.confirmed_qty ?? item.quantity ?? 0) - Number(item.returned_qty || 0));
+      if (!inventoryId || qty <= 0) continue;
+      await this.inventory.releaseReservation({
+        sku: inventoryId,
+        qty,
+        orderId,
+        orderItemId: item.item_id,
+        idempotencyKey: `cancel_${orderId}_${item.item_id}`,
+      });
+    }
   }
 
   async setDiscountAmount(orderId: string, discountAmount: number): Promise<void> {
     const safeDiscount = Math.max(0, Number.isFinite(discountAmount) ? discountAmount : 0);
     const now = new Date().toISOString();
+    let persistedTotals: Record<string, number> | null = null;
     this.rows.update((current) =>
       current.map((order) => {
         if (order.order_id !== orderId) return order;
+        persistedTotals = toPersistedOrderTotals({
+          ...order,
+          totals: { ...order.totals, discount_amount: safeDiscount },
+        });
         return {
           ...order,
           updated_at: now,
-          totals: {
-            ...order.totals,
-            discount_amount: safeDiscount,
-          },
+          totals: persistedTotals as unknown as OrderTotals,
         };
       }),
     );
 
     await updateDoc(doc(this.colRef, orderId), {
-      "totals.discount_amount": safeDiscount,
+      ...(persistedTotals ? { totals: persistedTotals } : { "totals.discount_amount": safeDiscount }),
       updated_at: serverTimestamp(),
     });
   }
@@ -1058,13 +1142,17 @@ export class OrdersService {
 
   async updateItems(orderId: string, items: OrderItem[]) {
     const now = new Date().toISOString();
+    let persistedTotals: Record<string, number> | null = null;
     this.rows.update((current) =>
-      current.map((order) =>
-        order.order_id === orderId ? { ...order, items, updated_at: now } : order
-      ),
+      current.map((order) => {
+        if (order.order_id !== orderId) return order;
+        persistedTotals = toPersistedOrderTotals({ ...order, items });
+        return { ...order, items, totals: persistedTotals as unknown as OrderTotals, updated_at: now };
+      }),
     );
     await updateDoc(doc(this.colRef, orderId), {
       items,
+      ...(persistedTotals ? { totals: persistedTotals } : {}),
       updated_at: serverTimestamp(),
     });
   }
@@ -1293,11 +1381,22 @@ export class OrdersService {
         note: data.dispatch_request?.note || null,
       },
       route_run_id: data.route_run_id ?? null,
+      route_stop_id: data.route_stop_id ?? null,
+      has_returns: Boolean(data.has_returns || (Array.isArray(data.items) && data.items.some((item: any) => Number(item?.returned_qty || 0) > 0))),
+      delivered_at: data.delivered_at ? toIso(data.delivered_at) : null,
+      paid_at: data.paid_at ? toIso(data.paid_at) : null,
+      closed_at: data.closed_at ? toIso(data.closed_at) : null,
       totals: {
         total_amount: Number(data.totals?.total_amount ?? 0),
         paid_amount: Number(data.totals?.paid_amount ?? 0),
         balance_due: Number(data.totals?.balance_due ?? 0),
         discount_amount: Number(data.totals?.discount_amount ?? 0),
+        gross_amount: Number(data.totals?.gross_amount ?? data.totals?.total_amount ?? 0),
+        returns_amount: Number(data.totals?.returns_amount ?? 0),
+        net_amount: Number(data.totals?.net_amount ?? data.totals?.total_amount ?? 0),
+        cost_amount: Number(data.totals?.cost_amount ?? 0),
+        gross_profit: Number(data.totals?.gross_profit ?? 0),
+        overpayment_amount: Number(data.totals?.overpayment_amount ?? 0),
       },
     };
   }

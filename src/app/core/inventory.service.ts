@@ -14,6 +14,7 @@ import {
   serverTimestamp,
   setDoc,
   Timestamp,
+  Transaction,
   where,
 } from "firebase/firestore";
 
@@ -22,6 +23,8 @@ export interface InventoryItem {
   business_id: BusinessId;
   title: string;
   sku?: string;
+  product_id?: string | null;
+  variant_id?: string | null;
   category_hint: string | null;
   supplier_id: string | null;
   variant_name: string | null;
@@ -32,6 +35,11 @@ export interface InventoryItem {
   on_hand_qty?: number;
   reserved_qty?: number;
   available_qty?: number;
+  in_review_qty?: number;
+  damaged_qty?: number;
+  min_stock?: number;
+  max_stock?: number;
+  supplier_lead_days?: number;
   unit_price: number | null;
   notes: string | null;
   image_urls: string[];
@@ -75,6 +83,8 @@ export interface ConsumeOnDeliveryInput {
 
 export interface ReceiveInboundInput {
   sku: string;
+  product_id?: string | null;
+  variant_id?: string | null;
   business_id?: BusinessId;
   qty: number;
   supplierOperationId: string;
@@ -87,8 +97,40 @@ export interface ReceiveInboundInput {
   image_url?: string | null;
 }
 
+export type InventoryMovementType =
+  | "receipt"
+  | "reserve"
+  | "release"
+  | "sale"
+  | "return"
+  | "quality_approve"
+  | "damage"
+  | "scrap"
+  | "adjustment";
+
+export interface InventoryMovement {
+  movement_id: string;
+  business_id: BusinessId;
+  inventory_id: string;
+  type: InventoryMovementType;
+  delta_on_hand: number;
+  delta_available: number;
+  delta_reserved: number;
+  delta_in_review: number;
+  delta_damaged: number;
+  order_id: string | null;
+  order_item_id: string | null;
+  return_id: string | null;
+  reason: string | null;
+  actor: string | null;
+  idempotency_key: string;
+  created_at?: any;
+}
+
 export interface ReceiveReturnInput {
   inventoryId: string;
+  product_id?: string | null;
+  variant_id?: string | null;
   business_id?: BusinessId;
   qty: number;
   returnId: string;
@@ -110,17 +152,31 @@ export interface ReceiveReturnInput {
 @Injectable({ providedIn: "root" })
 export class InventoryService {
   private colRef = collection(FIRESTORE, "inventory_items");
+  private movementsColRef = collection(FIRESTORE, "inventory_movements");
   private businessScope = inject(BusinessScopeService);
   private rows = signal<InventoryItem[]>([]);
+  private movementRows = signal<InventoryMovement[]>([]);
 
   items = computed(() => {
     const active = this.businessScope.activeBusinessIds();
     return this.rows().filter((item) => active.includes(item.business_id || "bm"));
   });
 
+  movements = computed(() => {
+    const active = this.businessScope.activeBusinessIds();
+    return this.movementRows().filter((row) => active.includes(row.business_id || "bm"));
+  });
+
+  movementsFor(inventoryId: string): InventoryMovement[] {
+    return this.movements().filter((row) => row.inventory_id === inventoryId);
+  }
+
   async loadFromFirestore(): Promise<void> {
     const q = query(this.colRef, where("business_id", "in", this.businessScope.availableBusinessIds()));
-    const snapshot = await getDocs(q);
+    const [snapshot, movementSnapshot] = await Promise.all([
+      getDocs(q),
+      getDocs(query(this.movementsColRef, where("business_id", "in", this.businessScope.availableBusinessIds()))),
+    ]);
 
     const rows = snapshot.docs
       .map((entry) => {
@@ -130,6 +186,11 @@ export class InventoryService {
       .sort((a, b) => this.toMillis(b.updated_at) - this.toMillis(a.updated_at));
 
     this.rows.set(rows);
+    this.movementRows.set(
+      movementSnapshot.docs
+        .map((entry) => this.normalizeMovement(entry.id, entry.data() as Record<string, unknown>))
+        .sort((a, b) => this.toMillis(b.created_at) - this.toMillis(a.created_at)),
+    );
   }
 
   async getBySku(sku: string, businessId?: BusinessId): Promise<InventoryItem | null> {
@@ -167,7 +228,9 @@ export class InventoryService {
 
       const onHand = this.toSafeQty(item.on_hand_qty ?? item.available_qty ?? item.quantity_on_hand);
       const reserved = this.toSafeQty(item.reserved_qty ?? 0);
-      const available = this.toSafeQty(item.available_qty ?? onHand - reserved);
+      const inReview = this.toSafeQty(item.in_review_qty ?? current?.in_review_qty ?? 0);
+      const damaged = this.toSafeQty(item.damaged_qty ?? current?.damaged_qty ?? 0);
+      const available = this.toSafeQty(item.available_qty ?? onHand - reserved - inReview - damaged);
       const nowIso = new Date().toISOString();
       const payload: InventoryItem = {
         ...item,
@@ -175,6 +238,8 @@ export class InventoryService {
         business_id: normalizeBusinessId(item.business_id || this.businessScope.writeBusinessId()),
         title: (item.title || "").trim(),
         sku: (item.sku || this.generateSku(item.title)).trim(),
+        product_id: item.product_id || null,
+        variant_id: item.variant_id || null,
         category_hint: item.category_hint || null,
         supplier_id: item.supplier_id || null,
         variant_name: item.variant_name || null,
@@ -183,6 +248,11 @@ export class InventoryService {
         on_hand_qty: onHand,
         reserved_qty: reserved,
         available_qty: available,
+        in_review_qty: inReview,
+        damaged_qty: damaged,
+        min_stock: this.toSafeQty(item.min_stock ?? current?.min_stock ?? 0),
+        max_stock: this.toSafeQty(item.max_stock ?? current?.max_stock ?? 0),
+        supplier_lead_days: this.toSafeQty(item.supplier_lead_days ?? current?.supplier_lead_days ?? 0),
         quantity_on_hand: available,
         unit_price: this.toSafePrice(item.unit_price),
         notes: item.notes || null,
@@ -227,6 +297,7 @@ export class InventoryService {
   async adjustQuantity(itemId: string, delta: number, idempotencyKey?: string): Promise<void> {
     const ref = doc(this.colRef, itemId);
     const idKey = idempotencyKey ? this.safeIdempotencyKey(idempotencyKey) : null;
+    const movementId = idKey || `adjust_${itemId}_${Date.now()}`;
     await runTransaction(FIRESTORE, async (tx) => {
       const snap = await tx.get(ref);
       if (!snap.exists()) return;
@@ -246,6 +317,10 @@ export class InventoryService {
         updated_at: serverTimestamp(),
         idempotency_keys: this.withIdempotency(row.idempotency_keys || {}, idKey, nowIso),
       });
+      this.writeMovement(tx, movementId, row.business_id, itemId, "adjustment", {
+        onHand: nextOnHand - currentOnHand,
+        available: nextAvailable - this.toSafeQty(row.available_qty ?? currentOnHand - reserved),
+      }, { reason: "Ajuste manual" });
     });
     await this.loadFromFirestore();
   }
@@ -283,6 +358,10 @@ export class InventoryService {
         updated_at: serverTimestamp(),
         idempotency_keys: this.withIdempotency(row.idempotency_keys || {}, idKey, nowIso),
       });
+      this.writeMovement(tx, idKey, row.business_id, inventoryId, "reserve", {
+        available: -qty,
+        reserved: qty,
+      }, { orderId: input.orderId, orderItemId: input.orderItemId });
     });
 
     await this.loadFromFirestore();
@@ -316,6 +395,11 @@ export class InventoryService {
         updated_at: serverTimestamp(),
         idempotency_keys: this.withIdempotency(row.idempotency_keys || {}, idKey, nowIso),
       });
+      const releasedQty = reserved - nextReserved;
+      this.writeMovement(tx, idKey, row.business_id, inventoryId, "release", {
+        available: releasedQty,
+        reserved: -releasedQty,
+      }, { orderId: input.orderId, orderItemId: input.orderItemId });
     });
 
     await this.loadFromFirestore();
@@ -352,6 +436,10 @@ export class InventoryService {
         updated_at: serverTimestamp(),
         idempotency_keys: this.withIdempotency(row.idempotency_keys || {}, idKey, nowIso),
       });
+      this.writeMovement(tx, idKey, row.business_id, inventoryId, "sale", {
+        onHand: -consumedQty,
+        reserved: -consumedQty,
+      }, { orderId: input.orderId, orderItemId: input.orderItemId });
     });
 
     await this.loadFromFirestore();
@@ -377,6 +465,8 @@ export class InventoryService {
           business_id: normalizeBusinessId(input.business_id || this.businessScope.writeBusinessId()),
           title: (input.title || "Producto sin nombre").trim(),
           sku: inventoryId,
+          product_id: input.product_id || null,
+          variant_id: input.variant_id || null,
           category_hint: null,
           supplier_id: input.supplier_id ?? null,
           variant_name: input.variant_name ?? null,
@@ -396,6 +486,10 @@ export class InventoryService {
           idempotency_keys: this.withIdempotency({}, idKey, nowIso),
         };
         tx.set(ref, { ...created, created_at: serverTimestamp(), updated_at: serverTimestamp() }, { merge: true });
+        this.writeMovement(tx, idKey, created.business_id, inventoryId, "receipt", {
+          onHand: qty,
+          available: qty,
+        }, { reason: `Recepción proveedor ${input.supplierOperationId}` });
         return;
       }
 
@@ -407,6 +501,8 @@ export class InventoryService {
       const nextOnHand = onHand + qty;
       const nextAvailable = Math.max(0, nextOnHand - reserved);
       tx.update(ref, {
+        product_id: row.product_id || input.product_id || null,
+        variant_id: row.variant_id || input.variant_id || null,
         on_hand_qty: nextOnHand,
         reserved_qty: reserved,
         available_qty: nextAvailable,
@@ -414,6 +510,10 @@ export class InventoryService {
         updated_at: serverTimestamp(),
         idempotency_keys: this.withIdempotency(row.idempotency_keys || {}, idKey, nowIso),
       });
+      this.writeMovement(tx, idKey, row.business_id, inventoryId, "receipt", {
+        onHand: qty,
+        available: qty,
+      }, { reason: `Recepción proveedor ${input.supplierOperationId}` });
     });
 
     await this.loadFromFirestore();
@@ -437,6 +537,8 @@ export class InventoryService {
           business_id: normalizeBusinessId(input.business_id || this.businessScope.writeBusinessId()),
           title: (input.title || "Producto devuelto").trim(),
           sku: (input.sku || inventoryId).trim(),
+          product_id: input.product_id || null,
+          variant_id: input.variant_id || null,
           category_hint: input.category_hint || null,
           supplier_id: input.supplier_id ?? null,
           variant_name: input.variant_name ?? null,
@@ -456,6 +558,10 @@ export class InventoryService {
           idempotency_keys: this.withIdempotency({}, idKey, nowIso),
         };
         tx.set(ref, { ...created, created_at: serverTimestamp(), updated_at: serverTimestamp() }, { merge: true });
+        this.writeMovement(tx, idKey, created.business_id, inventoryId, "return", {
+          onHand: qty,
+          available: qty,
+        }, { orderId: input.orderId, orderItemId: input.orderItemId, returnId: input.returnId, reason: input.notes || null });
         return;
       }
 
@@ -466,6 +572,8 @@ export class InventoryService {
       const nextOnHand = onHand + qty;
       const nextAvailable = Math.max(0, nextOnHand - reserved);
       tx.update(ref, {
+        product_id: row.product_id || input.product_id || null,
+        variant_id: row.variant_id || input.variant_id || null,
         on_hand_qty: nextOnHand,
         reserved_qty: reserved,
         available_qty: nextAvailable,
@@ -474,8 +582,37 @@ export class InventoryService {
         updated_at: serverTimestamp(),
         idempotency_keys: this.withIdempotency(row.idempotency_keys || {}, idKey, nowIso),
       });
+      this.writeMovement(tx, idKey, row.business_id, inventoryId, "return", {
+        onHand: qty,
+        available: qty,
+      }, { orderId: input.orderId, orderItemId: input.orderItemId, returnId: input.returnId, reason: input.notes || null });
     });
 
+    await this.loadFromFirestore();
+  }
+
+  async scrapDamaged(itemId: string, qty: number, reason: string): Promise<void> {
+    const safeQty = this.toSafeQty(qty);
+    if (safeQty <= 0) throw new Error("Cantidad de baja inválida.");
+    const ref = doc(this.colRef, itemId);
+    const movementId = `scrap_${itemId}_${Date.now()}`;
+    await runTransaction(FIRESTORE, async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists()) throw new Error("Artículo no encontrado.");
+      const row = this.normalizeItem(snap.data() as Partial<InventoryItem>, snap.id);
+      const damaged = this.toSafeQty(row.damaged_qty || 0);
+      if (safeQty > damaged) throw new Error(`Sólo hay ${damaged} pieza(s) dañadas.`);
+      const onHand = this.toSafeQty(row.on_hand_qty ?? 0);
+      tx.update(ref, {
+        on_hand_qty: Math.max(0, onHand - safeQty),
+        damaged_qty: damaged - safeQty,
+        updated_at: serverTimestamp(),
+      });
+      this.writeMovement(tx, movementId, row.business_id, itemId, "scrap", {
+        onHand: -safeQty,
+        damaged: -safeQty,
+      }, { reason: (reason || "Baja de mercancía dañada").trim() });
+    });
     await this.loadFromFirestore();
   }
 
@@ -489,13 +626,17 @@ export class InventoryService {
     const title = (data.title || "Producto sin nombre").trim();
     const onHand = this.toSafeQty(data.on_hand_qty ?? data.available_qty ?? data.quantity_on_hand);
     const reserved = this.toSafeQty(data.reserved_qty ?? 0);
-    const available = this.toSafeQty(data.available_qty ?? onHand - reserved);
+    const inReview = this.toSafeQty(data.in_review_qty ?? 0);
+    const damaged = this.toSafeQty(data.damaged_qty ?? 0);
+    const available = this.toSafeQty(data.available_qty ?? onHand - reserved - inReview - damaged);
 
     return {
       inventory_id: data.inventory_id || fallbackId,
       business_id: normalizeBusinessId(data.business_id),
       title,
       sku: (data.sku || this.generateSku(title)).trim(),
+      product_id: data.product_id || null,
+      variant_id: data.variant_id || null,
       category_hint: data.category_hint || null,
       supplier_id: data.supplier_id || null,
       variant_name: data.variant_name || null,
@@ -504,6 +645,11 @@ export class InventoryService {
       on_hand_qty: onHand,
       reserved_qty: reserved,
       available_qty: available,
+      in_review_qty: inReview,
+      damaged_qty: damaged,
+      min_stock: this.toSafeQty(data.min_stock ?? 0),
+      max_stock: this.toSafeQty(data.max_stock ?? 0),
+      supplier_lead_days: this.toSafeQty(data.supplier_lead_days ?? 0),
       quantity_on_hand: available,
       unit_price: this.toSafePrice(data.unit_price),
       notes: data.notes || null,
@@ -524,6 +670,68 @@ export class InventoryService {
     }
     const parsed = new Date(String(value));
     return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime();
+  }
+
+  private normalizeMovement(id: string, data: Record<string, unknown>): InventoryMovement {
+    return {
+      movement_id: String(data["movement_id"] || id),
+      business_id: normalizeBusinessId(data["business_id"]),
+      inventory_id: String(data["inventory_id"] || ""),
+      type: this.normalizeMovementType(data["type"]),
+      delta_on_hand: Number(data["delta_on_hand"] || 0),
+      delta_available: Number(data["delta_available"] || 0),
+      delta_reserved: Number(data["delta_reserved"] || 0),
+      delta_in_review: Number(data["delta_in_review"] || 0),
+      delta_damaged: Number(data["delta_damaged"] || 0),
+      order_id: this.optionalText(data["order_id"]),
+      order_item_id: this.optionalText(data["order_item_id"]),
+      return_id: this.optionalText(data["return_id"]),
+      reason: this.optionalText(data["reason"]),
+      actor: this.optionalText(data["actor"]),
+      idempotency_key: String(data["idempotency_key"] || id),
+      created_at: data["created_at"] ?? null,
+    };
+  }
+
+  private writeMovement(
+    tx: Transaction,
+    movementId: string,
+    businessId: BusinessId,
+    inventoryId: string,
+    type: InventoryMovementType,
+    delta: { onHand?: number; available?: number; reserved?: number; inReview?: number; damaged?: number },
+    refs: { orderId?: string | null; orderItemId?: string | null; returnId?: string | null; reason?: string | null; actor?: string | null } = {},
+  ): void {
+    const safeMovementId = this.safeIdempotencyKey(movementId);
+    tx.set(doc(this.movementsColRef, safeMovementId), {
+      movement_id: safeMovementId,
+      business_id: businessId,
+      inventory_id: inventoryId,
+      type,
+      delta_on_hand: Number(delta.onHand || 0),
+      delta_available: Number(delta.available || 0),
+      delta_reserved: Number(delta.reserved || 0),
+      delta_in_review: Number(delta.inReview || 0),
+      delta_damaged: Number(delta.damaged || 0),
+      order_id: refs.orderId || null,
+      order_item_id: refs.orderItemId || null,
+      return_id: refs.returnId || null,
+      reason: refs.reason || null,
+      actor: refs.actor || null,
+      idempotency_key: safeMovementId,
+      created_at: serverTimestamp(),
+    });
+  }
+
+  private normalizeMovementType(value: unknown): InventoryMovementType {
+    const normalized = String(value || "adjustment") as InventoryMovementType;
+    const valid: InventoryMovementType[] = ["receipt", "reserve", "release", "sale", "return", "quality_approve", "damage", "scrap", "adjustment"];
+    return valid.includes(normalized) ? normalized : "adjustment";
+  }
+
+  private optionalText(value: unknown): string | null {
+    const text = String(value ?? "").trim();
+    return text || null;
   }
 
   private buildInventoryId(title: string): string {

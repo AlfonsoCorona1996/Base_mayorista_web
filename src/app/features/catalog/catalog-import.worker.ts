@@ -40,6 +40,14 @@ interface PreviewRow {
   color: string | null;
   size: string | null;
   impuls_product_id: string | null;
+  cklass_model: string | null;
+  cklass_color: string | null;
+  cklass_size: string | null;
+  cklass_barcode: string | null;
+  cklass_catalog: string | null;
+  cklass_model_display: string | null;
+  cklass_product_code: string | null;
+  image_key: string | null;
   price_cost_excel: number | null;
   price_cost_discount_pct: number | null;
   price_cost: number | null;
@@ -79,6 +87,47 @@ function nonEmptyRecordCount(row: Record<string, unknown>): number {
 function textFromColumn(row: Record<string, unknown>, column: string): string {
   if (!column) return "";
   return String(row[column] ?? "").trim();
+}
+
+function normalizeText(value: unknown): string {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+
+function normalizeHeaderKey(value: unknown): string {
+  return normalizeText(value).replace(/[^a-z0-9]+/g, "");
+}
+
+function textFromKnownColumn(row: Record<string, unknown>, aliases: string[]): string {
+  const aliasSet = new Set(aliases.map((alias) => normalizeHeaderKey(alias)));
+  const key = Object.keys(row).find((header) => aliasSet.has(normalizeHeaderKey(header)));
+  return key ? String(row[key] ?? "").trim() : "";
+}
+
+function extractCklassFields(row: Record<string, unknown>) {
+  const model = textFromKnownColumn(row, ["MODELO", "modelo"]) || null;
+  const color = textFromKnownColumn(row, ["COLOR", "color"]) || null;
+  const size = textFromKnownColumn(row, ["TALLA", "talla"]) || null;
+  const barcode = textFromKnownColumn(row, ["Codigo_Barra", "codigo_barra", "codigo barra", "codigo de barra"]) || null;
+  const catalog = textFromKnownColumn(row, ["CATALOGO", "catalogo", "catálogo"]) || null;
+  const modelDisplay = model ? model.replace(/-/g, "") : null;
+  const cleanBarcode = barcode ? barcode.replace(/\s+/g, "") : "";
+  const productCode = cleanBarcode.length > 7 ? cleanBarcode.slice(0, -7) : null;
+  const imageKey = model && color && catalog ? `CKLASS|${model}|${color}|${catalog}` : null;
+
+  return {
+    cklass_model: model,
+    cklass_color: color,
+    cklass_size: size,
+    cklass_barcode: barcode,
+    cklass_catalog: catalog,
+    cklass_model_display: modelDisplay,
+    cklass_product_code: productCode,
+    image_key: imageKey,
+  };
 }
 
 function numberFromColumn(row: Record<string, unknown>, column: string): { value: number | null; invalid: boolean } {
@@ -123,6 +172,7 @@ function buildPreview(rows: Record<string, unknown>[], mapping: ImportMapping) {
     const rowNumber = Number(raw["__row_number"] || index + 2);
     const rowEmpty = raw["__row_empty"] === true || nonEmptyRecordCount(raw) === 0;
     const sku = textFromColumn(raw, mapping.skuColumn);
+    const cklassFields = extractCklassFields(raw);
     const duplicate = sku ? (skuCounts.get(sku.toLowerCase()) || 0) > 1 : false;
     const priceCostExcel = numberFromColumn(raw, mapping.priceCostColumn);
     const priceCostDiscountPct = clampPercent(mapping.priceCostDiscountPct);
@@ -150,6 +200,7 @@ function buildPreview(rows: Record<string, unknown>[], mapping: ImportMapping) {
       color: textFromColumn(raw, mapping.colorColumn) || null,
       size: textFromColumn(raw, mapping.sizeColumn) || null,
       impuls_product_id: textFromColumn(raw, mapping.impulsProductIdColumn) || null,
+      ...cklassFields,
       price_cost_excel: priceCostExcel.value,
       price_cost_discount_pct: priceCostDiscountPct,
       price_cost: priceCost,

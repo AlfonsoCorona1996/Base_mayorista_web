@@ -14,6 +14,8 @@ interface TrackItem {
   variant: string | null;
   color: string | null;
   quantity: number;
+  returned_qty?: number;
+  net_qty?: number;
 }
 
 interface TrackCancelledItem {
@@ -29,7 +31,7 @@ interface TrackOrder {
   updated_at: string;
   items: TrackItem[];
   cancelled_items: TrackCancelledItem[];
-  totals: { total_amount: number; paid_amount: number; balance_due: number };
+  totals: { total_amount: number; paid_amount: number; balance_due: number; gross_amount?: number; returns_amount?: number; net_amount?: number; overpayment_amount?: number };
 }
 
 interface TrackData {
@@ -109,5 +111,13 @@ export default class OrderTrackerPage implements OnInit {
 
   isTerminal(status: string): boolean {
     return ["pagado", "cancelado", "devuelto", "closed", "entregado"].includes(status);
+  }
+
+  netTotal(order: TrackOrder): number {
+    return Number(order.totals.net_amount ?? order.totals.total_amount ?? 0);
+  }
+
+  netQty(item: TrackItem): number {
+    return Math.max(0, Number(item.net_qty ?? item.quantity - Number(item.returned_qty || 0)));
   }
 }

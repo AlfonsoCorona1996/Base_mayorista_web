@@ -59,7 +59,10 @@
                   {{ item.variant }}{{ item.variant && item.color ? ' · ' : '' }}{{ item.color }}
                 </span>
               }
-              <span class="ao-item-qty">×{{ item.quantity }}</span>
+              <span class="ao-item-qty">
+                ×{{ netQty(item) }}
+                @if ((item.returned_qty || 0) > 0) { <small>· {{ item.returned_qty }} devuelta(s)</small> }
+              </span>
             </div>
           }
         </div>
@@ -79,9 +82,15 @@
 
         <!-- Totales -->
         <div class="ao-totals">
+          @if ((order.totals.returns_amount || 0) > 0) {
+            <div class="ao-total-row">
+              <span>Devoluciones</span>
+              <strong>-{{ order.totals.returns_amount | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong>
+            </div>
+          }
           <div class="ao-total-row">
             <span>Total</span>
-            <strong>{{ order.totals.total_amount | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong>
+            <strong>{{ netTotal(order) | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong>
           </div>
           @if (order.totals.paid_amount > 0) {
             <div class="ao-total-row paid">
@@ -131,7 +140,7 @@
               </div>
             </div>
             <span class="hist-total">
-              {{ order.totals.total_amount | currency:'MXN':'symbol-narrow':'1.0-0' }}
+              {{ netTotal(order) | currency:'MXN':'symbol-narrow':'1.0-0' }}
             </span>
           </div>
         }

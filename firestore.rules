@@ -123,9 +123,10 @@ service cloud.firestore {
     }
 
     match /customers/{customerId} {
-      allow read: if isActiveUser();
-      allow create, update: if isAdmin() || isOperativo();
-      allow delete: if isSuperAdmin();
+      allow read: if canReadBusinessResource() && hasSection("sections.clientes");
+      allow create: if (isAdmin() || isOperativo()) && canCreateBusinessResource();
+      allow update: if (isAdmin() || isOperativo()) && canUpdateBusinessResource();
+      allow delete: if isSuperAdmin() && canReadBusinessResource();
     }
 
     match /routes/{routeId} {
@@ -149,12 +150,17 @@ service cloud.firestore {
     match /route_runs/{runId} {
       allow read: if isActiveUser();
       allow create: if isAdmin();
-      allow update: if isAdmin();
+      allow update: if isAdmin()
+        || (hasCapability("cap.returns.create") && onlyChanges(["counts", "updatedAt"]))
+        || hasCapability("cap.runs.complete");
       allow delete: if isSuperAdmin();
 
       match /stops/{orderId} {
         allow read: if isActiveUser();
-        allow write: if isAdmin();
+        allow write: if isAdmin()
+          || hasCapability("cap.returns.create")
+          || hasCapability("cap.delivery.mark_delivered")
+          || hasCapability("cap.delivery.mark_partial");
       }
     }
 
@@ -165,6 +171,16 @@ service cloud.firestore {
       // Operativo can request dispatch and mark packing done.
       // Admin/Super admin can also accept/reject request and assign to route_run.
       allow update: if (isAdmin() && canUpdateBusinessResource())
+        || (
+          canUpdateBusinessResource()
+          && hasCapability("cap.payments.register")
+          && onlyChanges(["totals", "status", "paid_at", "closed_at", "delivered_at", "timeline", "updated_at"])
+        )
+        || (
+          canUpdateBusinessResource()
+          && (hasCapability("cap.delivery.mark_delivered") || hasCapability("cap.delivery.mark_partial"))
+          && onlyChanges(["status", "delivered_at", "timeline", "notes", "updated_at"])
+        )
         || (
           isOperativo()
           && canUpdateBusinessResource()
@@ -220,8 +236,16 @@ service cloud.firestore {
     match /inventory_items/{itemId} {
       allow read: if canReadBusinessResource() && (hasSection("sections.inventario") || hasCapability("cap.inventory.view"));
       allow create: if canCreateBusinessResource() && (hasCapability("cap.inventory.adjust") || hasCapability("cap.inventory.receive"));
-      allow update: if canUpdateBusinessResource() && (hasCapability("cap.inventory.adjust") || hasCapability("cap.inventory.receive") || hasCapability("cap.inventory.reserve") || hasCapability("cap.inventory.release"));
+      allow update: if canUpdateBusinessResource() && (hasCapability("cap.inventory.adjust") || hasCapability("cap.inventory.receive") || hasCapability("cap.inventory.reserve") || hasCapability("cap.inventory.release") || hasCapability("cap.delivery.mark_delivered"));
       allow delete: if canReadBusinessResource() && (isSuperAdmin() || hasCapability("cap.inventory.override"));
+    }
+
+    match /inventory_movements/{movementId} {
+      allow read: if canReadBusinessResource() && (hasSection("sections.inventario") || hasCapability("cap.inventory.view"));
+      allow create: if canCreateBusinessResource()
+        && (hasCapability("cap.inventory.adjust") || hasCapability("cap.inventory.receive") || hasCapability("cap.inventory.reserve") || hasCapability("cap.inventory.release") || hasCapability("cap.delivery.mark_delivered") || hasCapability("cap.returns.create") || hasCapability("cap.returns.approve"))
+        && getAfter(/databases/$(database)/documents/inventory_items/$(request.resource.data.inventory_id)).data.business_id == incomingBusinessId();
+      allow update, delete: if false;
     }
 
     match /suppliers/{supplierId} {
@@ -273,9 +297,28 @@ service cloud.firestore {
 
     match /returns/{returnId} {
       allow read: if canReadBusinessResource() && (hasCapability("cap.returns.view") || hasSection("sections.inventario"));
-      allow create: if canCreateBusinessResource() && hasCapability("cap.returns.create");
+      allow create: if canCreateBusinessResource()
+        && hasCapability("cap.returns.create")
+        && getAfter(/databases/$(database)/documents/orders/$(request.resource.data.order_id)).data.has_returns == true
+        && getAfter(/databases/$(database)/documents/orders/$(request.resource.data.order_id)).data.business_id == incomingBusinessId();
       allow update: if canUpdateBusinessResource() && (hasCapability("cap.returns.restock") || hasCapability("cap.returns.approve"));
       allow delete: if canReadBusinessResource() && isSuperAdmin();
+    }
+
+    match /customer_credit_movements/{movementId} {
+      allow read: if canReadBusinessResource() && (hasSection("sections.clientes") || hasSection("sections.administracion"));
+      allow create: if canCreateBusinessResource()
+        && (hasCapability("cap.returns.create") || hasCapability("cap.payments.register") || hasCapability("cap.payments.refund"))
+        && getAfter(/databases/$(database)/documents/customers/$(request.resource.data.customer_id)).data.business_id == incomingBusinessId();
+      allow update, delete: if false;
+    }
+
+    match /finance_refunds/{refundId} {
+      allow read: if canReadBusinessResource() && (hasSection("sections.administracion") || hasCapability("cap.finance.movements.view"));
+      allow create: if canCreateBusinessResource()
+        && hasCapability("cap.payments.refund")
+        && getAfter(/databases/$(database)/documents/finance_accounts/$(request.resource.data.account_id)).data.business_id == incomingBusinessId();
+      allow update, delete: if isSuperAdmin();
     }
 
     match /catalog_import_jobs/{jobId} {

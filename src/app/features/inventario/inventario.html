@@ -32,10 +32,12 @@
       <span>Stock</span>
       <strong>{{ formatCount(totalAvailableUnits()) }}</strong>
     </button>
-    <button type="button" [class.active]="activeTab() === 'returns'" (click)="activeTab.set('returns')">
-      <span>Devoluciones</span>
-      <strong>{{ formatCount(pendingReturns().length) }}</strong>
-    </button>
+    @if (features.enabled('inventoryProductsV2')) {
+      <button type="button" [class.active]="activeTab() === 'returns'" (click)="activeTab.set('returns')">
+        <span>Por revisar</span>
+        <strong>{{ formatCount(pendingReturns().length) }}</strong>
+      </button>
+    }
   </nav>
 
   @if (activeTab() === 'stock') {
@@ -310,6 +312,24 @@
                   <p>Disponible</p>
                   <strong>{{ formatCount(availableQty(item)) }}</strong>
                 </article>
+                @if (reviewQty(item) > 0) {
+                  <article class="metric-box metric-box-warn">
+                    <p>En revisión</p>
+                    <strong>{{ formatCount(reviewQty(item)) }}</strong>
+                  </article>
+                }
+                @if (damagedQty(item) > 0) {
+                  <article class="metric-box">
+                    <p>Dañado</p>
+                    <strong>{{ formatCount(damagedQty(item)) }}</strong>
+                  </article>
+                }
+                @if (reorderQty(item) > 0) {
+                  <article class="metric-box metric-box-warn">
+                    <p>Reponer</p>
+                    <strong>{{ formatCount(reorderQty(item)) }}</strong>
+                  </article>
+                }
               </div>
 
               @if (hasReservations(item)) {
@@ -416,6 +436,9 @@
               </div>
 
               <div class="card-actions">
+                <a class="btn btn-outline" [routerLink]="['/main/inventario', item.inventory_id]">
+                  <span>Movimientos</span>
+                </a>
                 <button type="button" class="btn btn-outline" (click)="startEdit(item)">
                   <svg class="action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                     <path d="M12 20h9"></path>
@@ -448,17 +471,17 @@
   } @else {
     <section class="returns-panel panel">
       <div class="list-header">
-        <h2>Devoluciones</h2>
-        <p>{{ returns().length }} registro(s)</p>
+        <h2>Por revisar</h2>
+        <p>{{ pendingReturns().length }} pieza(s) pendientes de decisión</p>
       </div>
 
-      @if (returns().length === 0) {
+      @if (pendingReturns().length === 0) {
         <div class="empty-state">
-          <p class="empty">Aún no hay devoluciones registradas.</p>
+          <p class="empty">No hay devoluciones pendientes de revisión.</p>
         </div>
       } @else {
         <div class="returns-list">
-          @for (row of returns(); track row.return_id) {
+          @for (row of pendingReturns(); track row.return_id) {
             <article class="return-card" [ngClass]="businessScope.isBothMode() ? returnBusinessClass(row) : ''">
               <div>
                 <div class="return-title-row">
@@ -667,6 +690,42 @@
                 name="size_label"
                 placeholder="Ejemplo: Unitalla"
               />
+            </label>
+          </div>
+
+          <div class="form-columns details-columns">
+            <label class="field">
+              <span>SKU</span>
+              <input type="text" class="input" [(ngModel)]="draft.sku" name="sku" placeholder="Se genera si lo dejas vacío" />
+            </label>
+
+            <label class="field">
+              <span>ID del producto</span>
+              <input type="text" class="input" [(ngModel)]="draft.product_id" name="product_id" placeholder="Enlace estable con Productos" />
+            </label>
+          </div>
+
+          <div class="form-columns details-columns">
+            <label class="field">
+              <span>ID de variante</span>
+              <input type="text" class="input" [(ngModel)]="draft.variant_id" name="variant_id" />
+            </label>
+
+            <label class="field">
+              <span>Tiempo de entrega (días)</span>
+              <input type="number" min="0" class="input" [(ngModel)]="draft.supplier_lead_days" name="supplier_lead_days" />
+            </label>
+          </div>
+
+          <div class="form-columns details-columns">
+            <label class="field">
+              <span>Stock mínimo</span>
+              <input type="number" min="0" class="input" [(ngModel)]="draft.min_stock" name="min_stock" />
+            </label>
+
+            <label class="field">
+              <span>Stock máximo</span>
+              <input type="number" min="0" class="input" [(ngModel)]="draft.max_stock" name="max_stock" />
             </label>
           </div>
 

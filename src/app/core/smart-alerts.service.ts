@@ -5,6 +5,7 @@ import { RoutesService } from "./routes.service";
 import { NormalizedListingsService } from "./normalized-listings.service";
 import { FIRESTORE } from "./firebase.providers";
 import { doc, onSnapshot } from "firebase/firestore";
+import { calculateOrderFinancials } from "./order-financials";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tipos públicos
@@ -127,12 +128,7 @@ function estimateOrderTotal(order: Order): number {
 }
 
 function pendingAmountForOrder(order: Order): number {
-  const persistedTotal = Math.max(0, toSafeNumber(order.totals?.total_amount));
-  const estimatedTotal = estimateOrderTotal(order);
-  const total = Math.max(persistedTotal, estimatedTotal);
-  const paid = Math.max(0, toSafeNumber(order.totals?.paid_amount));
-  const reportedBalance = Math.max(0, toSafeNumber(order.totals?.balance_due));
-  return Math.max(0, Math.min(total, Math.max(reportedBalance, total - paid)));
+  return calculateOrderFinancials(order).balanceDue;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

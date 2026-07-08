@@ -16,6 +16,11 @@ import type {
   StockState,
 } from "../../core/firestore-contracts";
 import { isNormalizedListingDocV3 } from "../../core/firestore-contracts";
+import { OrdersService } from "../../core/orders.service";
+import { InventoryService } from "../../core/inventory.service";
+import { calculateItemFinancials } from "../../core/order-financials";
+
+type CommercialFilter = "" | "unprofitable" | "high_returns" | "low_stock" | "no_cost" | "no_sku" | "slow" | "reorder";
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -42,6 +47,7 @@ export default class CatalogPage {
   colorFilter = signal("");
   statusFilter = signal<StockState | "">("");
   hideOutOfStock = signal(false);
+  commercialFilter = signal<CommercialFilter>("");
 
   rows = signal<NormalizedListingDocV3[]>([]);
   loading = signal(false);
@@ -56,6 +62,8 @@ export default class CatalogPage {
   private svc       = inject(NormalizedListingsService);
   private suppliers = inject(SuppliersService);
   private router    = inject(Router);
+  private orders = inject(OrdersService);
+  private inventory = inject(InventoryService);
   readonly manualSvc = inject(ManualProductHistoryService);
   businessScope = inject(BusinessScopeService);
   private firestore = FIRESTORE;
@@ -102,6 +110,8 @@ export default class CatalogPage {
   });
 
   constructor() {
+    this.orders.loadFromFirestore();
+    this.inventory.loadFromFirestore();
     effect(() => {
       const tabs = this.visibleTabs();
       if (!tabs.some((tab) => tab.id === this.activeTab())) {
@@ -157,6 +167,8 @@ export default class CatalogPage {
     return Array.from(values).sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
   });
 
+  private productStatsById = computed(() => new Map(this.rows().map((product) => [product.normalized_id, this.calculateProductStats(product)])));
+
   filteredRows = computed(() => {
     const search = this.searchTerm().trim().toLowerCase();
     const supplier = this.supplierFilter().trim().toLowerCase();
@@ -164,6 +176,7 @@ export default class CatalogPage {
     const color = this.colorFilter().trim().toLowerCase();
     const status = this.statusFilter();
     const hideOut = this.hideOutOfStock();
+    const commercial = this.commercialFilter();
 
     return this.rows().filter((doc) => {
       const title = (doc.listing.title || "").toLowerCase();
@@ -186,8 +199,17 @@ export default class CatalogPage {
       const colorOk = !color || colors.includes(color);
       const statusOk = !status || productState === status;
       const stockVisibilityOk = !hideOut || productState !== "out_of_stock";
+      const stats = this.productStats(doc);
+      const commercialOk = !commercial
+        || (commercial === "unprofitable" && stats.units > 0 && stats.profit <= 0)
+        || (commercial === "high_returns" && stats.returnRate >= 0.2)
+        || (commercial === "low_stock" && stats.lowStock)
+        || (commercial === "no_cost" && doc.listing.items.some((item) => !Number(item.prices?.precio_costo)))
+        || (commercial === "no_sku" && doc.listing.items.some((item) => !(item.sku || "").trim()))
+        || (commercial === "slow" && stats.slow)
+        || (commercial === "reorder" && stats.reorder);
 
-      return textOk && supplierOk && categoryOk && colorOk && statusOk && stockVisibilityOk;
+      return textOk && supplierOk && categoryOk && colorOk && statusOk && stockVisibilityOk && commercialOk;
     });
   });
 
@@ -198,6 +220,7 @@ export default class CatalogPage {
       this.categoryFilter().trim().length > 0 ||
       this.colorFilter().trim().length > 0 ||
       this.statusFilter().trim().length > 0 ||
+      this.commercialFilter().length > 0 ||
       this.hideOutOfStock()
   );
 
@@ -264,6 +287,7 @@ export default class CatalogPage {
     this.categoryFilter.set("");
     this.colorFilter.set("");
     this.statusFilter.set("");
+    this.commercialFilter.set("");
     this.hideOutOfStock.set(false);
   }
 
@@ -524,6 +548,48 @@ export default class CatalogPage {
 
   private setManualBusy(id: string, val: boolean): void {
     this.manualBusy.update(m => ({ ...m, [id]: val }));
+  }
+
+  productStats(product: NormalizedListingDocV3) {
+    return this.productStatsById().get(product.normalized_id) || this.calculateProductStats(product);
+  }
+
+  private calculateProductStats(product: NormalizedListingDocV3) {
+    const skus = new Set(product.listing.items.map((item) => (item.sku || "").trim().toLowerCase()).filter(Boolean));
+    const completed = new Set(["delivered", "delivered_partial", "entregado", "closed", "pagado", "pago_pendiente", "pagado_parcial"]);
+    let units = 0;
+    let returned = 0;
+    let sales = 0;
+    let profit = 0;
+    let lastSaleMs = 0;
+    for (const order of this.orders.list()) {
+      if (!completed.has(String(order.status)) && !order.delivered_at) continue;
+      for (const item of order.items || []) {
+        const sku = (item.sku || "").trim().toLowerCase();
+        if (item.product_id !== product.normalized_id && (!sku || !skus.has(sku))) continue;
+        const row = calculateItemFinancials(item);
+        units += row.netQty;
+        returned += row.returnedQty;
+        sales += row.netClient;
+        profit += row.netClient - row.netCost;
+        lastSaleMs = Math.max(lastSaleMs, new Date(order.delivered_at || order.updated_at || order.created_at).getTime() || 0);
+      }
+    }
+    const stock = this.inventory.items().filter((item) => item.product_id === product.normalized_id || skus.has((item.sku || "").trim().toLowerCase()));
+    const available = stock.reduce((sum, item) => sum + Number(item.available_qty ?? item.quantity_on_hand ?? 0), 0);
+    const min = stock.reduce((sum, item) => sum + Number(item.min_stock || 0), 0);
+    const max = stock.reduce((sum, item) => sum + Number(item.max_stock || 0), 0);
+    return {
+      units,
+      returned,
+      sales,
+      profit,
+      returnRate: units + returned > 0 ? returned / (units + returned) : 0,
+      available,
+      lowStock: min > 0 && available <= min,
+      reorder: min > 0 && available <= min && max > available,
+      slow: units === 0 || (lastSaleMs > 0 && Date.now() - lastSaleMs > 90 * 86_400_000),
+    };
   }
 
   manualBusinessForActiveTab(): "bm" | "catalogo" {

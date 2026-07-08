@@ -20,7 +20,9 @@ import { SupplierOperationsService } from "../../core/supplier-operations.servic
 import { ManualProductHistoryService, ManualProductEntry } from "../../core/manual-product-history.service";
 import { CatalogProduct, CatalogProductsService } from "../../core/catalog-products.service";
 import { CatalogBarcodeAliasService } from "../../core/catalog-barcode-alias.service";
-import { ReturnsService, ReturnDisposition } from "../../core/returns.service";
+import { ReturnsService, ReturnDisposition, ReturnPaymentResolution, ReturnRecord } from "../../core/returns.service";
+import { availableReturnQty, calculateOrderFinancials, netItemQty, returnedItemQty } from "../../core/order-financials";
+import { FinanceService } from "../../core/finance.service";
 import { BusinessScopeService } from "../../core/business-scope.service";
 import { BusinessId, normalizeBusinessId } from "../../core/rbac.constants";
 import { BarcodeProductLookupService, BarcodeProductMatch } from "../../core/barcode-product-lookup.service";
@@ -59,6 +61,9 @@ type ProductCardVm = {
   quickConfirming: boolean;
   showSupplierReceive: boolean;
   itemActionLoading: boolean;
+  returnedQty: number;
+  netQty: number;
+  isReturned: boolean;
 };
 
 type PackingRowVm = {
@@ -216,8 +221,10 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   private supplierOperations = inject(SupplierOperationsService);
   readonly manualHistory = inject(ManualProductHistoryService);
   private returnsService = inject(ReturnsService);
+  private finance = inject(FinanceService);
   private businessScope = inject(BusinessScopeService);
   private authz = inject(AuthzService);
+  canRefundReturn = computed(() => this.authz.canCap("cap.payments.refund"));
   private auth = inject(AuthService);
   private salesNoteRender = inject(SalesNoteRenderService);
   private routeRuns = inject(RouteRunsService);
@@ -392,29 +399,20 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   newItemSupplierId = signal<string | null>(null);
   newItemProductId = signal<string | null>(null);
   newItemSku = signal<string | null>(null);
+  newItemVariantId = signal<string | null>(null);
   selectedPreviewHasColorImage = signal(true);
 
   pendingItems = computed(() => (this.order()?.items || []).filter((item) => item.state !== "entregado" && item.state !== "pagado"));
   totals = computed(() => {
-    const items = this.order()?.items || [];
-    let totalVenta = 0;
-    let totalClienta = 0;
-    let totalCosto = 0;
-    for (const item of items) {
-      const qty = item.confirmation_state === "confirmed" ? this.confirmedQty(item) : 0;
-      const priceVenta = item.price_public ?? item.price_clienta ?? 0;
-      const priceClienta = item.price_clienta ?? item.price_public ?? 0;
-      const priceCosto = item.price_cost ?? 0;
-      totalVenta += priceVenta * qty;
-      totalClienta += priceClienta * qty;
-      totalCosto += priceCosto * qty;
-    }
-    const ganancia = totalClienta - totalCosto;
+    const financials = calculateOrderFinancials(this.order() || { items: [], totals: {} });
     return {
-      totalVenta,
-      totalClienta,
-      totalCosto,
-      ganancia,
+      totalVenta: financials.netPublic,
+      totalClienta: financials.netClientBeforeDiscount,
+      totalCosto: financials.netCost,
+      ganancia: financials.grossProfit,
+      devoluciones: financials.returnsAmount,
+      brutoClienta: financials.grossClient,
+      netoCobrar: financials.netAmount,
     };
   });
 
@@ -482,7 +480,12 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   returnQty = signal(1);
   returnDisposition = signal<ReturnDisposition>("available");
   returnReason = signal("");
+  returnPaymentResolution = signal<ReturnPaymentResolution>("not_required");
+  returnRefundAccountId = signal("");
+  returnRefundMethod = signal("");
+  returnRefundReference = signal("");
   returnSaving = signal(false);
+  financeAccounts = computed(() => this.finance.accounts());
   private actionToastTimer: ReturnType<typeof setTimeout> | null = null;
   private waNoteTimer: ReturnType<typeof setTimeout> | null = null;
   private waProgressTimer: ReturnType<typeof setTimeout> | null = null;
@@ -662,6 +665,9 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         quickConfirming: !!quickMap[item.item_id],
         showSupplierReceive: !isConfirmPhase && isConfirmed && this.isSupplierManagedItem(item) && !this.isSupplierItemReceived(currentOrder, item),
         itemActionLoading: !!loadingMap[item.item_id],
+        returnedQty: returnedItemQty(item),
+        netQty: netItemQty(item),
+        isReturned: returnedItemQty(item) > 0 && netItemQty(item) === 0,
       });
     }
     return rows;
@@ -838,6 +844,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   });
 
   ngOnInit() {
+    this.returnsService.watch();
     this.orderId.set(this.route.snapshot.paramMap.get("id") || "");
     this.initialHydration.set(true);
     void Promise.all([
@@ -847,6 +854,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       this.rutas.loadFromFirestore().catch(() => null),
       this.localities.loadFromFirestore().catch(() => null),
       this.inventory.loadFromFirestore().catch(() => null),
+      this.finance.loadAccounts().catch(() => null),
       this.supplierOperations.loadFromFirestore().catch(() => null),
       this.loadAssigneeOptions().catch(() => null),
     ]).then(() => {
@@ -3747,6 +3755,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.newItemSupplierId.set(item.supplier_id || null);
     this.newItemProductId.set(item.product_id || null);
     this.newItemSku.set(item.sku || item.inventory_id || null);
+    this.newItemVariantId.set(item.variant_id || null);
     this.updatePriceDraftFromSignals();
     this.selectedPreviewHasColorImage.set(Boolean(item.image_url));
     this.selectedPreview.set({
@@ -3786,6 +3795,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.newItemSupplierId.set(null);
     this.newItemProductId.set(null);
     this.newItemSku.set(null);
+    this.newItemVariantId.set(null);
     this.lockItemFields.set(false);
     this.catalogVariantOptions.set([]);
     this.catalogColorOptions.set([]);
@@ -3847,6 +3857,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.newItemSupplierId.set(null);
     this.newItemProductId.set(null);
     this.newItemSku.set(null);
+    this.newItemVariantId.set(null);
     this.showProductList.set(false);
     this.lockItemFields.set(false);
     this.catalogVariantOptions.set([]);
@@ -3885,9 +3896,9 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
   salesNoteRows(order: Order): SalesNoteRowVm[] {
     return (order.items || [])
-      .filter((item) => !["cancelado", "devuelto"].includes(item.state))
+      .filter((item) => item.state !== "cancelado" && netItemQty(item) > 0)
       .map((item) => {
-        const qty = item.confirmation_state === "confirmed" ? this.confirmedQty(item) : 0;
+        const qty = netItemQty(item);
         const legacyUnitPrice = (item as any)?.unit_price_clienta ?? (item as any)?.unit_price ?? (item as any)?.unitPrice;
         const unitRaw = item.price_clienta ?? item.price_public ?? legacyUnitPrice ?? 0;
         const unitParsed = Number(typeof unitRaw === "string" ? unitRaw.replace(/,/g, "").trim() : unitRaw);
@@ -4986,6 +4997,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
   async deliverPackage(order: Order, pkg: PackageRecord) {
     await this.orders.setPackageState(order.order_id, pkg.package_id, "entregado");
+    await this.orders.consumeInventoryForDelivery(order.order_id, pkg.package_id);
     await this.orders.logEvent(order.order_id, "PACKAGE_DELIVERED", `Paquete entregado ${pkg.label}`, {
       packageId: pkg.package_id,
     });
@@ -5180,9 +5192,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   orderTotalAfterDiscount(order: Order | null): number {
-    const subtotal = this.orderSubtotalClienta();
-    const discount = Math.min(subtotal, this.orderDiscountAmount(order));
-    return Number(Math.max(0, subtotal - discount).toFixed(2));
+    return order ? calculateOrderFinancials(order).netAmount : 0;
   }
 
   discountDraftValue(order: Order | null): number {
@@ -5273,7 +5283,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   paymentBalancePreview(order: Order | null): number {
     const total = this.paymentTotalWithDiscount(order);
     const paidParsed = this.parseMoneyInput(this.paymentAmount());
-    const paid = paidParsed === null ? 0 : Math.max(0, paidParsed);
+    const paid = (order?.totals?.paid_amount || 0) + (paidParsed === null ? 0 : Math.max(0, paidParsed));
     return Number(Math.max(0, total - paid).toFixed(2));
   }
 
@@ -5302,9 +5312,10 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       return;
     }
 
-    const subtotal = this.orderSubtotalClienta();
-    const discountAmount = Math.min(subtotal, this.orderDiscountAmount(order));
-    const totalAmount = Number(Math.max(0, subtotal - discountAmount).toFixed(2));
+    const financials = calculateOrderFinancials(order);
+    const discountAmount = financials.discountAmount;
+    const totalAmount = financials.netAmount;
+    const cumulativePaid = Number((Number(order.totals?.paid_amount || 0) + paidAmount).toFixed(2));
 
     this.paymentSaving.set(true);
     this.paymentError.set(null);
@@ -5318,10 +5329,10 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       );
       this.paymentModalOpen.set(false);
       this.showActionToast(
-        paidAmount >= totalAmount
+        cumulativePaid >= totalAmount
           ? "Pedido marcado como Pagado ✓"
-          : paidAmount > 0
-            ? `Pago parcial registrado. Saldo: $${(totalAmount - paidAmount).toFixed(2)}`
+          : cumulativePaid > 0
+            ? `Pago parcial registrado. Saldo: $${Math.max(0, totalAmount - cumulativePaid).toFixed(2)}`
             : "Pedido marcado con pago pendiente.",
       );
     } catch (err: any) {
@@ -5333,7 +5344,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
   markFullyPaid(order: Order) {
     const total = this.paymentTotalWithDiscount(order);
-    this.paymentAmount.set(String(total));
+    this.paymentAmount.set(String(Math.max(0, total - Number(order.totals?.paid_amount || 0))));
     this.confirmPayment(order);
   }
 
@@ -6929,18 +6940,40 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   canRegisterReturn(order: Order | null, item: OrderItem): boolean {
     if (!order) return false;
     if (!this.canCap("cap.returns.create")) return false;
-    return this.itemQuantity(item) > 0;
+    const allowed = new Set([
+      "packing", "empaque", "ready_for_route", "assigned_to_run", "in_transit", "en_ruta",
+      "delivered", "delivered_partial", "entregado", "pago_pendiente", "pagado_parcial", "pagado", "closed",
+    ]);
+    return allowed.has(String(order.status || "")) && availableReturnQty(item) > 0;
+  }
+
+  remainingReturnQty(item: OrderItem): number {
+    return availableReturnQty(item);
+  }
+
+  returnsForItem(item: OrderItem): ReturnRecord[] {
+    const orderId = this.order()?.order_id;
+    return this.returnsService.returns().filter((row) => row.order_id === orderId && row.order_item_id === item.item_id);
+  }
+
+  returnDestination(row: ReturnRecord): string {
+    if (row.status === "damaged" || row.disposition === "damaged") return "Dañada";
+    if (row.status === "pending_review") return "Por revisar";
+    return "Disponible en stock";
   }
 
   openReturnModal(order: Order, item: OrderItem) {
     if (!this.canRegisterReturn(order, item)) return;
     this.closeProductMenus();
-    const alreadyReturned = Math.max(0, Math.trunc(Number(item.returned_qty || 0)));
-    const remaining = Math.max(1, this.itemQuantity(item) - alreadyReturned);
+    const remaining = availableReturnQty(item);
     this.returnTargetItem.set(item);
     this.returnQty.set(remaining);
     this.returnDisposition.set("available");
     this.returnReason.set("");
+    this.returnPaymentResolution.set("not_required");
+    this.returnRefundAccountId.set("");
+    this.returnRefundMethod.set("");
+    this.returnRefundReference.set("");
     this.returnModalOpen.set(true);
   }
 
@@ -6951,12 +6984,36 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.returnQty.set(1);
     this.returnDisposition.set("available");
     this.returnReason.set("");
+    this.returnPaymentResolution.set("not_required");
+    this.returnRefundAccountId.set("");
+    this.returnRefundMethod.set("");
+    this.returnRefundReference.set("");
+  }
+
+  returnResolutionAmount(order: Order | null, item: OrderItem | null): number {
+    if (!order || !item) return 0;
+    const qty = Math.max(1, Math.min(Math.trunc(Number(this.returnQty()) || 1), availableReturnQty(item)));
+    const before = calculateOrderFinancials(order);
+    const items = (order.items || []).map((row) => row.item_id === item.item_id
+      ? { ...row, returned_qty: Number(row.returned_qty || 0) + qty }
+      : row);
+    const after = calculateOrderFinancials({ ...order, items });
+    return Math.max(0, Number((after.overpaymentAmount - before.overpaymentAmount).toFixed(2)));
   }
 
   async confirmReturn(order: Order | null) {
     const item = this.returnTargetItem();
     if (!order || !item || !this.canRegisterReturn(order, item)) return;
-    const qty = Math.max(1, Math.min(Math.trunc(Number(this.returnQty()) || 1), this.itemQuantity(item)));
+    const qty = Math.max(1, Math.min(Math.trunc(Number(this.returnQty()) || 1), availableReturnQty(item)));
+    const resolutionAmount = this.returnResolutionAmount(order, item);
+    if (resolutionAmount > 0 && this.returnPaymentResolution() === "not_required") {
+      await this.showPopupAlert("Elige si el monto pagado de más quedará como saldo a favor o se devolverá.", "Resolver saldo");
+      return;
+    }
+    if (resolutionAmount > 0 && this.returnPaymentResolution() === "refund" && (!this.returnRefundAccountId() || !this.returnRefundMethod().trim())) {
+      await this.showPopupAlert("Selecciona cuenta y método para registrar la devolución de dinero.", "Datos incompletos");
+      return;
+    }
     this.returnSaving.set(true);
     try {
       const record = await this.returnsService.registerReturn({
@@ -6966,25 +7023,13 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         disposition: this.returnDisposition(),
         reason: this.returnReason(),
         createdBy: this.currentActorName(),
+        paymentResolution: this.returnPaymentResolution(),
+        refundAccountId: this.returnRefundAccountId() || null,
+        refundMethod: this.returnRefundMethod() || null,
+        refundReference: this.returnRefundReference() || null,
+        packageId: this.returnPackageId(order, item),
       });
-      const nextItems = (order.items || []).map((row) => {
-        if (row.item_id !== item.item_id) return row;
-        const returnedQty = Math.min(this.itemQuantity(row), Math.max(0, Math.trunc(Number(row.returned_qty || 0))) + qty);
-        return {
-          ...row,
-          returned_qty: returnedQty,
-          state: returnedQty >= this.itemQuantity(row) ? "devuelto" as OrderItemState : row.state,
-        };
-      });
-      await this.orders.updateItems(order.order_id, nextItems);
-      await this.orders.logEvent(order.order_id, "RETURN_REGISTERED", `Devolución registrada: ${item.title}`, {
-        returnId: record.return_id,
-        itemId: item.item_id,
-        qty,
-        disposition: this.returnDisposition(),
-        inventoryId: record.inventory_id,
-      });
-      this.showActionToast("Devolución registrada.");
+      this.showActionToast(record.payment_resolution === "credit" ? "Devolución registrada y saldo a favor creado." : "Devolución registrada.");
       this.returnSaving.set(false);
       this.closeReturnModal();
       await this.refreshEvents();
@@ -6993,6 +7038,13 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     } finally {
       this.returnSaving.set(false);
     }
+  }
+
+  private returnPackageId(order: Order, item: OrderItem): string | null {
+    return (order.packages || []).find((pkg) =>
+      pkg.state !== "entregado"
+      && ((pkg.item_ids || []).includes(item.item_id) || (pkg.items || []).some((entry) => entry.orderItemId === item.item_id && Number(entry.qty || 0) > 0)),
+    )?.package_id || null;
   }
 
   editItemFromMenu(item: OrderItem) {
@@ -7434,6 +7486,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       confirmed_qty: null,
       supplier_id: source === "manual" ? null : this.newItemSupplierId(),
       product_id: source === "manual" ? null : this.newItemProductId(),
+      variant_id: source === "manual" ? null : this.newItemVariantId(),
       sku: source === "manual" ? null : this.newItemSku(),
       price_clienta: this.newItemPriceClienta(),
       price_public: this.newItemPricePublic(),
@@ -7453,18 +7506,17 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     if (!product || this.orderBusinessId() !== "catalogo") return this.selectedPreview()?.image || null;
     const currentImage = (this.selectedPreview()?.image || product.image_url || "").trim();
     if (currentImage) return currentImage;
+    const provider = this.catalogProductImageProvider(product);
+    if (!provider) return null;
+    const providerLabel = provider === "cklass" ? "CKLASS" : "Impuls";
 
     try {
-      const result = await this.catalogProducts.resolveImpulsImage(product);
+      const result = provider === "cklass"
+        ? await this.catalogProducts.resolveCklassImage(product)
+        : await this.catalogProducts.resolveImpulsImage(product);
       const imageUrl = String(result.image_url || result.images?.[0] || "").trim();
       if (!imageUrl) {
-        if (result.reason === "MISSING_IMPULS_PRODUCT_ID") {
-          this.showActionToast("Producto sin Generico de Impuls; se agregara sin imagen.");
-        } else if (result.found === false) {
-          this.showActionToast("No encontramos imagen en Impuls; se agregara sin imagen.");
-        } else {
-          this.showActionToast("Impuls no regreso imagen; se agregara sin imagen.");
-        }
+        this.showActionToast("No se encontró imagen para este producto, pero se agregó al pedido.");
         return null;
       }
 
@@ -7473,16 +7525,36 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         image_url: imageUrl,
         image_storage_path: result.image_storage_path || product.image_storage_path,
         image_status: "FETCHED",
-        image_provider: "impuls",
+        image_provider: provider === "cklass" ? "CKLASS" : "impuls",
       };
       this.selectedCatalogProduct.set(updated);
       this.selectedPreview.update((preview) => preview ? { ...preview, image: imageUrl } : preview);
       this.selectedPreviewHasColorImage.set(true);
       return imageUrl;
     } catch (error) {
-      this.showActionToast("No se pudo obtener imagen de Impuls; se agregara sin imagen.");
+      this.showActionToast(`No se pudo obtener imagen de ${providerLabel}; se agregara sin imagen.`);
       return null;
     }
+  }
+
+  private catalogProductImageProvider(product: CatalogProduct): "impuls" | "cklass" | null {
+    const providerText = [
+      product.supplier_name,
+      product.supplier_id,
+      product.image_provider,
+      product.brand_name,
+    ].map((value) => this.compactProviderText(value)).join(" ");
+    if (providerText.includes("cklass") || product.image_key?.startsWith("CKLASS|") || product.cklass_model) return "cklass";
+    if (providerText.includes("impuls") || product.impuls_product_id) return "impuls";
+    return null;
+  }
+
+  private compactProviderText(value: unknown): string {
+    return String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "");
   }
 
   private canMergeIntoExistingRow(order: Order, existing: OrderItem): boolean {
@@ -7782,6 +7854,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.newItemSupplierId.set(item.supplier_id || null);
     this.newItemProductId.set(item.inventory_id || null);
     this.newItemSku.set(item.sku || item.inventory_id || null);
+    this.newItemVariantId.set(item.variant_id || null);
     this.showProductList.set(false);
     this.lockItemFields.set(true);
     this.catalogVariantOptions.set([]);
@@ -7821,6 +7894,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.newItemSupplierId.set(doc.supplier_id || null);
     this.newItemProductId.set(doc.normalized_id || null);
     this.newItemSku.set(String(variant?.sku || "").trim() || null);
+    this.newItemVariantId.set(String(variant?.variant_id || "").trim() || null);
     this.showProductList.set(false);
     this.lockItemFields.set(true);
     this.catalogVariantOptions.set([...new Set(variants)]);
@@ -7853,6 +7927,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.newItemSupplierId.set(product.supplier_id || null);
     this.newItemProductId.set(product.product_id);
     this.newItemSku.set(product.sku || null);
+    this.newItemVariantId.set(null);
     this.showProductList.set(false);
     this.lockItemFields.set(true);
     this.catalogVariantOptions.set([]);
@@ -7891,6 +7966,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     const listing: any = doc.listing || { items: [] };
     const variant = (listing.items || []).find((it: any) => it.variant_name === value) || null;
     if (!variant) return;
+    this.newItemVariantId.set(String(variant?.variant_id || "").trim() || null);
     const prices = this.getVariantPriceSet(variant);
     this.newItemPricePublic.set(prices.final);
     this.newItemPriceClienta.set(this.computeClientaPrice(prices.final));

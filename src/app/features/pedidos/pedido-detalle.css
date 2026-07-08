@@ -6856,3 +6856,58 @@ code {
 .return-toggle label {
   flex: 1 1 130px;
 }
+
+.product-card.status--returned {
+  opacity: 0.72;
+  border-color: #94a3b8;
+  background: #f8fafc;
+}
+
+.product-card.status--return-partial {
+  border-color: #f59e0b;
+}
+
+.return-status-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: #fff7ed;
+  color: #c2410c;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.return-status-chip--full {
+  background: #e2e8f0;
+  color: #475569;
+}
+
+.summary-note--return {
+  color: #c2410c;
+  font-weight: 700;
+}
+
+.return-payment-box {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.9rem;
+  border: 1px solid #fdba74;
+  border-radius: 14px;
+  background: #fff7ed;
+}
+.return-history-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem;
+  margin-top: .5rem;
+}
+
+.return-history-inline span {
+  border-radius: 999px;
+  background: #fff7ed;
+  color: #9a3412;
+  padding: .2rem .5rem;
+  font-size: .72rem;
+  font-weight: 700;
+}

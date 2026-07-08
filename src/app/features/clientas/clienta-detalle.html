@@ -52,15 +52,36 @@
     </div>
   </div>
 
+  @if (features.enabled('customerCrmV2')) {
+  <div class="cd-quick-actions">
+    <button type="button" class="btn btn-primary" (click)="newOrder()"><span class="material-symbols-rounded">add_shopping_cart</span> Nuevo pedido</button>
+    @if (c.whatsapp) {
+      <a class="btn btn-ghost" [href]="'https://wa.me/' + c.whatsapp" target="_blank" rel="noopener"><span class="material-symbols-rounded">chat</span> WhatsApp</a>
+    }
+    @if ((c.credit_balance || 0) > 0) {
+      <button type="button" class="btn btn-ghost" (click)="activeTab.set('account')"><span class="material-symbols-rounded">account_balance_wallet</span> Aplicar saldo</button>
+    }
+    <button type="button" class="btn btn-ghost" (click)="activeTab.set('activity')"><span class="material-symbols-rounded">event</span> Seguimiento</button>
+  </div>
+
+  <nav class="cd-tabs" aria-label="Secciones de la clienta">
+    <button type="button" [class.active]="activeTab() === 'summary'" (click)="activeTab.set('summary')">Resumen</button>
+    <button type="button" [class.active]="activeTab() === 'orders'" (click)="activeTab.set('orders')">Pedidos</button>
+    <button type="button" [class.active]="activeTab() === 'products'" (click)="activeTab.set('products')">Productos</button>
+    <button type="button" [class.active]="activeTab() === 'account'" (click)="activeTab.set('account')">Cuenta</button>
+    <button type="button" [class.active]="activeTab() === 'activity'" (click)="activeTab.set('activity')">Actividad</button>
+  </nav>
+  }
+
   <!-- ── KPIs ── -->
-  <div class="cd-kpis">
+  <div class="cd-kpis" [class.cd-tab-hidden]="features.enabled('customerCrmV2') && activeTab() !== 'summary'">
     <div class="cd-kpi">
       <span class="kpi-value">{{ paidOrders().length }}</span>
-      <span class="kpi-label">Pedidos pagados</span>
+      <span class="kpi-label">Pedidos completados</span>
     </div>
     <div class="cd-kpi">
       <span class="kpi-value">{{ totalSpent() | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
-      <span class="kpi-label">Total gastado</span>
+      <span class="kpi-label">Ventas netas</span>
     </div>
     <div class="cd-kpi">
       <span class="kpi-value">{{ avgOrderValue() | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
@@ -70,6 +91,20 @@
       <span class="kpi-value">{{ monthlyAvg() | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
       <span class="kpi-label">Promedio mensual</span>
     </div>
+    <div class="cd-kpi">
+      <span class="kpi-value">{{ totalProfit() | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+      <span class="kpi-label">Ganancia</span>
+    </div>
+    <div class="cd-kpi">
+      <span class="kpi-value">{{ totalReturns() | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+      <span class="kpi-label">Devoluciones</span>
+    </div>
+    @if ((c.credit_balance || 0) > 0) {
+      <div class="cd-kpi kpi-warn">
+        <span class="kpi-value">{{ c.credit_balance | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+        <span class="kpi-label">Saldo a favor</span>
+      </div>
+    }
     @if (avgFrequencyDays()) {
       <div class="cd-kpi">
         <span class="kpi-value">{{ avgFrequencyDays() }}d</span>
@@ -86,7 +121,7 @@
 
   <!-- ── Adeudo activo ── -->
   @if (totalDebt() > 0) {
-    <div class="cd-debt-banner">
+    <div class="cd-debt-banner" [class.cd-tab-hidden]="features.enabled('customerCrmV2') && activeTab() !== 'account'">
       <span class="material-symbols-rounded">payments</span>
       <div>
         <p class="debt-amount">{{ totalDebt() | currency:'MXN':'symbol-narrow':'1.2-2' }}</p>
@@ -97,7 +132,7 @@
 
   <!-- ── Pedidos activos ── -->
   @if (activeOrders().length > 0) {
-    <section class="cd-section">
+    <section class="cd-section" [class.cd-tab-hidden]="features.enabled('customerCrmV2') && activeTab() !== 'orders'">
       <h2 class="cd-section-title">
         <span class="material-symbols-rounded">pending_actions</span>
         Pedidos activos ({{ activeOrders().length }})
@@ -119,18 +154,19 @@
 
   <!-- ── Productos frecuentes ── -->
   @if (topProducts().length > 0) {
-    <section class="cd-section">
+    <section class="cd-section" [class.cd-tab-hidden]="features.enabled('customerCrmV2') && activeTab() !== 'products'">
       <h2 class="cd-section-title">
         <span class="material-symbols-rounded">favorite</span>
         Productos frecuentes
       </h2>
       <ul class="cd-top-products">
-        @for (p of topProducts(); track p.title; let i = $index) {
+        @for (p of topProducts(); track (p.sku || p.title + (p.variant || '')); let i = $index) {
           <li class="cd-product-row">
             <span class="product-rank">{{ i + 1 }}</span>
-            <span class="product-title">{{ p.title }}</span>
+            <span class="product-title">{{ p.title }}<small>{{ p.sku || 'Sin SKU' }}{{ p.variant ? ' · ' + p.variant : '' }}</small></span>
             <span class="product-count">{{ p.count }}x</span>
             <span class="product-total">{{ p.totalSpent | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+            <span class="product-total">Margen {{ p.margin | currency:'MXN':'symbol-narrow':'1.0-0' }} · {{ p.returns }} dev.</span>
           </li>
         }
       </ul>
@@ -138,7 +174,7 @@
   }
 
   <!-- ── Historial completo ── -->
-  <section class="cd-section">
+  <section class="cd-section" [class.cd-tab-hidden]="features.enabled('customerCrmV2') && activeTab() !== 'orders'">
     <h2 class="cd-section-title">
       <span class="material-symbols-rounded">history</span>
       Historial de pedidos ({{ orders().length }})
@@ -147,7 +183,7 @@
       <p class="cd-empty">No tiene pedidos registrados.</p>
     } @else {
       <ul class="cd-order-list">
-        @for (order of orders(); track order.order_id) {
+        @for (order of visibleOrderHistory(); track order.order_id) {
           <li class="cd-order-row" (click)="openOrder(order.order_id)">
             <div class="order-row-left">
               <span class="order-id">{{ order.order_id }}</span>
@@ -155,9 +191,11 @@
             </div>
             <div class="order-row-center">
               <span class="badge" [ngClass]="statusClass(order.status)">{{ statusLabel(order.status) }}</span>
-              @if (order.totals.total_amount > 0) {
-                <span class="order-total">{{ order.totals.total_amount | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+              @if (orderNet(order) > 0) {
+                <span class="order-total">{{ orderNet(order) | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
               }
+              @if (orderBalance(order) > 0) { <span class="order-total">Saldo {{ orderBalance(order) | currency:'MXN':'symbol-narrow':'1.0-0' }}</span> }
+              @if (orderReturns(order) > 0) { <span class="order-total">Dev. {{ orderReturns(order) | currency:'MXN':'symbol-narrow':'1.0-0' }}</span> }
             </div>
             <span class="material-symbols-rounded order-arrow">chevron_right</span>
           </li>
@@ -166,8 +204,55 @@
     }
   </section>
 
+  <section class="cd-section" [class.cd-tab-hidden]="features.enabled('customerCrmV2') && activeTab() !== 'account'">
+    <h2 class="cd-section-title"><span class="material-symbols-rounded">account_balance_wallet</span> Estado de cuenta</h2>
+    <div class="cd-account-grid">
+      <div><span>Venta neta</span><strong>{{ totalSpent() | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></div>
+      <div><span>Cobrado</span><strong>{{ totalCollected() | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></div>
+      <div><span>Por cobrar</span><strong>{{ totalDebt() | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></div>
+      <div><span>Saldo a favor</span><strong>{{ (c.credit_balance || 0) | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></div>
+      <div><span>Antigüedad máxima</span><strong>{{ oldestDebtDays() }} días</strong></div>
+      <div><span>Tasa de devolución</span><strong>{{ returnRate() | percent:'1.1-1' }}</strong></div>
+    </div>
+    @if ((c.credit_balance || 0) > 0) {
+      <p class="cd-track-hint">El saldo se aplicará desde el cobro del siguiente pedido. Cada aplicación queda registrada en el ledger de la clienta.</p>
+      @if (unpaidOrders().length > 0) {
+        <div class="cd-follow-up">
+          <select class="input" [ngModel]="creditOrderId()" (ngModelChange)="creditOrderId.set($event)">
+            <option value="">Selecciona un pedido con saldo</option>
+            @for (order of unpaidOrders(); track order.order_id) {
+              <option [value]="order.order_id">{{ order.order_id }} · saldo {{ orderBalance(order) | currency:'MXN':'symbol-narrow':'1.0-0' }}</option>
+            }
+          </select>
+          <button type="button" class="btn btn-primary" [disabled]="!creditOrderId() || creditApplying()" (click)="applyCredit()">{{ creditApplying() ? 'Aplicando…' : 'Aplicar saldo' }}</button>
+        </div>
+      }
+    }
+    @if (creditMovements().length > 0) {
+      <ul class="cd-order-list">
+        @for (movement of creditMovements(); track movement.movement_id) {
+          <li class="cd-order-row">
+            <div class="order-row-left"><span class="order-id">{{ movement.type }}</span><span class="order-date">{{ movement.created_at | date:'dd/MM/yy' }}</span></div>
+            <strong>{{ movement.amount | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong>
+          </li>
+        }
+      </ul>
+      @if (visibleOrderHistory().length < orders().length) {
+        <button type="button" class="btn btn-ghost" (click)="orderHistoryLimit.set(orderHistoryLimit() + 20)">Cargar más pedidos</button>
+      }
+    }
+  </section>
+
+  <section class="cd-section" [class.cd-tab-hidden]="features.enabled('customerCrmV2') && activeTab() !== 'activity'">
+    <h2 class="cd-section-title"><span class="material-symbols-rounded">event</span> Próximo seguimiento</h2>
+    <div class="cd-follow-up">
+      <input type="date" class="input" [ngModel]="followUpDraft()" (ngModelChange)="followUpDraft.set($event)" />
+      <button type="button" class="btn btn-primary" [disabled]="followUpSaving()" (click)="scheduleFollowUp()">{{ followUpSaving() ? 'Guardando…' : 'Programar' }}</button>
+    </div>
+  </section>
+
   @if (c.notes) {
-    <section class="cd-section">
+    <section class="cd-section" [class.cd-tab-hidden]="features.enabled('customerCrmV2') && activeTab() !== 'activity'">
       <h2 class="cd-section-title">
         <span class="material-symbols-rounded">notes</span>
         Notas
@@ -177,7 +262,7 @@
   }
 
   <!-- ── Portal de seguimiento ── -->
-  <section class="cd-section cd-track-section">
+  <section class="cd-section cd-track-section" [class.cd-tab-hidden]="features.enabled('customerCrmV2') && activeTab() !== 'activity'">
     <h2 class="cd-section-title">
       <span class="material-symbols-rounded">share_location</span>
       Link de seguimiento
@@ -208,7 +293,7 @@
   </section>
 
   <!-- ── Notificaciones WhatsApp ── -->
-  <section class="cd-section cd-wa-section">
+  <section class="cd-section cd-wa-section" [class.cd-tab-hidden]="features.enabled('customerCrmV2') && activeTab() !== 'activity'">
     <h2 class="cd-section-title">
       <span class="material-symbols-rounded">chat</span>
       Notificaciones WhatsApp

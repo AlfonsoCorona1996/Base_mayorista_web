@@ -65,6 +65,12 @@ export const routes: Routes = [
         loadComponent: () => import("./features/catalog/catalog").then((m) => m.default),
       },
       {
+        path: "inventario/:id",
+        canActivate: [permissionGuard],
+        data: { permission: "inventario" },
+        loadComponent: () => import("./features/inventario/inventario-detalle").then((m) => m.default),
+      },
+      {
         path: "inventario",
         canActivate: [permissionGuard],
         data: { permission: "inventario" },

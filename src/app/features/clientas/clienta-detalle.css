@@ -507,3 +507,40 @@
   margin: 12px 18px 18px;
   font-size: 0.85rem;
 }
+.cd-tab-hidden { display: none !important; }
+
+.cd-quick-actions,
+.cd-tabs,
+.cd-follow-up {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.cd-quick-actions { margin: 12px 0; }
+.cd-tabs {
+  margin: 12px 0 18px;
+  border-bottom: 1px solid #e2e8f0;
+}
+.cd-tabs button {
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  padding: 10px 12px;
+  color: #64748b;
+  cursor: pointer;
+  font-weight: 700;
+}
+.cd-tabs button.active { color: #2563eb; border-bottom-color: #2563eb; }
+.cd-account-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  padding: 0 18px 18px;
+}
+.cd-account-grid div { display: grid; gap: 3px; padding: 12px; border-radius: 10px; background: #f8fafc; }
+.cd-account-grid span { color: #64748b; font-size: .76rem; }
+.cd-account-grid strong { color: #0f172a; }
+.cd-follow-up { padding: 0 18px 18px; }
+.product-title small { display: block; color: #94a3b8; font-size: .7rem; font-weight: 500; }

@@ -10,6 +10,7 @@ import {
   StopStatus,
 } from "../../services/route-runs.service";
 import { BusinessId } from "../../core/rbac.constants";
+import { OrdersService } from "../../core/orders.service";
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -24,6 +25,7 @@ export default class SalidaDetallePage {
   private routeRuns = inject(RouteRunsService);
   private authz = inject(AuthzService);
   private router = inject(Router);
+  private orders = inject(OrdersService);
 
   runId = signal("");
   run = signal<RouteRunDoc | null>(null);
@@ -62,7 +64,7 @@ export default class SalidaDetallePage {
     this.error.set(null);
     try {
       await this.authz.refresh();
-      const [run, stops] = await Promise.all([this.routeRuns.getRun(runId), this.routeRuns.listStops(runId)]);
+      const [run, stops] = await Promise.all([this.routeRuns.getRun(runId), this.routeRuns.listStops(runId), this.orders.loadFromFirestore()]);
       this.run.set(run);
       this.stops.set(stops);
       if (run) {
@@ -189,10 +191,17 @@ export default class SalidaDetallePage {
   async markStop(stopId: string, status: StopStatus): Promise<void> {
     const run = this.run();
     if (!run || this.markingStopId()) return;
+    const stop = this.stops().find((row) => row.stop_id === stopId);
     this.markingStopId.set(stopId);
     this.error.set(null);
     try {
       await this.routeRuns.markStop(run.runId, stopId, status);
+      if (stop && (status === "delivered" || status === "partial")) {
+        const orderStatus = status === "delivered" ? "delivered" : "delivered_partial";
+        for (const orderId of stop.order_ids.length ? stop.order_ids : [stop.order_id]) {
+          await this.orders.updateStatus(orderId, orderStatus);
+        }
+      }
       this.stops.update(rows => rows.map(s =>
         s.stop_id === stopId ? { ...s, stop_status: status } : s
       ));

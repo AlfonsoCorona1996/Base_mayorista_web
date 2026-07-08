@@ -85,6 +85,16 @@
           <small>{{ m.pendientesCobro }} pedidos entregados con saldo pendiente</small>
         </article>
         <article class="kpi-card glass-card">
+          <p>Saldos a favor</p>
+          <h2>{{ formatCurrency(customerCreditsTotal()) }}</h2>
+          <small>Crédito pendiente de aplicar a clientas</small>
+        </article>
+        <article class="kpi-card glass-card">
+          <p>Reembolsos efectuados</p>
+          <h2>{{ formatCurrency(refundsTotal()) }}</h2>
+          <small>Salidas de dinero registradas por devoluciones</small>
+        </article>
+        <article class="kpi-card glass-card">
           <p>Pipeline por entregar</p>
           <h2>{{ formatCurrency(m.pipelineClienta) }}</h2>
           <small>Monto clienta en etapas 2 y 3</small>
@@ -144,6 +154,18 @@
             <div class="metric-row metric-row-2">
               <span>Ventas brutas</span>
               <strong>{{ formatCurrency(m.ventasBrutas) }}</strong>
+            </div>
+            <div class="metric-row metric-row-2">
+              <span>Descuentos</span>
+              <strong>-{{ formatCurrency(m.descuentos) }}</strong>
+            </div>
+            <div class="metric-row metric-row-2">
+              <span>Devoluciones</span>
+              <strong>-{{ formatCurrency(m.devolucionesMonto) }}</strong>
+            </div>
+            <div class="metric-row metric-row-2">
+              <span>Ventas netas</span>
+              <strong>{{ formatCurrency(m.ventasNetas) }}</strong>
             </div>
             <div class="metric-row metric-row-2">
               <span>Ingresos cobrados</span>
@@ -217,6 +239,10 @@
             <div class="metric-row metric-row-2">
               <span>Devoluciones en dinero</span>
               <strong>{{ formatCurrency(m.devolucionesMonto) }}</strong>
+            </div>
+            <div class="metric-row metric-row-2">
+              <span>Tasa por unidades</span>
+              <strong>{{ formatPercent(m.devolucionUnidadesRate) }}</strong>
             </div>
             <div class="metric-row metric-row-2">
               <span>Impacto total devolucion</span>

@@ -368,6 +368,7 @@ export class CatalogProductsImportComponent implements OnDestroy {
       const rowNumber = Number(raw["__row_number"] || idx + 2);
       const rowEmpty = raw["__row_empty"] === true || this.nonEmptyRecordCount(raw) === 0;
       const sku = this.textFromColumn(raw, mapping.skuColumn);
+      const cklassFields = this.extractCklassFields(raw);
       const duplicate = sku ? (skuCounts.get(sku.toLowerCase()) || 0) > 1 : false;
       const priceCostExcel = this.numberFromColumn(raw, mapping.priceCostColumn);
       const priceCost = this.applyDiscount(priceCostExcel.value, mapping.priceCostDiscountPct);
@@ -393,6 +394,7 @@ export class CatalogProductsImportComponent implements OnDestroy {
         color: this.textFromColumn(raw, mapping.colorColumn) || null,
         size: this.textFromColumn(raw, mapping.sizeColumn) || null,
         impuls_product_id: this.textFromColumn(raw, mapping.impulsProductIdColumn) || null,
+        ...cklassFields,
         price_cost_excel: priceCostExcel.value,
         price_cost_discount_pct: mapping.priceCostDiscountPct,
         price_cost: priceCost,
@@ -429,6 +431,14 @@ export class CatalogProductsImportComponent implements OnDestroy {
       color: row.color,
       size: row.size,
       impuls_product_id: row.impuls_product_id,
+      cklass_model: row.cklass_model,
+      cklass_color: row.cklass_color,
+      cklass_size: row.cklass_size,
+      cklass_barcode: row.cklass_barcode,
+      cklass_catalog: row.cklass_catalog,
+      cklass_model_display: row.cklass_model_display,
+      cklass_product_code: row.cklass_product_code,
+      image_key: row.image_key,
       price_cost_excel: row.price_cost_excel,
       price_cost_discount_pct: row.price_cost_discount_pct,
       price_cost: row.price_cost,
@@ -509,6 +519,45 @@ export class CatalogProductsImportComponent implements OnDestroy {
     return String(row[column] ?? "").trim();
   }
 
+  private textFromKnownColumn(row: Record<string, unknown>, aliases: string[]): string {
+    const aliasSet = new Set(aliases.map((alias) => this.normalizeHeaderKey(alias)));
+    const key = Object.keys(row).find((header) => aliasSet.has(this.normalizeHeaderKey(header)));
+    return key ? String(row[key] ?? "").trim() : "";
+  }
+
+  private extractCklassFields(row: Record<string, unknown>): Pick<
+    CatalogProductImportRow,
+    | "cklass_model"
+    | "cklass_color"
+    | "cklass_size"
+    | "cklass_barcode"
+    | "cklass_catalog"
+    | "cklass_model_display"
+    | "cklass_product_code"
+    | "image_key"
+  > {
+    const model = this.textFromKnownColumn(row, ["MODELO", "modelo"]) || null;
+    const color = this.textFromKnownColumn(row, ["COLOR", "color"]) || null;
+    const size = this.textFromKnownColumn(row, ["TALLA", "talla"]) || null;
+    const barcode = this.textFromKnownColumn(row, ["Codigo_Barra", "codigo_barra", "codigo barra", "codigo de barra"]) || null;
+    const catalog = this.textFromKnownColumn(row, ["CATALOGO", "catalogo", "catálogo"]) || null;
+    const modelDisplay = model ? model.replace(/-/g, "") : null;
+    const cleanBarcode = barcode ? barcode.replace(/\s+/g, "") : "";
+    const productCode = cleanBarcode.length > 7 ? cleanBarcode.slice(0, -7) : null;
+    const imageKey = model && color && catalog ? `CKLASS|${model}|${color}|${catalog}` : null;
+
+    return {
+      cklass_model: model,
+      cklass_color: color,
+      cklass_size: size,
+      cklass_barcode: barcode,
+      cklass_catalog: catalog,
+      cklass_model_display: modelDisplay,
+      cklass_product_code: productCode,
+      image_key: imageKey,
+    };
+  }
+
   private numberFromColumn(row: Record<string, unknown>, column: string): { value: number | null; invalid: boolean } {
     const value = this.textFromColumn(row, column).replace(/[$,\s]/g, "");
     if (!value) return { value: null, invalid: false };
@@ -562,5 +611,9 @@ export class CatalogProductsImportComponent implements OnDestroy {
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
       .trim();
+  }
+
+  private normalizeHeaderKey(value: unknown): string {
+    return this.normalizeText(value).replace(/[^a-z0-9]+/g, "");
   }
 }

@@ -45,6 +45,14 @@ export interface CatalogProduct {
   price_clienta: number | null;
   stock_qty: number | null;
   impuls_product_id: string | null;
+  cklass_model: string | null;
+  cklass_color: string | null;
+  cklass_size: string | null;
+  cklass_barcode: string | null;
+  cklass_catalog: string | null;
+  cklass_model_display: string | null;
+  cklass_product_code: string | null;
+  image_key: string | null;
   image_status: CatalogProductImageStatus | null;
   image_url: string | null;
   image_storage_path: string | null;
@@ -52,6 +60,9 @@ export interface CatalogProduct {
   impuls_image_source_url: string | null;
   impuls_image_fetched_at?: unknown;
   impuls_image_error: string | null;
+  cklass_image_source_url: string | null;
+  cklass_image_fetched_at?: unknown;
+  cklass_image_error: string | null;
   notes: string | null;
   original_row?: Record<string, unknown>;
   last_import_id?: string | null;
@@ -75,6 +86,14 @@ export interface CatalogProductImportRow {
   price_clienta_markup_pct?: number | null;
   price_clienta?: number | null;
   impuls_product_id?: string | null;
+  cklass_model?: string | null;
+  cklass_color?: string | null;
+  cklass_size?: string | null;
+  cklass_barcode?: string | null;
+  cklass_catalog?: string | null;
+  cklass_model_display?: string | null;
+  cklass_product_code?: string | null;
+  image_key?: string | null;
   stock_qty?: number | null;
   image_url?: string | null;
   notes?: string | null;
@@ -103,6 +122,8 @@ export interface ResolveImpulsImageResult {
   image_storage_path?: string | null;
   image_status?: CatalogProductImageStatus | string | null;
 }
+
+export type ResolveCklassImageResult = ResolveImpulsImageResult;
 
 @Injectable({ providedIn: "root" })
 export class CatalogProductsService {
@@ -173,6 +194,14 @@ export class CatalogProductsService {
           color: this.nullableText(row.color),
           size: this.nullableText(row.size),
           impuls_product_id: this.nullableText(row.impuls_product_id),
+          cklass_model: this.nullableText(row.cklass_model),
+          cklass_color: this.nullableText(row.cklass_color),
+          cklass_size: this.nullableText(row.cklass_size),
+          cklass_barcode: this.nullableText(row.cklass_barcode),
+          cklass_catalog: this.nullableText(row.cklass_catalog),
+          cklass_model_display: this.nullableText(row.cklass_model_display),
+          cklass_product_code: this.nullableText(row.cklass_product_code),
+          image_key: this.nullableText(row.image_key),
           price_cost_excel: this.nullableNumber(row.price_cost_excel),
           price_cost_discount_pct: this.nullablePercent(row.price_cost_discount_pct),
           price_cost: this.nullableNumber(row.price_cost),
@@ -356,6 +385,27 @@ export class CatalogProductsService {
     return result;
   }
 
+  async resolveCklassImage(product: CatalogProduct): Promise<ResolveCklassImageResult> {
+    const catalogProductId = product.catalog_product_id || product.product_id;
+    if (!catalogProductId) return { ok: true, found: false, reason: "MISSING_CATALOG_PRODUCT_ID", images: [] };
+    const result = await lastValueFrom(
+      this.api.post<ResolveCklassImageResult>("/api/admin/catalog-products/resolve-cklass-image", {
+        business_id: "catalogo",
+        catalog_product_id: catalogProductId,
+      }),
+    );
+    const imageUrl = this.nullableText(result.image_url);
+    const patch: Partial<CatalogProduct> = {
+      ...product,
+      image_url: imageUrl ?? product.image_url,
+      image_storage_path: this.nullableText(result.image_storage_path) ?? product.image_storage_path,
+      image_status: this.normalizeImageStatus(result.image_status) ?? product.image_status,
+      image_provider: imageUrl ? "CKLASS" : product.image_provider,
+    };
+    this.mergeRows([{ ...product, ...patch }]);
+    return result;
+  }
+
   productDocId(businessId: BusinessId, sku: string): string {
     const encoded = encodeURIComponent(sku.trim()).replace(/\./g, "%2E");
     const safe = encoded.length <= 900 ? encoded : this.hashSku(sku);
@@ -383,6 +433,14 @@ export class CatalogProductsService {
       price_clienta: this.nullableNumber(data["price_clienta"]),
       stock_qty: this.nullableInteger(data["stock_qty"]),
       impuls_product_id: this.nullableText(data["impuls_product_id"]),
+      cklass_model: this.nullableText(data["cklass_model"]),
+      cklass_color: this.nullableText(data["cklass_color"]),
+      cklass_size: this.nullableText(data["cklass_size"]),
+      cklass_barcode: this.nullableText(data["cklass_barcode"]),
+      cklass_catalog: this.nullableText(data["cklass_catalog"]),
+      cklass_model_display: this.nullableText(data["cklass_model_display"]),
+      cklass_product_code: this.nullableText(data["cklass_product_code"]),
+      image_key: this.nullableText(data["image_key"]),
       image_status: this.normalizeImageStatus(data["image_status"]),
       image_url: this.nullableText(data["image_url"]),
       image_storage_path: this.nullableText(data["image_storage_path"]),
@@ -390,6 +448,9 @@ export class CatalogProductsService {
       impuls_image_source_url: this.nullableText(data["impuls_image_source_url"]),
       impuls_image_fetched_at: data["impuls_image_fetched_at"] ?? null,
       impuls_image_error: this.nullableText(data["impuls_image_error"]),
+      cklass_image_source_url: this.nullableText(data["cklass_image_source_url"]),
+      cklass_image_fetched_at: data["cklass_image_fetched_at"] ?? null,
+      cklass_image_error: this.nullableText(data["cklass_image_error"]),
       notes: this.nullableText(data["notes"]),
       original_row: (data["original_row"] || {}) as Record<string, unknown>,
       last_import_id: this.nullableText(data["last_import_id"]),

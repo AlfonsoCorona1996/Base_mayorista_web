@@ -145,6 +145,24 @@
       </div>
     </section>
 
+    @if (features.enabled('inventoryProductsV2')) {
+    <section class="surface-card commercial-overview">
+      <div class="section-head">
+        <h2><span class="material-symbols-rounded" aria-hidden="true">query_stats</span> Desempeño e inventario propio</h2>
+        <p>El estado del proveedor se mantiene separado de las existencias que realmente tienes.</p>
+      </div>
+      <div class="pricing-grid">
+        <article class="price-kpi"><p class="price-kpi-label">Venta neta</p><p class="price-kpi-value">{{ formatMoney(productAnalytics().sales, preferredCurrency()) }}</p></article>
+        <article class="price-kpi"><p class="price-kpi-label">Ganancia</p><p class="price-kpi-value">{{ formatMoney(productAnalytics().profit, preferredCurrency()) }}</p></article>
+        <article class="price-kpi"><p class="price-kpi-label">Unidades netas</p><p class="price-kpi-value">{{ productAnalytics().units }}</p></article>
+        <article class="price-kpi"><p class="price-kpi-label">Devoluciones</p><p class="price-kpi-value">{{ productAnalytics().returns }}</p></article>
+        <article class="price-kpi"><p class="price-kpi-label">Clientas únicas</p><p class="price-kpi-value">{{ productAnalytics().customers }}</p></article>
+        <article class="price-kpi"><p class="price-kpi-label">Tu stock</p><p class="price-kpi-value">{{ productAnalytics().available }} disponible · {{ productAnalytics().reserved }} reservado · {{ productAnalytics().review }} por revisar</p></article>
+        <article class="price-kpi"><p class="price-kpi-label">Última venta</p><p class="price-kpi-value">{{ formatDate(productAnalytics().lastSale) }}</p></article>
+      </div>
+    </section>
+    }
+
     <section class="assets-grid">
       <article class="surface-card assets-card">
         <div class="section-head section-head-inline">

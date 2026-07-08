@@ -4,6 +4,7 @@ import { Router, RouterLink, ActivatedRoute } from "@angular/router";
 import { AuthzService } from "../../core/authz.service";
 import { CustomersService } from "../../core/customers.service";
 import { Order, OrderItem, OrdersService } from "../../core/orders.service";
+import { calculateItemFinancials, calculateOrderFinancials } from "../../core/order-financials";
 import { RoutesService } from "../../core/routes.service";
 import {
   FinanceAccount,
@@ -628,28 +629,19 @@ export default class RetiroGananciasPage {
   }
 
   private resolveOrderTotal(order: Order): number {
-    const totals = this.toSafeNumber(order.totals?.total_amount);
-    if (totals > 0) return totals;
-    return (order.items || []).reduce((sum, item) => sum + this.resolveItemSaleValue(item), 0);
+    return calculateOrderFinancials(order).netAmount;
   }
 
   private resolveOrderCost(order: Order): number {
-    return (order.items || []).reduce((sum, item) => sum + this.resolveItemCostValue(item), 0);
+    return calculateOrderFinancials(order).netCost;
   }
 
   private resolveItemSaleValue(item: OrderItem): number {
-    const qty = Math.max(0, this.toSafeNumber((item.confirmed_qty ?? item.quantity) || 0));
-    const priceClienta = this.toSafeNumber(item.price_clienta);
-    if (priceClienta > 0) return qty * priceClienta;
-    const cost = this.toSafeNumber(item.price_cost);
-    if (cost > 0) return Number((cost * 1.35).toFixed(2)) * qty;
-    return 0;
+    return calculateItemFinancials(item).netClient;
   }
 
   private resolveItemCostValue(item: OrderItem): number {
-    const qty = Math.max(0, this.toSafeNumber((item.confirmed_qty ?? item.quantity) || 0));
-    const cost = this.toSafeNumber(item.price_cost);
-    return cost > 0 ? cost * qty : 0;
+    return calculateItemFinancials(item).netCost;
   }
 
   private matchesRoute(orderRouteId: string | null, selectedRouteId: string | null): boolean {

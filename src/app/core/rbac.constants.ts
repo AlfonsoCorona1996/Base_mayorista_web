@@ -321,6 +321,7 @@ export function buildRolePreset(roleId: RoleId): RoleDoc {
       "cap.transfers.execute",
       "cap.payments.view",
       "cap.payments.register",
+      "cap.payments.refund",
       "cap.audit.view",
     ]);
     capabilities["cap.roles.edit"] = false;
@@ -344,6 +345,10 @@ export function buildRolePreset(roleId: RoleId): RoleDoc {
       "cap.inventory.receive",
       "cap.inventory.reserve",
       "cap.inventory.release",
+      "cap.returns.view",
+      "cap.returns.create",
+      "cap.returns.approve",
+      "cap.returns.restock",
       "cap.packing.view",
       "cap.packing.box.create",
       "cap.packing.box.edit_open",

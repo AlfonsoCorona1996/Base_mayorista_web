@@ -10,6 +10,7 @@ import { OrdersService } from "../../core/orders.service";
 import { SuppliersService } from "../../core/suppliers.service";
 import { BusinessScopeService } from "../../core/business-scope.service";
 import { ReturnRecord, ReturnsService } from "../../core/returns.service";
+import { FeatureFlagsService } from "../../core/feature-flags.service";
 
 type StockFilter = "all" | "available" | "reserved" | "low" | "sold_out" | "without_price";
 type SortFilter = "updated_desc" | "name_asc" | "stock_low" | "stock_high" | "price_low" | "price_high";
@@ -18,12 +19,18 @@ type ReservationEntry = { orderId: string; qty: number; orderNumber: string; sta
 interface InventoryDraft {
   inventory_id: string;
   title: string;
+  sku: string;
+  product_id: string;
+  variant_id: string;
   category_hint: string;
   supplier_id: string;
   variant_name: string;
   color_name: string;
   size_label: string;
   quantity_on_hand: number;
+  min_stock: number;
+  max_stock: number;
+  supplier_lead_days: number;
   unit_price: number | null;
   notes: string;
   image_urls: string[];
@@ -83,6 +90,7 @@ export default class InventarioPage {
   private orders = inject(OrdersService);
   businessScope = inject(BusinessScopeService);
   private returnsService = inject(ReturnsService);
+  features = inject(FeatureFlagsService);
 
   constructor() {
     this.reload();
@@ -98,14 +106,19 @@ export default class InventarioPage {
 
   totalUnits = computed(() => this.rows().reduce((sum, row) => sum + this.onHandQty(row), 0));
   totalAvailableUnits = computed(() => this.rows().reduce((sum, row) => sum + this.availableQty(row), 0));
+  reviewUnits = computed(() => this.rows().reduce((sum, row) => sum + this.reviewQty(row), 0));
+  damagedUnits = computed(() => this.rows().reduce((sum, row) => sum + this.damagedQty(row), 0));
 
-  lowStockCount = computed(() => this.rows().filter((row) => this.availableQty(row) > 0 && this.availableQty(row) <= 3).length);
+  lowStockCount = computed(() => this.rows().filter((row) => {
+    const minimum = Math.max(0, Number(row.min_stock ?? 3));
+    return minimum > 0 && this.availableQty(row) > 0 && this.availableQty(row) <= minimum;
+  }).length);
 
   soldOutCount = computed(() => this.rows().filter((row) => this.onHandQty(row) === 0).length);
   reservedCount = computed(() => this.rows().filter((row) => this.reservedQty(row) > 0).length);
   withoutPriceCount = computed(() => this.rows().filter((row) => !row.unit_price || row.unit_price <= 0).length);
   totalInvestment = computed(() =>
-    this.rows().reduce((sum, row) => sum + (row.unit_price || 0) * this.onHandQty(row), 0),
+    this.rows().reduce((sum, row) => sum + (row.unit_price || 0) * (this.availableQty(row) + this.reservedQty(row) + this.reviewQty(row)), 0),
   );
 
   categoryOptions = computed(() => this.categories.getAll());
@@ -311,12 +324,18 @@ export default class InventarioPage {
     this.draft = {
       inventory_id: item.inventory_id,
       title: item.title,
+      sku: item.sku || "",
+      product_id: item.product_id || "",
+      variant_id: item.variant_id || "",
       category_hint: item.category_hint || "",
       supplier_id: item.supplier_id || "",
       variant_name: item.variant_name || "",
       color_name: item.color_name || "",
       size_label: item.size_label || "",
       quantity_on_hand: this.onHandQty(item),
+      min_stock: Number(item.min_stock || 0),
+      max_stock: Number(item.max_stock || 0),
+      supplier_lead_days: Number(item.supplier_lead_days || 0),
       unit_price: item.unit_price,
       notes: item.notes || "",
       image_urls: item.image_urls || [],
@@ -556,13 +575,19 @@ export default class InventarioPage {
       return;
     }
 
+    if (this.draft.max_stock > 0 && this.draft.max_stock < this.draft.min_stock) {
+      this.error.set("El stock máximo no puede ser menor que el mínimo.");
+      return;
+    }
+
     const existing = this.editingId()
       ? this.rows().find((row) => row.inventory_id === this.editingId())
       : null;
     const reservedQty = existing ? this.reservedQty(existing) : 0;
+    const unavailableQty = reservedQty + (existing ? this.reviewQty(existing) + this.damagedQty(existing) : 0);
 
-    if (this.draft.quantity_on_hand < reservedQty) {
-      this.error.set(`No puedes dejar menos piezas on hand que las ${reservedQty} reservadas activas.`);
+    if (this.draft.quantity_on_hand < unavailableQty) {
+      this.error.set(`No puedes dejar menos de ${unavailableQty} piezas físicas: incluyen reservas, revisión y daño.`);
       return;
     }
 
@@ -570,11 +595,14 @@ export default class InventarioPage {
 
     try {
       const onHandQty = Math.max(0, Math.trunc(this.draft.quantity_on_hand));
-      const availableQty = Math.max(0, onHandQty - reservedQty);
+      const availableQty = Math.max(0, onHandQty - unavailableQty);
       const payload: InventoryItem = {
         inventory_id: this.draft.inventory_id,
         business_id: existing?.business_id || this.businessScope.writeBusinessId(),
         title,
+        sku: this.draft.sku.trim(),
+        product_id: this.trimOrNull(this.draft.product_id),
+        variant_id: this.trimOrNull(this.draft.variant_id),
         category_hint: this.draft.category_hint || null,
         supplier_id: this.draft.supplier_id || null,
         variant_name: this.trimOrNull(this.draft.variant_name),
@@ -583,6 +611,11 @@ export default class InventarioPage {
         on_hand_qty: onHandQty,
         reserved_qty: reservedQty,
         available_qty: availableQty,
+        in_review_qty: existing?.in_review_qty || 0,
+        damaged_qty: existing?.damaged_qty || 0,
+        min_stock: Math.max(0, Math.trunc(Number(this.draft.min_stock || 0))),
+        max_stock: Math.max(0, Math.trunc(Number(this.draft.max_stock || 0))),
+        supplier_lead_days: Math.max(0, Math.trunc(Number(this.draft.supplier_lead_days || 0))),
         quantity_on_hand: availableQty,
         unit_price: this.draft.unit_price,
         notes: this.trimOrNull(this.draft.notes),
@@ -792,7 +825,25 @@ export default class InventarioPage {
   }
 
   availableQty(item: InventoryItem): number {
-    return Math.max(0, Math.trunc(this.onHandQty(item) - this.reservedQty(item)));
+    if (item.available_qty !== null && item.available_qty !== undefined) {
+      return Math.max(0, Math.trunc(Number(item.available_qty) || 0));
+    }
+    return Math.max(0, Math.trunc(this.onHandQty(item) - this.reservedQty(item) - this.reviewQty(item) - this.damagedQty(item)));
+  }
+
+  reviewQty(item: InventoryItem): number {
+    return Math.max(0, Math.trunc(Number(item.in_review_qty || 0)));
+  }
+
+  damagedQty(item: InventoryItem): number {
+    return Math.max(0, Math.trunc(Number(item.damaged_qty || 0)));
+  }
+
+  reorderQty(item: InventoryItem): number {
+    const minimum = Math.max(0, Number(item.min_stock || 0));
+    const maximum = Math.max(minimum, Number(item.max_stock || minimum));
+    if (minimum === 0 || this.availableQty(item) > minimum) return 0;
+    return Math.max(0, Math.trunc(maximum - this.availableQty(item)));
   }
 
   hasReservations(item: InventoryItem): boolean {
@@ -985,12 +1036,18 @@ export default class InventarioPage {
     return {
       inventory_id: "",
       title: "",
+      sku: "",
+      product_id: "",
+      variant_id: "",
       category_hint: "",
       supplier_id: "",
       variant_name: "",
       color_name: "",
       size_label: "",
       quantity_on_hand: 1,
+      min_stock: 0,
+      max_stock: 0,
+      supplier_lead_days: 0,
       unit_price: null,
       notes: "",
       image_urls: [],

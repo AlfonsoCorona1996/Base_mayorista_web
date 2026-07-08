@@ -4,8 +4,14 @@ import { RouterLink } from "@angular/router";
 import { Customer, CustomersService, OptInStatus } from "../../core/customers.service";
 import { LocalitiesService, Locality } from "../../core/localities.service";
 import { RoutesService } from "../../core/routes.service";
+import { OrdersService } from "../../core/orders.service";
+import { calculateOrderFinancials } from "../../core/order-financials";
+import { BusinessScopeService } from "../../core/business-scope.service";
+import { CurrencyPipe, DatePipe } from "@angular/common";
 
 type CustomerFilter = "all" | "active" | "inactive";
+type AccountFilter = "all" | "debt" | "credit";
+type CustomerSort = "name" | "sales" | "frequency" | "oldest";
 
 interface CustomerDraft {
   customer_id: string;
@@ -30,7 +36,7 @@ interface CustomerDraft {
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   selector: "app-clientas",
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, CurrencyPipe, DatePipe],
   templateUrl: "./clientas.html",
   styleUrl: "./clientas.css",
 })
@@ -43,6 +49,12 @@ export default class ClientasPage {
 
   searchTerm = signal("");
   statusFilter = signal<CustomerFilter>("all");
+  routeFilter = signal("all");
+  localityFilter = signal("all");
+  accountFilter = signal<AccountFilter>("all");
+  segmentFilter = signal("all");
+  activityFilter = signal<"all" | "30" | "60" | "inactive">("all");
+  sortBy = signal<CustomerSort>("name");
   editingId = signal<string | null>(null);
   showInsights = signal(false);
 
@@ -51,6 +63,8 @@ export default class ClientasPage {
   private customersService = inject(CustomersService);
   private routesService = inject(RoutesService);
   private localitiesService = inject(LocalitiesService);
+  private ordersService = inject(OrdersService);
+  private businessScope = inject(BusinessScopeService);
 
   constructor() {
     this.reload();
@@ -59,6 +73,11 @@ export default class ClientasPage {
   allCustomers = computed(() => this.customersService.customers());
   activeCount = computed(() => this.allCustomers().filter((customer) => customer.active).length);
   inactiveCount = computed(() => this.allCustomers().length - this.activeCount());
+  totalNetSales = computed(() => this.allCustomers().reduce((sum, customer) => sum + this.customerMetrics(customer).netSales, 0));
+  totalReceivable = computed(() => this.allCustomers().reduce((sum, customer) => sum + this.customerMetrics(customer).balanceDue, 0));
+  totalCredits = computed(() => this.allCustomers().reduce((sum, customer) => sum + Number(customer.credit_balance || 0), 0));
+  private metricsByCustomer = computed(() => new Map(this.allCustomers().map((customer) => [customer.customer_id, this.calculateCustomerMetrics(customer)])));
+  hasActiveFilters = computed(() => Boolean(this.searchTerm().trim()) || this.statusFilter() !== "all" || this.routeFilter() !== "all" || this.localityFilter() !== "all" || this.accountFilter() !== "all" || this.segmentFilter() !== "all" || this.activityFilter() !== "all" || this.sortBy() !== "name");
 
   routes = computed(() => this.routesService.routes());
   localities = computed(() => this.localitiesService.localities());
@@ -66,6 +85,12 @@ export default class ClientasPage {
   filteredCustomers = computed(() => {
     const term = this.searchTerm().trim().toLowerCase();
     const filter = this.statusFilter();
+    const route = this.routeFilter();
+    const locality = this.localityFilter();
+    const account = this.accountFilter();
+    const segment = this.segmentFilter();
+    const activity = this.activityFilter();
+    const sort = this.sortBy();
 
     return [...this.allCustomers()]
       .filter((customer) => {
@@ -74,6 +99,16 @@ export default class ClientasPage {
           (filter === "active" && customer.active) ||
           (filter === "inactive" && !customer.active);
         if (!statusOk) return false;
+        if (route !== "all" && (customer.route_id || "") !== route) return false;
+        if (locality !== "all" && (customer.locality_id || "") !== locality) return false;
+        const metrics = this.customerMetrics(customer);
+        if (account === "debt" && metrics.balanceDue <= 0) return false;
+        if (account === "credit" && Number(customer.credit_balance || 0) <= 0) return false;
+        if (segment !== "all" && this.customerSegment(customer) !== segment) return false;
+        const age = metrics.lastOrder ? (Date.now() - new Date(metrics.lastOrder).getTime()) / 86_400_000 : Infinity;
+        if (activity === "30" && age > 30) return false;
+        if (activity === "60" && age > 60) return false;
+        if (activity === "inactive" && age <= 60) return false;
         if (!term) return true;
 
         const blob = [
@@ -91,6 +126,9 @@ export default class ClientasPage {
         return blob.includes(term);
       })
       .sort((a, b) => {
+        if (sort === "sales") return this.customerMetrics(b).netSales - this.customerMetrics(a).netSales;
+        if (sort === "frequency") return this.customerMetrics(b).orders - this.customerMetrics(a).orders;
+        if (sort === "oldest") return new Date(this.customerMetrics(a).lastOrder || 0).getTime() - new Date(this.customerMetrics(b).lastOrder || 0).getTime();
         const nameA = `${a.first_name} ${a.last_name}`.trim();
         const nameB = `${b.first_name} ${b.last_name}`.trim();
         return nameA.localeCompare(nameB, "es", { sensitivity: "base" });
@@ -106,6 +144,7 @@ export default class ClientasPage {
         this.customersService.loadFromFirestore(),
         this.routesService.loadFromFirestore(),
         this.localitiesService.loadFromFirestore(),
+        this.ordersService.loadFromFirestore(),
       ]);
     } catch (error: any) {
       this.error.set(error?.message || "No se pudieron cargar las clientas");
@@ -122,6 +161,12 @@ export default class ClientasPage {
   clearFilters() {
     this.searchTerm.set("");
     this.statusFilter.set("all");
+    this.routeFilter.set("all");
+    this.localityFilter.set("all");
+    this.accountFilter.set("all");
+    this.segmentFilter.set("all");
+    this.activityFilter.set("all");
+    this.sortBy.set("name");
   }
 
   onRouteChange(routeId: string) {
@@ -205,6 +250,7 @@ export default class ClientasPage {
 
       const payload: Customer = {
         customer_id: draftId,
+        business_id: existing?.business_id || this.businessScope.writeBusinessId(),
         first_name: firstName,
         last_name: lastName,
         whatsapp,
@@ -212,20 +258,10 @@ export default class ClientasPage {
         locality_id: this.draft.locality_id || null,
         active: this.draft.active,
         notes: this.draft.notes.trim(),
-        tags: [],
-        opt_in: null,
-        insights: this.showInsights()
-          ? {
-              last_order_at: this.draft.insights_last_order || null,
-              total_orders: this.toNumberOrNull(this.draft.insights_total_orders),
-              total_spent: this.toNumberOrNull(this.draft.insights_total_spent),
-              avg_order_value: this.toNumberOrNull(this.draft.insights_avg_order),
-              avg_units_per_order: this.toNumberOrNull(this.draft.insights_avg_units),
-              frequency_days: this.toNumberOrNull(this.draft.insights_frequency_days),
-              preferred_categories: this.parseTags(this.draft.insights_categories),
-              preferred_products: this.parseTags(this.draft.insights_products),
-            }
-          : null,
+        tags: existing?.tags || [],
+        opt_in: existing?.opt_in || null,
+        insights: null,
+        credit_balance: existing?.credit_balance || 0,
         created_at: createdAt,
       };
 
@@ -324,7 +360,64 @@ export default class ClientasPage {
     const base = this.slugify(`${firstName} ${lastName}`) || "clienta";
     const digits = phone.replace(/\D/g, "");
     const suffix = digits.slice(-4) || Date.now().toString(36).slice(-4);
-    return `${base}-${suffix}`;
+    return `${this.businessScope.writeBusinessId()}-${base}-${suffix}`;
+  }
+
+  customerMetrics(customer: Customer): { orders: number; netSales: number; balanceDue: number; average: number; returns: number; lastOrder: string | null } {
+    return this.metricsByCustomer().get(customer.customer_id) || this.calculateCustomerMetrics(customer);
+  }
+
+  private calculateCustomerMetrics(customer: Customer): { orders: number; netSales: number; balanceDue: number; average: number; returns: number; lastOrder: string | null } {
+    const rows = this.ordersService.list().filter((order) => order.customer_id === customer.customer_id && order.business_id === customer.business_id);
+    const delivered = rows.filter((order) => Boolean(order.delivered_at) || ["delivered", "delivered_partial", "entregado", "pago_pendiente", "pagado_parcial", "pagado", "closed"].includes(order.status));
+    const completed = delivered.filter((order) => calculateOrderFinancials(order).netUnits > 0);
+    let netSales = 0;
+    let balanceDue = 0;
+    let returns = 0;
+    for (const order of delivered) {
+      const financials = calculateOrderFinancials(order);
+      returns += financials.returnsAmount;
+    }
+    for (const order of completed) {
+      const financials = calculateOrderFinancials(order);
+      netSales += financials.netAmount;
+      balanceDue += financials.balanceDue;
+    }
+    const lastOrder = completed
+      .map((order) => order.delivered_at || order.updated_at || order.created_at)
+      .filter(Boolean)
+      .sort()
+      .at(-1) || null;
+    return {
+      orders: completed.length,
+      netSales,
+      balanceDue,
+      average: completed.length > 0 ? netSales / completed.length : 0,
+      returns,
+      lastOrder,
+    };
+  }
+
+  customerSegment(customer: Customer): "champions" | "loyal" | "risk" | "new" | "dormant" {
+    const rows = this.allCustomers().filter((entry) => entry.business_id === customer.business_id);
+    const metrics = rows.map((entry) => ({ id: entry.customer_id, ...this.customerMetrics(entry) }));
+    const current = metrics.find((entry) => entry.id === customer.customer_id)!;
+    if (!current || current.orders === 0) return "dormant";
+    const rank = (value: number, values: number[]) => Math.max(1, Math.min(5, Math.ceil((values.filter((entry) => entry <= value).length / Math.max(1, values.length)) * 5)));
+    const recency = current.lastOrder ? (Date.now() - new Date(current.lastOrder).getTime()) / 86_400_000 : 99999;
+    const recencies = metrics.map((entry) => entry.lastOrder ? (Date.now() - new Date(entry.lastOrder).getTime()) / 86_400_000 : 99999);
+    const r = 6 - rank(recency, recencies);
+    const f = rank(current.orders, metrics.map((entry) => entry.orders));
+    const m = rank(current.netSales, metrics.map((entry) => entry.netSales));
+    if (r >= 4 && f >= 4 && m >= 4) return "champions";
+    if (r <= 2 && (f >= 3 || m >= 3)) return "risk";
+    if (current.orders === 1 && r >= 4) return "new";
+    if (r <= 2) return "dormant";
+    return "loyal";
+  }
+
+  segmentLabel(segment: string): string {
+    return ({ champions: "Estrella", loyal: "Fiel", risk: "En riesgo", new: "Nueva", dormant: "Inactiva" } as Record<string, string>)[segment] || segment;
   }
 
   private slugify(value: string): string {

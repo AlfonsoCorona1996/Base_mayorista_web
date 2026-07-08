@@ -37,6 +37,7 @@ export interface SupplierOperationRow {
   image_url: string | null;
   quantity: number;
   product_id: string | null;
+  variant_id: string | null;
   status: SupplierOperationStatus;
   inventory_item_id: string | null;
   received_to_inventory: boolean;
@@ -104,6 +105,7 @@ export class SupplierOperationsService {
         image_url: existing?.image_url || item.image_url || null,
         quantity: this.safeQty(item.confirmed_qty ?? item.quantity),
         product_id: item.product_id || null,
+        variant_id: item.variant_id || null,
         status: existing?.status || "por_levantar",
         inventory_item_id: existing?.inventory_item_id || null,
         received_to_inventory: existing?.received_to_inventory || false,
@@ -203,6 +205,8 @@ export class SupplierOperationsService {
 
     await this.inventory.receiveInbound({
       sku: inventoryId,
+      product_id: row.product_id,
+      variant_id: row.variant_id,
       business_id: row.business_id,
       qty,
       supplierOperationId: row.op_id,
@@ -534,6 +538,7 @@ export class SupplierOperationsService {
       image_url: data["image_url"] || null,
       quantity: this.safeQty(data["quantity"]),
       product_id: data["product_id"] || null,
+      variant_id: data["variant_id"] || null,
       status: (data["status"] as SupplierOperationStatus) || "por_levantar",
       inventory_item_id: data["inventory_item_id"] || null,
       received_to_inventory: data["received_to_inventory"] === true,

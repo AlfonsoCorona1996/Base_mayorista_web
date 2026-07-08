@@ -16,6 +16,7 @@ import { SalesNoteRenderRow, SalesNoteRenderService } from "./sales-note-render.
 import { BusinessScopeService } from "../../core/business-scope.service";
 import { BusinessId } from "../../core/rbac.constants";
 import { STORAGE } from "../../core/firebase.providers";
+import { calculateOrderFinancials, netItemQty } from "../../core/order-financials";
 
 type IntentFilter =
   | "hoy"
@@ -909,7 +910,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
           try {
             const total = this.tableOrderClientTotal(order);
             if (total > 0) {
-              await this.orders.closeWithPayment(order.order_id, total, total);
+              await this.orders.closeWithPayment(order.order_id, Math.max(0, total - Number(order.totals?.paid_amount || 0)), total);
             } else {
               await this.orders.updateStatus(order.order_id, "pagado");
             }
@@ -1264,18 +1265,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   tableOrderClientTotal(order: Order): number {
-    const persistedTotal = Number(order.totals?.total_amount ?? 0);
-    if (Number.isFinite(persistedTotal) && persistedTotal > 0) return persistedTotal;
-
-    let estimated = 0;
-    for (const item of order.items || []) {
-      const qtyRaw = Number(item.quantity ?? 0);
-      const qty = Number.isFinite(qtyRaw) ? Math.max(0, Math.trunc(qtyRaw)) : 0;
-      const unitRaw = Number(item.price_clienta ?? item.price_public ?? 0);
-      const unit = Number.isFinite(unitRaw) ? Math.max(0, unitRaw) : 0;
-      estimated += qty * unit;
-    }
-    return Number(estimated.toFixed(2));
+    return calculateOrderFinancials(order).netAmount;
   }
 
   isTableOrderPaid(order: Order): boolean {
@@ -2200,9 +2190,9 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
 
   private salesNoteRows(order: Order): SalesNoteRow[] {
     return (order.items || [])
-      .filter((item) => !["cancelado", "devuelto"].includes(item.state))
+      .filter((item) => item.state !== "cancelado" && netItemQty(item) > 0)
       .map((item) => {
-        const qty = this.itemConfirmedQty(item);
+        const qty = netItemQty(item);
         const legacyUnitPrice = (item as any)?.unit_price_clienta ?? (item as any)?.unit_price ?? (item as any)?.unitPrice;
         const unitRaw = item.price_clienta ?? item.price_public ?? legacyUnitPrice ?? 0;
         const unitParsed = Number(typeof unitRaw === "string" ? unitRaw.replace(/,/g, "").trim() : unitRaw);

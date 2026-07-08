@@ -349,6 +349,7 @@ export class RouteRunsService {
 
       tx.update(orderRef, {
         route_run_id: runId,
+        route_stop_id: stopId,
         status: "assigned_to_run",
         dispatch_request: {
           status: "accepted",

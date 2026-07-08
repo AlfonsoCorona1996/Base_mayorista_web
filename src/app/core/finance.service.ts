@@ -61,6 +61,21 @@ export interface FinanceWithdrawal {
   updated_at?: unknown;
 }
 
+export interface FinanceRefund {
+  refund_id: string;
+  business_id: BusinessId;
+  customer_id: string;
+  order_id: string;
+  return_id: string;
+  amount: number;
+  account_id: string;
+  method: string | null;
+  reference: string | null;
+  occurred_at: string;
+  created_by: string | null;
+  created_at?: unknown;
+}
+
 export interface FinanceCutSnapshot {
   ingresos: number;
   egresos: number;
@@ -106,22 +121,25 @@ export class FinanceService {
   private expensesCol = collection(FIRESTORE, "finance_expenses");
   private withdrawalsCol = collection(FIRESTORE, "finance_withdrawals");
   private cutsCol = collection(FIRESTORE, "finance_cuts");
+  private refundsCol = collection(FIRESTORE, "finance_refunds");
   private businessScope = inject(BusinessScopeService);
 
   private accountRows = signal<FinanceAccount[]>([]);
   private expenseRows = signal<FinanceExpense[]>([]);
   private withdrawalRows = signal<FinanceWithdrawal[]>([]);
   private cutRows = signal<FinanceCut[]>([]);
+  private refundRows = signal<FinanceRefund[]>([]);
   accounts = computed(() => this.filterByBusiness(this.accountRows()));
   expenses = computed(() => this.filterByBusiness(this.expenseRows()));
   withdrawals = computed(() => this.filterByBusiness(this.withdrawalRows()));
   cuts = computed(() => this.filterByBusiness(this.cutRows()));
+  refunds = computed(() => this.filterByBusiness(this.refundRows()));
   loading = signal(false);
 
   async loadAll(): Promise<void> {
     this.loading.set(true);
     try {
-      await Promise.all([this.loadAccounts(), this.loadExpenses(), this.loadWithdrawals(), this.loadCuts()]);
+      await Promise.all([this.loadAccounts(), this.loadExpenses(), this.loadWithdrawals(), this.loadCuts(), this.loadRefunds()]);
     } finally {
       this.loading.set(false);
     }
@@ -300,6 +318,11 @@ export class FinanceService {
     await this.loadCuts();
   }
 
+  async loadRefunds(): Promise<void> {
+    const snap = await getDocs(query(this.refundsCol, where("business_id", "in", this.businessScope.availableBusinessIds())));
+    this.refundRows.set(snap.docs.map((entry) => this.normalizeRefund(entry.id, entry.data() as Record<string, unknown>)).sort((a, b) => b.occurred_at.localeCompare(a.occurred_at)));
+  }
+
   private filterByBusiness<T extends { business_id: BusinessId }>(rows: T[]): T[] {
     const active = this.businessScope.activeBusinessIds();
     return rows.filter((row) => active.includes(row.business_id || "bm"));
@@ -371,6 +394,23 @@ export class FinanceService {
       },
       created_at: data["created_at"] ?? null,
       updated_at: data["updated_at"] ?? null,
+    };
+  }
+
+  private normalizeRefund(id: string, data: Record<string, unknown>): FinanceRefund {
+    return {
+      refund_id: String(data["refund_id"] || id),
+      business_id: normalizeBusinessId(data["business_id"]),
+      customer_id: String(data["customer_id"] || ""),
+      order_id: String(data["order_id"] || ""),
+      return_id: String(data["return_id"] || ""),
+      amount: this.toSafeAmount(data["amount"]),
+      account_id: String(data["account_id"] || ""),
+      method: this.toOptionalText(data["method"]),
+      reference: this.toOptionalText(data["reference"]),
+      occurred_at: this.normalizeDateInput(data["occurred_at"]),
+      created_by: this.toOptionalText(data["created_by"]),
+      created_at: data["created_at"] ?? null,
     };
   }
 

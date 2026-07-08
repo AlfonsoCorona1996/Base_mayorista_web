@@ -1,14 +1,14 @@
 import { Component, ChangeDetectionStrategy, inject, signal, computed, OnInit } from "@angular/core";
 import { ActivatedRoute, Router, RouterLink } from "@angular/router";
-import { CurrencyPipe, DatePipe, NgClass, UpperCasePipe } from "@angular/common";
+import { CurrencyPipe, DatePipe, NgClass, PercentPipe, UpperCasePipe } from "@angular/common";
 import { FormsModule } from "@angular/forms";
-import { collection, getDocs, orderBy, query, where } from "firebase/firestore";
 import { lastValueFrom } from "rxjs";
-import { FIRESTORE } from "../../core/firebase.providers";
 import { CustomersService, Customer } from "../../core/customers.service";
 import { RoutesService } from "../../core/routes.service";
-import { Order, OrderStatus } from "../../core/orders.service";
+import { Order, OrderStatus, OrdersService } from "../../core/orders.service";
+import { calculateItemFinancials, calculateOrderFinancials } from "../../core/order-financials";
 import { UserAdminApiService } from "../../services/user-admin-api.service";
+import { FeatureFlagsService } from "../../core/feature-flags.service";
 
 // Tipos de notificación (espejo del backend)
 export interface WaNotifType {
@@ -29,11 +29,16 @@ export type RfmSegment =
   | "needs_attention" // recencia baja, frecuencia media
   | "new"             // menos de 2 pedidos
   | "dormant";        // sin pedido en mucho tiempo
+type ClientTab = "summary" | "orders" | "products" | "account" | "activity";
 
 interface ProductFreqRow {
   title: string;
+  sku: string | null;
+  variant: string | null;
   count: number;
   totalSpent: number;
+  margin: number;
+  returns: number;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -47,7 +52,7 @@ function daysSince(iso: string | null | undefined): number {
 
 function computeRfmSegment(orders: Order[]): RfmSegment {
   const paid = orders.filter(o =>
-    ["pagado", "pagado_parcial", "entregado"].includes(o.status)
+    ["pagado", "pagado_parcial", "entregado", "delivered", "delivered_partial", "pago_pendiente", "closed"].includes(o.status)
   );
   const totalOrders = paid.length;
   if (totalOrders === 0) return "dormant";
@@ -55,7 +60,7 @@ function computeRfmSegment(orders: Order[]): RfmSegment {
 
   const last = paid[0];
   const days = daysSince(last.updated_at || last.created_at);
-  const total = paid.reduce((s, o) => s + (o.totals?.total_amount ?? 0), 0);
+  const total = paid.reduce((s, o) => s + calculateOrderFinancials(o).netAmount, 0);
   const avg = total / totalOrders;
 
   if (days < 14 && totalOrders >= 5 && avg > 500) return "champions";
@@ -73,7 +78,7 @@ function computeRfmSegment(orders: Order[]): RfmSegment {
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   selector: "app-clienta-detalle",
-  imports: [RouterLink, CurrencyPipe, DatePipe, NgClass, UpperCasePipe, FormsModule],
+  imports: [RouterLink, CurrencyPipe, DatePipe, NgClass, PercentPipe, UpperCasePipe, FormsModule],
   templateUrl: "./clienta-detalle.html",
   styleUrl: "./clienta-detalle.css",
 })
@@ -83,13 +88,20 @@ export default class ClientaDetallePage implements OnInit {
   private customers = inject(CustomersService);
   private routes    = inject(RoutesService);
   private api       = inject(UserAdminApiService);
-  private firestore = FIRESTORE;
+  private ordersService = inject(OrdersService);
+  features = inject(FeatureFlagsService);
 
   loading    = signal(true);
   customerId = signal("");
   customer   = signal<Customer | null>(null);
   orders     = signal<Order[]>([]);
   error      = signal<string | null>(null);
+  activeTab = signal<ClientTab>("summary");
+  followUpDraft = signal("");
+  followUpSaving = signal(false);
+  orderHistoryLimit = signal(20);
+  creditOrderId = signal("");
+  creditApplying = signal(false);
 
   // ── Link de seguimiento ───────────────────────────────────────────────
   trackLink        = signal<string | null>(null);
@@ -107,7 +119,7 @@ export default class ClientaDetallePage implements OnInit {
   // ── Computed de análisis ─────────────────────────────────────────────
 
   paidOrders = computed(() =>
-    this.orders().filter(o => ["pagado", "pagado_parcial", "entregado"].includes(o.status))
+    this.orders().filter(o => ["pagado", "pagado_parcial", "entregado", "delivered", "delivered_partial", "pago_pendiente", "closed"].includes(o.status) && calculateOrderFinancials(o).netUnits > 0)
   );
 
   activeOrders = computed(() =>
@@ -115,14 +127,39 @@ export default class ClientaDetallePage implements OnInit {
   );
 
   totalSpent = computed(() =>
-    this.paidOrders().reduce((s, o) => s + (o.totals?.total_amount ?? 0), 0)
+    this.paidOrders().reduce((s, o) => s + calculateOrderFinancials(o).netAmount, 0)
   );
+  deliveredHistory = computed(() => this.orders().filter((order) =>
+    (Boolean(order.delivered_at) || ["pagado", "pagado_parcial", "entregado", "delivered", "delivered_partial", "pago_pendiente", "closed"].includes(order.status))
+    && order.status !== "cancelado",
+  ));
+  unpaidOrders = computed(() => this.orders().filter((order) =>
+    calculateOrderFinancials(order).balanceDue > 0
+    && (Boolean(order.delivered_at) || ["delivered", "delivered_partial", "entregado", "pago_pendiente", "pagado_parcial"].includes(order.status)),
+  ));
 
   totalDebt = computed(() =>
     this.orders()
       .filter(o => ["pago_pendiente", "pagado_parcial"].includes(o.status))
-      .reduce((s, o) => s + (o.totals?.balance_due ?? 0), 0)
+      .reduce((s, o) => s + calculateOrderFinancials(o).balanceDue, 0)
   );
+  totalProfit = computed(() => this.paidOrders().reduce((sum, order) => sum + calculateOrderFinancials(order).grossProfit, 0));
+  totalReturns = computed(() => this.deliveredHistory().reduce((sum, order) => sum + calculateOrderFinancials(order).returnsAmount, 0));
+  totalCollected = computed(() => this.paidOrders().reduce((sum, order) => {
+    const row = calculateOrderFinancials(order);
+    return sum + Math.min(row.netAmount, row.paidAmount);
+  }, 0));
+  returnRate = computed(() => {
+    const gross = this.deliveredHistory().reduce((sum, order) => sum + calculateOrderFinancials(order).grossClient, 0);
+    return gross > 0 ? this.totalReturns() / gross : 0;
+  });
+  oldestDebtDays = computed(() => {
+    const pending = this.orders().filter((order) => calculateOrderFinancials(order).balanceDue > 0);
+    if (!pending.length) return 0;
+    return Math.floor(daysSince(pending[pending.length - 1].created_at));
+  });
+  creditMovements = computed(() => this.customers.creditMovementsFor(this.customerId()));
+  visibleOrderHistory = computed(() => this.orders().slice(0, this.orderHistoryLimit()));
 
   avgOrderValue = computed(() => {
     const n = this.paidOrders().length;
@@ -153,18 +190,21 @@ export default class ClientaDetallePage implements OnInit {
     return Math.floor(daysSince(paid[0].updated_at || paid[0].created_at));
   });
 
-  rfmSegment = computed<RfmSegment>(() => computeRfmSegment(this.paidOrders()));
+  rfmSegment = computed<RfmSegment>(() => this.relativeRfmSegment());
 
   /** Top 5 productos más comprados */
   topProducts = computed<ProductFreqRow[]>(() => {
     const freq = new Map<string, ProductFreqRow>();
     for (const order of this.paidOrders()) {
       for (const item of order.items ?? []) {
-        const key = (item.title || "").trim().toLowerCase();
+        const key = (item.sku || `${item.title}|${item.variant || ""}`).trim().toLowerCase();
         if (!key) continue;
-        const existing = freq.get(key) ?? { title: item.title || key, count: 0, totalSpent: 0 };
-        existing.count++;
-        existing.totalSpent += (item.price_clienta ?? 0) * (item.quantity ?? 1);
+        const existing = freq.get(key) ?? { title: item.title || key, sku: item.sku || null, variant: item.variant || null, count: 0, totalSpent: 0, margin: 0, returns: 0 };
+        const financials = calculateItemFinancials(item);
+        existing.count += financials.netQty;
+        existing.totalSpent += financials.netClient;
+        existing.margin += financials.netClient - financials.netCost;
+        existing.returns += financials.returnedQty;
         freq.set(key, existing);
       }
     }
@@ -188,6 +228,7 @@ export default class ClientaDetallePage implements OnInit {
     await Promise.all([
       this.customers.loadFromFirestore().catch(() => null),
       this.routes.loadFromFirestore().catch(() => null),
+      this.ordersService.loadFromFirestore().catch(() => null),
     ]);
 
     const c = this.customers.getById(id);
@@ -197,6 +238,7 @@ export default class ClientaDetallePage implements OnInit {
       return;
     }
     this.customer.set(c);
+    this.followUpDraft.set(c.follow_up_at ? String(c.follow_up_at).slice(0, 10) : "");
 
     // Pre-cargar link de tracking si ya existe
     if ((c as any).tracking_token) {
@@ -308,14 +350,12 @@ export default class ClientaDetallePage implements OnInit {
   }
 
   private async loadOrders(customerId: string): Promise<void> {
-    const q = query(
-      collection(this.firestore, "orders"),
-      where("customer_id", "==", customerId),
-      orderBy("created_at", "desc")
+    const businessId = this.customer()?.business_id;
+    this.orders.set(
+      this.ordersService.list()
+        .filter((order) => order.customer_id === customerId && (!businessId || order.business_id === businessId))
+        .sort((a, b) => b.created_at.localeCompare(a.created_at)),
     );
-    const snap = await getDocs(q).catch(() => null);
-    if (!snap) return;
-    this.orders.set(snap.docs.map(d => ({ order_id: d.id, ...d.data() } as Order)));
   }
 
   // ── UI ────────────────────────────────────────────────────────────────
@@ -368,5 +408,80 @@ export default class ClientaDetallePage implements OnInit {
 
   openOrder(orderId: string): void {
     this.router.navigate(["/main/pedidos", orderId]);
+  }
+
+  orderNet(order: Order): number {
+    return calculateOrderFinancials(order).netAmount;
+  }
+
+  orderBalance(order: Order): number {
+    return calculateOrderFinancials(order).balanceDue;
+  }
+
+  orderReturns(order: Order): number {
+    return calculateOrderFinancials(order).returnsAmount;
+  }
+
+  newOrder(): void {
+    this.router.navigate(["/main/pedidos"], { queryParams: { customer_id: this.customerId(), business_id: this.customer()?.business_id } });
+  }
+
+  async scheduleFollowUp(): Promise<void> {
+    const customer = this.customer();
+    if (!customer) return;
+    this.followUpSaving.set(true);
+    try {
+      await this.customers.save({ ...customer, follow_up_at: this.followUpDraft() || null });
+      this.customer.set(this.customers.getById(customer.customer_id));
+    } finally {
+      this.followUpSaving.set(false);
+    }
+  }
+
+  async applyCredit(): Promise<void> {
+    const orderId = this.creditOrderId();
+    if (!orderId) return;
+    this.creditApplying.set(true);
+    try {
+      await this.customers.applyCreditToOrder(this.customerId(), orderId);
+      this.customer.set(this.customers.getById(this.customerId()));
+      await this.ordersService.loadFromFirestore();
+      await this.loadOrders(this.customerId());
+      this.creditOrderId.set("");
+    } catch (error: any) {
+      this.error.set(error?.message || "No se pudo aplicar el saldo.");
+    } finally {
+      this.creditApplying.set(false);
+    }
+  }
+
+  private relativeRfmSegment(): RfmSegment {
+    const current = this.customer();
+    if (!current) return "dormant";
+    const completed = new Set(["pagado", "pagado_parcial", "entregado", "delivered", "delivered_partial", "pago_pendiente", "closed"]);
+    const metrics = this.customers.customers()
+      .filter((customer) => customer.business_id === current.business_id)
+      .map((customer) => {
+        const orders = this.ordersService.list().filter((order) => order.customer_id === customer.customer_id && order.business_id === current.business_id && completed.has(String(order.status)) && calculateOrderFinancials(order).netUnits > 0);
+        const last = orders.reduce((max, order) => Math.max(max, new Date(order.delivered_at || order.updated_at || order.created_at).getTime() || 0), 0);
+        return { id: customer.customer_id, recency: last ? (Date.now() - last) / 86_400_000 : 99999, frequency: orders.length, monetary: orders.reduce((sum, order) => sum + calculateOrderFinancials(order).netAmount, 0) };
+      });
+    const row = metrics.find((entry) => entry.id === current.customer_id);
+    if (!row || row.frequency === 0) return "dormant";
+    const rank = (value: number, values: number[], inverse = false) => {
+      const sorted = [...values].sort((a, b) => a - b);
+      const below = sorted.filter((entry) => entry <= value).length;
+      const score = Math.max(1, Math.min(5, Math.ceil((below / Math.max(1, sorted.length)) * 5)));
+      return inverse ? 6 - score : score;
+    };
+    const r = rank(row.recency, metrics.map((entry) => entry.recency), true);
+    const f = rank(row.frequency, metrics.map((entry) => entry.frequency));
+    const m = rank(row.monetary, metrics.map((entry) => entry.monetary));
+    if (r >= 4 && f >= 4 && m >= 4) return "champions";
+    if (f >= 4 && m >= 3) return r <= 2 ? "at_risk" : "loyal";
+    if (row.frequency <= 1 && r >= 4) return "new";
+    if (r <= 2 && (f >= 3 || m >= 3)) return "at_risk";
+    if (r <= 2) return "dormant";
+    return "needs_attention";
   }
 }

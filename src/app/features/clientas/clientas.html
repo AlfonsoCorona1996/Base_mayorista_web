@@ -23,6 +23,18 @@
       <p>Inactivas</p>
       <strong>{{ inactiveCount() }}</strong>
     </article>
+    <article class="stat-card">
+      <p>Ventas netas</p>
+      <strong>{{ totalNetSales() | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong>
+    </article>
+    <article class="stat-card">
+      <p>Por cobrar</p>
+      <strong>{{ totalReceivable() | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong>
+    </article>
+    <article class="stat-card">
+      <p>Saldos a favor</p>
+      <strong>{{ totalCredits() | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong>
+    </article>
   </section>
 
   @if (error()) {
@@ -49,7 +61,34 @@
         <option value="inactive">Solo inactivas</option>
       </select>
 
-      <button type="button" class="btn btn-outline" (click)="clearFilters()" [disabled]="!searchTerm().trim() && statusFilter() === 'all'">
+      <select class="input" [ngModel]="routeFilter()" (ngModelChange)="routeFilter.set($event)">
+        <option value="all">Todas las rutas</option>
+        @for (route of routes(); track route.route_id) { <option [value]="route.route_id">{{ route.name }}</option> }
+      </select>
+
+      <select class="input" [ngModel]="localityFilter()" (ngModelChange)="localityFilter.set($event)">
+        <option value="all">Todas las localidades</option>
+        @for (locality of localities(); track locality.locality_id) { <option [value]="locality.locality_id">{{ locality.name }}</option> }
+      </select>
+
+      <select class="input" [ngModel]="segmentFilter()" (ngModelChange)="segmentFilter.set($event)">
+        <option value="all">Todos los segmentos RFM</option>
+        <option value="champions">Estrella</option><option value="loyal">Fiel</option><option value="risk">En riesgo</option><option value="new">Nueva</option><option value="dormant">Inactiva</option>
+      </select>
+
+      <select class="input" [ngModel]="accountFilter()" (ngModelChange)="accountFilter.set($event)">
+        <option value="all">Cualquier cuenta</option><option value="debt">Con deuda</option><option value="credit">Con saldo a favor</option>
+      </select>
+
+      <select class="input" [ngModel]="activityFilter()" (ngModelChange)="activityFilter.set($event)">
+        <option value="all">Cualquier actividad</option><option value="30">Compra en 30 días</option><option value="60">Compra en 60 días</option><option value="inactive">Sin compra en 60 días</option>
+      </select>
+
+      <select class="input" [ngModel]="sortBy()" (ngModelChange)="sortBy.set($event)">
+        <option value="name">Ordenar por nombre</option><option value="sales">Mayor venta</option><option value="frequency">Mayor frecuencia</option><option value="oldest">Mayor antigüedad</option>
+      </select>
+
+      <button type="button" class="btn btn-outline" (click)="clearFilters()" [disabled]="!hasActiveFilters()">
         Limpiar filtros
       </button>
     </div>
@@ -117,59 +156,7 @@
           <textarea class="input textarea" [(ngModel)]="draft.notes" name="notes" rows="3" placeholder="Preferencias, instrucciones, etc."></textarea>
         </label>
 
-        <button type="button" class="btn btn-outline" (click)="showInsights.set(!showInsights())">
-          {{ showInsights() ? "Ocultar" : "Mostrar" }} analitica
-        </button>
-
-        @if (showInsights()) {
-          <div class="insights-panel">
-            <p class="insights-title">Insights (opcional)</p>
-            <div class="form-columns">
-              <label class="field">
-                <span>Ultima compra</span>
-                <input type="date" class="input" [(ngModel)]="draft.insights_last_order" name="insights_last_order" />
-              </label>
-              <label class="field">
-                <span>Total pedidos</span>
-                <input type="number" min="0" class="input" [(ngModel)]="draft.insights_total_orders" name="insights_total_orders" />
-              </label>
-            </div>
-
-            <div class="form-columns">
-              <label class="field">
-                <span>Total gastado</span>
-                <input type="number" min="0" step="0.01" class="input" [(ngModel)]="draft.insights_total_spent" name="insights_total_spent" />
-              </label>
-              <label class="field">
-                <span>Ticket promedio</span>
-                <input type="number" min="0" step="0.01" class="input" [(ngModel)]="draft.insights_avg_order" name="insights_avg_order" />
-              </label>
-            </div>
-
-            <div class="form-columns">
-              <label class="field">
-                <span>Piezas promedio</span>
-                <input type="number" min="0" class="input" [(ngModel)]="draft.insights_avg_units" name="insights_avg_units" />
-              </label>
-              <label class="field">
-                <span>Frecuencia (dias)</span>
-                <input type="number" min="0" class="input" [(ngModel)]="draft.insights_frequency_days" name="insights_frequency_days" />
-              </label>
-            </div>
-
-            <label class="field">
-              <span>Categorias preferidas</span>
-              <input type="text" class="input" [(ngModel)]="draft.insights_categories" name="insights_categories" placeholder="Ej. Cobertores, Ropa" />
-              <small>Separadas por comas.</small>
-            </label>
-
-            <label class="field">
-              <span>Productos preferidos</span>
-              <input type="text" class="input" [(ngModel)]="draft.insights_products" name="insights_products" placeholder="Ej. Cobertor polar" />
-              <small>Separadas por comas.</small>
-            </label>
-          </div>
-        }
+        <p class="insights-title">Las estadísticas se calculan automáticamente desde pedidos, pagos y devoluciones.</p>
 
         <div class="form-actions">
           <button type="submit" class="btn btn-primary" [disabled]="saving()">
@@ -200,16 +187,22 @@
                   <p>{{ customer.whatsapp }}</p>
                 </div>
                 <span class="status-tag" [class]="'status-tag ' + (customer.active ? 'tag-on' : 'tag-off')">
-                  {{ customer.active ? "Activa" : "Inactiva" }}
+                  {{ segmentLabel(customerSegment(customer)) }}
                 </span>
               </header>
 
+              @if (customerMetrics(customer); as metrics) {
               <div class="meta-grid">
                 <p><strong>Ruta:</strong> {{ routeName(customer.route_id) }}</p>
                 <p><strong>Localidad:</strong> {{ localityName(customer.locality_id) }}</p>
-                <p><strong>Ultima compra:</strong> {{ customer.insights?.last_order_at || "Sin datos" }}</p>
-                <p><strong>Total pedidos:</strong> {{ customer.insights?.total_orders ?? "Sin datos" }}</p>
+                <p><strong>Última compra:</strong> {{ metrics.lastOrder ? (metrics.lastOrder | date:'dd/MM/yy') : "Sin compras" }}</p>
+                <p><strong>Pedidos:</strong> {{ metrics.orders }}</p>
+                <p><strong>Venta neta:</strong> {{ metrics.netSales | currency:'MXN':'symbol-narrow':'1.0-0' }}</p>
+                <p><strong>Por cobrar:</strong> {{ metrics.balanceDue | currency:'MXN':'symbol-narrow':'1.0-0' }}</p>
+                <p><strong>Ticket:</strong> {{ metrics.average | currency:'MXN':'symbol-narrow':'1.0-0' }}</p>
+                <p><strong>Devoluciones:</strong> {{ metrics.returns | currency:'MXN':'symbol-narrow':'1.0-0' }}</p>
               </div>
+              }
 
               @if (customer.tags?.length) {
                 <div class="tag-row">

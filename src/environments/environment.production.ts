@@ -3,6 +3,7 @@ export const environment = {
   // URL base del backend que expone /admin/users/*
   // En produccion debe ser HTTPS para evitar Mixed Content en navegador.
   adminApiBaseUrl: "https://api.base-mayorista.com",
+  featureFlags: { returnsV2: true, inventoryProductsV2: true, customerCrmV2: true },
   firebase: {
     apiKey: "AIzaSyBZhmiBbnywXaTW32VTaZFPPPzGNLJCXDo",
     authDomain: "base-mayorista.firebaseapp.com",

@@ -33,6 +33,7 @@ export class SalesNoteRenderService {
     const totalAmount = Math.max(0, subtotal - discount);
     const balanceRaw = Number(input.balanceDue);
     const balanceDue = Number.isFinite(balanceRaw) && balanceRaw >= 0 ? balanceRaw : totalAmount;
+    const totalClientProfit = this.totalClientProfit(rows);
 
     const W = 1080;
     const CARD_X = 32;
@@ -57,7 +58,7 @@ export class SalesNoteRenderService {
     const ITEM_H = 114;
     const ITEM_GAP = 14;
     const TOTL_PRE = 30;
-    const TOTL_H = 150;
+    const TOTL_H = totalClientProfit > 0 ? 190 : 150;
 
     const itemsH = rows.length > 0
       ? rows.length * ITEM_H + (rows.length - 1) * ITEM_GAP
@@ -233,6 +234,10 @@ export class SalesNoteRenderService {
     ctx.textAlign = "right";
     ctx.fillText(this.formatCurrency(balanceDue), IR, balanceLabelY + 34);
 
+    if (totalClientProfit > 0) {
+      this.drawTotalClientProfit(ctx, totalClientProfit, IR, balanceLabelY + 56);
+    }
+
     return new Promise<Blob>((resolve, reject) => {
       canvas.toBlob((blob) => {
         if (!blob) {
@@ -299,6 +304,44 @@ export class SalesNoteRenderService {
     ctx.fillStyle = "#020617";
     ctx.font = "800 35px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
     ctx.fillText(this.formatCurrency(row.lineTotal), rightX, rowY + 95);
+  }
+
+  private drawTotalClientProfit(ctx: CanvasRenderingContext2D, totalClientProfit: number, rightX: number, topY: number): void {
+    const label = "Tu ganancia de esta nota:";
+    const amount = this.formatCurrency(totalClientProfit);
+    const pillH = 42;
+    const pillPadX = 18;
+
+    ctx.font = "700 23px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    const amountW = ctx.measureText(amount).width;
+    ctx.font = "600 22px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    const labelW = ctx.measureText(label).width;
+    const pillW = Math.ceil(labelW + 14 + amountW + pillPadX * 2);
+    const pillX = rightX - pillW;
+
+    this.drawRoundedRect(ctx, pillX, topY, pillW, pillH, 21, "#ecfdf3");
+    ctx.fill();
+
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#4f8a68";
+    ctx.font = "600 22px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    ctx.fillText(label, pillX + pillPadX, topY + 28);
+
+    ctx.textAlign = "right";
+    ctx.fillStyle = "#15803d";
+    ctx.font = "800 23px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    ctx.fillText(amount, pillX + pillW - pillPadX, topY + 28);
+  }
+
+  private totalClientProfit(rows: SalesNoteRenderRow[]): number {
+    const total = rows.reduce((sum, row) => {
+      const finalPrice = this.safePositiveNumber(row.finalUnitPrice);
+      const clientaPrice = this.safePositiveNumber(row.unitPrice);
+      const qty = Math.max(0, Number(row.qty || 0));
+      if (finalPrice === null || clientaPrice === null || finalPrice <= clientaPrice || qty <= 0) return sum;
+      return sum + ((finalPrice - clientaPrice) * qty);
+    }, 0);
+    return Number(total.toFixed(2));
   }
 
   private resolveDiscountPct(row: SalesNoteRenderRow, finalPrice: number | null, clientaPrice: number): number | null {
