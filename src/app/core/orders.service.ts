@@ -53,6 +53,7 @@ export type OrderStatus =
   | (string & {});
 
 export type OrderItemState = OrderStatus | "sin_estado";
+export type CollectionStatus = "none" | "pending" | "paid" | "remind_later";
 
 export interface OrderItem {
   item_id: string;
@@ -168,6 +169,10 @@ export interface Order {
   delivered_at?: string | null;
   paid_at?: string | null;
   closed_at?: string | null;
+  collection_status?: CollectionStatus;
+  collection_reminder_at?: string | null;
+  collection_note?: string | null;
+  sales_note_last_generated_at?: string | null;
   totals: OrderTotals;
 }
 
@@ -721,6 +726,9 @@ export class OrdersService {
           paid_at: nextStatus === "pagado" ? now : order.paid_at || null,
           closed_at: now,
           delivered_at: order.delivered_at || now,
+          collection_status: nextStatus === "pagado" ? "paid" : (balanceDue > 0 ? "pending" : order.collection_status || "none"),
+          collection_reminder_at: nextStatus === "pagado" ? null : order.collection_reminder_at || null,
+          collection_note: nextStatus === "pagado" ? "Cobro liquidado al registrar pago." : order.collection_note || null,
           totals: persistedTotals as unknown as OrderTotals,
           timeline: [
             ...order.timeline,
@@ -737,9 +745,46 @@ export class OrdersService {
       paid_at: nextStatus === "pagado" ? serverTimestamp() : currentOrder?.paid_at || null,
       closed_at: serverTimestamp(),
       delivered_at: currentOrder?.delivered_at || serverTimestamp(),
+      collection_status: nextStatus === "pagado" ? "paid" : (balanceDue > 0 ? "pending" : currentOrder?.collection_status || "none"),
+      collection_reminder_at: nextStatus === "pagado" ? null : currentOrder?.collection_reminder_at || null,
+      collection_note: nextStatus === "pagado" ? "Cobro liquidado al registrar pago." : currentOrder?.collection_note || null,
     });
     await this.consumeInventoryForDelivery(orderId).catch((error) => {
       console.error("[OrdersService] No se pudo consumir inventario al cerrar", error);
+    });
+  }
+
+  async markSalesNoteGenerated(orderId: string): Promise<void> {
+    const now = new Date().toISOString();
+    this.rows.update((current) =>
+      current.map((order) => order.order_id === orderId ? { ...order, sales_note_last_generated_at: now, updated_at: now } : order),
+    );
+    await updateDoc(doc(this.colRef, orderId), {
+      sales_note_last_generated_at: now,
+      updated_at: serverTimestamp(),
+    });
+  }
+
+  async updateCollectionState(orderId: string, patch: {
+    collection_status?: CollectionStatus;
+    collection_reminder_at?: string | null;
+    collection_note?: string | null;
+    sales_note_last_generated_at?: string | null;
+  }): Promise<void> {
+    const cleanPatch: Record<string, unknown> = {};
+    if (patch.collection_status) cleanPatch["collection_status"] = patch.collection_status;
+    if ("collection_reminder_at" in patch) cleanPatch["collection_reminder_at"] = patch.collection_reminder_at || null;
+    if ("collection_note" in patch) cleanPatch["collection_note"] = patch.collection_note || null;
+    if ("sales_note_last_generated_at" in patch) cleanPatch["sales_note_last_generated_at"] = patch.sales_note_last_generated_at || null;
+    if (!Object.keys(cleanPatch).length) return;
+
+    const now = new Date().toISOString();
+    this.rows.update((current) =>
+      current.map((order) => order.order_id === orderId ? { ...order, ...cleanPatch, updated_at: now } as Order : order),
+    );
+    await updateDoc(doc(this.colRef, orderId), {
+      ...cleanPatch,
+      updated_at: serverTimestamp(),
     });
   }
 
@@ -1386,6 +1431,10 @@ export class OrdersService {
       delivered_at: data.delivered_at ? toIso(data.delivered_at) : null,
       paid_at: data.paid_at ? toIso(data.paid_at) : null,
       closed_at: data.closed_at ? toIso(data.closed_at) : null,
+      collection_status: this.normalizeCollectionStatus(data.collection_status),
+      collection_reminder_at: data.collection_reminder_at ? toIso(data.collection_reminder_at) : null,
+      collection_note: data.collection_note ? String(data.collection_note) : null,
+      sales_note_last_generated_at: data.sales_note_last_generated_at ? toIso(data.sales_note_last_generated_at) : null,
       totals: {
         total_amount: Number(data.totals?.total_amount ?? 0),
         paid_amount: Number(data.totals?.paid_amount ?? 0),
@@ -1399,5 +1448,10 @@ export class OrdersService {
         overpayment_amount: Number(data.totals?.overpayment_amount ?? 0),
       },
     };
+  }
+
+  private normalizeCollectionStatus(value: unknown): CollectionStatus {
+    if (value === "pending" || value === "paid" || value === "remind_later") return value;
+    return "none";
   }
 }

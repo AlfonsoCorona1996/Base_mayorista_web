@@ -2495,6 +2495,91 @@
     </div>
   }
 
+  @if (collectionSheetOpen() && collectionSheetOrder(); as collectionOrder) {
+    <div class="sheet-backdrop sheet-backdrop--center" (click)="closeCollectionSheet()">
+      <div class="sheet payment-sheet collection-sheet" role="dialog" aria-modal="true" aria-labelledby="collection-sheet-title" (click)="$event.stopPropagation()">
+        <div class="sheet-handle" aria-hidden="true"></div>
+
+        <div class="payment-sheet-header">
+          <span class="material-symbols-rounded payment-sheet-icon" aria-hidden="true">request_quote</span>
+          <h2 id="collection-sheet-title">Cobranza de la nota</h2>
+        </div>
+
+        <div class="collection-customer">
+          <strong>{{ collectionCustomer(collectionOrder)?.first_name || 'Clienta' }} {{ collectionCustomer(collectionOrder)?.last_name || '' }}</strong>
+          <span>{{ collectionCustomer(collectionOrder)?.whatsapp || 'Sin WhatsApp' }}</span>
+        </div>
+
+        <div class="payment-summary-row collection-summary">
+          <div class="payment-summary-item">
+            <span class="payment-summary-label">Total de nota</span>
+            <span class="payment-summary-value">${{ collectionOrderTotal(collectionOrder) | number:'1.2-2' }}</span>
+          </div>
+          <div class="payment-summary-item">
+            <span class="payment-summary-label">Adeudo anterior</span>
+            <span class="payment-summary-value">${{ collectionPreviousDebt(collectionOrder) | number:'1.2-2' }}</span>
+          </div>
+          <div class="payment-summary-item">
+            <span class="payment-summary-label">Saldo del pedido</span>
+            <span class="payment-summary-value payment-summary-value--balance">${{ collectionOrderBalance(collectionOrder) | number:'1.2-2' }}</span>
+          </div>
+          <div class="payment-summary-item">
+            <span class="payment-summary-label">Total pendiente clienta</span>
+            <span class="payment-summary-value payment-summary-value--balance">${{ collectionTotalDebt(collectionOrder) | number:'1.2-2' }}</span>
+          </div>
+        </div>
+
+        <div class="sheet-field collection-note-field">
+          <label class="sheet-label" for="collection-note-input">Nota de cobranza</label>
+          <textarea
+            id="collection-note-input"
+            class="input"
+            rows="2"
+            placeholder="Ej. Se cobra al entregar, revisar adeudo anterior"
+            [ngModel]="collectionReminderNote()"
+            (ngModelChange)="collectionReminderNote.set($event)"
+          ></textarea>
+        </div>
+
+        <div class="collection-actions">
+          <button type="button" class="btn primary" [disabled]="collectionReminderSaving()" (click)="collectionChargeNow()">
+            <span class="material-symbols-rounded">payments</span>
+            Cobrar ahora
+          </button>
+          <button type="button" class="btn ghost" [disabled]="collectionReminderSaving()" (click)="collectionLeavePending()">
+            <span class="material-symbols-rounded">pending_actions</span>
+            Dejar pendiente
+          </button>
+          <button type="button" class="btn ghost" [disabled]="collectionReminderSaving()" (click)="collectionMarkPaid()">
+            <span class="material-symbols-rounded">check_circle</span>
+            Ya está pagado
+          </button>
+        </div>
+
+        <div class="collection-remind">
+          <label class="sheet-label" for="collection-reminder-date">Recordarme después</label>
+          <div>
+            <input
+              id="collection-reminder-date"
+              class="input"
+              type="date"
+              [ngModel]="collectionReminderDate()"
+              (ngModelChange)="collectionReminderDate.set($event)"
+            />
+            <button type="button" class="btn ghost" [disabled]="collectionReminderSaving()" (click)="collectionRemindLater()">
+              <span class="material-symbols-rounded">event</span>
+              Guardar recordatorio
+            </button>
+          </div>
+        </div>
+
+        <div class="sheet-actions">
+          <button type="button" class="btn ghost" [disabled]="collectionReminderSaving()" (click)="closeCollectionSheet()">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  }
+
   @if (discountModalOpen() && order(); as current) {
     <div class="sheet-backdrop sheet-backdrop--center" (click)="closeDiscountModal()">
       <div class="sheet payment-sheet discount-sheet" role="dialog" aria-modal="true" aria-labelledby="discount-modal-title" (click)="$event.stopPropagation()">

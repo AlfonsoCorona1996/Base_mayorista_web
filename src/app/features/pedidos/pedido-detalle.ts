@@ -35,6 +35,7 @@ import { AuthzService } from "../../core/authz.service";
 import { AuthService } from "../../core/auth.service";
 import { DispatchOrderRow, RouteRunDoc, RouteRunsService } from "../../services/route-runs.service";
 import { SalesNoteRenderService } from "./sales-note-render.service";
+import { CustomerFollowupsService } from "../../core/customer-followups.service";
 
 type EstadoConfirmacion = "pendiente" | "confirmado" | "sin_stock";
 
@@ -209,6 +210,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   private router = inject(Router);
   private orders = inject(OrdersService);
   private customers = inject(CustomersService);
+  private followups = inject(CustomerFollowupsService);
   private suppliers = inject(SuppliersService);
   private rutas = inject(RoutesService);
   private localities = inject(LocalitiesService);
@@ -386,6 +388,12 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   paymentAmount = signal("");
   paymentSaving = signal(false);
   paymentError = signal<string | null>(null);
+  collectionSheetOpen = signal(false);
+  collectionSheetOrder = signal<Order | null>(null);
+  collectionSheetSource = signal<"sales_note" | "wa_sales_note">("sales_note");
+  collectionReminderDate = signal("");
+  collectionReminderNote = signal("");
+  collectionReminderSaving = signal(false);
   discountModalOpen = signal(false);
   discountDraft = signal("");
   discountSaving = signal(false);
@@ -3959,6 +3967,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         total,
         shared,
       }).catch(() => null);
+      await this.orders.markSalesNoteGenerated(order.order_id).catch(() => null);
+      this.openCollectionReminder(this.orders.getById(order.order_id) || order, "sales_note");
       this.showActionToast(shared ? "Nota generada y lista para compartir." : "Nota generada.");
       this.actionError.set(null);
     } catch (error: any) {
@@ -5321,6 +5331,9 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.paymentError.set(null);
     try {
       await this.orders.closeWithPayment(order.order_id, paidAmount, totalAmount, discountAmount);
+      if (cumulativePaid >= totalAmount) {
+        await this.followups.completePaymentReminderForOrder(order.order_id).catch(() => null);
+      }
       await this.orders.logEvent(
         order.order_id,
         "PAYMENT_CLOSED",
@@ -5346,6 +5359,109 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     const total = this.paymentTotalWithDiscount(order);
     this.paymentAmount.set(String(Math.max(0, total - Number(order.totals?.paid_amount || 0))));
     this.confirmPayment(order);
+  }
+
+  collectionCustomer(order: Order | null): Customer | null {
+    return order?.customer_id ? this.customers.getById(order.customer_id) : null;
+  }
+
+  collectionOrderTotal(order: Order | null): number {
+    return calculateOrderFinancials(order || { items: [], totals: {} }).netAmount;
+  }
+
+  collectionOrderBalance(order: Order | null): number {
+    return calculateOrderFinancials(order || { items: [], totals: {} }).balanceDue;
+  }
+
+  collectionPreviousDebt(order: Order | null): number {
+    if (!order?.customer_id) return 0;
+    return this.orders.list()
+      .filter((row) => row.customer_id === order.customer_id && row.order_id !== order.order_id && !["cancelado", "devuelto"].includes(row.status))
+      .reduce((sum, row) => sum + calculateOrderFinancials(row).balanceDue, 0);
+  }
+
+  collectionTotalDebt(order: Order | null): number {
+    return this.collectionOrderBalance(order) + this.collectionPreviousDebt(order);
+  }
+
+  openCollectionReminder(order: Order, source: "sales_note" | "wa_sales_note"): void {
+    if (this.collectionTotalDebt(order) <= 0) return;
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    this.collectionSheetOrder.set(order);
+    this.collectionSheetSource.set(source);
+    this.collectionReminderDate.set(tomorrow.toISOString().slice(0, 10));
+    this.collectionReminderNote.set("");
+    this.collectionSheetOpen.set(true);
+  }
+
+  closeCollectionSheet(): void {
+    this.collectionSheetOpen.set(false);
+    this.collectionSheetOrder.set(null);
+    this.collectionReminderNote.set("");
+  }
+
+  collectionChargeNow(): void {
+    this.closeCollectionSheet();
+    this.openPaymentModal();
+  }
+
+  async collectionLeavePending(): Promise<void> {
+    const order = this.collectionSheetOrder();
+    if (!order || this.collectionReminderSaving()) return;
+    await this.saveCollectionDecision(order, "pending", new Date().toISOString().slice(0, 10));
+  }
+
+  async collectionMarkPaid(): Promise<void> {
+    const order = this.collectionSheetOrder();
+    if (!order || this.collectionReminderSaving()) return;
+    this.collectionReminderSaving.set(true);
+    try {
+      await this.orders.updateCollectionState(order.order_id, {
+        collection_status: "paid",
+        collection_reminder_at: null,
+        collection_note: this.collectionReminderNote() || "Cobro marcado como resuelto al generar nota.",
+      });
+      await this.followups.completePaymentReminderForOrder(order.order_id).catch(() => null);
+      this.showActionToast("Cobro marcado como resuelto.");
+      this.closeCollectionSheet();
+    } finally {
+      this.collectionReminderSaving.set(false);
+    }
+  }
+
+  async collectionRemindLater(): Promise<void> {
+    const order = this.collectionSheetOrder();
+    if (!order || this.collectionReminderSaving()) return;
+    const dueAt = this.collectionReminderDate() || new Date().toISOString().slice(0, 10);
+    await this.saveCollectionDecision(order, "remind_later", dueAt);
+  }
+
+  private async saveCollectionDecision(order: Order, status: "pending" | "remind_later", dueAt: string): Promise<void> {
+    this.collectionReminderSaving.set(true);
+    try {
+      const amountDue = this.collectionOrderBalance(order) > 0 ? this.collectionOrderBalance(order) : this.collectionTotalDebt(order);
+      await this.orders.updateCollectionState(order.order_id, {
+        collection_status: status,
+        collection_reminder_at: dueAt,
+        collection_note: this.collectionReminderNote() || null,
+      });
+      if (amountDue > 0) {
+        await this.followups.createPaymentReminder({
+          businessId: order.business_id,
+          customerId: order.customer_id,
+          orderId: order.order_id,
+          amountDue,
+          dueAt,
+          note: this.collectionReminderNote() || null,
+          source: this.collectionSheetSource(),
+        });
+      }
+      this.showActionToast(status === "pending" ? "Cobro dejado pendiente." : "Recordatorio de cobro creado.");
+      this.closeCollectionSheet();
+    } finally {
+      this.collectionReminderSaving.set(false);
+    }
   }
 
   waProgressStepIcon(step: WaProgressStep): string {
@@ -5554,6 +5670,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       });
       this.setWaNoteStatus(true, immediateMsg, statusQueryPath ? 0 : 7000);
       this.showActionToast(immediateMsg);
+      await this.orders.markSalesNoteGenerated(order.order_id).catch(() => null);
+      this.openCollectionReminder(this.orders.getById(order.order_id) || order, "wa_sales_note");
       if (statusQueryPath) {
         void this.pollWaDeliveryStatus(statusQueryPath, pollSeq, customerId, order.order_id, attemptId);
       } else if (deliveryMode !== "template") {

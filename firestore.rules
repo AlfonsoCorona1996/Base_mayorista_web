@@ -174,7 +174,7 @@ service cloud.firestore {
         || (
           canUpdateBusinessResource()
           && hasCapability("cap.payments.register")
-          && onlyChanges(["totals", "status", "paid_at", "closed_at", "delivered_at", "timeline", "updated_at"])
+          && onlyChanges(["totals", "status", "paid_at", "closed_at", "delivered_at", "timeline", "collection_status", "collection_reminder_at", "collection_note", "sales_note_last_generated_at", "updated_at"])
         )
         || (
           canUpdateBusinessResource()
@@ -311,6 +311,19 @@ service cloud.firestore {
         && (hasCapability("cap.returns.create") || hasCapability("cap.payments.register") || hasCapability("cap.payments.refund"))
         && getAfter(/databases/$(database)/documents/customers/$(request.resource.data.customer_id)).data.business_id == incomingBusinessId();
       allow update, delete: if false;
+    }
+
+    match /customer_followups/{followupId} {
+      allow read: if canReadBusinessResource() && (hasSection("sections.clientes") || hasSection("sections.administracion") || hasCapability("cap.payments.view"));
+      allow create: if (isAdmin() || isOperativo())
+        && canCreateBusinessResource()
+        && (hasSection("sections.clientes") || hasSection("sections.administracion") || hasCapability("cap.payments.register"))
+        && getAfter(/databases/$(database)/documents/customers/$(request.resource.data.customer_id)).data.business_id == incomingBusinessId();
+      allow update: if (isAdmin() || isOperativo())
+        && canUpdateBusinessResource()
+        && (hasSection("sections.clientes") || hasSection("sections.administracion") || hasCapability("cap.payments.register"))
+        && getAfter(/databases/$(database)/documents/customers/$(request.resource.data.customer_id)).data.business_id == incomingBusinessId();
+      allow delete: if isSuperAdmin() && canReadBusinessResource();
     }
 
     match /finance_refunds/{refundId} {

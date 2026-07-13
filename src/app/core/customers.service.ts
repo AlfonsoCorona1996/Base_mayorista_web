@@ -6,6 +6,7 @@ import { BusinessScopeService } from "./business-scope.service";
 import { calculateOrderFinancials, toPersistedOrderTotals } from "./order-financials";
 
 export type OptInStatus = "opted_in" | "opted_out" | "unknown";
+export type CommercialStage = "nueva" | "activa" | "frecuente" | "en_riesgo" | "inactiva" | "recuperada" | "prospecto";
 
 export interface CustomerInsights {
   last_order_at: string | null;
@@ -33,6 +34,15 @@ export interface Customer {
   route_id: string | null;
   locality_id: string | null;
   active: boolean;
+  birthday?: string | null;
+  address?: string;
+  delivery_reference?: string;
+  commercial_stage?: CommercialStage | null;
+  preferred_sizes?: string[];
+  preferred_categories?: string[];
+  preferred_colors?: string[];
+  source?: string;
+  wa_opt_in_notes?: string;
   notes?: string;
   tags?: string[];
   insights?: CustomerInsights | null;
@@ -130,6 +140,15 @@ export class CustomersService {
       route_id: customer.route_id || null,
       locality_id: customer.locality_id || null,
       active: customer.active ?? true,
+      birthday: this.cleanString(customer.birthday) || null,
+      address: this.cleanString(customer.address),
+      delivery_reference: this.cleanString(customer.delivery_reference),
+      commercial_stage: this.normalizeCommercialStage(customer.commercial_stage),
+      preferred_sizes: this.normalizeList(customer.preferred_sizes),
+      preferred_categories: this.normalizeList(customer.preferred_categories),
+      preferred_colors: this.normalizeList(customer.preferred_colors),
+      source: this.cleanString(customer.source),
+      wa_opt_in_notes: this.cleanString(customer.wa_opt_in_notes),
       notes: customer.notes || "",
       tags: Array.isArray(customer.tags) ? customer.tags.filter(Boolean) : [],
       insights: customer.insights ?? null,
@@ -173,7 +192,15 @@ export class CustomersService {
       const totals = toPersistedOrderTotals({ ...orderData, totals: { ...(orderData["totals"] || {}), paid_amount: paidAmount } });
       const nextStatus = totals["balance_due"] <= 0 ? "pagado" : "pagado_parcial";
       tx.update(customerRef, { credit_balance: Number((available - amount).toFixed(2)), updated_at: serverTimestamp() });
-      tx.update(orderRef, { totals, status: nextStatus, paid_at: totals["balance_due"] <= 0 ? serverTimestamp() : orderData["paid_at"] || null, updated_at: serverTimestamp() });
+      tx.update(orderRef, {
+        totals,
+        status: nextStatus,
+        paid_at: totals["balance_due"] <= 0 ? serverTimestamp() : orderData["paid_at"] || null,
+        collection_status: totals["balance_due"] <= 0 ? "paid" : "pending",
+        collection_reminder_at: totals["balance_due"] <= 0 ? null : orderData["collection_reminder_at"] || null,
+        collection_note: totals["balance_due"] <= 0 ? "Cobro liquidado al aplicar saldo a favor." : orderData["collection_note"] || null,
+        updated_at: serverTimestamp(),
+      });
       tx.set(movementRef, {
         movement_id: movementRef.id,
         business_id: normalizeBusinessId(customerData["business_id"]),
@@ -208,6 +235,15 @@ export class CustomersService {
       route_id: data.route_id || null,
       locality_id: data.locality_id || null,
       active: data.active ?? true,
+      birthday: this.cleanString(data.birthday) || null,
+      address: this.cleanString(data.address),
+      delivery_reference: this.cleanString(data.delivery_reference),
+      commercial_stage: this.normalizeCommercialStage(data.commercial_stage),
+      preferred_sizes: this.normalizeList(data.preferred_sizes),
+      preferred_categories: this.normalizeList(data.preferred_categories),
+      preferred_colors: this.normalizeList(data.preferred_colors),
+      source: this.cleanString(data.source),
+      wa_opt_in_notes: this.cleanString(data.wa_opt_in_notes),
       notes: data.notes || "",
       tags: Array.isArray(data.tags) ? data.tags.filter(Boolean) : [],
       insights: data.insights || null,
@@ -217,5 +253,20 @@ export class CustomersService {
       created_at: data.created_at ?? null,
       updated_at: data.updated_at ?? null,
     };
+  }
+
+  private cleanString(value: unknown): string {
+    return String(value || "").trim();
+  }
+
+  private normalizeList(value: unknown): string[] {
+    if (!Array.isArray(value)) return [];
+    return value.map((entry) => String(entry || "").trim()).filter(Boolean);
+  }
+
+  private normalizeCommercialStage(value: unknown): CommercialStage | null {
+    const safe = String(value || "").trim();
+    const allowed: CommercialStage[] = ["nueva", "activa", "frecuente", "en_riesgo", "inactiva", "recuperada", "prospecto"];
+    return allowed.includes(safe as CommercialStage) ? (safe as CommercialStage) : null;
   }
 }

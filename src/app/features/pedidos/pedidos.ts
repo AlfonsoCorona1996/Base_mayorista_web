@@ -2,7 +2,7 @@
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { CurrencyPipe, DatePipe, NgClass } from "@angular/common";
 import { FormsModule } from "@angular/forms";
-import { Router } from "@angular/router";
+import { ActivatedRoute, Router } from "@angular/router";
 import JSZip from "jszip";
 import { getBlob, ref as storageRef } from "firebase/storage";
 import { PDFDocument, StandardFonts, rgb, type PDFFont } from "pdf-lib";
@@ -14,9 +14,10 @@ import { NormalizedListingsService, NormalizedListingDoc } from "../../core/norm
 import { ActionChecklist, PrimaryAction, getActionChecklist, getPrimaryAction } from "./order-primary-action.mapper";
 import { SalesNoteRenderRow, SalesNoteRenderService } from "./sales-note-render.service";
 import { BusinessScopeService } from "../../core/business-scope.service";
-import { BusinessId } from "../../core/rbac.constants";
+import { BusinessId, normalizeBusinessId } from "../../core/rbac.constants";
 import { STORAGE } from "../../core/firebase.providers";
 import { calculateOrderFinancials, netItemQty } from "../../core/order-financials";
+import { CustomerFollowupsService } from "../../core/customer-followups.service";
 
 type IntentFilter =
   | "hoy"
@@ -85,8 +86,10 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   private inventory = inject(InventoryService);
   private catalog = inject(NormalizedListingsService);
   private salesNoteRender = inject(SalesNoteRenderService);
+  private followups = inject(CustomerFollowupsService);
   businessScope = inject(BusinessScopeService);
   private router = inject(Router);
+  private activatedRoute = inject(ActivatedRoute);
   private destroyRef = inject(DestroyRef);
   private readonly uiStateStorageKey = "pedidos.ui-state.v1";
   private uiStateHydrated = signal(false);
@@ -860,6 +863,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     let updated = 0;
     let skipped = 0;
     let failed = 0;
+    let collectionReminders = 0;
     const generatedNoteFiles: SalesNoteFile[] = [];
     if (action === "create_nota") {
       this.tableBulkResultVisible.set(false);
@@ -894,6 +898,9 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
                 mode: "table_bulk_selection",
               }
             ).catch(() => null);
+            if (await this.createCollectionReminderFromNote(order, "table_bulk_selection")) {
+              collectionReminders += 1;
+            }
             updated += 1;
             await this.sleep(120);
           } catch {
@@ -913,7 +920,13 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
               await this.orders.closeWithPayment(order.order_id, Math.max(0, total - Number(order.totals?.paid_amount || 0)), total);
             } else {
               await this.orders.updateStatus(order.order_id, "pagado");
+              await this.orders.updateCollectionState(order.order_id, {
+                collection_status: "paid",
+                collection_reminder_at: null,
+                collection_note: "Cobro resuelto al marcar pagado desde tabla.",
+              }).catch(() => null);
             }
+            await this.followups.completePaymentReminderForOrder(order.order_id).catch(() => null);
             await this.orders.logEvent(
               order.order_id,
               "PAYMENT_REGISTERED",
@@ -983,7 +996,10 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
       const failedLabel = failed > 0
         ? `, ${this.tableBulkCountLabel(failed, "con error", "con errores")}`
         : "";
-      this.tableBulkResultText.set(`${notesLabel}, ${skippedLabel}${failedLabel}`);
+      const remindersLabel = collectionReminders > 0
+        ? `, ${this.tableBulkCountLabel(collectionReminders, "recordatorio de cobro", "recordatorios de cobro")}`
+        : "";
+      this.tableBulkResultText.set(`${notesLabel}, ${skippedLabel}${failedLabel}${remindersLabel}`);
       this.tableBulkResultVisible.set(true);
       this.bulkNotesMessage.set(null);
       return;
@@ -1429,7 +1445,17 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
         this.orders.loadFromFirestore(),
         this.customers.loadFromFirestore().catch(() => null),
         this.routes.loadFromFirestore().catch(() => null),
+        this.followups.loadFromFirestore().catch(() => null),
       ]);
+      const queryCustomerId = this.activatedRoute.snapshot.queryParamMap.get("customer_id");
+      const queryBusinessId = this.activatedRoute.snapshot.queryParamMap.get("business_id");
+      if (queryBusinessId) {
+        const normalized = normalizeBusinessId(queryBusinessId);
+        if (this.businessScope.canAccessBusiness(normalized)) this.newBusinessId.set(normalized);
+      }
+      if (queryCustomerId && this.customers.getById(queryCustomerId)) {
+        this.pickCustomer(queryCustomerId);
+      }
     } catch (error: any) {
       this.error.set(error?.message || "No se pudieron cargar pedidos");
     }
@@ -2114,6 +2140,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     this.bulkNotesMessage.set(null);
     let generated = 0;
     let failed = 0;
+    let collectionReminders = 0;
     const generatedNoteFiles: SalesNoteFile[] = [];
 
     for (const order of selectedOrders) {
@@ -2134,6 +2161,9 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
           total: rows.reduce((sum, row) => sum + row.lineTotal, 0),
           mode: "bulk",
         }).catch(() => null);
+        if (await this.createCollectionReminderFromNote(order, "bulk")) {
+          collectionReminders += 1;
+        }
         await this.sleep(120);
       } catch (error) {
         failed += 1;
@@ -2145,16 +2175,42 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
 
     this.bulkNotesLoading.set(false);
     this.cancelBulkNoteMode();
+    const reminderCopy = collectionReminders > 0
+      ? ` Se crearon ${this.tableBulkCountLabel(collectionReminders, "recordatorio de cobro", "recordatorios de cobro")}.`
+      : "";
     if (failed === 0) {
-      this.bulkNotesMessage.set(`Se generaron ${this.tableBulkCountLabel(generated, "nota", "notas")}.`);
+      this.bulkNotesMessage.set(`Se generaron ${this.tableBulkCountLabel(generated, "nota", "notas")}.${reminderCopy}`);
     } else if (generated > 0) {
       this.bulkNotesMessage.set(
         `Se generaron ${this.tableBulkCountLabel(generated, "nota", "notas")}. `
-        + `${this.tableBulkCountLabel(failed, "pedido no se pudo procesar", "pedidos no se pudieron procesar")}.`
+        + `${this.tableBulkCountLabel(failed, "pedido no se pudo procesar", "pedidos no se pudieron procesar")}.${reminderCopy}`
       );
     } else {
       this.bulkNotesMessage.set("No se pudo generar ninguna nota con la selecciÃ³n actual.");
     }
+  }
+
+  private async createCollectionReminderFromNote(order: Order, source: string): Promise<boolean> {
+    await this.orders.markSalesNoteGenerated(order.order_id).catch(() => null);
+    const financials = calculateOrderFinancials(order);
+    const amountDue = financials.balanceDue;
+    if (!order.customer_id || amountDue <= 0) return false;
+    const dueAt = new Date().toISOString().slice(0, 10);
+    await this.orders.updateCollectionState(order.order_id, {
+      collection_status: "pending",
+      collection_reminder_at: dueAt,
+      collection_note: "Recordatorio creado al generar nota de venta.",
+    }).catch(() => null);
+    await this.followups.createPaymentReminder({
+      businessId: order.business_id,
+      customerId: order.customer_id,
+      orderId: order.order_id,
+      amountDue,
+      dueAt,
+      note: "Recordatorio creado al generar nota de venta.",
+      source,
+    }).catch(() => null);
+    return true;
   }
 
   open(orderId: string) {

@@ -1,41 +1,37 @@
 <section class="clients-page">
-  <header class="page-header">
-    <div>
-      <h1>Clientas</h1>
-      <p>Gestiona datos esenciales y mant�n los insights separados para evitar ruido.</p>
+  <header class="clients-header">
+    <div class="header-copy">
+      <div class="header-icon">
+        <span class="material-symbols-rounded">groups</span>
+      </div>
+      <div>
+        <h1>Clientas</h1>
+        <p>Gestiona clientas, cuenta, seguimiento y rendimiento comercial.</p>
+      </div>
     </div>
 
-    <button type="button" class="btn btn-secondary" (click)="reload()" [disabled]="loading()">
-      {{ loading() ? "Actualizando..." : "Actualizar" }}
-    </button>
+    <div class="header-actions">
+      <button type="button" class="btn btn-secondary" (click)="reload()" [disabled]="loading()">
+        <span class="material-symbols-rounded">refresh</span>
+        {{ loading() ? "Actualizando..." : "Actualizar" }}
+      </button>
+      <button type="button" class="btn btn-primary" (click)="openCreateDrawer()">
+        <span class="material-symbols-rounded">add</span>
+        Nueva clienta
+      </button>
+    </div>
   </header>
 
-  <section class="stats-grid">
-    <article class="stat-card">
-      <p>Total</p>
-      <strong>{{ allCustomers().length }}</strong>
-    </article>
-    <article class="stat-card">
-      <p>Activas</p>
-      <strong>{{ activeCount() }}</strong>
-    </article>
-    <article class="stat-card">
-      <p>Inactivas</p>
-      <strong>{{ inactiveCount() }}</strong>
-    </article>
-    <article class="stat-card">
-      <p>Ventas netas</p>
-      <strong>{{ totalNetSales() | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong>
-    </article>
-    <article class="stat-card">
-      <p>Por cobrar</p>
-      <strong>{{ totalReceivable() | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong>
-    </article>
-    <article class="stat-card">
-      <p>Saldos a favor</p>
-      <strong>{{ totalCredits() | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong>
-    </article>
-  </section>
+  <nav class="top-tabs" aria-label="Vista de clientas">
+    <button type="button" [class.active]="activeTab() === 'clients'" (click)="setActiveTab('clients')">
+      <span class="material-symbols-rounded">table_rows</span>
+      Clientas
+    </button>
+    <button type="button" [class.active]="activeTab() === 'actions'" (click)="setActiveTab('actions')">
+      <span class="material-symbols-rounded">bolt</span>
+      Acciones
+    </button>
+  </nav>
 
   @if (error()) {
     <div class="alert alert-error">{{ error() }}</div>
@@ -45,132 +41,156 @@
     <div class="alert alert-success">{{ success() }}</div>
   }
 
-  <section class="panel filters-panel">
-    <input
-      type="text"
-      class="input"
-      [ngModel]="searchTerm()"
-      (ngModelChange)="searchTerm.set($event)"
-      placeholder="Buscar por nombre, WhatsApp, ruta o localidad"
-    />
+  @if (activeTab() === "clients") {
+    <section class="kpi-strip" aria-label="Resumen de clientas">
+      <article class="kpi-item">
+        <span class="material-symbols-rounded">groups</span>
+        <div><small>Total</small><strong>{{ allCustomers().length }}</strong></div>
+      </article>
+      <article class="kpi-item">
+        <span class="material-symbols-rounded">check_circle</span>
+        <div><small>Activas</small><strong>{{ activeCount() }}</strong></div>
+      </article>
+      <article class="kpi-item kpi-risk">
+        <span class="material-symbols-rounded">warning</span>
+        <div><small>En riesgo</small><strong>{{ riskCount() }}</strong></div>
+      </article>
+      <article class="kpi-item">
+        <span class="material-symbols-rounded">paid</span>
+        <div><small>Ventas netas</small><strong>{{ totalNetSales() | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></div>
+      </article>
+      <article class="kpi-item kpi-debt">
+        <span class="material-symbols-rounded">account_balance_wallet</span>
+        <div><small>Por cobrar</small><strong>{{ totalReceivable() | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></div>
+      </article>
+    </section>
 
-    <div class="filters-row">
-      <select class="input" [ngModel]="statusFilter()" (ngModelChange)="onStatusFilterChange($event)">
-        <option value="all">Todas</option>
-        <option value="active">Solo activas</option>
-        <option value="inactive">Solo inactivas</option>
-      </select>
+    <section class="filters-shell">
+      <div class="filters-main">
+        <label class="search-field">
+          <span class="material-symbols-rounded">search</span>
+          <input
+            type="text"
+            [ngModel]="searchTerm()"
+            (ngModelChange)="setSearchTerm($event)"
+            placeholder="Buscar por nombre, WhatsApp, ruta o localidad"
+          />
+        </label>
 
-      <select class="input" [ngModel]="routeFilter()" (ngModelChange)="routeFilter.set($event)">
-        <option value="all">Todas las rutas</option>
-        @for (route of routes(); track route.route_id) { <option [value]="route.route_id">{{ route.name }}</option> }
-      </select>
+        <select class="input control-desktop" [ngModel]="routeFilter()" (ngModelChange)="setRouteFilter($event)">
+          <option value="all">Todas las rutas</option>
+          @for (route of routes(); track route.route_id) {
+            <option [value]="route.route_id">{{ route.name }}</option>
+          }
+        </select>
 
-      <select class="input" [ngModel]="localityFilter()" (ngModelChange)="localityFilter.set($event)">
-        <option value="all">Todas las localidades</option>
-        @for (locality of localities(); track locality.locality_id) { <option [value]="locality.locality_id">{{ locality.name }}</option> }
-      </select>
+        <select class="input control-desktop" [ngModel]="statusFilter()" (ngModelChange)="onStatusFilterChange($event)">
+          <option value="all">Todos los estados</option>
+          <option value="active">Activas</option>
+          <option value="inactive">Inactivas</option>
+        </select>
 
-      <select class="input" [ngModel]="segmentFilter()" (ngModelChange)="segmentFilter.set($event)">
-        <option value="all">Todos los segmentos RFM</option>
-        <option value="champions">Estrella</option><option value="loyal">Fiel</option><option value="risk">En riesgo</option><option value="new">Nueva</option><option value="dormant">Inactiva</option>
-      </select>
+        <select class="input control-desktop" [ngModel]="sortControlValue()" (ngModelChange)="setSortBy($event)">
+          <option value="name">Nombre A-Z</option>
+          <option value="sales">Mayor venta</option>
+          <option value="orders">Más pedidos</option>
+          <option value="balanceDue">Mayor por cobrar</option>
+          <option value="lastOrder">Compra reciente</option>
+          <option value="oldest">Mayor antigüedad</option>
+        </select>
 
-      <select class="input" [ngModel]="accountFilter()" (ngModelChange)="accountFilter.set($event)">
-        <option value="all">Cualquier cuenta</option><option value="debt">Con deuda</option><option value="credit">Con saldo a favor</option>
-      </select>
+        <button type="button" class="btn btn-outline filters-trigger" (click)="filtersSheetOpen.set(!filtersSheetOpen())">
+          <span class="material-symbols-rounded">tune</span>
+          {{ filterSheetTitle() }}
+        </button>
 
-      <select class="input" [ngModel]="activityFilter()" (ngModelChange)="activityFilter.set($event)">
-        <option value="all">Cualquier actividad</option><option value="30">Compra en 30 días</option><option value="60">Compra en 60 días</option><option value="inactive">Sin compra en 60 días</option>
-      </select>
-
-      <select class="input" [ngModel]="sortBy()" (ngModelChange)="sortBy.set($event)">
-        <option value="name">Ordenar por nombre</option><option value="sales">Mayor venta</option><option value="frequency">Mayor frecuencia</option><option value="oldest">Mayor antigüedad</option>
-      </select>
-
-      <button type="button" class="btn btn-outline" (click)="clearFilters()" [disabled]="!hasActiveFilters()">
-        Limpiar filtros
-      </button>
-    </div>
-  </section>
-
-  <section class="content-grid">
-    <article class="panel form-panel">
-      <div class="form-header">
-        <h2>{{ editingId() ? "Editar clienta" : "Nueva clienta" }}</h2>
-        @if (editingId()) {
-          <button type="button" class="btn btn-ghost" (click)="startCreate()">Nueva</button>
-        }
+        <button type="button" class="btn btn-ghost clear-btn" (click)="clearFilters()" [disabled]="!hasActiveFilters()">
+          Limpiar
+        </button>
       </div>
 
-      <form class="form-grid" (submit)="saveCustomer(); $event.preventDefault()">
-        <div class="form-columns">
-          <label class="field">
-            <span>Nombre *</span>
-            <input type="text" class="input" [(ngModel)]="draft.first_name" name="first_name" required />
-          </label>
-
-          <label class="field">
-            <span>Apellido *</span>
-            <input type="text" class="input" [(ngModel)]="draft.last_name" name="last_name" required />
-          </label>
+      @if (activeFilterChips().length > 0) {
+        <div class="filter-chips" aria-label="Filtros activos">
+          @for (chip of activeFilterChips(); track chip.key) {
+            <button type="button" class="filter-chip" (click)="removeFilter(chip.key)">
+              {{ chip.label }}
+              <span class="material-symbols-rounded">close</span>
+            </button>
+          }
         </div>
+      }
 
-        <label class="field">
-          <span>WhatsApp *</span>
-          <input type="tel" class="input" [(ngModel)]="draft.whatsapp" name="whatsapp" placeholder="+52 33 1234 5678" required />
-        </label>
+      @if (filtersSheetOpen()) {
+        <div class="filters-sheet">
+          <div class="sheet-title">
+            <strong>Más filtros</strong>
+            <button type="button" class="icon-btn mobile-only" (click)="filtersSheetOpen.set(false)" aria-label="Cerrar filtros">
+              <span class="material-symbols-rounded">close</span>
+            </button>
+          </div>
 
-        <div class="form-columns">
-          <label class="field">
-            <span>Ruta</span>
-            <select class="input" [ngModel]="draft.route_id" (ngModelChange)="onRouteChange($event)" name="route_id">
-              <option value="">Sin ruta</option>
-              @for (route of routes(); track route.route_id) {
-                <option [value]="route.route_id">{{ route.name }}</option>
-              }
-            </select>
-          </label>
+          <div class="secondary-filters">
+            <label>
+              <span>Localidad</span>
+              <select class="input" [ngModel]="localityFilter()" (ngModelChange)="setLocalityFilter($event)">
+                <option value="all">Todas las localidades</option>
+                @for (locality of localities(); track locality.locality_id) {
+                  <option [value]="locality.locality_id">{{ locality.name }}</option>
+                }
+              </select>
+            </label>
 
-          <label class="field">
-            <span>Localidad</span>
-            <select class="input" [(ngModel)]="draft.locality_id" name="locality_id" [disabled]="!draft.route_id">
-              <option value="">Sin localidad</option>
-              @for (locality of localitiesForRoute(draft.route_id); track locality.locality_id) {
-                <option [value]="locality.locality_id">{{ locality.name }}</option>
-              }
-            </select>
-          </label>
+            <label>
+              <span>Segmento</span>
+              <select class="input" [ngModel]="segmentFilter()" (ngModelChange)="setSegmentFilter($event)">
+                <option value="all">Todos los segmentos</option>
+                <option value="champions">Estrella</option>
+                <option value="loyal">Fiel</option>
+                <option value="risk">En riesgo</option>
+                <option value="new">Nueva</option>
+                <option value="dormant">Inactiva</option>
+                <option value="collection">Pendiente de cobro</option>
+                <option value="returns">Alta devolución</option>
+              </select>
+            </label>
+
+            <label>
+              <span>Cuenta</span>
+              <select class="input" [ngModel]="accountFilter()" (ngModelChange)="setAccountFilter($event)">
+                <option value="all">Cualquier cuenta</option>
+                <option value="debt">Con deuda</option>
+                <option value="credit">Con saldo a favor</option>
+              </select>
+            </label>
+
+            <label>
+              <span>Seguimiento</span>
+              <select class="input" [ngModel]="followupFilter()" (ngModelChange)="setFollowupFilter($event)">
+                <option value="all">Cualquier seguimiento</option>
+                <option value="pending">Con seguimiento pendiente</option>
+              </select>
+            </label>
+
+            <label>
+              <span>Actividad</span>
+              <select class="input" [ngModel]="activityFilter()" (ngModelChange)="setActivityFilter($event)">
+                <option value="all">Cualquier actividad</option>
+                <option value="30">Compra en 30 días</option>
+                <option value="60">Compra en 60 días</option>
+                <option value="inactive">Sin compra en 60 días</option>
+              </select>
+            </label>
+          </div>
         </div>
+      }
+    </section>
 
-        <label class="field">
-          <span>Estado</span>
-          <select class="input" [(ngModel)]="draft.active" name="active">
-            <option [ngValue]="true">Activa</option>
-            <option [ngValue]="false">Inactiva</option>
-          </select>
-        </label>
-
-        <label class="field">
-          <span>Notas</span>
-          <textarea class="input textarea" [(ngModel)]="draft.notes" name="notes" rows="3" placeholder="Preferencias, instrucciones, etc."></textarea>
-        </label>
-
-        <p class="insights-title">Las estadísticas se calculan automáticamente desde pedidos, pagos y devoluciones.</p>
-
-        <div class="form-actions">
-          <button type="submit" class="btn btn-primary" [disabled]="saving()">
-            {{ saving() ? "Guardando..." : editingId() ? "Guardar cambios" : "Crear clienta" }}
-          </button>
-          <button type="button" class="btn btn-outline" (click)="startCreate()">Limpiar</button>
+    <section class="clients-list-panel">
+      <div class="list-head">
+        <div>
+          <h2>Clientas registradas</h2>
+          <p>{{ filteredCustomers().length }} resultado(s)</p>
         </div>
-      </form>
-    </article>
-
-    <article class="panel list-panel">
-      <div class="list-header">
-        <h2>Clientas registradas</h2>
-        <p>{{ filteredCustomers().length }} resultado(s)</p>
       </div>
 
       @if (loading()) {
@@ -178,56 +198,378 @@
       } @else if (filteredCustomers().length === 0) {
         <p class="empty">No hay clientas con esos filtros.</p>
       } @else {
-        <div class="client-list">
-          @for (customer of filteredCustomers(); track customer.customer_id) {
-            <article class="client-card" [class.card-off]="!customer.active">
-              <header>
-                <div>
-                  <h3>{{ customer.first_name }} {{ customer.last_name }}</h3>
-                  <p>{{ customer.whatsapp }}</p>
-                </div>
-                <span class="status-tag" [class]="'status-tag ' + (customer.active ? 'tag-on' : 'tag-off')">
-                  {{ segmentLabel(customerSegment(customer)) }}
-                </span>
-              </header>
-
-              @if (customerMetrics(customer); as metrics) {
-              <div class="meta-grid">
-                <p><strong>Ruta:</strong> {{ routeName(customer.route_id) }}</p>
-                <p><strong>Localidad:</strong> {{ localityName(customer.locality_id) }}</p>
-                <p><strong>Última compra:</strong> {{ metrics.lastOrder ? (metrics.lastOrder | date:'dd/MM/yy') : "Sin compras" }}</p>
-                <p><strong>Pedidos:</strong> {{ metrics.orders }}</p>
-                <p><strong>Venta neta:</strong> {{ metrics.netSales | currency:'MXN':'symbol-narrow':'1.0-0' }}</p>
-                <p><strong>Por cobrar:</strong> {{ metrics.balanceDue | currency:'MXN':'symbol-narrow':'1.0-0' }}</p>
-                <p><strong>Ticket:</strong> {{ metrics.average | currency:'MXN':'symbol-narrow':'1.0-0' }}</p>
-                <p><strong>Devoluciones:</strong> {{ metrics.returns | currency:'MXN':'symbol-narrow':'1.0-0' }}</p>
-              </div>
+        <div class="clients-table-wrap desktop-list">
+          <table class="clients-table">
+            <thead>
+              <tr>
+                <th [attr.aria-sort]="sortAria('name')">
+                  <button type="button" class="table-sort" [class.active]="isSortedBy('name')" (click)="setTableSort('name')">
+                    Clienta
+                    <span class="material-symbols-rounded">{{ sortIcon('name') }}</span>
+                  </button>
+                </th>
+                <th [attr.aria-sort]="sortAria('route')">
+                  <button type="button" class="table-sort" [class.active]="isSortedBy('route')" (click)="setTableSort('route')">
+                    Ruta / localidad
+                    <span class="material-symbols-rounded">{{ sortIcon('route') }}</span>
+                  </button>
+                </th>
+                <th [attr.aria-sort]="sortAria('lastOrder')">
+                  <button type="button" class="table-sort" [class.active]="isSortedBy('lastOrder')" (click)="setTableSort('lastOrder')">
+                    Última compra
+                    <span class="material-symbols-rounded">{{ sortIcon('lastOrder') }}</span>
+                  </button>
+                </th>
+                <th [attr.aria-sort]="sortAria('sales')">
+                  <button type="button" class="table-sort" [class.active]="isSortedBy('sales')" (click)="setTableSort('sales')">
+                    Ventas netas
+                    <span class="material-symbols-rounded">{{ sortIcon('sales') }}</span>
+                  </button>
+                </th>
+                <th [attr.aria-sort]="sortAria('orders')">
+                  <button type="button" class="table-sort" [class.active]="isSortedBy('orders')" (click)="setTableSort('orders')">
+                    Pedidos
+                    <span class="material-symbols-rounded">{{ sortIcon('orders') }}</span>
+                  </button>
+                </th>
+                <th [attr.aria-sort]="sortAria('balanceDue')">
+                  <button type="button" class="table-sort" [class.active]="isSortedBy('balanceDue')" (click)="setTableSort('balanceDue')">
+                    Por cobrar
+                    <span class="material-symbols-rounded">{{ sortIcon('balanceDue') }}</span>
+                  </button>
+                </th>
+                <th [attr.aria-sort]="sortAria('status')">
+                  <button type="button" class="table-sort" [class.active]="isSortedBy('status')" (click)="setTableSort('status')">
+                    Estado
+                    <span class="material-symbols-rounded">{{ sortIcon('status') }}</span>
+                  </button>
+                </th>
+                <th class="actions-col">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (customer of paginatedCustomers(); track customer.customer_id) {
+                @if (customerMetrics(customer); as metrics) {
+                  <tr class="client-row" (click)="openProfile(customer.customer_id)">
+                    <td>
+                      <div class="client-cell">
+                        <span [class]="'client-avatar ' + avatarClass(customer)">{{ initials(customer) }}</span>
+                        <span>
+                          <strong>{{ customer.first_name }} {{ customer.last_name }}</strong>
+                          <small>{{ customer.whatsapp || "Sin WhatsApp" }}</small>
+                        </span>
+                      </div>
+                    </td>
+                    <td>
+                      <span class="stacked-cell">
+                        <strong>{{ routeName(customer.route_id) }}</strong>
+                        <small>{{ localityName(customer.locality_id) }}</small>
+                      </span>
+                    </td>
+                    <td>{{ metrics.lastOrder ? (metrics.lastOrder | date:'dd MMM yy') : "Sin compras" }}</td>
+                    <td>{{ metrics.netSales | currency:'MXN':'symbol-narrow':'1.0-0' }}</td>
+                    <td>{{ metrics.orders }}</td>
+                    <td [class.money-danger]="metrics.balanceDue > 0">{{ metrics.balanceDue | currency:'MXN':'symbol-narrow':'1.0-0' }}</td>
+                    <td>
+                      <div class="status-pills">
+                        @for (pill of compactStatusPills(customer); track pill.label) {
+                          <span class="status-pill" [attr.data-tone]="pill.tone">{{ pill.label }}</span>
+                        }
+                      </div>
+                    </td>
+                    <td class="actions-col">
+                      <button type="button" class="icon-btn" (click)="openEditDrawer(customer, $event)" aria-label="Editar clienta">
+                        <span class="material-symbols-rounded">edit</span>
+                      </button>
+                      <button type="button" class="icon-btn" (click)="toggleRowMenu(customer.customer_id, $event)" aria-label="Más acciones">
+                        <span class="material-symbols-rounded">more_vert</span>
+                      </button>
+                      @if (rowMenuOpenId() === customer.customer_id) {
+                        <div class="row-menu" (click)="$event.stopPropagation()">
+                          <button type="button" (click)="openEditDrawer(customer, $event)">
+                            <span class="material-symbols-rounded">edit</span>
+                            Editar
+                          </button>
+                          <button type="button" (click)="toggleActiveFromMenu(customer, $event)" [disabled]="isBusy(customer.customer_id)">
+                            <span class="material-symbols-rounded">{{ customer.active ? "person_off" : "person_check" }}</span>
+                            {{ customer.active ? "Desactivar" : "Reactivar" }}
+                          </button>
+                        </div>
+                      }
+                    </td>
+                  </tr>
+                }
               }
+            </tbody>
+          </table>
+        </div>
 
-              @if (customer.tags?.length) {
-                <div class="tag-row">
-                  @for (tag of customer.tags; track tag) {
-                    <span class="tag">{{ tag }}</span>
+        <div class="mobile-client-list">
+          @for (customer of paginatedCustomers(); track customer.customer_id) {
+            @if (customerMetrics(customer); as metrics) {
+              <article class="mobile-client-card" (click)="openProfile(customer.customer_id)">
+                <header>
+                  <div class="mobile-client-main">
+                    <span [class]="'client-avatar ' + avatarClass(customer)">{{ initials(customer) }}</span>
+                    <div>
+                      <h3>{{ customer.first_name }} {{ customer.last_name }}</h3>
+                      <p>{{ customer.whatsapp || "Sin WhatsApp" }}</p>
+                      <small>{{ routeName(customer.route_id) }} / {{ localityName(customer.locality_id) }}</small>
+                    </div>
+                  </div>
+                  <button type="button" class="icon-btn" (click)="toggleRowMenu(customer.customer_id, $event)" aria-label="Más acciones">
+                    <span class="material-symbols-rounded">more_vert</span>
+                  </button>
+                  @if (rowMenuOpenId() === customer.customer_id) {
+                    <div class="row-menu mobile-menu" (click)="$event.stopPropagation()">
+                      <button type="button" (click)="openEditDrawer(customer, $event)">
+                        <span class="material-symbols-rounded">edit</span>
+                        Editar
+                      </button>
+                      <button type="button" (click)="toggleActiveFromMenu(customer, $event)" [disabled]="isBusy(customer.customer_id)">
+                        <span class="material-symbols-rounded">{{ customer.active ? "person_off" : "person_check" }}</span>
+                        {{ customer.active ? "Desactivar" : "Reactivar" }}
+                      </button>
+                    </div>
+                  }
+                </header>
+
+                <div class="status-pills">
+                  @for (pill of compactStatusPills(customer); track pill.label) {
+                    <span class="status-pill" [attr.data-tone]="pill.tone">{{ pill.label }}</span>
                   }
                 </div>
-              }
 
-              <div class="card-actions">
-                <a class="btn btn-primary" [routerLink]="['/main/clientas', customer.customer_id]">Ver perfil</a>
-                <button type="button" class="btn btn-outline" (click)="startEdit(customer)">Editar</button>
-                <button
-                  type="button"
-                  class="btn btn-danger"
-                  (click)="toggleActive(customer, !customer.active)"
-                  [disabled]="isBusy(customer.customer_id)"
-                >
-                  {{ isBusy(customer.customer_id) ? "Procesando..." : customer.active ? "Desactivar" : "Activar" }}
-                </button>
-              </div>
-            </article>
+                <div class="mobile-metrics">
+                  <div><span>Última compra</span><strong>{{ metrics.lastOrder ? (metrics.lastOrder | date:'dd MMM yy') : "Sin compras" }}</strong></div>
+                  <div><span>Ventas netas</span><strong>{{ metrics.netSales | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></div>
+                  <div><span>Pedidos</span><strong>{{ metrics.orders }}</strong></div>
+                  <div><span>Por cobrar</span><strong [class.money-danger]="metrics.balanceDue > 0">{{ metrics.balanceDue | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></div>
+                </div>
+              </article>
+            }
           }
         </div>
+
+        <footer class="list-pagination">
+          <span>{{ pageStart() }}–{{ pageEnd() }} de {{ filteredCustomers().length }} clientas</span>
+          <div class="pager-controls">
+            <button type="button" class="icon-btn" (click)="prevPage()" [disabled]="pageIndex() <= 1" aria-label="Página anterior">
+              <span class="material-symbols-rounded">chevron_left</span>
+            </button>
+            <strong>{{ pageIndex() }}</strong>
+            <button type="button" class="icon-btn" (click)="nextPage()" [disabled]="pageIndex() >= totalPages()" aria-label="Página siguiente">
+              <span class="material-symbols-rounded">chevron_right</span>
+            </button>
+          </div>
+          <select class="input page-size" [ngModel]="pageSize()" (ngModelChange)="setPageSize($event)">
+            @for (size of pageSizeOptions; track size) {
+              <option [value]="size">{{ size }} por página</option>
+            }
+          </select>
+        </footer>
       }
-    </article>
-  </section>
+    </section>
+  }
+
+  @if (activeTab() === "actions") {
+    <section class="actions-workspace">
+      <div class="actions-heading">
+        <div>
+          <h2>Acciones de hoy</h2>
+          <p>Cobranza, postventa, cumpleaños, reactivación y calidad de datos.</p>
+        </div>
+      </div>
+
+      <div class="action-tabs" aria-label="Categorías de acciones">
+        @for (action of todayActions(); track action.key) {
+          <button type="button" [class.active]="selectedActionCategory() === action.key" (click)="setActionCategory(action.key)">
+            <span class="material-symbols-rounded">{{ action.icon }}</span>
+            <strong>{{ action.label }}</strong>
+            <small>{{ action.count }}</small>
+          </button>
+        }
+      </div>
+
+      @if (selectedTodayAction(); as action) {
+        <div class="action-list-head">
+          <h3>{{ action.label }}</h3>
+          <p>{{ action.count }} pendiente(s)</p>
+        </div>
+
+        @if (action.items.length > 0) {
+          <div class="action-list">
+            @for (item of action.items; track item.customer.customer_id) {
+              <button type="button" class="action-row" (click)="openProfile(item.customer.customer_id)">
+                <span [class]="'client-avatar ' + avatarClass(item.customer)">{{ initials(item.customer) }}</span>
+                <span>
+                  <strong>{{ item.customer.first_name }} {{ item.customer.last_name }}</strong>
+                  <small>{{ item.detail }}</small>
+                </span>
+                @if (item.amount) {
+                  <em>{{ item.amount | currency:'MXN':'symbol-narrow':'1.0-0' }}</em>
+                }
+                <span class="material-symbols-rounded">chevron_right</span>
+              </button>
+            }
+          </div>
+        } @else {
+          <p class="empty">Sin pendientes visibles en esta categoría.</p>
+        }
+      }
+    </section>
+  }
+
+  <button type="button" class="fab-new" (click)="openCreateDrawer()" aria-label="Nueva clienta">
+    <span class="material-symbols-rounded">add</span>
+  </button>
+
+  @if (drawerOpen()) {
+    <div class="drawer-backdrop" (click)="closeDrawer()">
+      <aside class="customer-drawer" role="dialog" aria-modal="true" aria-labelledby="customer-drawer-title" (click)="$event.stopPropagation()">
+        <header class="drawer-header">
+          <div class="drawer-title">
+            <span class="drawer-icon material-symbols-rounded">{{ drawerMode() === "edit" ? "edit" : "person_add" }}</span>
+            <div>
+              <h2 id="customer-drawer-title">{{ drawerMode() === "edit" ? "Editar clienta" : "Nueva clienta" }}</h2>
+              <p>{{ drawerMode() === "edit" ? "Actualiza la información comercial." : "Completa la información para crear una nueva clienta." }}</p>
+            </div>
+          </div>
+          <button type="button" class="icon-btn" (click)="closeDrawer()" aria-label="Cerrar formulario">
+            <span class="material-symbols-rounded">close</span>
+          </button>
+        </header>
+
+        <form class="drawer-form" (submit)="saveCustomer(); $event.preventDefault()">
+          <div class="form-columns">
+            <label class="field">
+              <span>Nombre *</span>
+              <input type="text" class="input" [(ngModel)]="draft.first_name" name="first_name" required />
+            </label>
+
+            <label class="field">
+              <span>Apellido *</span>
+              <input type="text" class="input" [(ngModel)]="draft.last_name" name="last_name" required />
+            </label>
+          </div>
+
+          <label class="field">
+            <span>WhatsApp</span>
+            <input type="tel" class="input" [(ngModel)]="draft.whatsapp" name="whatsapp" placeholder="+52 33 1234 5678" />
+          </label>
+
+          <div class="form-columns">
+            <label class="field">
+              <span>Ruta</span>
+              <select class="input" [ngModel]="draft.route_id" (ngModelChange)="onRouteChange($event)" name="route_id">
+                <option value="">Sin ruta</option>
+                @for (route of routes(); track route.route_id) {
+                  <option [value]="route.route_id">{{ route.name }}</option>
+                }
+              </select>
+            </label>
+
+            <label class="field">
+              <span>Localidad</span>
+              <select class="input" [(ngModel)]="draft.locality_id" name="locality_id" [disabled]="!draft.route_id">
+                <option value="">Sin localidad</option>
+                @for (locality of localitiesForRoute(draft.route_id); track locality.locality_id) {
+                  <option [value]="locality.locality_id">{{ locality.name }}</option>
+                }
+              </select>
+            </label>
+          </div>
+
+          <label class="field">
+            <span>Estado</span>
+            <select class="input" [(ngModel)]="draft.active" name="active">
+              <option [ngValue]="true">Activa</option>
+              <option [ngValue]="false">Inactiva</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Notas</span>
+            <textarea class="input textarea" [(ngModel)]="draft.notes" name="notes" rows="3" placeholder="Preferencias, instrucciones, etc."></textarea>
+          </label>
+
+          <button type="button" class="advanced-toggle" (click)="advancedFormOpen.set(!advancedFormOpen())">
+            <span class="material-symbols-rounded">{{ advancedFormOpen() ? "expand_less" : "expand_more" }}</span>
+            Datos 360
+          </button>
+
+          @if (advancedFormOpen()) {
+            <section class="advanced-form">
+              <div class="form-columns">
+                <label class="field">
+                  <span>Cumpleaños</span>
+                  <input type="date" class="input" [(ngModel)]="draft.birthday" name="birthday" />
+                </label>
+
+                <label class="field">
+                  <span>Etapa comercial</span>
+                  <select class="input" [(ngModel)]="draft.commercial_stage" name="commercial_stage">
+                    <option value="">Sin etapa</option>
+                    <option value="prospecto">Prospecto</option>
+                    <option value="nueva">Nueva</option>
+                    <option value="activa">Activa</option>
+                    <option value="frecuente">Frecuente</option>
+                    <option value="en_riesgo">En riesgo</option>
+                    <option value="inactiva">Inactiva</option>
+                    <option value="recuperada">Recuperada</option>
+                  </select>
+                </label>
+              </div>
+
+              <label class="field">
+                <span>Dirección</span>
+                <input type="text" class="input" [(ngModel)]="draft.address" name="address" placeholder="Calle, colonia o punto de entrega" />
+              </label>
+
+              <label class="field">
+                <span>Referencia de entrega</span>
+                <input type="text" class="input" [(ngModel)]="draft.delivery_reference" name="delivery_reference" placeholder="Color de casa, negocio, horario útil" />
+              </label>
+
+              <div class="form-columns">
+                <label class="field">
+                  <span>Tallas preferidas</span>
+                  <input type="text" class="input" [(ngModel)]="draft.preferred_sizes" name="preferred_sizes" placeholder="S, M, 7, 9" />
+                </label>
+
+                <label class="field">
+                  <span>Categorías favoritas</span>
+                  <input type="text" class="input" [(ngModel)]="draft.preferred_categories" name="preferred_categories" placeholder="Blusas, jeans, vestidos" />
+                </label>
+              </div>
+
+              <div class="form-columns">
+                <label class="field">
+                  <span>Colores preferidos</span>
+                  <input type="text" class="input" [(ngModel)]="draft.preferred_colors" name="preferred_colors" placeholder="Negro, rojo, mezclilla" />
+                </label>
+
+                <label class="field">
+                  <span>Origen</span>
+                  <input type="text" class="input" [(ngModel)]="draft.source" name="source" placeholder="Recomendación, Facebook, ruta" />
+                </label>
+              </div>
+
+              <label class="field">
+                <span>Notas WhatsApp / permiso</span>
+                <textarea class="input textarea small" [(ngModel)]="draft.wa_opt_in_notes" name="wa_opt_in_notes" rows="2" placeholder="Preferencia de horario o contexto de autorización"></textarea>
+              </label>
+            </section>
+          }
+
+          <footer class="drawer-footer">
+            <button type="button" class="btn btn-outline" (click)="closeDrawer()" [disabled]="saving()">Cancelar</button>
+            <button type="submit" class="btn btn-primary" [disabled]="saving()">
+              {{ saving() ? "Guardando..." : drawerMode() === "edit" ? "Guardar cambios" : "Crear clienta" }}
+            </button>
+          </footer>
+        </form>
+      </aside>
+    </div>
+  }
 </section>

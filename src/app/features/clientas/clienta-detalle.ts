@@ -8,7 +8,7 @@ import { RoutesService } from "../../core/routes.service";
 import { Order, OrderStatus, OrdersService } from "../../core/orders.service";
 import { calculateItemFinancials, calculateOrderFinancials } from "../../core/order-financials";
 import { UserAdminApiService } from "../../services/user-admin-api.service";
-import { FeatureFlagsService } from "../../core/feature-flags.service";
+import { CustomerFollowup, CustomerFollowupType, CustomerFollowupsService } from "../../core/customer-followups.service";
 
 // Tipos de notificación (espejo del backend)
 export interface WaNotifType {
@@ -29,7 +29,7 @@ export type RfmSegment =
   | "needs_attention" // recencia baja, frecuencia media
   | "new"             // menos de 2 pedidos
   | "dormant";        // sin pedido en mucho tiempo
-type ClientTab = "summary" | "orders" | "products" | "account" | "activity";
+type ClientTab = "summary" | "orders" | "products" | "account" | "followup" | "data";
 
 interface ProductFreqRow {
   title: string;
@@ -89,7 +89,7 @@ export default class ClientaDetallePage implements OnInit {
   private routes    = inject(RoutesService);
   private api       = inject(UserAdminApiService);
   private ordersService = inject(OrdersService);
-  features = inject(FeatureFlagsService);
+  private followupsService = inject(CustomerFollowupsService);
 
   loading    = signal(true);
   customerId = signal("");
@@ -98,7 +98,10 @@ export default class ClientaDetallePage implements OnInit {
   error      = signal<string | null>(null);
   activeTab = signal<ClientTab>("summary");
   followUpDraft = signal("");
+  followUpType = signal<CustomerFollowupType>("general_note");
+  followUpNote = signal("");
   followUpSaving = signal(false);
+  assistantCopied = signal<string | null>(null);
   orderHistoryLimit = signal(20);
   creditOrderId = signal("");
   creditApplying = signal(false);
@@ -135,12 +138,12 @@ export default class ClientaDetallePage implements OnInit {
   ));
   unpaidOrders = computed(() => this.orders().filter((order) =>
     calculateOrderFinancials(order).balanceDue > 0
-    && (Boolean(order.delivered_at) || ["delivered", "delivered_partial", "entregado", "pago_pendiente", "pagado_parcial"].includes(order.status)),
+    && !["cancelado", "devuelto"].includes(order.status),
   ));
 
   totalDebt = computed(() =>
     this.orders()
-      .filter(o => ["pago_pendiente", "pagado_parcial"].includes(o.status))
+      .filter(o => !["cancelado", "devuelto"].includes(o.status))
       .reduce((s, o) => s + calculateOrderFinancials(o).balanceDue, 0)
   );
   totalProfit = computed(() => this.paidOrders().reduce((sum, order) => sum + calculateOrderFinancials(order).grossProfit, 0));
@@ -159,7 +162,24 @@ export default class ClientaDetallePage implements OnInit {
     return Math.floor(daysSince(pending[pending.length - 1].created_at));
   });
   creditMovements = computed(() => this.customers.creditMovementsFor(this.customerId()));
+  followups = computed(() => this.followupsService.forCustomer(this.customerId()).sort((a, b) => a.due_at.localeCompare(b.due_at)));
+  openFollowups = computed(() => this.followups().filter((row) => row.status === "open" || row.status === "snoozed"));
+  overdueFollowups = computed(() => this.openFollowups().filter((row) => this.isOverdue(row.due_at)));
+  completedFollowups = computed(() => this.followups().filter((row) => row.status === "done"));
+  accountOrders = computed(() => this.orders().filter((order) => calculateOrderFinancials(order).balanceDue > 0 || calculateOrderFinancials(order).paidAmount > 0 || calculateOrderFinancials(order).overpaymentAmount > 0));
   visibleOrderHistory = computed(() => this.orders().slice(0, this.orderHistoryLimit()));
+  dataQualityIssues = computed(() => {
+    const c = this.customer();
+    if (!c) return [];
+    const issues: string[] = [];
+    if (!c.route_id) issues.push("Ruta pendiente");
+    if (!c.birthday) issues.push("Cumpleaños pendiente");
+    if (!c.address?.trim()) issues.push("Dirección pendiente");
+    if (!c.preferred_sizes?.length && !c.preferred_categories?.length) issues.push("Preferencias pendientes");
+    return issues;
+  });
+  nextAction = computed(() => this.buildNextAction());
+  assistantDrafts = computed(() => this.buildAssistantDrafts());
 
   avgOrderValue = computed(() => {
     const n = this.paidOrders().length;
@@ -229,6 +249,7 @@ export default class ClientaDetallePage implements OnInit {
       this.customers.loadFromFirestore().catch(() => null),
       this.routes.loadFromFirestore().catch(() => null),
       this.ordersService.loadFromFirestore().catch(() => null),
+      this.followupsService.loadFromFirestore().catch(() => null),
     ]);
 
     const c = this.customers.getById(id);
@@ -418,6 +439,14 @@ export default class ClientaDetallePage implements OnInit {
     return calculateOrderFinancials(order).balanceDue;
   }
 
+  orderPaid(order: Order): number {
+    return calculateOrderFinancials(order).paidAmount;
+  }
+
+  orderOverpayment(order: Order): number {
+    return calculateOrderFinancials(order).overpaymentAmount;
+  }
+
   orderReturns(order: Order): number {
     return calculateOrderFinancials(order).returnsAmount;
   }
@@ -429,13 +458,52 @@ export default class ClientaDetallePage implements OnInit {
   async scheduleFollowUp(): Promise<void> {
     const customer = this.customer();
     if (!customer) return;
+    if (!this.followUpDraft()) {
+      this.error.set("Selecciona una fecha para el seguimiento.");
+      return;
+    }
     this.followUpSaving.set(true);
     try {
+      const type = this.followUpType();
+      await this.followupsService.save({
+        business_id: customer.business_id,
+        customer_id: customer.customer_id,
+        type,
+        due_at: this.followUpDraft(),
+        title: this.followupTypeLabel(type),
+        note: this.followUpNote() || null,
+        source: "customer_profile",
+      });
       await this.customers.save({ ...customer, follow_up_at: this.followUpDraft() || null });
+      await this.followupsService.loadFromFirestore();
       this.customer.set(this.customers.getById(customer.customer_id));
+      this.followUpNote.set("");
     } finally {
       this.followUpSaving.set(false);
     }
+  }
+
+  async completeFollowup(row: CustomerFollowup): Promise<void> {
+    await this.followupsService.completeFollowup(row.followup_id);
+    if (row.type === "payment_reminder" && row.order_id) {
+      await this.ordersService.updateCollectionState(row.order_id, {
+        collection_status: "paid",
+        collection_reminder_at: null,
+        collection_note: "Seguimiento de cobro marcado como resuelto desde ficha 360.",
+      }).catch(() => null);
+    }
+    await Promise.all([
+      this.followupsService.loadFromFirestore().catch(() => null),
+      this.ordersService.loadFromFirestore().catch(() => null),
+    ]);
+    await this.loadOrders(this.customerId());
+  }
+
+  async snoozeFollowup(row: CustomerFollowup): Promise<void> {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    await this.followupsService.snoozeFollowup(row.followup_id, tomorrow.toISOString().slice(0, 10));
+    await this.followupsService.loadFromFirestore().catch(() => null);
   }
 
   async applyCredit(): Promise<void> {
@@ -453,6 +521,131 @@ export default class ClientaDetallePage implements OnInit {
     } finally {
       this.creditApplying.set(false);
     }
+  }
+
+  collectionStatusLabel(status: string | null | undefined): string {
+    return {
+      none: "Sin estado",
+      pending: "Cobro pendiente",
+      paid: "Ya cobrado",
+      remind_later: "Recordar después",
+    }[status || "none"] || "Sin estado";
+  }
+
+  followupTypeLabel(type: CustomerFollowupType): string {
+    return {
+      payment_reminder: "Cobro pendiente",
+      post_sale: "Postventa",
+      birthday: "Cumpleaños",
+      reactivation: "Reactivación",
+      quote: "Cotización",
+      general_note: "Seguimiento general",
+    }[type];
+  }
+
+  followupIcon(type: CustomerFollowupType): string {
+    return {
+      payment_reminder: "payments",
+      post_sale: "support_agent",
+      birthday: "cake",
+      reactivation: "campaign",
+      quote: "request_quote",
+      general_note: "event_note",
+    }[type];
+  }
+
+  async copyAssistantDraft(id: string, text: string): Promise<void> {
+    await navigator.clipboard.writeText(text).catch(() => null);
+    this.assistantCopied.set(id);
+    setTimeout(() => this.assistantCopied.set(null), 1800);
+  }
+
+  private buildNextAction(): { icon: string; title: string; detail: string } {
+    const customer = this.customer();
+    if (!customer) return { icon: "flag", title: "Sin acción", detail: "No se encontró la clienta." };
+    if (this.totalDebt() > 0) {
+      return {
+        icon: "payments",
+        title: "Revisar cobro antes de vender",
+        detail: `Debe ${this.money(this.totalDebt())}. Al generar nota conviene decidir si se cobra ahora o se agenda recordatorio.`,
+      };
+    }
+    const overdue = this.overdueFollowups()[0];
+    if (overdue) return { icon: this.followupIcon(overdue.type), title: overdue.title, detail: `Vencido desde ${overdue.due_at}.` };
+    const birthdayDays = this.daysUntilBirthday(customer.birthday || null);
+    if (birthdayDays !== null && birthdayDays <= 7) {
+      return { icon: "cake", title: birthdayDays === 0 ? "Felicitar cumpleaños" : "Preparar cumpleaños", detail: birthdayDays === 0 ? "Cumpleaños hoy." : `Cumple en ${birthdayDays} días.` };
+    }
+    const days = this.daysSinceLastOrder();
+    if (days !== null && days > 60) return { icon: "campaign", title: "Reactivar clienta", detail: `${days} días sin compra. Conviene enviar mensaje corto con novedades.` };
+    if (this.dataQualityIssues().length) return { icon: "fact_check", title: "Completar datos 360", detail: this.dataQualityIssues().slice(0, 2).join(", ") };
+    return { icon: "support_agent", title: "Postventa ligera", detail: "Revisar satisfacción, preferencias y próxima recomendación." };
+  }
+
+  private buildAssistantDrafts(): Array<{ id: string; icon: string; title: string; text: string }> {
+    const c = this.customer();
+    if (!c) return [];
+    const name = c.first_name || "amiga";
+    const preferred = [...(c.preferred_categories || []), ...(c.preferred_colors || [])].slice(0, 3).join(", ");
+    const drafts: Array<{ id: string; icon: string; title: string; text: string }> = [];
+    if (this.totalDebt() > 0) {
+      drafts.push({
+        id: "collection",
+        icon: "payments",
+        title: "Cobranza amable",
+        text: `Hola ${name}, te comparto que tienes un saldo pendiente de ${this.money(this.totalDebt())}. Cuando puedas lo revisamos para dejar tu cuenta al día. Gracias.`,
+      });
+    }
+    drafts.push({
+      id: "post_sale",
+      icon: "support_agent",
+      title: "Postventa",
+      text: `Hola ${name}, ¿cómo te fue con tu último pedido? Si algo no te quedó bien o necesitas cambio, dime y lo revisamos.`,
+    });
+    if (this.daysUntilBirthday(c.birthday || null) !== null && (this.daysUntilBirthday(c.birthday || null) || 0) <= 14) {
+      drafts.push({
+        id: "birthday",
+        icon: "cake",
+        title: "Cumpleaños",
+        text: `Hola ${name}, espero que tengas un cumpleaños muy bonito. Te mando un abrazo y mis mejores deseos.`,
+      });
+    }
+    if ((this.daysSinceLastOrder() || 0) > 45) {
+      drafts.push({
+        id: "reactivation",
+        icon: "campaign",
+        title: "Reactivación",
+        text: `Hola ${name}, me llegaron novedades y pensé en ti${preferred ? ` por tus gustos en ${preferred}` : ""}. Si quieres te mando opciones por WhatsApp.`,
+      });
+    }
+    drafts.push({
+      id: "recommendation",
+      icon: "auto_awesome",
+      title: "Recomendación",
+      text: `Hola ${name}, por lo que sueles pedir${preferred ? ` (${preferred})` : ""}, creo que estas piezas te pueden funcionar. Te mando fotos y medidas para que elijas con calma.`,
+    });
+    return drafts.slice(0, 5);
+  }
+
+  private isOverdue(date: string | null | undefined): boolean {
+    if (!date) return false;
+    const today = new Date().toISOString().slice(0, 10);
+    return date < today;
+  }
+
+  private daysUntilBirthday(value: string | null): number | null {
+    if (!value) return null;
+    const parts = value.slice(0, 10).split("-").map(Number);
+    if (parts.length < 3 || !parts[1] || !parts[2]) return null;
+    const today = new Date();
+    const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const birthday = new Date(today.getFullYear(), parts[1] - 1, parts[2]);
+    if (birthday < start) birthday.setFullYear(today.getFullYear() + 1);
+    return Math.ceil((birthday.getTime() - start.getTime()) / 86_400_000);
+  }
+
+  private money(value: number): string {
+    return new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format(value || 0);
   }
 
   private relativeRfmSegment(): RfmSegment {

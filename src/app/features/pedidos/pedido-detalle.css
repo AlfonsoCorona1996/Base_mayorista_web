@@ -6441,6 +6441,83 @@ code {
   line-height: 1.4;
 }
 
+.collection-sheet {
+  display: grid;
+  gap: 12px;
+}
+
+.collection-customer {
+  margin: 0 18px;
+  border: 1px solid #dce8f5;
+  border-radius: 10px;
+  background: #f8fbff;
+  padding: 10px 12px;
+  display: grid;
+  gap: 2px;
+}
+
+.collection-customer strong {
+  color: #0f172a;
+  font-size: 0.92rem;
+}
+
+.collection-customer span {
+  color: #64748b;
+  font-size: 0.78rem;
+}
+
+.collection-summary {
+  margin-top: 0;
+}
+
+.collection-note-field textarea.input {
+  min-height: 66px;
+  padding-top: 8px;
+  resize: vertical;
+}
+
+.collection-actions {
+  display: grid;
+  gap: 8px;
+  padding: 0 18px;
+}
+
+.collection-actions .btn,
+.collection-remind .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 42px;
+}
+
+.collection-actions .material-symbols-rounded,
+.collection-remind .material-symbols-rounded {
+  font-size: 18px;
+}
+
+.collection-remind {
+  display: grid;
+  gap: 7px;
+  padding: 0 18px;
+}
+
+.collection-remind > div {
+  display: grid;
+  gap: 8px;
+}
+
+@media (min-width: 640px) {
+  .collection-actions {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .collection-remind > div {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+}
+
 .payment-close-btn {
   background: linear-gradient(135deg, #16a34a, #15803d) !important;
   border: 1px solid #166534 !important;
