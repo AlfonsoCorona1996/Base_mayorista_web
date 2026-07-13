@@ -7,6 +7,8 @@ export interface RoutePlan {
   name: string;
   locality_ids: string[];
   active: boolean;
+  estimated_run_expense?: number | null;
+  estimated_run_expense_notes?: string | null;
   notes?: string;
   created_at?: any;
   updated_at?: any;
@@ -48,6 +50,8 @@ export class RoutesService {
       name: (route.name || routeId).trim(),
       locality_ids: Array.isArray(route.locality_ids) ? route.locality_ids.filter(Boolean) : [],
       active: route.active ?? true,
+      estimated_run_expense: this.toSafeAmount(route.estimated_run_expense),
+      estimated_run_expense_notes: this.toOptionalText(route.estimated_run_expense_notes),
       created_at: route.created_at ?? now,
       updated_at: now,
       notes: route.notes || "",
@@ -72,9 +76,24 @@ export class RoutesService {
       name: (data.name || routeId).trim(),
       locality_ids: Array.isArray(data.locality_ids) ? data.locality_ids.filter(Boolean) : [],
       active: data.active ?? true,
+      estimated_run_expense: this.toSafeAmount(data.estimated_run_expense),
+      estimated_run_expense_notes: this.toOptionalText(data.estimated_run_expense_notes),
       notes: data.notes || "",
       created_at: data.created_at ?? null,
       updated_at: data.updated_at ?? null,
     };
+  }
+
+  private toSafeAmount(value: unknown): number | null {
+    if (value === null || value === undefined || value === "") return null;
+    const parsed = typeof value === "number" ? value : Number(value);
+    if (!Number.isFinite(parsed)) return null;
+    return Math.max(0, Number(parsed.toFixed(2)));
+  }
+
+  private toOptionalText(value: unknown): string | null {
+    if (value === null || value === undefined) return null;
+    const text = String(value).trim();
+    return text || null;
   }
 }

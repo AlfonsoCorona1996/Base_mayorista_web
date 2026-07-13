@@ -1,185 +1,390 @@
 <section class="routes-page">
-  <header class="page-header">
-    <div>
-      <h1>Rutas</h1>
-      <p>Organiza localidades en el orden exacto de entrega.</p>
+  <header class="routes-header">
+    <div class="title-block">
+      <span class="title-icon material-symbols-rounded">route</span>
+      <div>
+        <h1>Rutas</h1>
+        <p>Administra rutas, localidades, salidas y rentabilidad logística.</p>
+      </div>
     </div>
 
-    <button type="button" class="btn btn-secondary" (click)="reload()" [disabled]="loading()">
-      {{ loading() ? "Actualizando..." : "Actualizar" }}
-    </button>
+    <div class="header-actions">
+      <button type="button" class="btn btn-secondary" (click)="reload()" [disabled]="loading()">
+        <span class="material-symbols-rounded">refresh</span>
+        {{ loading() ? "Actualizando..." : "Actualizar" }}
+      </button>
+      <button type="button" class="btn btn-primary desktop-create" (click)="openCreateDrawer()">
+        <span class="material-symbols-rounded">add</span>
+        Nueva ruta
+      </button>
+    </div>
   </header>
-
-  <section class="stats-grid">
-    <article class="stat-card">
-      <p>Total</p>
-      <strong>{{ allRoutes().length }}</strong>
-    </article>
-    <article class="stat-card">
-      <p>Activas</p>
-      <strong>{{ activeCount() }}</strong>
-    </article>
-    <article class="stat-card">
-      <p>Inactivas</p>
-      <strong>{{ inactiveCount() }}</strong>
-    </article>
-  </section>
 
   @if (error()) {
     <div class="alert alert-error">{{ error() }}</div>
   }
-
   @if (success()) {
     <div class="alert alert-success">{{ success() }}</div>
   }
 
-  <section class="panel filters-panel">
-    <input
-      type="text"
-      class="input"
-      [ngModel]="searchTerm()"
-      (ngModelChange)="searchTerm.set($event)"
-      placeholder="Buscar ruta o localidad"
-    />
-
-    <div class="filters-row">
-      <select class="input" [ngModel]="statusFilter()" (ngModelChange)="onStatusFilterChange($event)">
-        <option value="all">Todas</option>
-        <option value="active">Solo activas</option>
-        <option value="inactive">Solo inactivas</option>
-      </select>
-
-      <button type="button" class="btn btn-outline" (click)="clearFilters()" [disabled]="!searchTerm().trim() && statusFilter() === 'all'">
-        Limpiar filtros
-      </button>
-    </div>
+  <section class="kpi-strip" aria-label="Indicadores de rutas">
+    <article class="kpi-card">
+      <span class="material-symbols-rounded">route</span>
+      <div><small>Total</small><strong>{{ allRoutes().length }}</strong></div>
+    </article>
+    <article class="kpi-card">
+      <span class="material-symbols-rounded">check_circle</span>
+      <div><small>Activas</small><strong>{{ activeRoutes().length }}</strong></div>
+    </article>
+    <article class="kpi-card">
+      <span class="material-symbols-rounded">location_on</span>
+      <div><small>Localidades</small><strong>{{ totalLocalities() }}</strong></div>
+    </article>
+    <article class="kpi-card">
+      <span class="material-symbols-rounded">paid</span>
+      <div><small>Ventas netas</small><strong>{{ totalNetSales() | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></div>
+    </article>
+    <article class="kpi-card">
+      <span class="material-symbols-rounded">local_gas_station</span>
+      <div><small>Gastos</small><strong>{{ financeAvailable() ? (totalExpenses() | currency:'MXN':'symbol-narrow':'1.0-0') : "N/D" }}</strong></div>
+    </article>
+    <article class="kpi-card">
+      <span class="material-symbols-rounded">trending_up</span>
+      <div><small>Utilidad</small><strong>{{ financeAvailable() ? (totalNetProfit() | currency:'MXN':'symbol-narrow':'1.0-0') : "N/D" }}</strong></div>
+    </article>
+    <article class="kpi-card">
+      <span class="material-symbols-rounded">account_balance_wallet</span>
+      <div><small>Por cobrar</small><strong>{{ totalBalance() | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></div>
+    </article>
+    <article class="kpi-card">
+      <span class="material-symbols-rounded">pending_actions</span>
+      <div><small>Pendientes</small><strong>{{ totalPending() }}</strong></div>
+    </article>
   </section>
 
-  <section class="content-grid">
-    <article class="panel form-panel">
-      <div class="form-header">
-        <h2>{{ editingId() ? "Editar ruta" : "Nueva ruta" }}</h2>
-        @if (editingId()) {
-          <button type="button" class="btn btn-ghost" (click)="startCreate()">Nueva</button>
-        }
-      </div>
+  <section class="filters-panel">
+    <label class="search-field">
+      <span class="material-symbols-rounded">search</span>
+      <input
+        type="search"
+        [ngModel]="searchTerm()"
+        (ngModelChange)="setSearchTerm($event)"
+        placeholder="Buscar ruta o localidad"
+      />
+    </label>
 
-      <form class="form-grid" (submit)="saveRoute(); $event.preventDefault()">
-        <label class="field">
-          <span>Nombre *</span>
-          <input type="text" class="input" [(ngModel)]="draft.name" name="name" required />
-        </label>
+    <select class="input control-desktop" [ngModel]="statusFilter()" (ngModelChange)="onStatusFilterChange($event)">
+      <option value="all">Todas las rutas</option>
+      <option value="active">Solo activas</option>
+      <option value="inactive">Solo inactivas</option>
+    </select>
 
-        <label class="field">
+    <select class="input control-desktop" [ngModel]="sortBy()" (ngModelChange)="setSortBy($event)">
+      <option value="name">Nombre A-Z</option>
+      <option value="sales">Mayor venta</option>
+      <option value="profit">Mayor utilidad</option>
+      <option value="balance">Mayor por cobrar</option>
+      <option value="pending">Más pendientes</option>
+      <option value="lastRun">Última salida</option>
+    </select>
+
+    <button type="button" class="btn btn-outline mobile-filter" (click)="filtersSheetOpen.set(!filtersSheetOpen())">
+      <span class="material-symbols-rounded">tune</span>
+      Filtros
+    </button>
+
+    <button type="button" class="btn btn-ghost clear-btn" (click)="clearFilters()" [disabled]="!hasActiveFilters()">
+      Limpiar
+    </button>
+
+    @if (filtersSheetOpen()) {
+      <div class="filters-sheet">
+        <label>
           <span>Estado</span>
-          <select class="input" [(ngModel)]="draft.active" name="active">
-            <option [ngValue]="true">Activa</option>
-            <option [ngValue]="false">Inactiva</option>
+          <select class="input" [ngModel]="statusFilter()" (ngModelChange)="onStatusFilterChange($event)">
+            <option value="all">Todas las rutas</option>
+            <option value="active">Solo activas</option>
+            <option value="inactive">Solo inactivas</option>
           </select>
         </label>
-
-        <label class="field">
-          <span>Notas</span>
-          <textarea class="input textarea" [(ngModel)]="draft.notes" name="notes" rows="3"></textarea>
+        <label>
+          <span>Ordenar</span>
+          <select class="input" [ngModel]="sortBy()" (ngModelChange)="setSortBy($event)">
+            <option value="name">Nombre A-Z</option>
+            <option value="sales">Mayor venta</option>
+            <option value="profit">Mayor utilidad</option>
+            <option value="balance">Mayor por cobrar</option>
+            <option value="pending">Más pendientes</option>
+            <option value="lastRun">Última salida</option>
+          </select>
         </label>
+      </div>
+    }
+  </section>
 
-        <div class="route-builder">
-          <p class="builder-title">Localidades en orden</p>
-
-          <div class="builder-controls">
-            <select
-              class="input"
-              [ngModel]="selectedLocalityId()"
-              (ngModelChange)="selectedLocalityId.set($event)"
-              [ngModelOptions]="{ standalone: true }"
-            >
-              <option value="">Selecciona localidad</option>
-              @for (locality of availableLocalities(); track locality.locality_id) {
-                <option [value]="locality.locality_id">{{ locality.name }}</option>
-              }
-            </select>
-
-            <button type="button" class="btn btn-outline" (click)="addLocality()">Agregar</button>
-          </div>
-
-          @if (draft.locality_ids.length === 0) {
-            <p class="empty">Aun no agregas localidades a esta ruta.</p>
-          } @else {
-            <div class="route-list">
-              @for (localityId of draft.locality_ids; track localityId; let idx = $index) {
-                <div class="route-item">
-                  <div>
-                    {{ localityName(localityId) }}
-                  </div>
-                  <div class="route-actions">
-                    <button type="button" class="btn btn-danger remove-x" (click)="removeLocality(idx)">X</button>
-                  </div>
-                </div>
-              }
-            </div>
-          }
-        </div>
-
-        <div class="form-actions">
-          <button type="submit" class="btn btn-primary" [disabled]="saving()">
-            {{ saving() ? "Guardando..." : editingId() ? "Guardar cambios" : "Crear ruta" }}
-          </button>
-          <button type="button" class="btn btn-outline" (click)="startCreate()">Limpiar</button>
-        </div>
-      </form>
-    </article>
-
-    <article class="panel list-panel">
-      <div class="list-header">
+  <section class="routes-list-panel">
+    <div class="list-head">
+      <div>
         <h2>Rutas registradas</h2>
         <p>{{ filteredRoutes().length }} resultado(s)</p>
       </div>
+    </div>
 
-      @if (loading()) {
-        <p class="empty">Cargando rutas...</p>
-      } @else if (filteredRoutes().length === 0) {
-        <p class="empty">No hay rutas con esos filtros.</p>
-      } @else {
-        <div class="route-cards">
-          @for (route of filteredRoutes(); track route.route_id) {
-            <article class="route-card" [class.card-off]="!route.active">
-              <header>
-                <div>
-                  <h3>{{ route.name }}</h3>
-                  <p>{{ route.locality_ids.length }} localidades</p>
-                </div>
-                <span class="status-tag" [class]="'status-tag ' + (route.active ? 'tag-on' : 'tag-off')">
-                  {{ route.active ? "Activa" : "Inactiva" }}
-                </span>
-              </header>
-
-              @if (route.locality_ids.length > 0) {
-                <div class="route-preview">
-              @for (localityId of route.locality_ids; track localityId; let idx = $index) {
-                    <span>{{ localityName(localityId) }}</span>
-                  }
-                </div>
+    @if (loading()) {
+      <p class="empty">Cargando rutas...</p>
+    } @else if (filteredRoutes().length === 0) {
+      <p class="empty">No hay rutas con esos filtros.</p>
+    } @else {
+      <div class="routes-table-wrap desktop-list">
+        <table class="routes-table">
+          <thead>
+            <tr>
+              <th><button type="button" class="table-sort" [class.active]="isSortedBy('name')" (click)="setTableSort('name')">Ruta <span class="material-symbols-rounded">{{ sortIcon('name') }}</span></button></th>
+              <th><button type="button" class="table-sort" [class.active]="isSortedBy('localities')" (click)="setTableSort('localities')">Localidades <span class="material-symbols-rounded">{{ sortIcon('localities') }}</span></button></th>
+              <th><button type="button" class="table-sort" [class.active]="isSortedBy('customers')" (click)="setTableSort('customers')">Clientas <span class="material-symbols-rounded">{{ sortIcon('customers') }}</span></button></th>
+              <th><button type="button" class="table-sort" [class.active]="isSortedBy('lastRun')" (click)="setTableSort('lastRun')">Última salida <span class="material-symbols-rounded">{{ sortIcon('lastRun') }}</span></button></th>
+              <th><button type="button" class="table-sort" [class.active]="isSortedBy('sales')" (click)="setTableSort('sales')">Ventas netas <span class="material-symbols-rounded">{{ sortIcon('sales') }}</span></button></th>
+              <th><button type="button" class="table-sort" [class.active]="isSortedBy('expenses')" (click)="setTableSort('expenses')">Gastos <span class="material-symbols-rounded">{{ sortIcon('expenses') }}</span></button></th>
+              <th><button type="button" class="table-sort" [class.active]="isSortedBy('profit')" (click)="setTableSort('profit')">Utilidad <span class="material-symbols-rounded">{{ sortIcon('profit') }}</span></button></th>
+              <th><button type="button" class="table-sort" [class.active]="isSortedBy('balance')" (click)="setTableSort('balance')">Por cobrar <span class="material-symbols-rounded">{{ sortIcon('balance') }}</span></button></th>
+              <th><button type="button" class="table-sort" [class.active]="isSortedBy('pending')" (click)="setTableSort('pending')">Pendientes <span class="material-symbols-rounded">{{ sortIcon('pending') }}</span></button></th>
+              <th><button type="button" class="table-sort" [class.active]="isSortedBy('status')" (click)="setTableSort('status')">Estado <span class="material-symbols-rounded">{{ sortIcon('status') }}</span></button></th>
+              <th class="actions-col">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (route of filteredRoutes(); track route.route_id) {
+              @if (routeMetrics(route); as metrics) {
+                <tr class="route-row" (click)="openRouteDetail(route)">
+                  <td>
+                    <div class="route-cell">
+                      <span class="route-avatar material-symbols-rounded">route</span>
+                      <span>
+                        <strong>{{ route.name }}</strong>
+                        <small>{{ route.notes || "Sin notas" }}</small>
+                      </span>
+                    </div>
+                  </td>
+                  <td>{{ metrics.localityCount }}</td>
+                  <td>{{ metrics.customerCount }}</td>
+                  <td>{{ metrics.lastRunAt ? (metrics.lastRunAt | date:'dd MMM yy') : "Sin salidas" }}</td>
+                  <td>{{ metrics.netSales | currency:'MXN':'symbol-narrow':'1.0-0' }}</td>
+                  <td>
+                    {{ financeAvailable() ? (metrics.expenses | currency:'MXN':'symbol-narrow':'1.0-0') : "N/D" }}
+                    @if (!financeAvailable() && expenseLabel(route)) { <small class="cell-note">{{ expenseLabel(route) }}</small> }
+                  </td>
+                  <td [class.money-good]="metrics.netProfit > 0" [class.money-danger]="metrics.netProfit < 0">
+                    {{ financeAvailable() ? (metrics.netProfit | currency:'MXN':'symbol-narrow':'1.0-0') : "N/D" }}
+                  </td>
+                  <td [class.money-danger]="metrics.balanceDue > 0">{{ metrics.balanceDue | currency:'MXN':'symbol-narrow':'1.0-0' }}</td>
+                  <td>{{ metrics.pendingOrders }}</td>
+                  <td><span class="status-pill" [attr.data-tone]="routeStatusTone(route)">{{ routeStatusLabel(route) }}</span></td>
+                  <td class="actions-col">
+                    <button type="button" class="icon-btn" (click)="openEditDrawer(route, $event)" aria-label="Editar ruta">
+                      <span class="material-symbols-rounded">edit</span>
+                    </button>
+                    <button type="button" class="icon-btn" (click)="toggleRowMenu(route.route_id, $event)" aria-label="Más acciones">
+                      <span class="material-symbols-rounded">more_vert</span>
+                    </button>
+                    @if (rowMenuOpenId() === route.route_id) {
+                      <div class="row-menu" (click)="$event.stopPropagation()">
+                        <button type="button" (click)="openEditDrawer(route, $event)">
+                          <span class="material-symbols-rounded">edit</span>
+                          Editar
+                        </button>
+                        <button type="button" (click)="toggleActiveFromMenu(route, $event)" [disabled]="isBusy(route.route_id)">
+                          <span class="material-symbols-rounded">{{ route.active ? "visibility_off" : "check_circle" }}</span>
+                          {{ route.active ? "Desactivar" : "Activar" }}
+                        </button>
+                      </div>
+                    }
+                  </td>
+                </tr>
               }
+            }
+          </tbody>
+        </table>
+      </div>
 
-              <div class="card-actions compact-actions">
-                <button type="button" class="btn btn-outline route-action-btn" (click)="startEdit(route)">
-                  <span aria-hidden="true">✏️</span>
-                  <span>Editar</span>
+      <div class="mobile-route-list">
+        @for (route of filteredRoutes(); track route.route_id) {
+          @if (routeMetrics(route); as metrics) {
+            <article class="route-card" (click)="openRouteDetail(route)">
+              <header>
+                <div class="route-cell">
+                  <span class="route-avatar material-symbols-rounded">route</span>
+                  <span>
+                    <strong>{{ route.name }}</strong>
+                    <small>{{ metrics.localityCount }} localidades · {{ metrics.customerCount }} clientas</small>
+                  </span>
+                </div>
+                <button type="button" class="icon-btn" (click)="toggleRowMenu(route.route_id, $event)" aria-label="Más acciones">
+                  <span class="material-symbols-rounded">more_vert</span>
                 </button>
-                <button
-                  type="button"
-                  class="btn btn-danger route-action-btn"
-                  (click)="toggleActive(route, !route.active)"
-                  [disabled]="isBusy(route.route_id)"
-                >
-                  <span aria-hidden="true">{{ route.active ? "⛔" : "✅" }}</span>
-                  <span>{{ isBusy(route.route_id) ? "Procesando..." : route.active ? "Desactivar" : "Activar" }}</span>
-                </button>
+                @if (rowMenuOpenId() === route.route_id) {
+                  <div class="row-menu mobile-row-menu" (click)="$event.stopPropagation()">
+                    <button type="button" (click)="openEditDrawer(route, $event)">
+                      <span class="material-symbols-rounded">edit</span>
+                      Editar
+                    </button>
+                    <button type="button" (click)="toggleActiveFromMenu(route, $event)" [disabled]="isBusy(route.route_id)">
+                      <span class="material-symbols-rounded">{{ route.active ? "visibility_off" : "check_circle" }}</span>
+                      {{ route.active ? "Desactivar" : "Activar" }}
+                    </button>
+                  </div>
+                }
+              </header>
+              <div class="mobile-metrics">
+                <div><span>Ventas</span><strong>{{ metrics.netSales | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></div>
+                <div><span>Utilidad</span><strong>{{ financeAvailable() ? (metrics.netProfit | currency:'MXN':'symbol-narrow':'1.0-0') : "N/D" }}</strong></div>
+                <div><span>Por cobrar</span><strong [class.money-danger]="metrics.balanceDue > 0">{{ metrics.balanceDue | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></div>
+                <div><span>Pendientes</span><strong>{{ metrics.pendingOrders }}</strong></div>
               </div>
+              <footer>
+                <span class="status-pill" [attr.data-tone]="routeStatusTone(route)">{{ routeStatusLabel(route) }}</span>
+                <button type="button" class="text-action" (click)="openRouteDetail(route, $event)">Ver detalle</button>
+              </footer>
             </article>
           }
-        </div>
-      }
-    </article>
+        }
+      </div>
+    }
   </section>
+
+  <button type="button" class="fab mobile-only" (click)="openCreateDrawer()" aria-label="Nueva ruta">
+    <span class="material-symbols-rounded">add</span>
+  </button>
+
+  @if (drawerOpen()) {
+    <div class="drawer-backdrop" (click)="closeDrawer()"></div>
+    <aside class="route-drawer" role="dialog" aria-modal="true" aria-labelledby="route-drawer-title">
+      <header class="drawer-header">
+        <div class="drawer-title">
+          <span class="drawer-icon material-symbols-rounded">{{ drawerMode() === "edit" ? "edit" : "add_road" }}</span>
+          <div>
+            <h2 id="route-drawer-title">{{ drawerMode() === "edit" ? "Editar ruta" : "Nueva ruta" }}</h2>
+            <p>Gestiona la ruta y sus localidades desde un solo lugar.</p>
+          </div>
+        </div>
+        <button type="button" class="icon-btn" (click)="closeDrawer()" aria-label="Cerrar">
+          <span class="material-symbols-rounded">close</span>
+        </button>
+      </header>
+
+      <form class="drawer-form" (submit)="saveRoute(); $event.preventDefault()">
+        <div class="form-columns">
+          <label class="field">
+            <span>Nombre *</span>
+            <input type="text" class="input" [(ngModel)]="draft.name" name="name" required />
+          </label>
+          <label class="field">
+            <span>Estado</span>
+            <select class="input" [(ngModel)]="draft.active" name="active">
+              <option [ngValue]="true">Activa</option>
+              <option [ngValue]="false">Inactiva</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="form-columns">
+          <label class="field">
+            <span>Gasto estimado por salida</span>
+            <input type="number" min="0" class="input" [(ngModel)]="draft.estimated_run_expense" name="estimated_run_expense" placeholder="Gasolina, casetas, etc." />
+          </label>
+          <label class="field">
+            <span>Nota de gasto estimado</span>
+            <input type="text" class="input" [(ngModel)]="draft.estimated_run_expense_notes" name="estimated_run_expense_notes" placeholder="Ej. gasolina promedio" />
+          </label>
+        </div>
+
+        <label class="field">
+          <span>Notas</span>
+          <textarea class="input textarea" [(ngModel)]="draft.notes" name="notes" rows="3" placeholder="Indicaciones, horarios, referencias operativas"></textarea>
+        </label>
+
+        <section class="locality-manager">
+          <div class="section-title">
+            <span class="material-symbols-rounded">location_on</span>
+            <div>
+              <h3>Localidades</h3>
+              <p>{{ draft.locality_ids.length }} en esta ruta</p>
+            </div>
+          </div>
+
+          <div class="locality-add-row">
+            <select class="input" [ngModel]="selectedLocalityId()" (ngModelChange)="selectedLocalityId.set($event)" [ngModelOptions]="{ standalone: true }">
+              <option value="">Agregar localidad existente</option>
+              @for (locality of localityOptions(); track locality.locality_id) {
+                <option [value]="locality.locality_id">{{ localityOptionLabel(locality) }}</option>
+              }
+            </select>
+            <button type="button" class="btn btn-outline" (click)="addExistingLocality()">
+              <span class="material-symbols-rounded">add_location</span>
+              Agregar
+            </button>
+          </div>
+
+          <div class="quick-locality">
+            <input type="text" class="input" [ngModel]="newLocalityName()" (ngModelChange)="newLocalityName.set($event)" [ngModelOptions]="{ standalone: true }" placeholder="Nueva localidad" />
+            <input type="text" class="input" [ngModel]="newLocalityNotes()" (ngModelChange)="newLocalityNotes.set($event)" [ngModelOptions]="{ standalone: true }" placeholder="Notas opcionales" />
+            <button type="button" class="btn btn-secondary" (click)="createLocalityInDraft()">
+              <span class="material-symbols-rounded">add</span>
+              Crear
+            </button>
+          </div>
+
+          @if (draft.locality_ids.length === 0) {
+            <p class="empty small-empty">Aún no agregas localidades.</p>
+          } @else {
+            <div class="locality-list">
+              @for (localityId of draft.locality_ids; track localityId; let idx = $index) {
+                <article class="locality-row" [class.locality-off]="!localityActive(localityId)">
+                  <div class="locality-main">
+                    <span class="locality-index">{{ idx + 1 }}</span>
+                    <div>
+                      <strong>{{ localityName(localityId) }}</strong>
+                      <small>{{ localityActive(localityId) ? ownerRouteName(localityId) : "Inactiva" }}</small>
+                    </div>
+                  </div>
+                  <div class="locality-actions">
+                    <button type="button" class="icon-btn mini" (click)="moveLocality(idx, -1)" [disabled]="idx === 0" aria-label="Subir localidad">
+                      <span class="material-symbols-rounded">arrow_upward</span>
+                    </button>
+                    <button type="button" class="icon-btn mini" (click)="moveLocality(idx, 1)" [disabled]="idx === draft.locality_ids.length - 1" aria-label="Bajar localidad">
+                      <span class="material-symbols-rounded">arrow_downward</span>
+                    </button>
+                    <button type="button" class="icon-btn mini" (click)="startLocalityEdit(localityId)" aria-label="Editar localidad">
+                      <span class="material-symbols-rounded">edit_location</span>
+                    </button>
+                    <button type="button" class="icon-btn mini" (click)="toggleLocalityActive(localityId)" aria-label="Activar o desactivar localidad">
+                      <span class="material-symbols-rounded">{{ localityActive(localityId) ? "visibility_off" : "visibility" }}</span>
+                    </button>
+                    <button type="button" class="icon-btn mini danger" (click)="removeLocality(idx)" aria-label="Quitar localidad">
+                      <span class="material-symbols-rounded">close</span>
+                    </button>
+                  </div>
+
+                  @if (editingLocalityId() === localityId) {
+                    <div class="locality-edit">
+                      <input type="text" class="input" [ngModel]="localityEditName()" (ngModelChange)="localityEditName.set($event)" [ngModelOptions]="{ standalone: true }" />
+                      <input type="text" class="input" [ngModel]="localityEditNotes()" (ngModelChange)="localityEditNotes.set($event)" [ngModelOptions]="{ standalone: true }" placeholder="Notas" />
+                      <button type="button" class="btn btn-primary" (click)="saveLocalityEdit()">Guardar</button>
+                      <button type="button" class="btn btn-ghost" (click)="cancelLocalityEdit()">Cancelar</button>
+                    </div>
+                  }
+                </article>
+              }
+            </div>
+          }
+        </section>
+      </form>
+
+      <footer class="drawer-footer">
+        <button type="button" class="btn btn-outline" (click)="closeDrawer()">Cancelar</button>
+        <button type="button" class="btn btn-primary" (click)="saveRoute()" [disabled]="saving()">
+          {{ saving() ? "Guardando..." : drawerMode() === "edit" ? "Guardar cambios" : "Crear ruta" }}
+        </button>
+      </footer>
+    </aside>
+  }
 </section>

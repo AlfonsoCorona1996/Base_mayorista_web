@@ -1,0 +1,232 @@
+<section class="route-detail-page">
+  <header class="detail-header">
+    <button type="button" class="icon-btn" (click)="goBack()" aria-label="Volver a rutas">
+      <span class="material-symbols-rounded">arrow_back</span>
+    </button>
+    <div class="title-block">
+      <span class="title-icon material-symbols-rounded">route</span>
+      <div>
+        <h1>{{ routePlan()?.name || "Ruta" }}</h1>
+        <p>{{ routePlan()?.notes || "Detalle operativo y financiero de la ruta." }}</p>
+      </div>
+    </div>
+    <button type="button" class="btn btn-secondary" (click)="reload()" [disabled]="loading()">
+      <span class="material-symbols-rounded">refresh</span>
+      {{ loading() ? "Actualizando..." : "Actualizar" }}
+    </button>
+  </header>
+
+  @if (error()) {
+    <div class="alert alert-error">{{ error() }}</div>
+  }
+
+  @if (routePlan(); as route) {
+    @if (summary(); as m) {
+      <section class="kpi-strip">
+        <article class="kpi-card"><span class="material-symbols-rounded">paid</span><div><small>Ventas netas</small><strong>{{ m.netSales | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></div></article>
+        <article class="kpi-card"><span class="material-symbols-rounded">trending_up</span><div><small>Utilidad bruta</small><strong>{{ m.grossProfit | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></div></article>
+        <article class="kpi-card"><span class="material-symbols-rounded">local_gas_station</span><div><small>Gastos</small><strong>{{ financeAvailable() ? (m.expenses | currency:'MXN':'symbol-narrow':'1.0-0') : "N/D" }}</strong></div></article>
+        <article class="kpi-card"><span class="material-symbols-rounded">account_balance</span><div><small>Utilidad neta</small><strong>{{ financeAvailable() ? (m.netProfit | currency:'MXN':'symbol-narrow':'1.0-0') : "N/D" }}</strong></div></article>
+        <article class="kpi-card"><span class="material-symbols-rounded">percent</span><div><small>Margen</small><strong>{{ m.margin | percent:'1.0-0' }}</strong></div></article>
+        <article class="kpi-card"><span class="material-symbols-rounded">wallet</span><div><small>Por cobrar</small><strong>{{ m.balanceDue | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></div></article>
+        <article class="kpi-card"><span class="material-symbols-rounded">assignment_late</span><div><small>Pendientes</small><strong>{{ m.pendingOrders }}</strong></div></article>
+        <article class="kpi-card"><span class="material-symbols-rounded">inventory_2</span><div><small>Inversión necesaria</small><strong>{{ m.investmentNeeded | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></div></article>
+      </section>
+    }
+
+    <nav class="detail-tabs" aria-label="Secciones de ruta">
+      @for (tab of tabs; track tab.key) {
+        <button type="button" [class.active]="activeTab() === tab.key" (click)="setTab(tab.key)">
+          <span class="material-symbols-rounded">{{ tab.icon }}</span>
+          {{ tab.label }}
+        </button>
+      }
+    </nav>
+
+    @if (activeTab() === "summary") {
+      <section class="summary-grid">
+        <article class="panel">
+          <header class="panel-head">
+            <div>
+              <h2>Próxima operación</h2>
+              <p>Pedidos listos o solicitados para salir.</p>
+            </div>
+            <span class="count-pill">{{ pendingOrders().length }}</span>
+          </header>
+          @if (pendingOrders().length === 0) {
+            <p class="empty">No hay pedidos pendientes por salir.</p>
+          } @else {
+            <div class="compact-list">
+              @for (row of pendingOrders().slice(0, 5); track row.order.order_id) {
+                <a class="compact-row" [routerLink]="['/main/pedidos', row.order.order_id]">
+                  <span class="material-symbols-rounded">receipt_long</span>
+                  <div>
+                    <strong>{{ row.customerName }}</strong>
+                    <small>{{ orderStatusLabel(row.order.status) }} · {{ row.sale | currency:'MXN':'symbol-narrow':'1.0-0' }}</small>
+                  </div>
+                  <em>{{ row.cost | currency:'MXN':'symbol-narrow':'1.0-0' }}</em>
+                </a>
+              }
+            </div>
+          }
+        </article>
+
+        <article class="panel">
+          <header class="panel-head">
+            <div>
+              <h2>Clientas principales</h2>
+              <p>Ordenadas por venta neta en esta ruta.</p>
+            </div>
+          </header>
+          @if (customerInsights().length === 0) {
+            <p class="empty">Sin clientas asignadas.</p>
+          } @else {
+            <div class="compact-list">
+              @for (row of customerInsights().slice(0, 5); track row.customer.customer_id) {
+                <a class="compact-row" [routerLink]="['/main/clientas', row.customer.customer_id]">
+                  <span class="avatar">{{ row.customer.first_name.charAt(0) }}{{ row.customer.last_name.charAt(0) }}</span>
+                  <div>
+                    <strong>{{ row.customer.first_name }} {{ row.customer.last_name }}</strong>
+                    <small>{{ row.orders }} pedidos · ticket {{ row.ticket | currency:'MXN':'symbol-narrow':'1.0-0' }}</small>
+                  </div>
+                  <em>{{ row.netSales | currency:'MXN':'symbol-narrow':'1.0-0' }}</em>
+                </a>
+              }
+            </div>
+          }
+        </article>
+      </section>
+    }
+
+    @if (activeTab() === "runs") {
+      <section class="panel">
+        <header class="panel-head">
+          <div>
+            <h2>Salidas</h2>
+            <p>Venta, inversión, gasto y utilidad por salida.</p>
+          </div>
+        </header>
+        @if (runInsights().length === 0) {
+          <p class="empty">No hay salidas registradas para esta ruta.</p>
+        } @else {
+          <div class="data-list">
+            @for (row of runInsights(); track row.run.runId) {
+              <a class="data-row" [routerLink]="['/main/salidas', row.run.runId]">
+                <div><strong>{{ row.run.scheduled_at | date:'dd MMM yy' }}</strong><small>{{ runStatusLabel(row.run.status) }} · {{ row.ordersCount }} pedidos</small></div>
+                <div><span>Venta</span><strong>{{ row.saleTotal | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></div>
+                <div><span>Costo</span><strong>{{ row.cost | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></div>
+                <div><span>Gasto</span><strong>{{ row.expense | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong><small>{{ expenseSourceLabel(row.expenseSource) }}</small></div>
+                <div><span>Utilidad</span><strong [class.money-danger]="row.netProfit < 0">{{ row.netProfit | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></div>
+                <div><span>Por cobrar</span><strong>{{ row.balanceDue | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></div>
+              </a>
+            }
+          </div>
+        }
+      </section>
+    }
+
+    @if (activeTab() === "orders") {
+      <section class="panel">
+        <header class="panel-head">
+          <div>
+            <h2>Pedidos pendientes por salir</h2>
+            <p>Venta general, ganancia e inversión necesaria.</p>
+          </div>
+        </header>
+        @if (pendingOrders().length === 0) {
+          <p class="empty">No hay pedidos pendientes.</p>
+        } @else {
+          <div class="data-list">
+            @for (row of pendingOrders(); track row.order.order_id) {
+              <a class="data-row" [routerLink]="['/main/pedidos', row.order.order_id]">
+                <div><strong>{{ row.customerName }}</strong><small>{{ orderStatusLabel(row.order.status) }}</small></div>
+                <div><span>Venta</span><strong>{{ row.sale | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></div>
+                <div><span>Costo</span><strong>{{ row.cost | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></div>
+                <div><span>Ganancia</span><strong>{{ row.grossProfit | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></div>
+                <div><span>Por cobrar</span><strong>{{ row.balanceDue | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></div>
+              </a>
+            }
+          </div>
+        }
+      </section>
+    }
+
+    @if (activeTab() === "customers") {
+      <section class="panel">
+        <header class="panel-head">
+          <div>
+            <h2>Clientas de la ruta</h2>
+            <p>Venta, frecuencia, deuda y última compra.</p>
+          </div>
+        </header>
+        @if (customerInsights().length === 0) {
+          <p class="empty">Sin clientas en esta ruta.</p>
+        } @else {
+          <div class="data-list">
+            @for (row of customerInsights(); track row.customer.customer_id) {
+              <a class="data-row" [routerLink]="['/main/clientas', row.customer.customer_id]">
+                <div><strong>{{ row.customer.first_name }} {{ row.customer.last_name }}</strong><small>{{ row.lastOrder ? (row.lastOrder | date:'dd MMM yy') : "Sin compras" }}</small></div>
+                <div><span>Ventas</span><strong>{{ row.netSales | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></div>
+                <div><span>Pedidos</span><strong>{{ row.orders }}</strong></div>
+                <div><span>Ticket</span><strong>{{ row.ticket | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></div>
+                <div><span>Debe</span><strong [class.money-danger]="row.balanceDue > 0">{{ row.balanceDue | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></div>
+              </a>
+            }
+          </div>
+        }
+      </section>
+    }
+
+    @if (activeTab() === "expenses") {
+      <section class="panel">
+        <header class="panel-head">
+          <div>
+            <h2>Gastos de ruta</h2>
+            <p>Gastos asociados por ruta y, cuando exista, por salida.</p>
+          </div>
+        </header>
+        @if (!financeAvailable()) {
+          <p class="empty">No tienes permisos o acceso para consultar gastos financieros.</p>
+        } @else if (routeExpenses().length === 0) {
+          <p class="empty">No hay gastos registrados para esta ruta.</p>
+        } @else {
+          <div class="data-list">
+            @for (expense of routeExpenses(); track expense.expense_id) {
+              <div class="data-row">
+                <div><strong>{{ expense.notes || "Gasto de ruta" }}</strong><small>{{ expense.occurred_at | date:'dd MMM yy' }} · {{ expense.category }}</small></div>
+                <div><span>Monto</span><strong>{{ expense.amount | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></div>
+                <div><span>Salida</span><strong>{{ expense.route_run_id || "General" }}</strong></div>
+              </div>
+            }
+          </div>
+        }
+      </section>
+    }
+
+    @if (activeTab() === "localities") {
+      <section class="panel">
+        <header class="panel-head">
+          <div>
+            <h2>Localidades</h2>
+            <p>Orden operativo de entrega dentro de la ruta.</p>
+          </div>
+        </header>
+        @if (route.locality_ids.length === 0) {
+          <p class="empty">Esta ruta aún no tiene localidades.</p>
+        } @else {
+          <div class="locality-list">
+            @for (localityId of route.locality_ids; track localityId; let idx = $index) {
+              <article class="locality-row">
+                <span>{{ idx + 1 }}</span>
+                <div>
+                  <strong>{{ localityName(localityId) }}</strong>
+                  <small>{{ localityCustomerCount(localityId) }} clientas</small>
+                </div>
+              </article>
+            }
+          </div>
+        }
+      </section>
+    }
+  }
+</section>

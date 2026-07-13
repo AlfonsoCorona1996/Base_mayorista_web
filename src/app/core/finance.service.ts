@@ -29,6 +29,7 @@ export interface FinanceExpense {
   amount: number;
   occurred_at: string;
   route_id: string | null;
+  route_run_id?: string | null;
   account_id: string | null;
   installment_total: number | null;
   installment_index: number | null;
@@ -217,6 +218,7 @@ export class FinanceService {
       amount: this.toSafeAmount(input.amount),
       occurred_at: this.normalizeDateInput(input.occurred_at),
       route_id: this.toOptionalText(input.route_id),
+      route_run_id: this.toOptionalText(input.route_run_id),
       account_id: this.toOptionalText(input.account_id),
       installment_total: this.toNullablePositiveInt(input.installment_total),
       installment_index: this.toNullablePositiveInt(input.installment_index),
@@ -348,6 +350,7 @@ export class FinanceService {
       amount: this.toSafeAmount(data["amount"]),
       occurred_at: this.normalizeDateInput(data["occurred_at"]),
       route_id: this.toOptionalText(data["route_id"]),
+      route_run_id: this.toOptionalText(data["route_run_id"]),
       account_id: this.toOptionalText(data["account_id"]),
       installment_total: this.toNullablePositiveInt(data["installment_total"]),
       installment_index: this.toNullablePositiveInt(data["installment_index"]),

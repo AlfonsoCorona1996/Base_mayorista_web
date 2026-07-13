@@ -460,9 +460,14 @@
 
           <div class="form-columns">
             <label class="field">
-              <span>Ruta</span>
-              <select class="input" [ngModel]="draft.route_id" (ngModelChange)="onRouteChange($event)" name="route_id">
-                <option value="">Sin ruta</option>
+              <span class="field-head">
+                <span>Ruta *</span>
+                <button type="button" class="mini-add-btn" (click)="toggleQuickRoute()" aria-label="Crear ruta rápida">
+                  <span class="material-symbols-rounded">add</span>
+                </button>
+              </span>
+              <select class="input" [ngModel]="draft.route_id" (ngModelChange)="onRouteChange($event)" name="route_id" required>
+                <option value="">Selecciona ruta</option>
                 @for (route of routes(); track route.route_id) {
                   <option [value]="route.route_id">{{ route.name }}</option>
                 }
@@ -470,15 +475,67 @@
             </label>
 
             <label class="field">
-              <span>Localidad</span>
-              <select class="input" [(ngModel)]="draft.locality_id" name="locality_id" [disabled]="!draft.route_id">
-                <option value="">Sin localidad</option>
+              <span class="field-head">
+                <span>Localidad *</span>
+                <button type="button" class="mini-add-btn" (click)="toggleQuickLocality()" [disabled]="!draft.route_id" aria-label="Crear localidad rápida">
+                  <span class="material-symbols-rounded">add</span>
+                </button>
+              </span>
+              <select class="input" [(ngModel)]="draft.locality_id" name="locality_id" [disabled]="!draft.route_id" required>
+                <option value="">Selecciona localidad</option>
                 @for (locality of localitiesForRoute(draft.route_id); track locality.locality_id) {
                   <option [value]="locality.locality_id">{{ locality.name }}</option>
                 }
               </select>
             </label>
           </div>
+
+          @if (quickRouteOpen()) {
+            <section class="quick-create-panel">
+              <div class="quick-create-head">
+                <span class="material-symbols-rounded">add_road</span>
+                <div>
+                  <strong>Nueva ruta rápida</strong>
+                  <small>Crea la ruta y su primera localidad sin salir del formulario.</small>
+                </div>
+              </div>
+              <div class="quick-grid">
+                <input type="text" class="input" [ngModel]="quickRouteName()" (ngModelChange)="quickRouteName.set($event)" [ngModelOptions]="{ standalone: true }" placeholder="Nombre de ruta" />
+                <input type="text" class="input" [ngModel]="quickRouteLocalityName()" (ngModelChange)="quickRouteLocalityName.set($event)" [ngModelOptions]="{ standalone: true }" placeholder="Primera localidad" />
+              </div>
+              <input type="text" class="input" [ngModel]="quickRouteNotes()" (ngModelChange)="quickRouteNotes.set($event)" [ngModelOptions]="{ standalone: true }" placeholder="Notas opcionales de la ruta" />
+              <div class="quick-actions">
+                <button type="button" class="btn btn-ghost" (click)="toggleQuickRoute()">Cancelar</button>
+                <button type="button" class="btn btn-secondary" (click)="createQuickRoute()" [disabled]="quickSaving()">
+                  <span class="material-symbols-rounded">add</span>
+                  Crear ruta
+                </button>
+              </div>
+            </section>
+          }
+
+          @if (quickLocalityOpen()) {
+            <section class="quick-create-panel">
+              <div class="quick-create-head">
+                <span class="material-symbols-rounded">add_location</span>
+                <div>
+                  <strong>Nueva localidad</strong>
+                  <small>Se agregará a {{ routeName(draft.route_id) }} y quedará seleccionada.</small>
+                </div>
+              </div>
+              <div class="quick-grid">
+                <input type="text" class="input" [ngModel]="quickLocalityName()" (ngModelChange)="quickLocalityName.set($event)" [ngModelOptions]="{ standalone: true }" placeholder="Nombre de localidad" />
+                <input type="text" class="input" [ngModel]="quickLocalityNotes()" (ngModelChange)="quickLocalityNotes.set($event)" [ngModelOptions]="{ standalone: true }" placeholder="Notas opcionales" />
+              </div>
+              <div class="quick-actions">
+                <button type="button" class="btn btn-ghost" (click)="toggleQuickLocality()">Cancelar</button>
+                <button type="button" class="btn btn-secondary" (click)="createQuickLocality()" [disabled]="quickSaving()">
+                  <span class="material-symbols-rounded">add</span>
+                  Crear localidad
+                </button>
+              </div>
+            </section>
+          }
 
           <label class="field">
             <span>Estado</span>

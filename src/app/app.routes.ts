@@ -89,6 +89,12 @@ export const routes: Routes = [
         loadComponent: () => import("./features/clientas/clienta-detalle").then((m) => m.default),
       },
       {
+        path: "rutas/:id",
+        canActivate: [permissionGuard],
+        data: { permission: "rutas" },
+        loadComponent: () => import("./features/rutas/ruta-detalle").then((m) => m.default),
+      },
+      {
         path: "rutas",
         canActivate: [permissionGuard],
         data: { permission: "rutas" },
@@ -96,9 +102,8 @@ export const routes: Routes = [
       },
       {
         path: "localidades",
-        canActivate: [permissionGuard],
-        data: { permission: "localidades" },
-        loadComponent: () => import("./features/localidades/localidades").then((m) => m.default),
+        pathMatch: "full",
+        redirectTo: "rutas",
       },
       {
         path: "edicion-productos",

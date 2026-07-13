@@ -3,7 +3,7 @@ import { FormsModule } from "@angular/forms";
 import { ActivatedRoute, Router } from "@angular/router";
 import { CommercialStage, Customer, CustomersService } from "../../core/customers.service";
 import { LocalitiesService, Locality } from "../../core/localities.service";
-import { RoutesService } from "../../core/routes.service";
+import { RoutePlan, RoutesService } from "../../core/routes.service";
 import { OrdersService } from "../../core/orders.service";
 import { calculateOrderFinancials } from "../../core/order-financials";
 import { BusinessScopeService } from "../../core/business-scope.service";
@@ -103,6 +103,14 @@ export default class ClientasPage {
   rowMenuOpenId = signal<string | null>(null);
   advancedFormOpen = signal(false);
   filtersSheetOpen = signal(false);
+  quickRouteOpen = signal(false);
+  quickLocalityOpen = signal(false);
+  quickSaving = signal(false);
+  quickRouteName = signal("");
+  quickRouteLocalityName = signal("");
+  quickRouteNotes = signal("");
+  quickLocalityName = signal("");
+  quickLocalityNotes = signal("");
   selectedActionCategory = signal<ActionCategory>("collection");
   pageIndex = signal(1);
   pageSize = signal(20);
@@ -366,6 +374,7 @@ export default class ClientasPage {
     if (this.saving()) return;
     this.drawerOpen.set(false);
     this.advancedFormOpen.set(false);
+    this.closeQuickCreates();
     this.startCreate();
   }
 
@@ -406,10 +415,104 @@ export default class ClientasPage {
     }
   }
 
+  toggleQuickRoute() {
+    this.quickRouteOpen.set(!this.quickRouteOpen());
+    if (this.quickRouteOpen()) this.quickLocalityOpen.set(false);
+  }
+
+  toggleQuickLocality() {
+    this.quickLocalityOpen.set(!this.quickLocalityOpen());
+    if (this.quickLocalityOpen()) this.quickRouteOpen.set(false);
+  }
+
+  async createQuickRoute() {
+    this.error.set(null);
+    this.success.set(null);
+    const routeName = this.quickRouteName().trim();
+    const localityName = this.quickRouteLocalityName().trim();
+    if (!routeName || !localityName) {
+      this.error.set("Escribe la ruta y su primera localidad");
+      return;
+    }
+
+    this.quickSaving.set(true);
+    try {
+      const routeId = this.uniqueRouteId(routeName);
+      const localityId = this.uniqueLocalityId(localityName);
+      await this.localitiesService.save({
+        locality_id: localityId,
+        name: localityName,
+        notes: "",
+        active: true,
+      });
+      const payload: RoutePlan = {
+        route_id: routeId,
+        name: routeName,
+        notes: this.quickRouteNotes().trim(),
+        active: true,
+        locality_ids: [localityId],
+        created_at: new Date(),
+      };
+      await this.routesService.save(payload);
+      this.draft.route_id = routeId;
+      this.draft.locality_id = localityId;
+      this.quickRouteName.set("");
+      this.quickRouteLocalityName.set("");
+      this.quickRouteNotes.set("");
+      this.quickRouteOpen.set(false);
+      this.success.set("Ruta y localidad creadas");
+    } catch (error: any) {
+      this.error.set(error?.message || "No se pudo crear la ruta");
+    } finally {
+      this.quickSaving.set(false);
+    }
+  }
+
+  async createQuickLocality() {
+    this.error.set(null);
+    this.success.set(null);
+    const routeId = this.draft.route_id.trim();
+    const localityName = this.quickLocalityName().trim();
+    const route = routeId ? this.routesService.getById(routeId) : null;
+    if (!route) {
+      this.error.set("Selecciona una ruta antes de crear la localidad");
+      return;
+    }
+    if (!localityName) {
+      this.error.set("Escribe el nombre de la localidad");
+      return;
+    }
+
+    this.quickSaving.set(true);
+    try {
+      const localityId = this.uniqueLocalityId(localityName);
+      await this.localitiesService.save({
+        locality_id: localityId,
+        name: localityName,
+        notes: this.quickLocalityNotes().trim(),
+        active: true,
+      });
+      await this.routesService.save({
+        ...route,
+        locality_ids: [...new Set([...(route.locality_ids || []), localityId])],
+      });
+      this.draft.locality_id = localityId;
+      this.quickLocalityName.set("");
+      this.quickLocalityNotes.set("");
+      this.quickLocalityOpen.set(false);
+      this.success.set("Localidad creada");
+    } catch (error: any) {
+      this.error.set(error?.message || "No se pudo crear la localidad");
+    } finally {
+      this.quickSaving.set(false);
+    }
+  }
+
   startCreate() {
     this.editingId.set(null);
     this.draft = this.emptyDraft();
     this.showInsights.set(false);
+    this.closeQuickCreates();
     this.error.set(null);
     this.success.set(null);
   }
@@ -463,6 +566,11 @@ export default class ClientasPage {
 
     if (!firstName || !lastName) {
       this.error.set("Nombre y apellido son obligatorios");
+      return;
+    }
+
+    if (!this.editingId() && (!this.draft.route_id || !this.draft.locality_id)) {
+      this.error.set("Ruta y localidad son obligatorias para crear una clienta");
       return;
     }
 
@@ -803,6 +911,28 @@ export default class ClientasPage {
     const route = this.routesService.getById(routeId);
     if (!route || !Array.isArray(route.locality_ids)) return [];
     return route.locality_ids.filter(Boolean);
+  }
+
+  private closeQuickCreates() {
+    this.quickRouteOpen.set(false);
+    this.quickLocalityOpen.set(false);
+    this.quickRouteName.set("");
+    this.quickRouteLocalityName.set("");
+    this.quickRouteNotes.set("");
+    this.quickLocalityName.set("");
+    this.quickLocalityNotes.set("");
+  }
+
+  private uniqueRouteId(name: string): string {
+    const base = this.slugify(name) || `ruta-${Date.now().toString(36)}`;
+    if (!this.routesService.getById(base)) return base;
+    return `${base}-${Date.now().toString(36).slice(-4)}`;
+  }
+
+  private uniqueLocalityId(name: string): string {
+    const base = this.slugify(name) || `localidad-${Date.now().toString(36)}`;
+    if (!this.localitiesService.getById(base)) return base;
+    return `${base}-${Date.now().toString(36).slice(-4)}`;
   }
 
   private buildCustomerId(firstName: string, lastName: string, phone: string): string {
