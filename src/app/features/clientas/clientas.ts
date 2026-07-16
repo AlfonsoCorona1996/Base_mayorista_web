@@ -745,38 +745,33 @@ export default class ClientasPage {
     return "Dar seguimiento comercial";
   }
 
-  private buildTodayActions(): Array<{ key: string; label: string; icon: string; count: number; items: Array<{ customer: Customer; detail: string; amount?: number }> }> {
+  private buildTodayActions(): Array<{ key: string; label: string; icon: string; count: number; items: Array<{ trackId: string; customer: Customer; detail: string; amount?: number }> }> {
     const customers = this.allCustomers();
     const collectionItems = customers
       .filter((customer) => this.customerMetrics(customer).balanceDue > 0)
       .sort((a, b) => this.customerMetrics(b).balanceDue - this.customerMetrics(a).balanceDue)
-      .slice(0, 5)
-      .map((customer) => ({ customer, detail: "Cobro pendiente", amount: this.customerMetrics(customer).balanceDue }));
+      .map((customer) => ({ trackId: `collection-${customer.customer_id}`, customer, detail: "Cobro pendiente", amount: this.customerMetrics(customer).balanceDue }));
 
     const postSaleItems = this.openFollowups()
       .filter((row) => row.type === "post_sale")
-      .slice(0, 5)
-      .map((row) => ({ customer: this.customersService.getById(row.customer_id) }))
-      .filter((entry): entry is { customer: Customer } => Boolean(entry.customer))
-      .map(({ customer }) => ({ customer, detail: "Seguimiento postventa" }));
+      .map((row) => ({ row, customer: this.customersService.getById(row.customer_id) }))
+      .filter((entry): entry is { row: CustomerFollowup; customer: Customer } => Boolean(entry.customer))
+      .map(({ row, customer }) => ({ trackId: `post-sale-${row.followup_id}`, customer, detail: "Seguimiento postventa" }));
 
     const birthdayItems = customers
       .map((customer) => ({ customer, days: this.daysUntilBirthday(customer.birthday || null) }))
       .filter((entry): entry is { customer: Customer; days: number } => entry.days !== null && entry.days <= 7)
       .sort((a, b) => a.days - b.days)
-      .slice(0, 5)
-      .map(({ customer, days }) => ({ customer, detail: days === 0 ? "Cumpleaños hoy" : `Cumple en ${days} días` }));
+      .map(({ customer, days }) => ({ trackId: `birthday-${customer.customer_id}`, customer, detail: days === 0 ? "Cumpleaños hoy" : `Cumple en ${days} días` }));
 
     const reactivationItems = customers
       .filter((customer) => (this.customerMetrics(customer).daysSinceLastOrder || 0) > 60 && this.customerMetrics(customer).balanceDue <= 0)
       .sort((a, b) => (this.customerMetrics(b).daysSinceLastOrder || 0) - (this.customerMetrics(a).daysSinceLastOrder || 0))
-      .slice(0, 5)
-      .map((customer) => ({ customer, detail: `${this.customerMetrics(customer).daysSinceLastOrder} días sin compra` }));
+      .map((customer) => ({ trackId: `reactivation-${customer.customer_id}`, customer, detail: `${this.customerMetrics(customer).daysSinceLastOrder} días sin compra` }));
 
     const missingDataItems = customers
       .filter((customer) => this.qualityIssues(customer).length > 0)
-      .slice(0, 5)
-      .map((customer) => ({ customer, detail: this.qualityIssues(customer).slice(0, 2).join(", ") }));
+      .map((customer) => ({ trackId: `missing-data-${customer.customer_id}`, customer, detail: this.qualityIssues(customer).slice(0, 2).join(", ") }));
 
     return [
       { key: "collection", label: "Cobrar", icon: "payments", count: customers.filter((customer) => this.customerMetrics(customer).balanceDue > 0).length, items: collectionItems },

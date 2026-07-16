@@ -1,156 +1,177 @@
-<!-- ─────────────────────────────────────────────────────── -->
-<!-- Portal de seguimiento público para clientas            -->
-<!-- ─────────────────────────────────────────────────────── -->
+<div class="portal-shell">
+  <header class="portal-header">
+    <a class="portal-brand" href="/" aria-label="Ir al inicio de Base Mayorista">
+      <img src="/BaseMayoristaLogo.png" alt="" />
+      <span>Base Mayorista</span>
+    </a>
+    <a class="support-link" [href]="whatsappHref()" target="_blank" rel="noopener noreferrer">
+      <span class="material-symbols-rounded" aria-hidden="true">chat</span>
+      <span class="support-link__label">Ayuda por WhatsApp</span>
+    </a>
+  </header>
 
-<div class="tracker-root">
-
-  <!-- ── Loading ─────────────────────────────────────────── -->
-  @if (loading()) {
-    <div class="tracker-loading">
-      <span class="spinner"></span>
-      <p>Cargando tu pedido…</p>
-    </div>
-  }
-
-  <!-- ── Error ────────────────────────────────────────────── -->
-  @if (!loading() && error()) {
-    <div class="tracker-error">
-      <span class="err-icon">😕</span>
-      <h2>El enlace no está disponible</h2>
-      <p>{{ error() }}</p>
-      <p class="err-hint">Si crees que esto es un error, contacta a tu vendedora.</p>
-    </div>
-  }
-
-  <!-- ── Contenido ─────────────────────────────────────────── -->
-  @if (!loading() && data(); as d) {
-
-    <!-- Encabezado -->
-    <header class="tk-header">
-      <div class="tk-logo">Base Mayorista</div>
-      <div class="tk-hello">
-        Hola, <strong>{{ d.customer.first_name }}</strong> 👋
-      </div>
-    </header>
-
-    <!-- ── PEDIDO ACTIVO ───────────────────────────────────── -->
-    @if (mainOrder(); as order) {
-      <section class="tk-card active-order">
-        <div class="ao-top">
-          <span class="ao-emoji">{{ statusEmoji(order.status) }}</span>
-          <div class="ao-text">
-            <h2 class="ao-label">{{ order.status_label }}</h2>
-            <p class="ao-date">Actualizado: {{ order.updated_at | date:'d MMM y, H:mm' }}</p>
-          </div>
+  <main class="portal-main">
+    @if (loading()) {
+      <section class="loading-state" aria-live="polite" aria-label="Cargando seguimiento">
+        <div class="skeleton skeleton--title"></div>
+        <div class="skeleton skeleton--hero"></div>
+        <div class="skeleton-grid">
+          <div class="skeleton skeleton--card"></div>
+          <div class="skeleton skeleton--card"></div>
+          <div class="skeleton skeleton--card"></div>
         </div>
-
-        <!-- Barra de progreso -->
-        <div class="ao-progress-track">
-          <div class="ao-progress-fill" [style.width.%]="progress()"></div>
+      </section>
+    } @else if (error()) {
+      <section class="state-card state-card--error" role="alert">
+        <span class="state-card__icon material-symbols-rounded" aria-hidden="true">link_off</span>
+        <h1>{{ error() === 'invalid' ? 'Este enlace no está disponible' : 'No pudimos cargar tus pedidos' }}</h1>
+        <p>
+          {{ error() === 'invalid'
+            ? 'Pide a tu vendedora que te comparta un enlace nuevo.'
+            : 'Revisa tu conexión y vuelve a intentarlo. Tus pedidos siguen guardados.' }}
+        </p>
+        <div class="state-actions">
+          @if (error() === 'unavailable') {
+            <button type="button" class="button button--primary" (click)="retry()">Volver a intentar</button>
+          }
+          <a class="button button--secondary" [href]="whatsappHref()" target="_blank" rel="noopener noreferrer">Pedir ayuda</a>
         </div>
+      </section>
+    } @else if (data(); as dashboard) {
+      <section class="welcome" aria-labelledby="portal-title">
+        <p class="eyebrow">Tu cuenta en Base Mayorista</p>
+        <h1 id="portal-title">Hola, {{ dashboard.customer.first_name }}</h1>
+        <p>Aquí puedes revisar tus pedidos, pagos y devoluciones con información actualizada.</p>
+      </section>
 
-        <!-- Productos -->
-        <div class="ao-items">
-          @for (item of order.items; track item.title) {
-            <div class="ao-item">
-              <span class="ao-item-name">{{ item.title }}</span>
-              @if (item.variant || item.color) {
-                <span class="ao-item-sub">
-                  {{ item.variant }}{{ item.variant && item.color ? ' · ' : '' }}{{ item.color }}
-                </span>
-              }
-              <span class="ao-item-qty">
-                ×{{ netQty(item) }}
-                @if ((item.returned_qty || 0) > 0) { <small>· {{ item.returned_qty }} devuelta(s)</small> }
-              </span>
-            </div>
+      <section class="profit-hero" aria-labelledby="profit-title">
+        <div class="profit-hero__icon"><span class="material-symbols-rounded" aria-hidden="true">trending_up</span></div>
+        <div class="profit-hero__copy">
+          <p id="profit-title">Ganancia estimada con tus pedidos entregados</p>
+          <strong>{{ dashboard.summary.estimated_profit | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong>
+          @if (!dashboard.summary.estimated_profit_complete) {
+            <span class="estimate-note">
+              <span class="material-symbols-rounded" aria-hidden="true">info</span>
+              Estimación parcial: faltan precios públicos en {{ dashboard.summary.incomplete_profit_orders }} pedido(s).
+            </span>
+          } @else {
+            <span>Calculada con el precio público sugerido menos tu precio de compra.</span>
           }
         </div>
+      </section>
 
-        <!-- Productos cancelados -->
-        @if (order.cancelled_items.length) {
-          <div class="ao-cancelled">
-            <p class="ao-cancelled-title">Productos no disponibles</p>
-            @for (c of order.cancelled_items; track c.title) {
-              <div class="ao-cancelled-item">
-                <span class="cc-icon">✗</span>
-                <span>{{ c.title }} — {{ c.reason }}</span>
+      <section class="summary-grid" aria-label="Resumen de tu cuenta">
+        <article class="summary-card summary-card--due">
+          <span class="summary-card__icon material-symbols-rounded" aria-hidden="true">payments</span>
+          <div><span>Total por pagar</span><strong>{{ dashboard.summary.total_due | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></div>
+        </article>
+        <article class="summary-card summary-card--credit">
+          <span class="summary-card__icon material-symbols-rounded" aria-hidden="true">account_balance_wallet</span>
+          <div><span>Saldo a favor</span><strong>{{ dashboard.summary.credit_balance | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></div>
+        </article>
+        <article class="summary-card">
+          <span class="summary-card__icon material-symbols-rounded" aria-hidden="true">inventory_2</span>
+          <div><span>Pedidos en proceso</span><strong>{{ dashboard.summary.active_orders }}</strong></div>
+        </article>
+        <article class="summary-card">
+          <span class="summary-card__icon material-symbols-rounded" aria-hidden="true">task_alt</span>
+          <div><span>Pedidos completados</span><strong>{{ dashboard.summary.completed_orders }}</strong></div>
+        </article>
+      </section>
+
+      <nav class="portal-tabs" aria-label="Secciones de seguimiento">
+        <button type="button" [class.active]="activeTab() === 'active'" [attr.aria-current]="activeTab() === 'active' ? 'page' : null" (click)="selectTab('active')">
+          En proceso <span>{{ dashboard.summary.active_orders }}</span>
+        </button>
+        <button type="button" [class.active]="activeTab() === 'history'" [attr.aria-current]="activeTab() === 'history' ? 'page' : null" (click)="selectTab('history')">
+          Historial <span>{{ dashboard.summary.completed_orders }}</span>
+        </button>
+        <button type="button" [class.active]="activeTab() === 'returns'" [attr.aria-current]="activeTab() === 'returns' ? 'page' : null" (click)="selectTab('returns')">
+          Devoluciones <span>{{ dashboard.summary.returns_count }}</span>
+        </button>
+      </nav>
+
+      <section class="records-section" aria-live="polite">
+        @if (activeTab() === 'active') {
+          <div class="section-heading"><div><p class="eyebrow">Seguimiento</p><h2>Tus pedidos en proceso</h2></div><span>Actualizado {{ dashboard.generated_at | date:'d MMM, H:mm' }}</span></div>
+          @if (dashboard.active_orders.length === 0) {
+            <div class="empty-state"><span class="material-symbols-rounded" aria-hidden="true">inventory</span><h3>No tienes pedidos en proceso</h3><p>Cuando hagas un pedido nuevo aparecerá aquí.</p></div>
+          } @else {
+            <div class="order-list">
+              @for (order of dashboard.active_orders; track order.order_id) {
+                <article class="order-card">
+                  <div class="order-card__top">
+                    <span class="status-pill status-pill--{{ order.status.tone }}"><span class="material-symbols-rounded" aria-hidden="true">{{ statusIcon(order.status.key) }}</span>{{ order.status.label }}</span>
+                    <span class="order-date">{{ order.updated_at | date:'d MMM y, H:mm' }}</span>
+                  </div>
+                  <div class="order-card__body">
+                    <div><p class="order-id">Pedido {{ shortOrderId(order.order_id) }}</p><p>{{ order.items_count }} producto(s) · {{ order.units_count }} pieza(s)</p></div>
+                    <div class="order-money"><span>Total clienta</span><strong>{{ order.totals.customer_total | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></div>
+                  </div>
+                  <div class="order-card__footer">
+                    <div class="order-profit"><span>Ganancia estimada</span><strong>{{ order.totals.estimated_profit | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong>@if (!order.totals.estimated_profit_complete) { <small>Estimación parcial</small> }</div>
+                    <a class="detail-link" [routerLink]="['/track', token(), 'pedido', order.order_id]">Ver detalle <span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span></a>
+                  </div>
+                </article>
+              }
+            </div>
+          }
+        }
+
+        @if (activeTab() === 'history') {
+          <div class="section-heading"><div><p class="eyebrow">Tus compras</p><h2>Historial de pedidos</h2></div></div>
+          @if (history().length === 0) {
+            <div class="empty-state"><span class="material-symbols-rounded" aria-hidden="true">history</span><h3>Aún no hay historial</h3><p>Tus pedidos entregados aparecerán aquí.</p></div>
+          } @else {
+            <div class="order-list">
+              @for (order of history(); track order.order_id) {
+                <article class="order-card order-card--history">
+                  <div class="order-card__top"><span class="status-pill status-pill--{{ order.status.tone }}"><span class="material-symbols-rounded" aria-hidden="true">{{ statusIcon(order.status.key) }}</span>{{ order.status.label }}</span><span class="order-date">{{ order.created_at | date:'d MMM y' }}</span></div>
+                  <div class="order-card__body"><div><p class="order-id">Pedido {{ shortOrderId(order.order_id) }}</p><p>{{ order.units_count }} pieza(s)@if (order.returned_units > 0) { · {{ order.returned_units }} devuelta(s) }</p></div><div class="order-money"><span>Total clienta</span><strong>{{ order.totals.customer_total | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></div></div>
+                  <div class="order-card__footer"><div class="order-profit"><span>Ganancia estimada</span><strong>{{ order.totals.estimated_profit | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></div><a class="detail-link" [routerLink]="['/track', token(), 'pedido', order.order_id]">Ver detalle <span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span></a></div>
+                </article>
+              }
+            </div>
+            @if (historyCursor()) { <button type="button" class="load-more" [disabled]="loadingMore()" (click)="loadMoreHistory()">{{ loadingMore() ? 'Cargando…' : 'Ver más pedidos' }}</button> }
+            @if (paginationError() === 'history') {
+              <div class="pagination-error" role="alert">
+                <span>No pudimos cargar más pedidos.</span>
+                <button type="button" (click)="loadMoreHistory()">Intentar de nuevo</button>
               </div>
             }
-          </div>
+          }
         }
 
-        <!-- Totales -->
-        <div class="ao-totals">
-          @if ((order.totals.returns_amount || 0) > 0) {
-            <div class="ao-total-row">
-              <span>Devoluciones</span>
-              <strong>-{{ order.totals.returns_amount | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong>
+        @if (activeTab() === 'returns') {
+          <div class="section-heading"><div><p class="eyebrow">Postventa</p><h2>Tus devoluciones</h2></div></div>
+          @if (returns().length === 0) {
+            <div class="empty-state"><span class="material-symbols-rounded" aria-hidden="true">assignment_return</span><h3>No tienes devoluciones</h3><p>Si registramos una devolución, podrás consultar aquí su resultado.</p></div>
+          } @else {
+            <div class="return-list">
+              @for (row of returns(); track row.return_id) {
+                <article class="return-card">
+                  <div class="return-card__icon"><span class="material-symbols-rounded" aria-hidden="true">assignment_return</span></div>
+                  <div class="return-card__content"><div class="return-card__top"><h3>{{ row.product.title }}</h3><span class="status-pill status-pill--{{ row.status.tone }}">{{ row.status.label }}</span></div><p>@if (row.product.variant) { {{ row.product.variant }} } @if (row.product.variant && row.product.color) { · } @if (row.product.color) { {{ row.product.color }} }</p><div class="return-meta"><span>{{ row.quantity }} pieza(s)</span><span>{{ row.created_at | date:'d MMM y' }}</span><strong>{{ row.resolution.label }}@if (row.resolution.amount > 0) { · {{ row.resolution.amount | currency:'MXN':'symbol-narrow':'1.2-2' }} }</strong></div></div>
+                </article>
+              }
             </div>
-          }
-          <div class="ao-total-row">
-            <span>Total</span>
-            <strong>{{ netTotal(order) | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong>
-          </div>
-          @if (order.totals.paid_amount > 0) {
-            <div class="ao-total-row paid">
-              <span>Pagado</span>
-              <strong>{{ order.totals.paid_amount | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong>
-            </div>
-          }
-          @if (order.totals.balance_due > 0) {
-            <div class="ao-total-row debt">
-              <span>Por pagar</span>
-              <strong>{{ order.totals.balance_due | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong>
-            </div>
-          }
-        </div>
-      </section>
-    }
-
-    <!-- ── SIN PEDIDO ACTIVO ─────────────────────────────── -->
-    @if (!mainOrder()) {
-      <div class="tk-empty">
-        <span>📭</span>
-        <p>No tienes pedidos activos en este momento.</p>
-      </div>
-    }
-
-    <!-- ── ADEUDO TOTAL ─────────────────────────────────── -->
-    @if (d.total_debt > 0) {
-      <div class="tk-debt-banner">
-        💰 Tienes un saldo pendiente de
-        <strong>{{ d.total_debt | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong>.
-        Coordina el pago con tu vendedora.
-      </div>
-    }
-
-    <!-- ── HISTORIAL ─────────────────────────────────────── -->
-    @if (d.history_orders.length) {
-      <section class="tk-card history">
-        <h3 class="tk-section-title">Historial de pedidos</h3>
-
-        @for (order of d.history_orders; track order.order_id) {
-          <div class="hist-row" [ngClass]="{ 'hist-row--terminal': isTerminal(order.status) }">
-            <div class="hist-left">
-              <span class="hist-emoji">{{ statusEmoji(order.status) }}</span>
-              <div class="hist-text">
-                <span class="hist-status">{{ order.status_label }}</span>
-                <span class="hist-date">{{ order.created_at | date:'d MMM y' }}</span>
+            @if (returnsCursor()) { <button type="button" class="load-more" [disabled]="loadingMore()" (click)="loadMoreReturns()">{{ loadingMore() ? 'Cargando…' : 'Ver más devoluciones' }}</button> }
+            @if (paginationError() === 'returns') {
+              <div class="pagination-error" role="alert">
+                <span>No pudimos cargar más devoluciones.</span>
+                <button type="button" (click)="loadMoreReturns()">Intentar de nuevo</button>
               </div>
-            </div>
-            <span class="hist-total">
-              {{ netTotal(order) | currency:'MXN':'symbol-narrow':'1.0-0' }}
-            </span>
-          </div>
+            }
+          }
         }
       </section>
+
+      <aside class="help-card">
+        <div><span class="material-symbols-rounded" aria-hidden="true">support_agent</span><div><h2>¿Necesitas ayuda?</h2><p>Escríbenos y te ayudamos a revisar tu pedido.</p></div></div>
+        <a class="button button--whatsapp" [href]="whatsappHref()" target="_blank" rel="noopener noreferrer">Abrir WhatsApp</a>
+      </aside>
     }
+  </main>
 
-    <!-- Footer -->
-    <footer class="tk-footer">
-      <p>Base Mayorista · Enlace personal, no lo compartas</p>
-    </footer>
-
-  }
+  <footer class="portal-footer"><p>Tu enlace es personal. Evita compartirlo con otras personas.</p><span>Base Mayorista · Seguimiento seguro</span></footer>
 </div>

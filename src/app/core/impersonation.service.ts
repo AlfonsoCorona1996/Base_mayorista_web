@@ -75,7 +75,8 @@ export class ImpersonationService {
         parsed.roleId !== "admin" &&
         parsed.roleId !== "administrativo" &&
         parsed.roleId !== "operativo" &&
-        parsed.roleId !== "repartidor"
+        parsed.roleId !== "repartidor" &&
+        parsed.roleId !== "durango_operativo"
       ) {
         return null;
       }

@@ -153,6 +153,18 @@ export const routes: Routes = [
         loadComponent: () => import("./features/salidas/salida-detalle.page").then((m) => m.default),
       },
       {
+        path: "embarques",
+        canActivate: [authzGuard],
+        data: { section: "sections.embarques" },
+        loadComponent: () => import("./features/embarques/embarques.page").then((m) => m.default),
+      },
+      {
+        path: "durango",
+        canActivate: [authzGuard],
+        data: { section: "sections.durango" },
+        loadComponent: () => import("./features/durango/durango.page").then((m) => m.default),
+      },
+      {
         path: "administracion",
         canActivate: [authzGuard],
         data: { section: "sections.administracion" },
@@ -199,6 +211,12 @@ export const routes: Routes = [
   {
     path: "privacy",
     loadComponent: () => import("./features/public/privacy").then((m) => m.default),
+  },
+
+  {
+    path: "track/:token/pedido/:orderId",
+    loadComponent: () =>
+      import("./features/public/order-tracker/order-tracker-detail").then((m) => m.default),
   },
 
   {

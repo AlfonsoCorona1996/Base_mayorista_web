@@ -29,6 +29,10 @@ service cloud.firestore {
       return isActiveUser() && roleId() == "operativo";
     }
 
+    function isDurangoOperativo() {
+      return isActiveUser() && roleId() == "durango_operativo";
+    }
+
     function hasSection(sectionKey) {
       return isActiveUser()
         && userDoc().data.sections != null
@@ -164,6 +168,30 @@ service cloud.firestore {
       }
     }
 
+    match /shipments/{shipmentId} {
+      allow read: if isActiveUser()
+        && (
+          hasSection("sections.embarques")
+          || hasSection("sections.durango")
+          || hasCapability("cap.shipments.view")
+        );
+      allow create: if isActiveUser()
+        && (
+          hasCapability("cap.shipments.create")
+          || hasSection("sections.embarques")
+        );
+      allow update: if isActiveUser()
+        && (
+          hasCapability("cap.shipments.edit")
+          || hasCapability("cap.shipments.send")
+          || hasCapability("cap.shipments.receive")
+          || hasCapability("cap.shipments.close")
+          || hasSection("sections.embarques")
+          || hasSection("sections.durango")
+        );
+      allow delete: if isSuperAdmin();
+    }
+
     match /orders/{orderId} {
       allow read: if canReadBusinessResource();
       allow create: if (isAdmin() || isOperativo()) && canCreateBusinessResource();
@@ -174,12 +202,33 @@ service cloud.firestore {
         || (
           canUpdateBusinessResource()
           && hasCapability("cap.payments.register")
-          && onlyChanges(["totals", "status", "paid_at", "closed_at", "delivered_at", "timeline", "collection_status", "collection_reminder_at", "collection_note", "sales_note_last_generated_at", "updated_at"])
+          && onlyChanges(["totals", "status", "paid_at", "closed_at", "delivered_at", "timeline", "customer_payment_status", "settlement_status", "collection_status", "collection_reminder_at", "collection_note", "sales_note_last_generated_at", "updated_at"])
         )
         || (
           canUpdateBusinessResource()
           && (hasCapability("cap.delivery.mark_delivered") || hasCapability("cap.delivery.mark_partial"))
-          && onlyChanges(["status", "delivered_at", "timeline", "notes", "updated_at"])
+          && onlyChanges(["status", "delivery_status", "custody_status", "current_holder_location", "current_holder_user_id", "current_holder_name", "delivered_at", "timeline", "notes", "updated_at"])
+        )
+        || (
+          canUpdateBusinessResource()
+          && (
+            hasCapability("cap.shipments.create")
+            || hasCapability("cap.shipments.edit")
+            || hasCapability("cap.shipments.send")
+            || hasCapability("cap.shipments.receive")
+            || hasCapability("cap.packing.finish")
+            || hasCapability("cap.delivery.mark_delivered")
+            || hasCapability("cap.delivery.mark_partial")
+            || hasCapability("cap.payments.register")
+            || hasCapability("cap.settlement.send")
+            || hasCapability("cap.settlement.reconcile")
+          )
+          && onlyChanges(["fulfillment_status", "custody_status", "delivery_status", "customer_payment_status", "settlement_status", "current_holder_location", "current_holder_user_id", "current_holder_name", "shipment_id", "updated_at"])
+        )
+        || (
+          canUpdateBusinessResource()
+          && (hasCapability("cap.settlement.send") || hasCapability("cap.settlement.reconcile"))
+          && onlyChanges(["settlement_status", "status", "closed_at", "updated_at"])
         )
         || (
           isOperativo()
@@ -190,7 +239,7 @@ service cloud.firestore {
               && request.resource.data.dispatch_request.status == "requested"
             )
             || (
-              onlyChanges(["status", "packing", "updated_at"])
+              onlyChanges(["status", "packing", "fulfillment_status", "custody_status", "delivery_status", "current_holder_location", "updated_at"])
               && request.resource.data.status == "ready_for_route"
               && request.resource.data.packing.status == "done"
             )
@@ -201,9 +250,67 @@ service cloud.firestore {
 
       match /events/{eventId} {
         allow read: if canAccessOrder(orderId);
-        allow create: if (isAdmin() || isOperativo()) && canAccessOrder(orderId);
+        allow create: if canAccessOrder(orderId)
+          && (
+            isAdmin()
+            || isOperativo()
+            || hasCapability("cap.shipments.receive")
+            || hasCapability("cap.delivery.mark_delivered")
+            || hasCapability("cap.payments.register")
+            || hasCapability("cap.settlement.send")
+            || hasCapability("cap.settlement.reconcile")
+          );
         allow update, delete: if isSuperAdmin();
       }
+    }
+
+    match /order_collection_events/{eventId} {
+      allow read: if canReadBusinessResource()
+        && (
+          hasCapability("cap.payments.view")
+          || hasCapability("cap.payments.register")
+          || hasCapability("cap.settlement.view")
+          || hasSection("sections.administracion")
+        );
+      allow create: if canCreateBusinessResource() && hasCapability("cap.payments.register");
+      allow update: if canUpdateBusinessResource()
+        && (
+          hasCapability("cap.settlement.reconcile")
+          || hasSection("sections.administracion")
+        );
+      allow delete: if false;
+    }
+
+    match /operational_expense_reports/{reportId} {
+      allow read: if canReadBusinessResource()
+        && (
+          hasSection("sections.durango")
+          || hasSection("sections.administracion")
+          || hasCapability("cap.finance.movements.view")
+        );
+      allow create: if canCreateBusinessResource()
+        && (
+          hasSection("sections.durango")
+          || hasSection("sections.administracion")
+        );
+      allow update: if canUpdateBusinessResource()
+        && (
+          hasSection("sections.administracion")
+          || hasCapability("cap.finance.movements.create")
+          || hasCapability("cap.finance.movements.edit")
+        );
+      allow delete: if isSuperAdmin();
+    }
+
+    match /order_settlement_events/{eventId} {
+      allow read: if canReadBusinessResource()
+        && (
+          hasCapability("cap.settlement.view")
+          || hasSection("sections.administracion")
+        );
+      allow create: if canCreateBusinessResource()
+        && (hasCapability("cap.settlement.send") || hasCapability("cap.settlement.reconcile"));
+      allow update, delete: if false;
     }
 
     match /finance_accounts/{accountId} {
@@ -338,6 +445,13 @@ service cloud.firestore {
       allow read: if canReadBusinessResource() && hasSection("sections.catalogo");
       allow create: if canCreateBusinessResource() && hasSection("sections.catalogo");
       allow update: if canUpdateBusinessResource() && hasSection("sections.catalogo");
+      allow delete: if canReadBusinessResource() && isSuperAdmin();
+    }
+
+    match /catalog_import_rows/{rowId} {
+      allow read: if canReadBusinessResource() && hasSection("sections.catalogo");
+      allow create: if canCreateBusinessResource() && hasSection("sections.catalogo") && isAdmin();
+      allow update: if canUpdateBusinessResource() && hasSection("sections.catalogo") && isAdmin();
       allow delete: if canReadBusinessResource() && isSuperAdmin();
     }
 

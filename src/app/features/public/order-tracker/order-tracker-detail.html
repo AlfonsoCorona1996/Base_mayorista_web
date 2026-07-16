@@ -1,0 +1,97 @@
+<div class="detail-shell">
+  <header class="detail-header">
+    <a class="back-link" [routerLink]="['/track', token()]" aria-label="Volver a mis pedidos">
+      <span class="material-symbols-rounded" aria-hidden="true">arrow_back</span>
+      Mis pedidos
+    </a>
+    <a class="detail-brand" href="/" aria-label="Ir al inicio de Base Mayorista"><img src="/BaseMayoristaLogo.png" alt="" /><span>Base Mayorista</span></a>
+  </header>
+
+  <main class="detail-main">
+    @if (loading()) {
+      <section class="detail-loading" aria-live="polite" aria-label="Cargando pedido">
+        <div class="skeleton skeleton--heading"></div>
+        <div class="skeleton skeleton--summary"></div>
+        <div class="skeleton skeleton--content"></div>
+      </section>
+    } @else if (error()) {
+      <section class="detail-state" role="alert">
+        <span class="material-symbols-rounded" aria-hidden="true">search_off</span>
+        <h1>{{ error() === 'invalid' ? 'No encontramos este pedido' : 'No pudimos cargar el pedido' }}</h1>
+        <p>{{ error() === 'invalid' ? 'El enlace pudo cambiar o el pedido no pertenece a esta cuenta.' : 'Revisa tu conexión y vuelve a intentarlo.' }}</p>
+        <div class="detail-state__actions">
+          <a class="button button--secondary" [routerLink]="['/track', token()]">Volver a mis pedidos</a>
+          @if (error() === 'unavailable') { <button type="button" class="button button--primary" (click)="retry()">Volver a intentar</button> }
+        </div>
+      </section>
+    } @else if (data(); as response) {
+      <section class="detail-title">
+        <div>
+          <p class="eyebrow">Detalle del pedido</p>
+          <h1>Pedido {{ shortOrderId(response.order.order_id) }}</h1>
+          <p>Creado el {{ response.order.created_at | date:'d MMM y, H:mm' }}</p>
+        </div>
+        <span class="status-pill status-pill--{{ response.order.status.tone }}"><span class="material-symbols-rounded" aria-hidden="true">{{ statusIcon(response.order.status.key) }}</span>{{ response.order.status.label }}</span>
+      </section>
+
+      <section class="order-overview" aria-label="Resumen económico del pedido">
+        <article><span>Total clienta</span><strong>{{ response.order.totals.customer_total | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong><small>Lo que pagas por tu mercancía</small></article>
+        <article class="order-overview__profit"><span>Ganancia estimada</span><strong>{{ response.order.totals.estimated_profit | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong><small>{{ response.order.totals.estimated_profit_complete ? 'Con el precio público sugerido' : 'Estimación parcial por precios faltantes' }}</small></article>
+      </section>
+
+      <section class="detail-card progress-card" aria-labelledby="progress-title">
+        <div class="card-heading"><div><p class="eyebrow">Seguimiento</p><h2 id="progress-title">Avance de tu pedido</h2></div><span>Actualizado {{ response.order.updated_at | date:'d MMM, H:mm' }}</span></div>
+        <ol class="progress-list">
+          @for (stage of response.order.progress; track stage.key; let last = $last) {
+            <li class="progress-step progress-step--{{ stage.state }}">
+              <div class="progress-marker"><span class="material-symbols-rounded" aria-hidden="true">{{ stageIcon(stage.state) }}</span></div>
+              @if (!last) { <span class="progress-line" aria-hidden="true"></span> }
+              <div class="progress-copy"><strong>{{ stage.label }}</strong>@if (stage.date) { <span>{{ stage.date | date:'d MMM y, H:mm' }}</span> } @else if (stage.state === 'current') { <span>En proceso</span> }</div>
+            </li>
+          }
+        </ol>
+      </section>
+
+      <div class="detail-layout">
+        <section class="detail-card products-card" aria-labelledby="products-title">
+          <div class="card-heading"><div><p class="eyebrow">Contenido</p><h2 id="products-title">Tus productos</h2></div><span>{{ response.order.units_count }} pieza(s)</span></div>
+          <div class="product-list">
+            @for (item of response.order.items; track $index) {
+              <article class="product-row">
+                <div class="product-media">
+                  @if (item.image_url) { <img [src]="item.image_url" [alt]="item.title" loading="lazy" /> }
+                  @else { <span class="material-symbols-rounded" aria-hidden="true">checkroom</span> }
+                </div>
+                <div class="product-content">
+                  <div class="product-title-row"><div><h3>{{ item.title }}</h3><p>@if (item.variant) { {{ item.variant }} } @if (item.variant && item.color) { · } @if (item.color) { {{ item.color }} }</p></div><span class="status-pill status-pill--{{ item.confirmation.tone }}"><span class="material-symbols-rounded" aria-hidden="true">{{ statusIcon(item.confirmation.key) }}</span>{{ item.confirmation.label }}</span></div>
+                  <div class="quantity-row"><span>Pedidas: <strong>{{ item.ordered_quantity }}</strong></span><span>Confirmadas: <strong>{{ item.confirmed_quantity }}</strong></span>@if (item.returned_quantity > 0) { <span>Devueltas: <strong>{{ item.returned_quantity }}</strong></span> }</div>
+                  <div class="price-grid"><div><span>Tu precio</span><strong>{{ item.customer_unit_price | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></div><div><span>Precio público</span><strong>{{ item.public_unit_price === null ? 'Pendiente' : (item.public_unit_price | currency:'MXN':'symbol-narrow':'1.2-2') }}</strong></div><div><span>Ganancia estimada</span><strong class="profit-value">{{ item.estimated_profit === null ? 'Pendiente' : (item.estimated_profit | currency:'MXN':'symbol-narrow':'1.2-2') }}</strong></div></div>
+                </div>
+              </article>
+            }
+          </div>
+        </section>
+
+        <aside class="detail-sidebar">
+          <section class="detail-card account-card" aria-labelledby="account-title">
+            <div class="card-heading"><div><p class="eyebrow">Tu cuenta</p><h2 id="account-title">Resumen de pago</h2></div></div>
+            <dl><div><dt>Total clienta</dt><dd>{{ response.order.account.total | currency:'MXN':'symbol-narrow':'1.2-2' }}</dd></div><div><dt>Pagado</dt><dd>{{ response.order.account.paid | currency:'MXN':'symbol-narrow':'1.2-2' }}</dd></div><div class="account-balance"><dt>Por pagar</dt><dd>{{ response.order.account.pending | currency:'MXN':'symbol-narrow':'1.2-2' }}</dd></div><div class="account-credit"><dt>Saldo por devoluciones</dt><dd>{{ response.order.account.returns_credit | currency:'MXN':'symbol-narrow':'1.2-2' }}</dd></div></dl>
+          </section>
+
+          @if (response.order.returns.length > 0) {
+            <section class="detail-card returns-card" aria-labelledby="order-returns-title">
+              <div class="card-heading"><div><p class="eyebrow">Postventa</p><h2 id="order-returns-title">Devoluciones</h2></div></div>
+              <ul>
+                @for (row of response.order.returns; track row.return_id) {
+                  <li><span class="material-symbols-rounded" aria-hidden="true">assignment_return</span><div><strong>{{ row.product.title }} · {{ row.quantity }} pieza(s)</strong><span>{{ row.status.label }}</span><small>{{ row.resolution.label }}@if (row.resolution.amount > 0) { · {{ row.resolution.amount | currency:'MXN':'symbol-narrow':'1.2-2' }} }</small></div></li>
+                }
+              </ul>
+            </section>
+          }
+
+          <section class="contact-card"><span class="material-symbols-rounded" aria-hidden="true">support_agent</span><h2>¿Tienes alguna duda?</h2><p>Escríbenos por WhatsApp y menciona este pedido.</p><a class="button button--whatsapp" [href]="whatsappHref()" target="_blank" rel="noopener noreferrer">Pedir ayuda</a></section>
+        </aside>
+      </div>
+    }
+  </main>
+</div>

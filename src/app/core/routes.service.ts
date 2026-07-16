@@ -2,6 +2,15 @@ import { Injectable, signal } from "@angular/core";
 import { FIRESTORE } from "./firebase.providers";
 import { collection, doc, getDocs, orderBy, query, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
 
+export interface RouteExpenseTemplate {
+  template_id: string;
+  label: string;
+  amount: number;
+  category: string;
+  active: boolean;
+  notes?: string | null;
+}
+
 export interface RoutePlan {
   route_id: string;
   name: string;
@@ -9,6 +18,7 @@ export interface RoutePlan {
   active: boolean;
   estimated_run_expense?: number | null;
   estimated_run_expense_notes?: string | null;
+  expense_templates?: RouteExpenseTemplate[];
   notes?: string;
   created_at?: any;
   updated_at?: any;
@@ -52,6 +62,7 @@ export class RoutesService {
       active: route.active ?? true,
       estimated_run_expense: this.toSafeAmount(route.estimated_run_expense),
       estimated_run_expense_notes: this.toOptionalText(route.estimated_run_expense_notes),
+      expense_templates: this.normalizeExpenseTemplates(route.expense_templates),
       created_at: route.created_at ?? now,
       updated_at: now,
       notes: route.notes || "",
@@ -78,6 +89,7 @@ export class RoutesService {
       active: data.active ?? true,
       estimated_run_expense: this.toSafeAmount(data.estimated_run_expense),
       estimated_run_expense_notes: this.toOptionalText(data.estimated_run_expense_notes),
+      expense_templates: this.normalizeExpenseTemplates(data.expense_templates),
       notes: data.notes || "",
       created_at: data.created_at ?? null,
       updated_at: data.updated_at ?? null,
@@ -95,5 +107,25 @@ export class RoutesService {
     if (value === null || value === undefined) return null;
     const text = String(value).trim();
     return text || null;
+  }
+
+  private normalizeExpenseTemplates(value: unknown): RouteExpenseTemplate[] {
+    if (!Array.isArray(value)) return [];
+    return value
+      .map((entry, index): RouteExpenseTemplate | null => {
+        const raw = (entry || {}) as Partial<RouteExpenseTemplate>;
+        const label = String(raw.label || "").trim();
+        const amount = this.toSafeAmount(raw.amount) || 0;
+        if (!label || amount <= 0) return null;
+        return {
+          template_id: String(raw.template_id || `tpl_${index}_${label.toLowerCase().replace(/[^a-z0-9]+/g, "_")}`).trim(),
+          label,
+          amount,
+          category: String(raw.category || "paqueteria").trim() || "paqueteria",
+          active: raw.active ?? true,
+          notes: this.toOptionalText(raw.notes),
+        };
+      })
+      .filter((entry): entry is RouteExpenseTemplate => Boolean(entry));
   }
 }

@@ -106,6 +106,7 @@ export default class MainLayoutPage {
     if (role === "administrativo") return "Administrativo";
     if (role === "operativo") return "Operativo";
     if (role === "repartidor") return "Repartidor";
+    if (role === "durango_operativo") return "Durango operativo";
     return "Administrador";
   }
 

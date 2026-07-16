@@ -31,6 +31,51 @@ html.ms-icons-loading .material-symbols-rounded {
   --color-primary: #1e293b;
   --color-secondary: #94a3b8;
   --desktop-ui-zoom: 1;
+
+  /* UI layout and sizing tokens. Colors and feature themes remain local. */
+  --ui-content-max-width: 1440px;
+  --ui-page-padding-min: 12px;
+  --ui-page-padding-mobile: 16px;
+  --ui-page-padding-tablet: 24px;
+  --ui-page-padding-desktop: 32px;
+  --ui-page-padding-inline: var(--ui-page-padding-mobile);
+
+  --ui-space-4: 4px;
+  --ui-space-8: 8px;
+  --ui-space-12: 12px;
+  --ui-space-16: 16px;
+  --ui-space-24: 24px;
+  --ui-space-32: 32px;
+  --ui-space-48: 48px;
+
+  --ui-control-height-compact: 40px;
+  --ui-control-height: 44px;
+  --ui-control-height-comfortable: 48px;
+  --ui-touch-target-min: 44px;
+  --ui-card-min-width: 280px;
+
+  --ui-form-max-width-compact: 440px;
+  --ui-form-max-width-short: 560px;
+  --ui-form-max-width-medium: 720px;
+  --ui-modal-max-width-small: 440px;
+  --ui-modal-max-width-form: 640px;
+  --ui-modal-max-width-wide: 960px;
+
+  --ui-radius-sm: 8px;
+  --ui-radius-md: 12px;
+  --ui-radius-lg: 16px;
+  --ui-radius-xl: 24px;
+  --ui-radius-pill: 999px;
+
+  /* Matches the layer scale already used by the main layout. */
+  --ui-z-base: 0;
+  --ui-z-raised: 10;
+  --ui-z-backdrop: 20;
+  --ui-z-sticky: 25;
+  --ui-z-navigation: 30;
+  --ui-z-overlay: 40;
+  --ui-z-modal: 50;
+  --ui-z-toast: 60;
 }
 
 /* ============================================================
@@ -68,14 +113,21 @@ body {
 }
 
 
+@media (min-width: 768px) {
+  :root {
+    --ui-page-padding-inline: var(--ui-page-padding-tablet);
+  }
+}
+
 /* Zoom global en desktop */
 @media (min-width: 1024px) {
   :root {
-    --desktop-ui-zoom: 0.8;
+    /* --desktop-ui-zoom: 0.8; */
+    --ui-page-padding-inline: var(--ui-page-padding-desktop);
   }
 
   html {
-    zoom: 0.8;
+    /* zoom: 0.8; */
   }
 }
 

@@ -58,6 +58,18 @@
             <span>Salidas</span>
           </a>
           }
+          @if (can('embarques')) {
+          <a routerLink="/main/embarques" routerLinkActive="active" (click)="closeMenu()">
+            <span class="menu-item-icon material-symbols-rounded" aria-hidden="true">package_2</span>
+            <span>Embarques</span>
+          </a>
+          }
+          @if (can('durango')) {
+          <a routerLink="/main/durango" routerLinkActive="active" (click)="closeMenu()">
+            <span class="menu-item-icon material-symbols-rounded" aria-hidden="true">warehouse</span>
+            <span>Durango</span>
+          </a>
+          }
 
 
         </div>

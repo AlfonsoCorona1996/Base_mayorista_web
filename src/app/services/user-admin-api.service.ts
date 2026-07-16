@@ -25,6 +25,8 @@ export type AdminPermissionKey =
   | "rutas"
   | "localidades"
   | "salidas"
+  | "embarques"
+  | "durango"
   | "usuarios";
 
 export type AdminPermissionsPayload = Record<AdminPermissionKey, boolean>;
@@ -123,6 +125,8 @@ type BackendSectionKey =
   | "rutas"
   | "localidades"
   | "salidas"
+  | "embarques"
+  | "durango"
   | "usuarios";
 
 const BACKEND_SECTION_KEYS: BackendSectionKey[] = [
@@ -138,6 +142,8 @@ const BACKEND_SECTION_KEYS: BackendSectionKey[] = [
   "rutas",
   "localidades",
   "salidas",
+  "embarques",
+  "durango",
   "usuarios",
 ];
 
@@ -156,6 +162,9 @@ export class UserAdminApiService {
   }
   put<T>(path: string, body: unknown) {
     return this.http.put<T>(`${this.baseUrl}${path}`, body);
+  }
+  delete<T>(path: string) {
+    return this.http.delete<T>(`${this.baseUrl}${path}`);
   }
 
   async createManagedUser(input: CreateManagedUserInput): Promise<CreateManagedUserResult> {
@@ -350,6 +359,8 @@ export class UserAdminApiService {
       rutas: Boolean(rawInput["rutas"]),
       localidades: Boolean(rawInput["localidades"]),
       salidas: Boolean(rawInput["salidas"]),
+      embarques: Boolean(rawInput["embarques"]),
+      durango: Boolean(rawInput["durango"]),
       usuarios: roleId === "super_admin" ? Boolean(rawInput["usuarios"]) : false,
     };
   }

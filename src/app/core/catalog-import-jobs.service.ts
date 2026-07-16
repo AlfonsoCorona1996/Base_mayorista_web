@@ -14,22 +14,40 @@ import { UserAdminApiService } from "../services/user-admin-api.service";
 import { CatalogProductImportRow } from "./catalog-products.service";
 
 export type CatalogImportJobStatus = "queued" | "running" | "completed" | "failed";
+export type CatalogImportMode = "full" | "partial";
+export type CatalogImportRollbackStatus = "none" | "running" | "completed" | "failed";
+export type CatalogImportRowStatus = "created" | "updated" | "unchanged" | "rejected" | "failed" | "skipped";
 
 export interface CatalogImportJob {
   job_id: string;
   business_id: BusinessId;
   file_name: string;
   status: CatalogImportJobStatus;
+  import_mode: CatalogImportMode;
+  source_sheet_name: string | null;
+  header_row_index: number | null;
+  mapping_snapshot: Record<string, unknown> | null;
   total_rows: number;
   valid_rows: number;
   rejected_rows: number;
   processed_rows: number;
+  created_products: number;
+  updated_products: number;
+  unchanged_rows: number;
+  failed_rows: number;
+  not_in_file_count: number;
   percent: number;
   error: string | null;
   supplier_id: string | null;
   supplier_name: string | null;
   price_cost_discount_pct: number | null;
   price_clienta_markup_pct: number | null;
+  created_by: string | null;
+  created_by_name: string | null;
+  rollback_status: CatalogImportRollbackStatus;
+  rolled_back_at?: unknown;
+  rolled_back_by: string | null;
+  rollback_error: string | null;
   created_at?: unknown;
   updated_at?: unknown;
   completed_at?: unknown;
@@ -38,6 +56,10 @@ export interface CatalogImportJob {
 export interface CreateCatalogImportJobInput {
   business_id: BusinessId;
   file_name: string;
+  import_mode: CatalogImportMode;
+  source_sheet_name?: string | null;
+  header_row_index?: number | null;
+  mapping_snapshot?: Record<string, unknown> | null;
   total_rows: number;
   valid_rows: number;
   rejected_rows: number;
@@ -57,6 +79,37 @@ export interface UploadCatalogImportChunkResult {
   job: CatalogImportJob;
 }
 
+export interface CatalogImportAuditRow {
+  row_id: string;
+  job_id: string | null;
+  business_id: BusinessId;
+  supplier_id: string | null;
+  supplier_name: string | null;
+  product_id: string | null;
+  sku: string | null;
+  row_number: number;
+  status: CatalogImportRowStatus;
+  issue: string | null;
+  changed_fields: string[];
+  before_snapshot: Record<string, unknown> | null;
+  after_snapshot: Record<string, unknown> | null;
+  price_before: Record<string, unknown> | null;
+  price_after: Record<string, unknown> | null;
+  created_at?: unknown;
+}
+
+export interface CatalogImportRowsResult {
+  ok?: boolean;
+  rows: CatalogImportAuditRow[];
+}
+
+export interface CatalogImportRollbackResult {
+  ok?: boolean;
+  job: CatalogImportJob;
+  restored?: number;
+  deactivated?: number;
+}
+
 @Injectable({ providedIn: "root" })
 export class CatalogImportJobsService {
   private colRef = collection(FIRESTORE, "catalog_import_jobs");
@@ -70,6 +123,7 @@ export class CatalogImportJobsService {
     this.jobs().filter((job) => job.status === "queued" || job.status === "running"),
   );
   readonly latestActiveJob = computed(() => this.activeJobs()[0] || null);
+  readonly completedJobs = computed(() => this.jobs().filter((job) => job.status === "completed"));
 
   watch(): void {
     const allowed = this.businessScope.availableBusinessIds();
@@ -118,6 +172,20 @@ export class CatalogImportJobsService {
     return this.normalizeJob(result.job?.job_id, result.job as unknown as Record<string, unknown>);
   }
 
+  async loadRows(jobId: string, maxRows = 500): Promise<CatalogImportAuditRow[]> {
+    const result = await lastValueFrom(
+      this.api.get<CatalogImportRowsResult>(`/api/admin/catalog-imports/${encodeURIComponent(jobId)}/rows?limit=${encodeURIComponent(String(maxRows))}`),
+    );
+    return Array.isArray(result.rows) ? result.rows.map((row) => this.normalizeAuditRow(row as unknown as Record<string, unknown>)) : [];
+  }
+
+  async rollback(jobId: string): Promise<CatalogImportJob> {
+    const result = await lastValueFrom(
+      this.api.post<CatalogImportRollbackResult>(`/api/admin/catalog-imports/${encodeURIComponent(jobId)}/rollback`, {}),
+    );
+    return this.normalizeJob(result.job?.job_id, result.job as unknown as Record<string, unknown>);
+  }
+
   private normalizeJob(fallbackId: string | undefined, data: Record<string, unknown>): CatalogImportJob {
     const status = String(data["status"] || "queued") as CatalogImportJobStatus;
     const total = this.safeNumber(data["total_rows"]);
@@ -134,19 +202,56 @@ export class CatalogImportJobsService {
       business_id: normalizeBusinessId(data["business_id"]),
       file_name: String(data["file_name"] || "catalogo.xlsx"),
       status: status === "running" || status === "completed" || status === "failed" ? status : "queued",
+      import_mode: data["import_mode"] === "partial" ? "partial" : "full",
+      source_sheet_name: this.nullableText(data["source_sheet_name"]),
+      header_row_index: data["header_row_index"] === null || data["header_row_index"] === undefined ? null : this.safeNumber(data["header_row_index"]),
+      mapping_snapshot: data["mapping_snapshot"] && typeof data["mapping_snapshot"] === "object" ? data["mapping_snapshot"] as Record<string, unknown> : null,
       total_rows: total,
       valid_rows: valid,
       rejected_rows: this.safeNumber(data["rejected_rows"]),
       processed_rows: processed,
+      created_products: this.safeNumber(data["created_products"]),
+      updated_products: this.safeNumber(data["updated_products"]),
+      unchanged_rows: this.safeNumber(data["unchanged_rows"]),
+      failed_rows: this.safeNumber(data["failed_rows"]),
+      not_in_file_count: this.safeNumber(data["not_in_file_count"]),
       percent,
       error: typeof data["error"] === "string" && data["error"].trim() ? String(data["error"]) : null,
       supplier_id: this.nullableText(data["supplier_id"]),
       supplier_name: this.nullableText(data["supplier_name"]),
       price_cost_discount_pct: this.safeNullablePercent(data["price_cost_discount_pct"]),
       price_clienta_markup_pct: this.safeNullablePercent(data["price_clienta_markup_pct"]),
+      created_by: this.nullableText(data["created_by"]),
+      created_by_name: this.nullableText(data["created_by_name"]),
+      rollback_status: this.normalizeRollbackStatus(data["rollback_status"]),
+      rolled_back_at: data["rolled_back_at"] ?? null,
+      rolled_back_by: this.nullableText(data["rolled_back_by"]),
+      rollback_error: this.nullableText(data["rollback_error"]),
       created_at: data["created_at"] ?? null,
       updated_at: data["updated_at"] ?? null,
       completed_at: data["completed_at"] ?? null,
+    };
+  }
+
+  private normalizeAuditRow(data: Record<string, unknown>): CatalogImportAuditRow {
+    const status = String(data["status"] || "skipped") as CatalogImportRowStatus;
+    return {
+      row_id: String(data["row_id"] || ""),
+      job_id: this.nullableText(data["job_id"]),
+      business_id: normalizeBusinessId(data["business_id"]),
+      supplier_id: this.nullableText(data["supplier_id"]),
+      supplier_name: this.nullableText(data["supplier_name"]),
+      product_id: this.nullableText(data["product_id"]),
+      sku: this.nullableText(data["sku"]),
+      row_number: this.safeNumber(data["row_number"]),
+      status: ["created", "updated", "unchanged", "rejected", "failed", "skipped"].includes(status) ? status : "skipped",
+      issue: this.nullableText(data["issue"]),
+      changed_fields: Array.isArray(data["changed_fields"]) ? data["changed_fields"].map((value) => String(value)) : [],
+      before_snapshot: data["before_snapshot"] && typeof data["before_snapshot"] === "object" ? data["before_snapshot"] as Record<string, unknown> : null,
+      after_snapshot: data["after_snapshot"] && typeof data["after_snapshot"] === "object" ? data["after_snapshot"] as Record<string, unknown> : null,
+      price_before: data["price_before"] && typeof data["price_before"] === "object" ? data["price_before"] as Record<string, unknown> : null,
+      price_after: data["price_after"] && typeof data["price_after"] === "object" ? data["price_after"] as Record<string, unknown> : null,
+      created_at: data["created_at"] ?? null,
     };
   }
 
@@ -161,6 +266,11 @@ export class CatalogImportJobsService {
     const number = Number(value);
     if (!Number.isFinite(number)) return null;
     return Math.max(0, Math.min(100, Number(number.toFixed(2))));
+  }
+
+  private normalizeRollbackStatus(value: unknown): CatalogImportRollbackStatus {
+    const text = String(value || "none");
+    return text === "running" || text === "completed" || text === "failed" ? text : "none";
   }
 
   private nullableText(value: unknown): string | null {

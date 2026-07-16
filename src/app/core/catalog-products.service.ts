@@ -65,8 +65,16 @@ export interface CatalogProduct {
   cklass_image_error: string | null;
   notes: string | null;
   original_row?: Record<string, unknown>;
+  active?: boolean;
   last_import_id?: string | null;
   last_imported_at?: unknown;
+  last_price_import_id?: string | null;
+  last_price_imported_at?: unknown;
+  last_price_imported_by?: string | null;
+  last_import_row_id?: string | null;
+  last_import_status?: string | null;
+  price_health_flags?: string[];
+  reverted_from_import_id?: string | null;
   created_at?: unknown;
   updated_at?: unknown;
 }
@@ -74,6 +82,7 @@ export interface CatalogProduct {
 export interface CatalogProductImportRow {
   sku: string;
   name: string;
+  row_number?: number | null;
   brand_name?: string | null;
   supplier_id?: string | null;
   supplier_name?: string | null;
@@ -145,12 +154,12 @@ export class CatalogProductsService {
 
   products = computed(() => {
     const active = this.businessScope.activeBusinessIds();
-    return this.rows().filter((row) => active.includes(row.business_id || "bm"));
+    return this.rows().filter((row) => active.includes(row.business_id || "bm") && row.active !== false);
   });
 
   catalogoProducts = computed(() =>
     this.businessScope.canAccessBusiness("catalogo")
-      ? this.rows().filter((row) => row.business_id === "catalogo")
+      ? this.rows().filter((row) => row.business_id === "catalogo" && row.active !== false)
       : [],
   );
 
@@ -162,6 +171,7 @@ export class CatalogProductsService {
     const snap = await getDocs(query(this.colRef, where("business_id", "in", this.businessScope.availableBusinessIds())));
     const rows = snap.docs
       .map((entry) => this.normalizeProduct(entry.id, entry.data() as Record<string, unknown>))
+      .filter((row) => row.active !== false)
       .sort((a, b) => a.name.localeCompare(b.name, "es", { sensitivity: "base" }));
     this.rows.set(rows);
   }
@@ -249,11 +259,12 @@ export class CatalogProductsService {
     return { importId, processed: cleanRows.length, batches };
   }
 
-  watchCatalogPage(options?: { businessId?: BusinessId; searchSku?: string; pageSize?: number }): void {
+  watchCatalogPage(options?: { businessId?: BusinessId; searchSku?: string; supplierId?: string | null; pageSize?: number }): void {
     const businessId = normalizeBusinessId(options?.businessId || "catalogo");
     const pageSize = Math.max(10, Math.min(Math.trunc(options?.pageSize || 80), 200));
     const searchSku = this.normalizeSku(options?.searchSku || "");
-    const key = `${businessId}:${searchSku}:${pageSize}`;
+    const supplierId = this.nullableText(options?.supplierId);
+    const key = `${businessId}:${searchSku}:${supplierId || ""}:${pageSize}`;
     if (this.activePageKey === key && this.unsubscribePage) return;
 
     this.stopWatchingPage();
@@ -267,6 +278,9 @@ export class CatalogProductsService {
       orderBy("sku_normalized"),
       fsLimit(pageSize),
     ];
+    if (supplierId) {
+      constraints.splice(1, 0, where("supplier_id", "==", supplierId));
+    }
     if (searchSku) {
       constraints.splice(1, 0, where("sku_normalized", ">=", searchSku), where("sku_normalized", "<=", `${searchSku}\uf8ff`));
     }
@@ -274,7 +288,9 @@ export class CatalogProductsService {
     this.unsubscribePage = onSnapshot(
       query(this.colRef, ...constraints),
       (snap) => {
-        const rows = snap.docs.map((entry) => this.normalizeProduct(entry.id, entry.data() as Record<string, unknown>));
+        const rows = snap.docs
+          .map((entry) => this.normalizeProduct(entry.id, entry.data() as Record<string, unknown>))
+          .filter((row) => row.active !== false);
         this.pageCursor = snap.docs[snap.docs.length - 1] || null;
         this.pageRows.set(rows);
         this.pageState.set({
@@ -302,11 +318,12 @@ export class CatalogProductsService {
     this.activePageKey = "";
   }
 
-  async loadMoreCatalogPage(options?: { businessId?: BusinessId; searchSku?: string; pageSize?: number }): Promise<void> {
+  async loadMoreCatalogPage(options?: { businessId?: BusinessId; searchSku?: string; supplierId?: string | null; pageSize?: number }): Promise<void> {
     if (!this.pageCursor) return;
     const businessId = normalizeBusinessId(options?.businessId || "catalogo");
     const pageSize = Math.max(10, Math.min(Math.trunc(options?.pageSize || 80), 200));
     const searchSku = this.normalizeSku(options?.searchSku || "");
+    const supplierId = this.nullableText(options?.supplierId);
     this.pageState.update((current) => ({ ...current, loading: true, error: null }));
 
     const constraints: QueryConstraint[] = [
@@ -315,13 +332,18 @@ export class CatalogProductsService {
       startAfter(this.pageCursor),
       fsLimit(pageSize),
     ];
+    if (supplierId) {
+      constraints.splice(1, 0, where("supplier_id", "==", supplierId));
+    }
     if (searchSku) {
       constraints.splice(1, 0, where("sku_normalized", ">=", searchSku), where("sku_normalized", "<=", `${searchSku}\uf8ff`));
     }
 
     try {
       const snap = await getDocs(query(this.colRef, ...constraints));
-      const nextRows = snap.docs.map((entry) => this.normalizeProduct(entry.id, entry.data() as Record<string, unknown>));
+      const nextRows = snap.docs
+        .map((entry) => this.normalizeProduct(entry.id, entry.data() as Record<string, unknown>))
+        .filter((row) => row.active !== false);
       this.pageCursor = snap.docs[snap.docs.length - 1] || null;
       const merged = this.mergeById([...this.pageRows(), ...nextRows]);
       this.pageRows.set(merged);
@@ -343,6 +365,7 @@ export class CatalogProductsService {
     const snap = await getDoc(doc(this.colRef, this.productDocId(resolvedBusinessId, cleanSku)));
     if (!snap.exists()) return null;
     const row = this.normalizeProduct(snap.id, snap.data() as Record<string, unknown>);
+    if (row.active === false) return null;
     this.mergeRows([row]);
     return row;
   }
@@ -359,7 +382,9 @@ export class CatalogProductsService {
       orderBy("sku_normalized"),
       fsLimit(Math.max(1, Math.min(Math.trunc(maxRows), 20))),
     ));
-    const rows = snap.docs.map((entry) => this.normalizeProduct(entry.id, entry.data() as Record<string, unknown>));
+    const rows = snap.docs
+      .map((entry) => this.normalizeProduct(entry.id, entry.data() as Record<string, unknown>))
+      .filter((row) => row.active !== false);
     this.mergeRows(rows);
     return rows;
   }
@@ -453,8 +478,16 @@ export class CatalogProductsService {
       cklass_image_error: this.nullableText(data["cklass_image_error"]),
       notes: this.nullableText(data["notes"]),
       original_row: (data["original_row"] || {}) as Record<string, unknown>,
+      active: data["active"] === false ? false : true,
       last_import_id: this.nullableText(data["last_import_id"]),
       last_imported_at: data["last_imported_at"] ?? null,
+      last_price_import_id: this.nullableText(data["last_price_import_id"]),
+      last_price_imported_at: data["last_price_imported_at"] ?? null,
+      last_price_imported_by: this.nullableText(data["last_price_imported_by"]),
+      last_import_row_id: this.nullableText(data["last_import_row_id"]),
+      last_import_status: this.nullableText(data["last_import_status"]),
+      price_health_flags: Array.isArray(data["price_health_flags"]) ? data["price_health_flags"].map((value) => String(value)) : [],
+      reverted_from_import_id: this.nullableText(data["reverted_from_import_id"]),
       created_at: data["created_at"] ?? null,
       updated_at: data["updated_at"] ?? null,
     };

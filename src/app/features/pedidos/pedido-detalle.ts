@@ -11,7 +11,7 @@ import { PDFDocument, PDFFont, PDFPage, StandardFonts, rgb } from "pdf-lib";
 import * as QRCode from "qrcode";
 import { CustomersService, Customer } from "../../core/customers.service";
 import { SuppliersService } from "../../core/suppliers.service";
-import { OrdersService, Order, OrderEvent, OrderItem, OrderItemState, OrderStatus, PackageRecord, Incident, IncidentSeverity } from "../../core/orders.service";
+import { OrdersService, Order, OrderCollectionEvent, OrderEvent, OrderItem, OrderItemState, OrderStatus, PackageRecord, Incident, IncidentSeverity } from "../../core/orders.service";
 import { RoutesService } from "../../core/routes.service";
 import { LocalitiesService } from "../../core/localities.service";
 import { InventoryService, InventoryItem } from "../../core/inventory.service";
@@ -19,6 +19,7 @@ import { NormalizedListingsService, NormalizedListingDoc } from "../../core/norm
 import { SupplierOperationsService } from "../../core/supplier-operations.service";
 import { ManualProductHistoryService, ManualProductEntry } from "../../core/manual-product-history.service";
 import { CatalogProduct, CatalogProductsService } from "../../core/catalog-products.service";
+import { CatalogImportJobsService } from "../../core/catalog-import-jobs.service";
 import { CatalogBarcodeAliasService } from "../../core/catalog-barcode-alias.service";
 import { ReturnsService, ReturnDisposition, ReturnPaymentResolution, ReturnRecord } from "../../core/returns.service";
 import { availableReturnQty, calculateOrderFinancials, netItemQty, returnedItemQty } from "../../core/order-financials";
@@ -36,6 +37,8 @@ import { AuthService } from "../../core/auth.service";
 import { DispatchOrderRow, RouteRunDoc, RouteRunsService } from "../../services/route-runs.service";
 import { SalesNoteRenderService } from "./sales-note-render.service";
 import { CustomerFollowupsService } from "../../core/customer-followups.service";
+import { ShipmentBusinessSummary, ShipmentItem, ShipmentsService } from "../../core/shipments.service";
+import { OperationalExpenseReport, OperationalExpenseReportsService } from "../../core/operational-expense-reports.service";
 
 type EstadoConfirmacion = "pendiente" | "confirmado" | "sin_stock";
 
@@ -217,6 +220,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   private inventory = inject(InventoryService);
   private catalog = inject(NormalizedListingsService);
   private catalogProducts = inject(CatalogProductsService);
+  private catalogImportJobs = inject(CatalogImportJobsService);
   private barcodeLookup = inject(BarcodeProductLookupService);
   private catalogBarcodeAliases = inject(CatalogBarcodeAliasService);
   private physicalBarcodeScanner = inject(PhysicalBarcodeScannerService);
@@ -230,6 +234,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   private auth = inject(AuthService);
   private salesNoteRender = inject(SalesNoteRenderService);
   private routeRuns = inject(RouteRunsService);
+  private shipments = inject(ShipmentsService);
+  private operationalExpenseReports = inject(OperationalExpenseReportsService);
   private destroyRef = inject(DestroyRef);
   private api = inject(UserAdminApiService);
 
@@ -280,6 +286,11 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   copiedOrderId = signal(false);
   orderHeadMenuOpen = signal(false);
   actionToast = signal<string | null>(null);
+  operationsSheetOpen = signal(false);
+  operationalDestination = signal<"durango" | "gdl" | "otro">("durango");
+  operationalCustomDestination = signal("");
+  operationalNotes = signal("");
+  savingOperationalAction = signal(false);
   changeCustomerModalOpen = signal(false);
   changeCustomerQuery = signal("");
   changeCustomerSelectedId = signal<string | null>(null);
@@ -394,6 +405,9 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   collectionReminderDate = signal("");
   collectionReminderNote = signal("");
   collectionReminderSaving = signal(false);
+  collectionEvents = signal<OrderCollectionEvent[]>([]);
+  collectionDecisionSaving = signal(false);
+  expenseDecisionSaving = signal(false);
   discountModalOpen = signal(false);
   discountDraft = signal("");
   discountSaving = signal(false);
@@ -456,6 +470,12 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   selectedPreview = signal<{ title: string; variant: string; color: string; image: string | null; source: string } | null>(null);
   selectedCatalogDoc = signal<NormalizedListingDoc | null>(null);
   selectedCatalogProduct = signal<CatalogProduct | null>(null);
+  priceWarningOpen = signal(false);
+  priceWarningProduct = signal<CatalogProduct | null>(null);
+  priceWarningReason = signal<string | null>(null);
+  priceWarningLatestImportLabel = signal<string | null>(null);
+  priceWarningAckReason = signal<string | null>(null);
+  private priceWarningResolver: ((decision: "review" | "use" | "cancel") => void) | null = null;
   catalogProductSuggestions = signal<CatalogProduct[]>([]);
   catalogProductSearching = signal(false);
   barcodeScannerOpen = signal(false);
@@ -853,6 +873,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
   ngOnInit() {
     this.returnsService.watch();
+    this.catalogImportJobs.watch();
+    this.shipments.watch();
     this.orderId.set(this.route.snapshot.paramMap.get("id") || "");
     this.initialHydration.set(true);
     void Promise.all([
@@ -863,6 +885,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       this.localities.loadFromFirestore().catch(() => null),
       this.inventory.loadFromFirestore().catch(() => null),
       this.finance.loadAccounts().catch(() => null),
+      this.operationalExpenseReports.loadAll().catch(() => null),
       this.supplierOperations.loadFromFirestore().catch(() => null),
       this.loadAssigneeOptions().catch(() => null),
     ]).then(() => {
@@ -876,6 +899,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       this.manualHistory.load(currentOrder.business_id).catch(() => null);
       this.loadIncidents();
       this.refreshEvents();
+      this.loadCollectionEvents();
     }).catch(() => {
       this.error.set("No se pudo cargar la informacion del pedido.");
     }).finally(() => {
@@ -930,6 +954,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       clearTimeout(this.catalogProductSearchTimer);
       this.catalogProductSearchTimer = null;
     }
+    this.catalogImportJobs.stop();
     this.stopPhysicalBarcodeScanner();
     this.businessScope.unlockScope();
   }
@@ -939,6 +964,13 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     if (!orderId) return;
     const list = await this.orders.listIncidents(orderId).catch(() => []);
     this.incidents.set(list);
+  }
+
+  async loadCollectionEvents(): Promise<void> {
+    const orderId = this.orderId();
+    if (!orderId) return;
+    const rows = await this.orders.listCollectionEventsForOrder(orderId).catch(() => []);
+    this.collectionEvents.set(rows);
   }
 
   private async createIncidentAndRefresh(orderId: string, incident: any): Promise<void> {
@@ -1295,6 +1327,466 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     }
   }
 
+  finalStatePills(order: Order): Array<{ icon: string; title: string; label: string; tone: string }> {
+    return [
+      {
+        icon: "inventory_2",
+        title: "Preparación",
+        label: this.fulfillmentLabel(order),
+        tone: order.fulfillment_status === "packed_gdl" || order.fulfillment_status === "packed_durango" ? "ok" : "work",
+      },
+      {
+        icon: "move_down",
+        title: "Custodia",
+        label: this.custodyLabel(order),
+        tone: order.custody_status === "customer" ? "ok" : order.custody_status === "shipment" ? "warn" : "info",
+      },
+      {
+        icon: "local_shipping",
+        title: "Entrega",
+        label: this.deliveryLabel(order),
+        tone: order.delivery_status === "delivered" ? "ok" : order.delivery_status === "not_delivered" || order.delivery_status === "incident" ? "danger" : "wait",
+      },
+      {
+        icon: "payments",
+        title: "Cobro clienta",
+        label: this.customerPaymentLabel(order),
+        tone: order.customer_payment_status === "collected" ? "ok" : order.customer_payment_status === "partial" ? "warn" : "danger",
+      },
+      {
+        icon: "account_balance",
+        title: "Conciliación",
+        label: this.settlementLabel(order),
+        tone: order.settlement_status === "reconciled" ? "ok" : order.settlement_status === "difference" ? "danger" : order.settlement_status === "sent_to_gdl" || order.settlement_status === "received" ? "warn" : "wait",
+      },
+    ];
+  }
+
+  fulfillmentLabel(order: Order): string {
+    switch (order.fulfillment_status) {
+      case "packing_gdl":
+        return "Empaque GDL";
+      case "packed_gdl":
+        return "Empacado GDL";
+      case "packing_durango":
+        return "Empaque Durango";
+      case "packed_durango":
+        return "Empacado Durango";
+      default:
+        return order.packing?.status === "done" ? "Empacado GDL" : "Pendiente";
+    }
+  }
+
+  custodyLabel(order: Order): string {
+    switch (order.custody_status) {
+      case "shipment":
+        return "En embarque";
+      case "durango":
+        return "Durango";
+      case "delivery_staff":
+        return order.current_holder_name || "Repartidora/cobranza";
+      case "customer":
+        return "Clienta";
+      default:
+        return "GDL";
+    }
+  }
+
+  deliveryLabel(order: Order): string {
+    switch (order.delivery_status) {
+      case "delivered":
+        return "Entregado";
+      case "not_delivered":
+        return "No entregado";
+      case "incident":
+        return "Incidencia";
+      default:
+        return "Pendiente";
+    }
+  }
+
+  customerPaymentLabel(order: Order): string {
+    const balance = calculateOrderFinancials(order).balanceDue;
+    if (order.customer_payment_status === "collected" || balance <= 0) return "Cobrado";
+    if (order.customer_payment_status === "partial") return `Parcial · ${this.formatCurrency(balance)} pendiente`;
+    return `${this.formatCurrency(balance)} pendiente`;
+  }
+
+  settlementLabel(order: Order): string {
+    switch (order.settlement_status) {
+      case "pending":
+        return "Pendiente";
+      case "sent_to_gdl":
+        return "Dinero enviado";
+      case "received":
+        return "Recibido GDL";
+      case "reconciled":
+        return "Conciliado";
+      case "difference":
+        return "Diferencia";
+      default:
+        return Number(order.totals?.paid_amount || 0) > 0 ? "Pendiente" : "Sin cobro";
+    }
+  }
+
+  durangoCollectionEvents(order: Order | null): OrderCollectionEvent[] {
+    if (!order) return [];
+    return this.collectionEvents()
+      .filter((event) => event.order_id === order.order_id)
+      .filter((event) => event.source_location === "durango")
+      .filter((event) => event.verification_status !== "rejected");
+  }
+
+  pendingDurangoExpenseReports(order: Order | null): OperationalExpenseReport[] {
+    if (!order) return [];
+    return this.operationalExpenseReports
+      .reportsForOrder(order.order_id)
+      .filter((report) => report.approval_status === "pending");
+  }
+
+  hasDurangoReview(order: Order | null): boolean {
+    return this.durangoCollectionEvents(order).length > 0 || this.pendingDurangoExpenseReports(order).length > 0;
+  }
+
+  collectionVerificationLabel(event: OrderCollectionEvent): string {
+    switch (event.verification_status) {
+      case "confirmed":
+        return "Dinero recibido";
+      case "difference":
+        return "Con diferencia";
+      case "rejected":
+        return "Rechazado";
+      default:
+        return "Por recibir de Durango";
+    }
+  }
+
+  collectionVerificationTone(event: OrderCollectionEvent): string {
+    switch (event.verification_status) {
+      case "confirmed":
+        return "ok";
+      case "difference":
+        return "danger";
+      case "rejected":
+        return "muted";
+      default:
+        return "warn";
+    }
+  }
+
+  collectionMethodLabel(method: string | null | undefined): string {
+    switch (method) {
+      case "transferencia":
+        return "Transferencia";
+      case "tarjeta":
+        return "Tarjeta";
+      case "otro":
+        return "Otro";
+      default:
+        return "Efectivo";
+    }
+  }
+
+  collectionReporter(event: OrderCollectionEvent): string {
+    return event.reported_by?.name || event.collected_by?.name || "Durango";
+  }
+
+  canReviewDurangoMoney(): boolean {
+    return this.authz.canCap("cap.settlement.reconcile") || this.authz.canSection("sections.administracion");
+  }
+
+  async confirmDurangoCollection(event: OrderCollectionEvent): Promise<void> {
+    if (this.collectionDecisionSaving() || !this.canReviewDurangoMoney()) return;
+    this.collectionDecisionSaving.set(true);
+    try {
+      await this.orders.confirmReportedCollection(event, "Dinero recibido desde Durango.");
+      await this.orders.loadFromFirestore().catch(() => null);
+      await this.loadCollectionEvents();
+      this.showActionToast("Dinero de Durango confirmado como recibido.");
+    } catch (error: any) {
+      this.error.set(error?.message || "No se pudo confirmar el dinero.");
+    } finally {
+      this.collectionDecisionSaving.set(false);
+    }
+  }
+
+  async reconcileDurangoCollection(event: OrderCollectionEvent): Promise<void> {
+    if (this.collectionDecisionSaving() || !this.canReviewDurangoMoney()) return;
+    this.collectionDecisionSaving.set(true);
+    try {
+      if (event.verification_status === "reported") {
+        await this.orders.confirmReportedCollection(event, "Dinero recibido y conciliado desde GDL.");
+      }
+      await this.orders.markSettlement(event.order_id, "reconciled", "Cobro Durango conciliado en GDL.");
+      await this.orders.loadFromFirestore().catch(() => null);
+      await this.loadCollectionEvents();
+      this.showActionToast("Cobro de Durango conciliado.");
+    } catch (error: any) {
+      this.error.set(error?.message || "No se pudo conciliar el cobro.");
+    } finally {
+      this.collectionDecisionSaving.set(false);
+    }
+  }
+
+  async markDurangoCollectionDifference(event: OrderCollectionEvent): Promise<void> {
+    if (this.collectionDecisionSaving() || !this.canReviewDurangoMoney()) return;
+    const ok = await this.showPopupConfirm("Marcar este cobro como diferencia? El pedido quedara pendiente de aclaracion.", {
+      title: "Diferencia de cobro",
+      confirmLabel: "Marcar diferencia",
+      cancelLabel: "Cancelar",
+      danger: true,
+    });
+    if (!ok) return;
+    this.collectionDecisionSaving.set(true);
+    try {
+      await this.orders.markCollectionDifference(event, "Diferencia detectada al revisar dinero de Durango.");
+      await this.orders.loadFromFirestore().catch(() => null);
+      await this.loadCollectionEvents();
+      this.showActionToast("Cobro marcado con diferencia.");
+    } catch (error: any) {
+      this.error.set(error?.message || "No se pudo marcar diferencia.");
+    } finally {
+      this.collectionDecisionSaving.set(false);
+    }
+  }
+
+  async rejectDurangoCollection(event: OrderCollectionEvent): Promise<void> {
+    if (this.collectionDecisionSaving() || !this.canReviewDurangoMoney()) return;
+    const ok = await this.showPopupConfirm("Rechazar este cobro reportado? El saldo volvera a quedar pendiente para la clienta.", {
+      title: "Rechazar cobro",
+      confirmLabel: "Rechazar cobro",
+      cancelLabel: "Cancelar",
+      danger: true,
+    });
+    if (!ok) return;
+    this.collectionDecisionSaving.set(true);
+    try {
+      await this.orders.rejectReportedCollection(event, "Cobro reportado por Durango rechazado por GDL.");
+      await this.orders.loadFromFirestore().catch(() => null);
+      await this.loadCollectionEvents();
+      this.showActionToast("Cobro rechazado y saldo restaurado.");
+    } catch (error: any) {
+      this.error.set(error?.message || "No se pudo rechazar el cobro.");
+    } finally {
+      this.collectionDecisionSaving.set(false);
+    }
+  }
+
+  expenseReportCategoryLabel(report: OperationalExpenseReport): string {
+    return this.operationalExpenseReports.categoryLabel(report.category);
+  }
+
+  expenseReportReporter(report: OperationalExpenseReport): string {
+    return report.reported_by?.name || "Durango";
+  }
+
+  canApproveOperationalExpense(): boolean {
+    return this.authz.canCap("cap.finance.movements.create") || this.authz.canSection("sections.administracion");
+  }
+
+  async approveOperationalExpense(report: OperationalExpenseReport): Promise<void> {
+    if (this.expenseDecisionSaving() || !this.canApproveOperationalExpense()) return;
+    this.expenseDecisionSaving.set(true);
+    try {
+      await this.operationalExpenseReports.approveReport(report);
+      this.showActionToast("Gasto de Durango aprobado y enviado a finanzas.");
+    } catch (error: any) {
+      this.error.set(error?.message || "No se pudo aprobar el gasto.");
+    } finally {
+      this.expenseDecisionSaving.set(false);
+    }
+  }
+
+  async rejectOperationalExpense(report: OperationalExpenseReport): Promise<void> {
+    if (this.expenseDecisionSaving() || !this.canApproveOperationalExpense()) return;
+    const ok = await this.showPopupConfirm("Rechazar este gasto reportado por Durango?", {
+      title: "Rechazar gasto",
+      confirmLabel: "Rechazar",
+      cancelLabel: "Cancelar",
+      danger: true,
+    });
+    if (!ok) return;
+    this.expenseDecisionSaving.set(true);
+    try {
+      await this.operationalExpenseReports.rejectReport(report.report_id, "Gasto reportado por Durango rechazado por GDL.");
+      this.showActionToast("Gasto rechazado.");
+    } catch (error: any) {
+      this.error.set(error?.message || "No se pudo rechazar el gasto.");
+    } finally {
+      this.expenseDecisionSaving.set(false);
+    }
+  }
+
+  canMarkDelivered(order: Order | null): boolean {
+    if (!order) return false;
+    if (["cancelado", "devuelto", "closed"].includes(order.status)) return false;
+    if (order.delivery_status === "delivered" || order.status === "delivered" || order.status === "entregado") return false;
+    return this.authz.canCap("cap.delivery.mark_delivered");
+  }
+
+  canCreateShipmentFromOrder(order: Order | null): boolean {
+    if (!order) return false;
+    if (["cancelado", "devuelto", "closed"].includes(order.status)) return false;
+    if (order.delivery_status === "delivered" || order.custody_status === "customer") return false;
+    if (this.activeShipmentForOrder(order)) return false;
+    if ((order.items || []).length === 0) return false;
+    return this.authz.canCap("cap.shipments.create") || this.authz.canSection("sections.embarques");
+  }
+
+  activeShipmentForOrder(order: Order | null): string | null {
+    if (!order) return null;
+    const match = this.shipments.rows()
+      .filter((shipment) => shipment.status !== "closed")
+      .find((shipment) => (shipment.items || []).some((item) => item.order_id === order.order_id));
+    return match?.shipment_id || null;
+  }
+
+  openOrderOperationsSheet(order: Order): void {
+    this.orderHeadMenuOpen.set(false);
+    this.operationalDestination.set("durango");
+    this.operationalCustomDestination.set("");
+    this.operationalNotes.set(order.notes || "");
+    this.operationsSheetOpen.set(true);
+  }
+
+  closeOrderOperationsSheet(): void {
+    if (this.savingOperationalAction()) return;
+    this.operationsSheetOpen.set(false);
+  }
+
+  async markDeliveredFromHeader(order: Order): Promise<void> {
+    this.orderHeadMenuOpen.set(false);
+    await this.markDeliveredFromOperations(order);
+  }
+
+  async markDeliveredFromOperations(order: Order): Promise<void> {
+    if (!this.canMarkDelivered(order) || this.savingOperationalAction()) return;
+    this.savingOperationalAction.set(true);
+    this.error.set(null);
+    try {
+      await this.orders.markOrderDelivered(order.order_id, "Marcado como entregado desde detalle de pedido");
+      this.operationsSheetOpen.set(false);
+      this.showActionToast("Pedido marcado como entregado. Cobro y conciliación siguen separados.");
+    } catch (error: any) {
+      this.error.set(error?.message || "No se pudo marcar entregado.");
+    } finally {
+      this.savingOperationalAction.set(false);
+    }
+  }
+
+  async quickShipToDurango(order: Order): Promise<void> {
+    this.orderHeadMenuOpen.set(false);
+    await this.createShipmentFromOrder(order, "durango", "");
+  }
+
+  async createShipmentFromOperations(order: Order): Promise<void> {
+    const destination = this.operationalDestination() === "otro"
+      ? this.operationalCustomDestination().trim()
+      : this.operationalDestination();
+    await this.createShipmentFromOrder(order, destination || "durango", this.operationalNotes());
+  }
+
+  private async createShipmentFromOrder(order: Order, destination: string, notes: string): Promise<void> {
+    if (!this.canCreateShipmentFromOrder(order) || this.savingOperationalAction()) return;
+    const activeShipmentId = this.activeShipmentForOrder(order);
+    if (activeShipmentId) {
+      this.error.set("Este pedido ya está en un embarque activo. Usa el embarque existente o ciérralo antes de crear otro.");
+      return;
+    }
+    this.savingOperationalAction.set(true);
+    this.error.set(null);
+    try {
+      const customerName = this.customerDisplayName(order);
+      const items = this.shipmentItemsForOrder(order, customerName);
+      if (!items.length) {
+        this.error.set("No hay paquetes cerrados para embarcar. Cierra la caja antes de crear el embarque.");
+        return;
+      }
+      const financials = calculateOrderFinancials(order);
+      const destinationLabel = String(destination || "durango").trim() || "durango";
+      const shipmentId = await this.shipments.createShipment({
+        title: `${customerName} · Pedido ${order.order_id}`,
+        destination_location: destinationLabel,
+        notes: notes.trim() || null,
+        items,
+        business_summaries: [
+          {
+            business_id: order.business_id,
+            orders_total: 1,
+            packages_total: items.filter((item) => item.type === "package").length,
+            loose_items_total: items.filter((item) => item.type === "loose_item").reduce((sum, item) => sum + Number(item.quantity || 0), 0),
+            sale_total: financials.netAmount,
+            balance_due: financials.balanceDue,
+          },
+        ] as ShipmentBusinessSummary[],
+      });
+      await this.orders.updateOperationalState(
+        order.order_id,
+        { shipment_id: shipmentId },
+        `Embarque preparado hacia ${destinationLabel}`,
+      );
+      this.operationsSheetOpen.set(false);
+      this.showActionToast(`Embarque en proceso creado hacia ${destinationLabel}.`);
+    } catch (error: any) {
+      this.error.set(error?.message || "No se pudo crear el embarque.");
+    } finally {
+      this.savingOperationalAction.set(false);
+    }
+  }
+
+  private shipmentItemsForOrder(order: Order, customerName: string): ShipmentItem[] {
+    const closedPackages = (order.packages || []).filter((pkg) => pkg.status === "closed" || pkg.state === "armado" || pkg.state === "closed");
+    if (!closedPackages.length && (order.packages || []).length > 0) return [];
+    const packages = closedPackages;
+    if (!packages.length) {
+      return [
+        {
+          item_id: `pkg-${order.order_id}-full`,
+          type: "package",
+          status: "pending",
+          order_id: order.order_id,
+          business_id: order.business_id,
+          customer_id: order.customer_id,
+          customer_name: customerName,
+          package_id: null,
+          package_label: "Pedido completo",
+          title: "Pedido completo",
+          quantity: 1,
+          contents: (order.items || []).map((item) => ({
+            title: item.title,
+            quantity: Number(item.quantity || 1),
+            variant: item.variant || null,
+            color: item.color || null,
+          })),
+        },
+      ];
+    }
+    return packages.map((pkg) => ({
+      item_id: `pkg-${order.order_id}-${pkg.package_id}`,
+      type: "package",
+      status: "pending",
+      order_id: order.order_id,
+      business_id: order.business_id,
+      customer_id: order.customer_id,
+      customer_name: customerName,
+      package_id: pkg.package_id,
+      package_label: pkg.label,
+      title: pkg.label || "Paquete",
+      quantity: 1,
+      contents: (pkg.items || []).map((item) => ({
+        title: item.name,
+        quantity: Number(item.qty || 1),
+        variant: item.size || item.variant || null,
+        color: item.color || null,
+      })),
+    }));
+  }
+
+  private customerDisplayName(order: Order): string {
+    const customer = order.customer_id ? this.customers.getById(order.customer_id) : null;
+    return customer ? `${customer.first_name} ${customer.last_name}`.trim() || "Clienta" : "Clienta";
+  }
+
   eventActor(event: any): string {
     if (!event) return "Usuario";
     if (typeof event.actor === "string" && event.actor.trim()) return event.actor;
@@ -1321,6 +1813,29 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     if (diffMonths < 12) return `Hace ${diffMonths} mes`;
     const diffYears = Math.round(diffDays / 365);
     return `Hace ${diffYears} a`;
+  }
+
+  private toDate(value: unknown): Date | null {
+    if (!value) return null;
+    if (value instanceof Date) return value;
+    if (typeof value === "object" && value !== null && typeof (value as { toDate?: unknown }).toDate === "function") {
+      return (value as { toDate: () => Date }).toDate();
+    }
+    if (typeof value === "object" && value !== null && typeof (value as { seconds?: unknown }).seconds === "number") {
+      return new Date(Number((value as { seconds: number }).seconds) * 1000);
+    }
+    const parsed = new Date(String(value));
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  private toMillis(value: unknown): number {
+    return this.toDate(value)?.getTime() || 0;
+  }
+
+  dateShort(value: unknown): string {
+    const date = this.toDate(value);
+    if (!date) return "sin fecha";
+    return new Intl.DateTimeFormat("es-MX", { day: "numeric", month: "short", year: "numeric" }).format(date);
   }
 
   allowedCapabilities(order: Order | null, userRole: string) {
@@ -3810,6 +4325,11 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.selectedPreview.set(null);
     this.selectedCatalogDoc.set(null);
     this.selectedCatalogProduct.set(null);
+    this.priceWarningOpen.set(false);
+    this.priceWarningProduct.set(null);
+    this.priceWarningReason.set(null);
+    this.priceWarningLatestImportLabel.set(null);
+    this.priceWarningAckReason.set(null);
     this.catalogProductSuggestions.set([]);
     this.catalogProductSearching.set(false);
     this.selectedPreviewHasColorImage.set(true);
@@ -3968,7 +4488,6 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         shared,
       }).catch(() => null);
       await this.orders.markSalesNoteGenerated(order.order_id).catch(() => null);
-      this.openCollectionReminder(this.orders.getById(order.order_id) || order, "sales_note");
       this.showActionToast(shared ? "Nota generada y lista para compartir." : "Nota generada.");
       this.actionError.set(null);
     } catch (error: any) {
@@ -5014,7 +5533,13 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   async registerPayment(order: Order) {
-    await this.orders.logEvent(order.order_id, "PAYMENT_REGISTERED", "Pago registrado/conciliado", {});
+    this.closeActionModal();
+    const latest = this.orders.getById(order.order_id) || order;
+    if (this.collectionTotalDebt(latest) > 0) {
+      this.openCollectionReminder(latest, "sales_note");
+      return;
+    }
+    this.openPaymentModal();
   }
 
   // ── Cierre de pedido ─────────────────────────────────────────────────────
@@ -5336,14 +5861,14 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       }
       await this.orders.logEvent(
         order.order_id,
-        "PAYMENT_CLOSED",
-        `Pedido cerrado. Pago: $${paidAmount}. Total: $${totalAmount}. Descuento: $${discountAmount}.`,
+        "PAYMENT_REGISTERED",
+        `Cobro registrado. Pago: $${paidAmount}. Total: $${totalAmount}. Descuento: $${discountAmount}.`,
         { paid_amount: paidAmount, total_amount: totalAmount, discount_amount: discountAmount },
       );
       this.paymentModalOpen.set(false);
       this.showActionToast(
         cumulativePaid >= totalAmount
-          ? "Pedido marcado como Pagado ✓"
+          ? "Cobro completo registrado. Falta validar entrega/conciliación si aplica."
           : cumulativePaid > 0
             ? `Pago parcial registrado. Saldo: $${Math.max(0, totalAmount - cumulativePaid).toFixed(2)}`
             : "Pedido marcado con pago pendiente.",
@@ -5671,7 +6196,6 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       this.setWaNoteStatus(true, immediateMsg, statusQueryPath ? 0 : 7000);
       this.showActionToast(immediateMsg);
       await this.orders.markSalesNoteGenerated(order.order_id).catch(() => null);
-      this.openCollectionReminder(this.orders.getById(order.order_id) || order, "wa_sales_note");
       if (statusQueryPath) {
         void this.pollWaDeliveryStatus(statusQueryPath, pollSeq, customerId, order.order_id, attemptId);
       } else if (deliveryMode !== "template") {
@@ -7289,6 +7813,10 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     if (needsLateNote && !lateNote) return;
 
     const source = this.newItemSource();
+    if (source === "catalogo" && this.selectedCatalogProduct()) {
+      const ok = await this.confirmCatalogPriceWarningIfNeeded();
+      if (!ok) return;
+    }
     if (source === "catalogo") {
       await this.ensureSelectedCatalogProductImage();
     }
@@ -7427,6 +7955,10 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       return;
     }
     const state: OrderItemState = source === "inventario" ? "reservado_inventario" : "confirmando_proveedor";
+    if (source === "catalogo" && this.selectedCatalogProduct()) {
+      const ok = await this.confirmCatalogPriceWarningIfNeeded();
+      if (!ok) return;
+    }
     if (source === "catalogo") {
       await this.ensureSelectedCatalogProductImage();
     }
@@ -7481,6 +8013,10 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       await this.showClientaBelowCostoPopup();
       return;
     }
+    if (this.newItemSource() === "catalogo" && this.selectedCatalogProduct()) {
+      const ok = await this.confirmCatalogPriceWarningIfNeeded();
+      if (!ok) return;
+    }
     if (this.newItemSource() === "catalogo") {
       await this.ensureSelectedCatalogProductImage();
     }
@@ -7509,6 +8045,10 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       price_public: this.newItemPricePublic(),
       price_clienta: this.newItemPriceClienta(),
       price_cost: this.newItemPriceCost(),
+      price_source_import_id: this.selectedCatalogProduct()?.last_price_import_id || this.selectedCatalogProduct()?.last_import_id || target.price_source_import_id || null,
+      price_source_imported_at: this.selectedCatalogProduct()?.last_price_imported_at || this.selectedCatalogProduct()?.last_imported_at || target.price_source_imported_at || null,
+      price_warning_ack_at: this.priceWarningAckReason() ? new Date().toISOString() : target.price_warning_ack_at || null,
+      price_warning_reason: this.priceWarningAckReason() || target.price_warning_reason || null,
       discount_pct: this.newItemDiscount(),
       confirmed_qty: nextConfirmedQty,
       image_url: this.selectedPreview()?.image || target.image_url || null,
@@ -7582,6 +8122,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     extra?: Partial<OrderItem>,
   ): OrderItem {
     const businessId = this.orderBusinessId();
+    const selectedImportedProduct = source === "catalogo" ? this.selectedCatalogProduct() : null;
+    const warningReason = selectedImportedProduct ? this.priceWarningAckReason() : null;
     const productRefType =
       source === "manual"
         ? "manual"
@@ -7609,6 +8151,10 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       price_clienta: this.newItemPriceClienta(),
       price_public: this.newItemPricePublic(),
       price_cost: this.newItemPriceCost(),
+      price_source_import_id: selectedImportedProduct?.last_price_import_id || selectedImportedProduct?.last_import_id || null,
+      price_source_imported_at: selectedImportedProduct?.last_price_imported_at || selectedImportedProduct?.last_imported_at || null,
+      price_warning_ack_at: warningReason ? new Date().toISOString() : null,
+      price_warning_reason: warningReason,
       discount_pct: this.newItemDiscount(),
       inventory_id: source === "inventario" ? this.newItemInventoryId() : null,
       image_url: this.selectedPreview()?.image || null,
@@ -8063,6 +8609,66 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.selectedCatalogDoc.set(null);
     this.selectedCatalogProduct.set(product);
     this.catalogProductSuggestions.set([]);
+    const reason = this.catalogProductPriceWarningReason(product);
+    this.priceWarningAckReason.set(null);
+    this.priceWarningReason.set(reason);
+    this.priceWarningLatestImportLabel.set(this.latestSupplierImportLabel(product));
+  }
+
+  private catalogProductPriceWarningReason(product: CatalogProduct | null): string | null {
+    if (!product) return null;
+    if (product.reverted_from_import_id) return "Este producto viene de una importacion revertida.";
+    if (product.price_clienta === null || product.price_clienta === undefined) return "Este producto no tiene precio clienta.";
+    if (product.price_cost === null || product.price_cost === undefined) return "Este producto no tiene precio costo.";
+    if (product.price_health_flags?.includes("large_price_change") || product.last_import_status === "price_review") {
+      return "Este producto tuvo un cambio fuerte de precio en su ultima importacion.";
+    }
+    const latest = this.latestCompletedFullImportForSupplier(product.supplier_id);
+    const productImportId = product.last_price_import_id || product.last_import_id || null;
+    if (latest && productImportId && latest.job_id !== productImportId) {
+      return "Este producto no se actualizo en la ultima importacion completa del proveedor.";
+    }
+    if (latest && !productImportId) return "Este producto no tiene historial de importacion de precio.";
+    return null;
+  }
+
+  private latestCompletedFullImportForSupplier(supplierId: string | null | undefined) {
+    if (!supplierId) return null;
+    return this.catalogImportJobs.completedJobs()
+      .filter((job) => job.supplier_id === supplierId && job.import_mode === "full" && job.rollback_status !== "completed")
+      .sort((a, b) => this.toMillis(b.completed_at || b.updated_at) - this.toMillis(a.completed_at || a.updated_at))[0] || null;
+  }
+
+  private latestSupplierImportLabel(product: CatalogProduct | null): string | null {
+    const latest = this.latestCompletedFullImportForSupplier(product?.supplier_id);
+    if (!latest) return null;
+    return `${latest.file_name} · ${this.dateShort(latest.completed_at || latest.updated_at)}`;
+  }
+
+  private async confirmCatalogPriceWarningIfNeeded(): Promise<boolean> {
+    const product = this.selectedCatalogProduct();
+    const reason = this.catalogProductPriceWarningReason(product);
+    if (!product || !reason || this.priceWarningAckReason() === reason) return true;
+    this.priceWarningProduct.set(product);
+    this.priceWarningReason.set(reason);
+    this.priceWarningLatestImportLabel.set(this.latestSupplierImportLabel(product));
+    this.priceWarningOpen.set(true);
+    const decision = await new Promise<"review" | "use" | "cancel">((resolve) => {
+      this.priceWarningResolver = resolve;
+    });
+    this.priceWarningResolver = null;
+    this.priceWarningOpen.set(false);
+    if (decision === "use") {
+      this.priceWarningAckReason.set(reason);
+      return true;
+    }
+    return false;
+  }
+
+  resolvePriceWarning(decision: "review" | "use" | "cancel"): void {
+    this.priceWarningResolver?.(decision);
+    this.priceWarningResolver = null;
+    this.priceWarningOpen.set(false);
   }
 
   closeProductListSoon() {

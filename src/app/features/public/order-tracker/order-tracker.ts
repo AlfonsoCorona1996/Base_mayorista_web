@@ -1,123 +1,123 @@
-import { Component, ChangeDetectionStrategy, inject, signal, computed, OnInit } from "@angular/core";
-import { ActivatedRoute } from "@angular/router";
-import { HttpClient } from "@angular/common/http";
-import { CurrencyPipe, DatePipe, NgClass } from "@angular/common";
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from "@angular/core";
+import { CurrencyPipe, DatePipe } from "@angular/common";
+import { HttpErrorResponse } from "@angular/common/http";
+import { ActivatedRoute, RouterLink } from "@angular/router";
 import { lastValueFrom } from "rxjs";
-import { environment } from "../../../../environments/environment";
+import {
+  TrackDashboard,
+  TrackOrderSummary,
+  TrackReturn,
+  TrackingPortalService,
+} from "./tracking-portal.service";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Tipos de la respuesta del backend
-// ─────────────────────────────────────────────────────────────────────────────
-
-interface TrackItem {
-  title: string;
-  variant: string | null;
-  color: string | null;
-  quantity: number;
-  returned_qty?: number;
-  net_qty?: number;
-}
-
-interface TrackCancelledItem {
-  title: string;
-  reason: string;
-}
-
-interface TrackOrder {
-  order_id: string;
-  status: string;
-  status_label: string;
-  created_at: string;
-  updated_at: string;
-  items: TrackItem[];
-  cancelled_items: TrackCancelledItem[];
-  totals: { total_amount: number; paid_amount: number; balance_due: number; gross_amount?: number; returns_amount?: number; net_amount?: number; overpayment_amount?: number };
-}
-
-interface TrackData {
-  customer: { first_name: string; last_name: string };
-  active_orders: TrackOrder[];
-  history_orders: TrackOrder[];
-  total_debt: number;
-  generated_at: string;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Componente
-// ─────────────────────────────────────────────────────────────────────────────
+type PortalTab = "active" | "history" | "returns";
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   selector: "app-order-tracker",
-  imports: [CurrencyPipe, DatePipe, NgClass],
+  imports: [CurrencyPipe, DatePipe, RouterLink],
   templateUrl: "./order-tracker.html",
   styleUrl: "./order-tracker.css",
 })
-export default class OrderTrackerPage implements OnInit {
-  private route = inject(ActivatedRoute);
-  private http   = inject(HttpClient);
+export default class OrderTrackerPage {
+  private readonly route = inject(ActivatedRoute);
+  private readonly portal = inject(TrackingPortalService);
 
-  loading = signal(true);
-  error   = signal<string | null>(null);
-  data    = signal<TrackData | null>(null);
+  readonly token = signal(this.route.snapshot.paramMap.get("token") ?? "");
+  readonly loading = signal(true);
+  readonly error = signal<"invalid" | "unavailable" | null>(null);
+  readonly data = signal<TrackDashboard | null>(null);
+  readonly activeTab = signal<PortalTab>("active");
+  readonly history = signal<TrackOrderSummary[]>([]);
+  readonly returns = signal<TrackReturn[]>([]);
+  readonly historyCursor = signal<string | null>(null);
+  readonly returnsCursor = signal<string | null>(null);
+  readonly loadingMore = signal(false);
+  readonly paginationError = signal<PortalTab | null>(null);
 
-  /** Pedido activo principal (el más reciente no terminal) */
-  mainOrder = computed(() => this.data()?.active_orders?.[0] ?? null);
-
-  /** Progreso del pedido en la cadena (0–100) */
-  progress = computed(() => {
-    const o = this.mainOrder();
-    if (!o) return 0;
-    const steps = [
-      "borrador", "confirmando_proveedor", "en_transito", "packing",
-      "empaque", "ready_for_route", "assigned_to_run", "in_transit",
-      "en_ruta", "pago_pendiente", "pagado",
-    ];
-    const idx = steps.indexOf(o.status);
-    return idx < 0 ? 10 : Math.round(((idx + 1) / steps.length) * 100);
+  readonly whatsappHref = computed(() => {
+    const number = this.data()?.support.whatsapp_number || "523310167906";
+    return `https://wa.me/${number}?text=${encodeURIComponent("Hola, necesito ayuda con el seguimiento de mis pedidos.")}`;
   });
 
-  async ngOnInit(): Promise<void> {
-    const token = this.route.snapshot.paramMap.get("token") ?? "";
+  constructor() {
+    void this.load();
+  }
+
+  selectTab(tab: PortalTab): void {
+    this.activeTab.set(tab);
+  }
+
+  async retry(): Promise<void> {
+    await this.load();
+  }
+
+  async loadMoreHistory(): Promise<void> {
+    const cursor = this.historyCursor();
+    if (!cursor || this.loadingMore()) return;
+    this.loadingMore.set(true);
+    this.paginationError.set(null);
+    try {
+      const page = await lastValueFrom(this.portal.loadHistory(this.token(), cursor));
+      this.history.update((rows) => [...rows, ...page.items]);
+      this.historyCursor.set(page.next_cursor);
+    } catch {
+      this.paginationError.set("history");
+    } finally {
+      this.loadingMore.set(false);
+    }
+  }
+
+  async loadMoreReturns(): Promise<void> {
+    const cursor = this.returnsCursor();
+    if (!cursor || this.loadingMore()) return;
+    this.loadingMore.set(true);
+    this.paginationError.set(null);
+    try {
+      const page = await lastValueFrom(this.portal.loadReturns(this.token(), cursor));
+      this.returns.update((rows) => [...rows, ...page.items]);
+      this.returnsCursor.set(page.next_cursor);
+    } catch {
+      this.paginationError.set("returns");
+    } finally {
+      this.loadingMore.set(false);
+    }
+  }
+
+  shortOrderId(orderId: string): string {
+    return orderId.length > 14 ? orderId.slice(-14).toUpperCase() : orderId.toUpperCase();
+  }
+
+  statusIcon(key: string): string {
+    if (["delivered", "completed"].includes(key)) return "check_circle";
+    if (["in_transit", "delivered_pending", "delivered_partial"].includes(key)) return "local_shipping";
+    if (["packed", "packing"].includes(key)) return "inventory_2";
+    if (["cancelled", "unavailable"].includes(key)) return "cancel";
+    if (["returned", "review"].includes(key)) return "assignment_return";
+    return "schedule";
+  }
+
+  private async load(): Promise<void> {
+    const token = this.token();
+    this.loading.set(true);
+    this.error.set(null);
     if (!token) {
-      this.error.set("El enlace no es válido.");
+      this.error.set("invalid");
       this.loading.set(false);
       return;
     }
-    await this.load(token);
-  }
-
-  private async load(token: string): Promise<void> {
     try {
-      const url = `${environment.adminApiBaseUrl}/api/track/${token}`;
-      const result = await lastValueFrom(this.http.get<TrackData>(url));
+      const result = await lastValueFrom(this.portal.loadDashboard(token));
       this.data.set(result);
-    } catch (err: any) {
-      const msg = err?.error?.message ?? err?.message ?? "Error al cargar el seguimiento.";
-      this.error.set(msg);
+      this.history.set(result.history.items);
+      this.historyCursor.set(result.history.next_cursor);
+      this.returns.set(result.returns.items);
+      this.returnsCursor.set(result.returns.next_cursor);
+    } catch (error: unknown) {
+      this.error.set(error instanceof HttpErrorResponse && error.status === 404 ? "invalid" : "unavailable");
     } finally {
       this.loading.set(false);
     }
-  }
-
-  statusEmoji(status: string): string {
-    if (["pagado", "entregado"].includes(status)) return "✅";
-    if (["in_transit", "en_ruta", "assigned_to_run"].includes(status)) return "🚚";
-    if (["packing", "empaque", "ready_for_route"].includes(status)) return "📦";
-    if (["cancelado", "devuelto"].includes(status)) return "❌";
-    return "⏳";
-  }
-
-  isTerminal(status: string): boolean {
-    return ["pagado", "cancelado", "devuelto", "closed", "entregado"].includes(status);
-  }
-
-  netTotal(order: TrackOrder): number {
-    return Number(order.totals.net_amount ?? order.totals.total_amount ?? 0);
-  }
-
-  netQty(item: TrackItem): number {
-    return Math.max(0, Number(item.net_qty ?? item.quantity - Number(item.returned_qty || 0)));
   }
 }

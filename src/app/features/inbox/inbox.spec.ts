@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
-import { Inbox } from './inbox';
+import Inbox from './inbox';
 
 describe('Inbox', () => {
   let component: Inbox;

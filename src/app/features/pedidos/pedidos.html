@@ -215,6 +215,14 @@
               </div>
             </div>
 
+            <div class="order-status-row">
+              @for (pill of tableOrderStatusPills(order); track pill.label) {
+                <span class="trow-status" [ngClass]="pill.className">
+                  {{ pill.label }}
+                </span>
+              }
+            </div>
+
             @if (meta.primaryAlert; as alert) {
               <p class="alert-row" [class.alert-row-danger]="alert.tone === 'danger'" [class.alert-row-warning]="alert.tone === 'warning'">
                 <span class="material-symbols-rounded" aria-hidden="true">warning</span>
@@ -400,6 +408,9 @@
             </button>
             <button type="button" class="table-bulk-menu-item" (click)="applyTableBulkAction('create_nota', $event)" [disabled]="!canApplyTableBulkAction('create_nota')">
               Crear nota
+            </button>
+            <button type="button" class="table-bulk-menu-item" (click)="applyTableBulkAction('create_embarque', $event)" [disabled]="!canApplyTableBulkAction('create_embarque')">
+              Crear embarque ({{ tableShipmentEligibleRows().length }})
             </button>
             <div class="table-bulk-menu-divider"></div>
             <button type="button" class="table-bulk-menu-item" (click)="applyTableBulkAction('mark_pagado', $event)" [disabled]="!canApplyTableBulkAction('mark_pagado')">
@@ -696,9 +707,13 @@
                   <span class="tc-route">{{ routeName(order.route_id) }}</span>
                 </td>
                 <td class="td-status">
-                  <span class="trow-status" [ngClass]="tableStatusClass(order.status)">
-                    {{ tableStatusLabel(order.status) }}
-                  </span>
+                  <div class="trow-status-stack">
+                    @for (pill of tableOrderStatusPills(order); track pill.label) {
+                      <span class="trow-status" [ngClass]="pill.className">
+                        {{ pill.label }}
+                      </span>
+                    }
+                  </div>
                 </td>
                 <td class="td-items">{{ (order.items || []).length }}</td>
                 <td class="td-total">
@@ -736,6 +751,68 @@
         </table>
       </div>
     </section>
+  }
+
+  @if (bulkShipmentOpen()) {
+    <div class="sheet-backdrop" (click)="closeBulkShipmentConfig($event)">
+      <div class="sheet bulk-shipment-sheet" role="dialog" aria-modal="true" aria-label="Crear embarque masivo" (click)="$event.stopPropagation()">
+        <div class="sheet-handle" aria-hidden="true"></div>
+        <div class="bulk-shipment-head">
+          <div>
+            <h2>Crear embarque</h2>
+            <p class="muted">Se creara un embarque en proceso con los pedidos seleccionados.</p>
+          </div>
+          <span class="bulk-shipment-icon material-symbols-rounded" aria-hidden="true">inventory_2</span>
+        </div>
+
+        <div class="bulk-shipment-summary">
+          <span><strong>{{ tableShipmentEligibleRows().length }}</strong> pedidos</span>
+          <span><strong>{{ tableShipmentRouteCount() }}</strong> rutas</span>
+          <span><strong>{{ tableShipmentSaleTotal() | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong> venta</span>
+          <span><strong>{{ tableShipmentBalanceDue() | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong> por cobrar</span>
+        </div>
+
+        @if (tableShipmentBlockedRows().length > 0) {
+          <div class="sheet-warning">
+            {{ tableShipmentBlockedRows().length }} pedido(s) se omitiran porque ya estan en embarque activo, entregados, cancelados o sin empaque listo.
+          </div>
+        }
+
+        <label class="sheet-field">
+          <span>Destino</span>
+          <select class="input" [(ngModel)]="bulkShipmentDestination">
+            <option value="durango">Durango</option>
+            <option value="gdl">GDL</option>
+            <option value="otro">Otro destino</option>
+          </select>
+        </label>
+
+        @if (bulkShipmentDestination() === 'otro') {
+          <label class="sheet-field">
+            <span>Nombre del destino</span>
+            <input class="input" type="text" placeholder="Ej. Zacatecas, paqueteria, bodega externa" [(ngModel)]="bulkShipmentCustomDestination" />
+          </label>
+        }
+
+        <label class="sheet-field">
+          <span>Notas operativas</span>
+          <textarea class="input" rows="3" placeholder="Responsable, instrucciones, paqueteria o detalles del envio" [(ngModel)]="bulkShipmentNotes"></textarea>
+        </label>
+
+        @if (bulkShipmentError()) {
+          <p class="error-text">{{ bulkShipmentError() }}</p>
+        }
+
+        <div class="sheet-actions">
+          <button type="button" class="btn primary" (click)="confirmBulkShipment($event)" [disabled]="tableShipmentEligibleRows().length === 0 || tableBulkActionLoading()">
+            Crear embarque
+          </button>
+          <button type="button" class="btn ghost" (click)="closeBulkShipmentConfig($event)">
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
   }
 
   @if (bitacoraConfigOpen()) {

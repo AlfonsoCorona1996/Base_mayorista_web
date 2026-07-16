@@ -30,6 +30,11 @@ export interface FinanceExpense {
   occurred_at: string;
   route_id: string | null;
   route_run_id?: string | null;
+  order_id?: string | null;
+  shipment_id?: string | null;
+  shared_expense_group_id?: string | null;
+  allocation_method?: "direct" | "by_orders" | "by_packages" | "by_sale" | "manual" | null;
+  allocated_from_total?: number | null;
   account_id: string | null;
   installment_total: number | null;
   installment_index: number | null;
@@ -219,6 +224,11 @@ export class FinanceService {
       occurred_at: this.normalizeDateInput(input.occurred_at),
       route_id: this.toOptionalText(input.route_id),
       route_run_id: this.toOptionalText(input.route_run_id),
+      order_id: this.toOptionalText(input.order_id),
+      shipment_id: this.toOptionalText(input.shipment_id),
+      shared_expense_group_id: this.toOptionalText(input.shared_expense_group_id),
+      allocation_method: this.normalizeAllocationMethod(input.allocation_method),
+      allocated_from_total: input.allocated_from_total == null ? null : this.toSafeAmount(input.allocated_from_total),
       account_id: this.toOptionalText(input.account_id),
       installment_total: this.toNullablePositiveInt(input.installment_total),
       installment_index: this.toNullablePositiveInt(input.installment_index),
@@ -351,6 +361,11 @@ export class FinanceService {
       occurred_at: this.normalizeDateInput(data["occurred_at"]),
       route_id: this.toOptionalText(data["route_id"]),
       route_run_id: this.toOptionalText(data["route_run_id"]),
+      order_id: this.toOptionalText(data["order_id"]),
+      shipment_id: this.toOptionalText(data["shipment_id"]),
+      shared_expense_group_id: this.toOptionalText(data["shared_expense_group_id"]),
+      allocation_method: this.normalizeAllocationMethod(data["allocation_method"]),
+      allocated_from_total: data["allocated_from_total"] == null ? null : this.toSafeAmount(data["allocated_from_total"]),
       account_id: this.toOptionalText(data["account_id"]),
       installment_total: this.toNullablePositiveInt(data["installment_total"]),
       installment_index: this.toNullablePositiveInt(data["installment_index"]),
@@ -426,6 +441,12 @@ export class FinanceService {
     if (raw === "deuda_fija") return raw;
     if (raw === "deuda_meses") return raw;
     return "consumibles";
+  }
+
+  private normalizeAllocationMethod(value: unknown): FinanceExpense["allocation_method"] {
+    const raw = String(value || "").trim();
+    if (raw === "direct" || raw === "by_orders" || raw === "by_packages" || raw === "by_sale" || raw === "manual") return raw;
+    return null;
   }
 
   private normalizeWithdrawalPurpose(value: unknown): FinanceWithdrawalPurpose {

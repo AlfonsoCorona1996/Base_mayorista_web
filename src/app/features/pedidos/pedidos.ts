@@ -18,6 +18,7 @@ import { BusinessId, normalizeBusinessId } from "../../core/rbac.constants";
 import { STORAGE } from "../../core/firebase.providers";
 import { calculateOrderFinancials, netItemQty } from "../../core/order-financials";
 import { CustomerFollowupsService } from "../../core/customer-followups.service";
+import { Shipment, ShipmentBusinessSummary, ShipmentItem, ShipmentsService } from "../../core/shipments.service";
 
 type IntentFilter =
   | "hoy"
@@ -51,7 +52,8 @@ type TableRangePreset = "today" | "last7" | "last30";
 type TableSortColumn = "updated_at" | "created_at" | "status" | "customer" | "route" | "items" | "total";
 type TableMenuColumn = "route" | "status";
 type TableMenuOption = { value: string; label: string; count: number };
-type TableBulkAction = "create_bitacora" | "create_nota" | "mark_pagado" | "mark_recibido" | "mark_listo_ruta";
+type TableBulkAction = "create_bitacora" | "create_nota" | "create_embarque" | "mark_pagado" | "mark_recibido" | "mark_listo_ruta";
+type TableStatusPill = { label: string; className: string };
 type BitacoraConfig = {
   includeProductCount: boolean;
   includeProductDetail: boolean;
@@ -87,6 +89,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   private catalog = inject(NormalizedListingsService);
   private salesNoteRender = inject(SalesNoteRenderService);
   private followups = inject(CustomerFollowupsService);
+  private shipments = inject(ShipmentsService);
   businessScope = inject(BusinessScopeService);
   private router = inject(Router);
   private activatedRoute = inject(ActivatedRoute);
@@ -161,6 +164,11 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   bitacoraIncludeCustomerContact = signal(false);
   bitacoraRouteSelections = signal<string[]>([]);
   bitacoraConfigError = signal<string | null>(null);
+  bulkShipmentOpen = signal(false);
+  bulkShipmentDestination = signal<"durango" | "gdl" | "otro">("durango");
+  bulkShipmentCustomDestination = signal("");
+  bulkShipmentNotes = signal("");
+  bulkShipmentError = signal<string | null>(null);
   tableBulkProgressPercent = computed(() => {
     const total = this.tableBulkProgressTotal();
     if (total <= 0) return 0;
@@ -427,6 +435,31 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   tableMarkReadyForRouteEligibleRows = computed(() =>
     this.tableSelectedRows().filter((order) => this.canMarkAsReadyForRouteFromBulk(order))
   );
+  activeShipmentOrderIds = computed(() => {
+    const ids = new Set<string>();
+    for (const shipment of this.shipments.activeShipments()) {
+      for (const item of shipment.items || []) {
+        if (item.order_id) ids.add(item.order_id);
+      }
+    }
+    return ids;
+  });
+  tableShipmentEligibleRows = computed(() =>
+    this.tableSelectedRows().filter((order) => this.canCreateShipmentForOrder(order))
+  );
+  tableShipmentBlockedRows = computed(() =>
+    this.tableSelectedRows().filter((order) => !this.canCreateShipmentForOrder(order))
+  );
+  tableShipmentRouteCount = computed(() => {
+    const routes = new Set(this.tableShipmentEligibleRows().map((order) => order.route_id || "sin_ruta"));
+    return routes.size;
+  });
+  tableShipmentSaleTotal = computed(() =>
+    this.tableShipmentEligibleRows().reduce((sum, order) => sum + calculateOrderFinancials(order).netAmount, 0)
+  );
+  tableShipmentBalanceDue = computed(() =>
+    this.tableShipmentEligibleRows().reduce((sum, order) => sum + calculateOrderFinancials(order).balanceDue, 0)
+  );
   bitacoraRouteOptions = computed<TableMenuOption[]>(() => {
     const map = new Map<string, TableMenuOption>();
     for (const order of this.tableRowsFiltered()) {
@@ -522,6 +555,10 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
 
   @HostListener("document:keydown.escape")
   onTableMenuEscape(): void {
+    if (this.bulkShipmentOpen()) {
+      this.closeBulkShipmentConfig();
+      return;
+    }
     if (this.bitacoraConfigOpen()) {
       this.closeBitacoraConfig();
       return;
@@ -837,6 +874,9 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     if (action === "create_nota") {
       return this.tableSelectedCount() > 0;
     }
+    if (action === "create_embarque") {
+      return this.tableShipmentEligibleRows().length > 0;
+    }
     if (action === "mark_pagado") {
       return this.tableMarkPaidEligibleRows().length > 0;
     }
@@ -851,6 +891,10 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     if (!this.canApplyTableBulkAction(action)) return;
     if (action === "create_bitacora") {
       this.openBitacoraConfig(event);
+      return;
+    }
+    if (action === "create_embarque") {
+      this.openBulkShipmentConfig(event);
       return;
     }
 
@@ -1187,6 +1231,8 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
         return "Crear bitacora";
       case "create_nota":
         return "Crear nota";
+      case "create_embarque":
+        return "Crear embarque";
       case "mark_pagado":
         return "Marcar como pagados";
       case "mark_recibido":
@@ -1270,6 +1316,76 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
       assigned_to_run: "trow-status--ready",
     };
     return map[status] ?? "trow-status--default";
+  }
+
+  tableOrderStatusPills(order: Order): TableStatusPill[] {
+    const pills: TableStatusPill[] = [];
+    const activeShipment = this.activeShipmentForOrder(order.order_id);
+    const deliveryStatus = order.delivery_status || null;
+    const custodyStatus = order.custody_status || null;
+    const paymentStatus = order.customer_payment_status || null;
+    const balanceDue = calculateOrderFinancials(order).balanceDue;
+
+    if (deliveryStatus === "delivered" || ["delivered", "entregado"].includes(order.status)) {
+      pills.push({ label: "Entregado", className: "trow-status--paid" });
+    } else if (deliveryStatus === "incident") {
+      pills.push({ label: "Incidencia entrega", className: "trow-status--cancel" });
+    } else if (deliveryStatus === "not_delivered") {
+      pills.push({ label: "No entregado", className: "trow-status--partial" });
+    } else if (activeShipment) {
+      pills.push(this.shipmentStatusPill(activeShipment));
+    } else if (custodyStatus === "shipment") {
+      pills.push({ label: "En transito", className: "trow-status--transit" });
+    } else if (custodyStatus === "durango") {
+      pills.push({ label: "En Durango", className: "trow-status--durango" });
+    } else if (custodyStatus === "delivery_staff") {
+      pills.push({ label: "Con entrega", className: "trow-status--route" });
+    } else {
+      pills.push({
+        label: this.tableStatusLabel(order.status),
+        className: this.tableStatusClass(order.status),
+      });
+    }
+
+    if (paymentStatus === "partial") {
+      pills.push({ label: "Cobro parcial", className: "trow-status--partial" });
+    } else if (balanceDue > 0 && !["cancelado", "devuelto"].includes(order.status) && paymentStatus !== "collected") {
+      pills.push({ label: "Por cobrar", className: "trow-status--pay-danger" });
+    } else if (paymentStatus === "collected" && deliveryStatus !== "delivered") {
+      pills.push({ label: "Cobrado", className: "trow-status--paid" });
+    }
+
+    return pills.slice(0, 3);
+  }
+
+  private activeShipmentForOrder(orderId: string): Shipment | null {
+    const candidates = this.shipments.activeShipments()
+      .filter((shipment) => (shipment.items || []).some((item) => item.order_id === orderId))
+      .sort((a, b) => a.created_at.localeCompare(b.created_at));
+    return candidates[0] || null;
+  }
+
+  private shipmentStatusPill(shipment: Shipment): TableStatusPill {
+    const destination = this.bulkShipmentDestinationLabel(shipment.destination_location);
+    switch (shipment.status) {
+      case "sent":
+        return {
+          label: destination === "Durango" ? "Camino a Durango" : `Camino a ${destination}`,
+          className: "trow-status--transit",
+        };
+      case "partial_received":
+        return {
+          label: destination === "Durango" ? "Durango parcial" : `Recibido parcial`,
+          className: "trow-status--partial",
+        };
+      case "received":
+        return {
+          label: destination === "Durango" ? "En Durango" : `Recibido ${destination}`,
+          className: destination === "Durango" ? "trow-status--durango" : "trow-status--route",
+        };
+      default:
+        return { label: "En proceso embarque", className: "trow-status--shipment-draft" };
+    }
   }
 
   formatTableDateShort(input: string): string {
@@ -1447,6 +1563,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
         this.routes.loadFromFirestore().catch(() => null),
         this.followups.loadFromFirestore().catch(() => null),
       ]);
+      this.shipments.watch();
       const queryCustomerId = this.activatedRoute.snapshot.queryParamMap.get("customer_id");
       const queryBusinessId = this.activatedRoute.snapshot.queryParamMap.get("business_id");
       if (queryBusinessId) {
@@ -1527,6 +1644,220 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     } finally {
       this.creating.set(false);
     }
+  }
+
+  openBulkShipmentConfig(event?: Event): void {
+    event?.stopPropagation();
+    this.tableBulkMenuOpen.set(false);
+    this.tableBulkMenuPosition.set(null);
+    this.bulkShipmentDestination.set("durango");
+    this.bulkShipmentCustomDestination.set("");
+    this.bulkShipmentNotes.set("");
+    this.bulkShipmentError.set(null);
+    this.bulkShipmentOpen.set(true);
+  }
+
+  closeBulkShipmentConfig(event?: Event): void {
+    event?.stopPropagation();
+    if (this.tableBulkActionLoading()) return;
+    this.bulkShipmentOpen.set(false);
+    this.bulkShipmentError.set(null);
+  }
+
+  async confirmBulkShipment(event?: Event): Promise<void> {
+    event?.stopPropagation();
+    if (this.tableBulkActionLoading()) return;
+    this.bulkShipmentError.set(null);
+
+    const selectedRows = this.tableShipmentEligibleRows();
+    if (selectedRows.length === 0) {
+      this.bulkShipmentError.set("No hay pedidos seleccionados que se puedan embarcar.");
+      return;
+    }
+
+    const blockedByExistingShipment = selectedRows.filter((order) => this.activeShipmentOrderIds().has(order.order_id));
+    if (blockedByExistingShipment.length > 0) {
+      this.bulkShipmentError.set("Actualiza la lista: uno o mas pedidos ya estan en un embarque activo.");
+      return;
+    }
+
+    const destination = this.bulkShipmentDestinationValue();
+    if (!destination) {
+      this.bulkShipmentError.set("Indica el destino del embarque.");
+      return;
+    }
+
+    this.bulkShipmentOpen.set(false);
+    this.tableBulkActionLoading.set(true);
+    this.tableBulkResultVisible.set(false);
+    this.tableBulkResultText.set("");
+    this.startTableBulkProgress("Creando embarque...", Math.max(1, selectedRows.length + 1));
+
+    let shipmentId = "";
+    let updated = 0;
+    let failed = 0;
+
+    try {
+      const items = selectedRows.flatMap((order) => this.shipmentItemsForOrder(order));
+      if (items.length === 0) {
+        this.bulkShipmentError.set("No se encontraron paquetes o productos para embarcar.");
+        return;
+      }
+      shipmentId = await this.shipments.createShipment({
+        title: this.bulkShipmentTitle(destination),
+        notes: this.bulkShipmentNotes().trim() || null,
+        destination_location: destination,
+        items,
+        business_summaries: this.shipmentBusinessSummariesFor(selectedRows),
+      });
+      this.advanceTableBulkProgress(1);
+
+      for (const order of selectedRows) {
+        try {
+          await this.orders.updateOperationalState(
+            order.order_id,
+            { shipment_id: shipmentId },
+            "Pedido agregado a embarque masivo",
+          );
+          updated += 1;
+        } catch {
+          failed += 1;
+        } finally {
+          this.advanceTableBulkProgress(1);
+        }
+      }
+    } catch (error: any) {
+      this.bulkShipmentError.set(error?.message || "No se pudo crear el embarque.");
+      this.tableBulkResultText.set("No se pudo crear el embarque.");
+      this.tableBulkResultVisible.set(true);
+      return;
+    } finally {
+      this.tableBulkActionLoading.set(false);
+      this.finishTableBulkProgressSoon();
+    }
+
+    if (updated > 0) {
+      this.tableSelected.set({});
+    }
+    const destinationLabel = this.bulkShipmentDestinationLabel(destination);
+    const failedLabel = failed > 0 ? ` | ${this.tableBulkCountLabel(failed, "pedido con error", "pedidos con error")}` : "";
+    this.tableBulkResultText.set(
+      `Embarque a ${destinationLabel}: ${this.tableBulkCountLabel(updated, "pedido agregado", "pedidos agregados")}${failedLabel}`,
+    );
+    this.tableBulkResultVisible.set(true);
+    this.bulkNotesMessage.set(null);
+  }
+
+  private bulkShipmentDestinationValue(): string {
+    const destination = this.bulkShipmentDestination();
+    if (destination === "otro") return this.bulkShipmentCustomDestination().trim();
+    return destination;
+  }
+
+  bulkShipmentDestinationLabel(destination = this.bulkShipmentDestinationValue()): string {
+    const clean = String(destination || "").trim();
+    if (!clean) return "destino pendiente";
+    if (clean === "durango") return "Durango";
+    if (clean === "gdl") return "GDL";
+    return clean.charAt(0).toUpperCase() + clean.slice(1);
+  }
+
+  private bulkShipmentTitle(destination: string): string {
+    const date = new Intl.DateTimeFormat("es-MX", { day: "2-digit", month: "short" }).format(new Date());
+    return `Embarque ${this.bulkShipmentDestinationLabel(destination)} ${date}`;
+  }
+
+  private canCreateShipmentForOrder(order: Order): boolean {
+    if (this.activeShipmentOrderIds().has(order.order_id)) return false;
+    if (["cancelado", "devuelto", "closed"].includes(order.status)) return false;
+    if (order.delivery_status === "delivered" || order.custody_status === "customer") return false;
+    if ((order.packages || []).length > 0) return this.closedPackagesCount(order) > 0;
+    if (order.packing?.status === "done") return true;
+    if (["ready_for_route", "assigned_to_run"].includes(order.status)) return true;
+    if (["packing", "empaque"].includes(order.status)) return this.closedPackagesCount(order) > 0;
+    return false;
+  }
+
+  private shipmentItemsForOrder(order: Order): ShipmentItem[] {
+    const customerName = this.customerName(order.customer_id);
+    const closedPackages = (order.packages || []).filter((pkg) => this.packageStatusForBulk(pkg) === "closed");
+    if (!closedPackages.length && (order.packages || []).length > 0) return [];
+    const sourcePackages = closedPackages;
+    if (!sourcePackages.length) {
+      return [
+        {
+          item_id: `pkg-${order.order_id}-full`,
+          type: "package",
+          status: "pending",
+          order_id: order.order_id,
+          business_id: normalizeBusinessId(order.business_id),
+          customer_id: order.customer_id,
+          customer_name: customerName,
+          package_id: null,
+          package_label: "Pedido completo",
+          title: "Pedido completo",
+          quantity: 1,
+          contents: (order.items || []).map((item) => ({
+            title: item.title || "Producto",
+            quantity: Number(item.quantity || 1),
+            variant: item.variant || null,
+            color: item.color || null,
+          })),
+        },
+      ];
+    }
+
+    return sourcePackages.map((pkg) => ({
+      item_id: `pkg-${order.order_id}-${pkg.package_id}`,
+      type: "package",
+      status: "pending",
+      order_id: order.order_id,
+      business_id: normalizeBusinessId(order.business_id),
+      customer_id: order.customer_id,
+      customer_name: customerName,
+      package_id: pkg.package_id,
+      package_label: pkg.label,
+      title: pkg.label || "Paquete",
+      quantity: 1,
+      contents: (pkg.items || []).map((item) => ({
+        title: item.name || "Producto",
+        quantity: Number(item.qty || 1),
+        variant: item.size || item.variant || null,
+        color: item.color || null,
+      })),
+    }));
+  }
+
+  private shipmentBusinessSummariesFor(orders: Order[]): ShipmentBusinessSummary[] {
+    const byBusiness = new Map<BusinessId, ShipmentBusinessSummary>();
+    for (const businessId of ["bm", "catalogo"] as BusinessId[]) {
+      byBusiness.set(businessId, {
+        business_id: businessId,
+        orders_total: 0,
+        packages_total: 0,
+        loose_items_total: 0,
+        sale_total: 0,
+        balance_due: 0,
+      });
+    }
+
+    for (const order of orders) {
+      const businessId = normalizeBusinessId(order.business_id);
+      const summary = byBusiness.get(businessId)!;
+      const financials = calculateOrderFinancials(order);
+      summary.orders_total += 1;
+      summary.packages_total += Math.max(1, this.shipmentItemsForOrder(order).filter((item) => item.type === "package").length);
+      summary.sale_total += financials.netAmount;
+      summary.balance_due += financials.balanceDue;
+    }
+
+    return Array.from(byBusiness.values())
+      .map((row) => ({
+        ...row,
+        sale_total: Number(row.sale_total.toFixed(2)),
+        balance_due: Number(row.balance_due.toFixed(2)),
+      }))
+      .filter((row) => row.orders_total || row.packages_total || row.loose_items_total || row.sale_total || row.balance_due);
   }
 
   orderBusinessLabel(order: Order): string {
@@ -2288,6 +2619,10 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     this.tableBulkProgressCurrent.set(Math.max(0, Math.min(total, Math.trunc(current))));
   }
 
+  private advanceTableBulkProgress(delta = 1): void {
+    this.updateTableBulkProgress(this.tableBulkProgressCurrent() + delta);
+  }
+
   private finishTableBulkProgress(): void {
     const total = this.tableBulkProgressTotal();
     if (total > 0) this.tableBulkProgressCurrent.set(total);
@@ -2301,6 +2636,10 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
       this.tableBulkProgressTotal.set(0);
       this.tableBulkProgressHideTimer = null;
     }, 900);
+  }
+
+  private finishTableBulkProgressSoon(): void {
+    this.finishTableBulkProgress();
   }
 
   private async generateRouteBitacoraPdfs(

@@ -489,6 +489,161 @@
 }
 .cd-track-gen .material-symbols-rounded { font-size: 18px; }
 
+.cd-track-loading,
+.cd-track-empty {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 18px 14px;
+  padding: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  color: #475569;
+  font-size: 0.82rem;
+}
+
+.cd-track-loading .material-symbols-rounded {
+  color: #2563eb;
+  animation: cd-track-spin 0.9s linear infinite;
+}
+
+.cd-track-empty {
+  align-items: flex-start;
+  background: #f8fafc;
+}
+
+.cd-track-empty > .material-symbols-rounded { color: #64748b; }
+
+.cd-track-empty strong {
+  display: block;
+  color: #0f172a;
+  font-size: 0.85rem;
+}
+
+.cd-track-empty p {
+  margin: 3px 0 0;
+  line-height: 1.4;
+}
+
+.cd-track-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 0 18px 10px;
+}
+
+.cd-track-status,
+.cd-track-legacy {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 999px;
+  padding: 5px 9px;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.cd-track-status {
+  color: #047857;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+}
+
+.cd-track-status .material-symbols-rounded { font-size: 15px; }
+
+.cd-track-legacy {
+  color: #9a3412;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+}
+
+.cd-track-access {
+  margin: -4px 18px 12px;
+  color: #64748b;
+  font-size: 0.75rem;
+}
+
+.cd-track-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 18px 14px;
+}
+
+.cd-track-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 40px;
+  text-decoration: none;
+  font-size: 0.78rem;
+}
+
+.cd-track-actions .material-symbols-rounded { font-size: 17px; }
+.cd-track-revoke { color: #b91c1c; }
+
+.cd-track-message,
+.cd-track-security {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0 18px 12px;
+  font-size: 0.77rem;
+  line-height: 1.4;
+}
+
+.cd-track-message {
+  padding: 9px 11px;
+  border-radius: 9px;
+}
+
+.cd-track-message--error {
+  color: #991b1b;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+}
+
+.cd-track-message--success {
+  color: #047857;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+}
+
+.cd-track-security {
+  color: #64748b;
+  margin-bottom: 18px;
+}
+
+.cd-track-security .material-symbols-rounded {
+  flex: 0 0 auto;
+  color: #475569;
+  font-size: 17px;
+}
+
+@keyframes cd-track-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .cd-track-loading .material-symbols-rounded { animation: none; }
+}
+
+@media (max-width: 560px) {
+  .cd-track-box {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .cd-track-copy { justify-content: center; }
+
+  .cd-track-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .cd-track-actions .btn { width: 100%; }
+}
+
 /* ─────────────────────────────────────────────────────────
    Notificaciones WhatsApp
    ───────────────────────────────────────────────────────── */

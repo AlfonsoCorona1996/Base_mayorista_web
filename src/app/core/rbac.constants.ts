@@ -13,6 +13,8 @@ export const SECTION_KEYS = [
   "sections.rutas",
   "sections.localidades",
   "sections.salidas",
+  "sections.embarques",
+  "sections.durango",
   "sections.usuarios",
 ] as const;
 
@@ -67,6 +69,12 @@ export const CAPABILITY_KEYS = [
   "cap.runs.cancel",
   "cap.transfers.create",
   "cap.transfers.execute",
+  "cap.shipments.view",
+  "cap.shipments.create",
+  "cap.shipments.edit",
+  "cap.shipments.send",
+  "cap.shipments.receive",
+  "cap.shipments.close",
   "cap.delivery.view",
   "cap.delivery.mark_delivered",
   "cap.delivery.mark_partial",
@@ -76,6 +84,9 @@ export const CAPABILITY_KEYS = [
   "cap.payments.register",
   "cap.payments.refund",
   "cap.payments.override",
+  "cap.settlement.view",
+  "cap.settlement.send",
+  "cap.settlement.reconcile",
   "cap.returns.view",
   "cap.returns.create",
   "cap.returns.approve",
@@ -96,7 +107,7 @@ export const CAPABILITY_KEYS = [
   "cap.audit.view",
 ] as const;
 
-export const ROLE_IDS = ["super_admin", "admin", "administrativo", "operativo", "repartidor"] as const;
+export const ROLE_IDS = ["super_admin", "admin", "administrativo", "operativo", "repartidor", "durango_operativo"] as const;
 export const BUSINESS_IDS = ["bm", "catalogo"] as const;
 
 export type SectionKey = (typeof SECTION_KEYS)[number];
@@ -164,7 +175,14 @@ export function buildCapabilitiesMap(defaultValue = false): CapabilitiesMap {
 }
 
 export function normalizeRoleId(value: unknown): RoleId {
-  if (value === "super_admin" || value === "admin" || value === "administrativo" || value === "operativo" || value === "repartidor") {
+  if (
+    value === "super_admin" ||
+    value === "admin" ||
+    value === "administrativo" ||
+    value === "operativo" ||
+    value === "repartidor" ||
+    value === "durango_operativo"
+  ) {
     return value;
   }
   return "operativo";
@@ -279,6 +297,7 @@ export function roleLabel(roleId: RoleId): string {
   if (roleId === "admin") return "Admin";
   if (roleId === "administrativo") return "Administrativo";
   if (roleId === "operativo") return "Operativo";
+  if (roleId === "durango_operativo") return "Durango operativo";
   return "Repartidor";
 }
 
@@ -305,6 +324,8 @@ export function buildRolePreset(roleId: RoleId): RoleDoc {
       "cap.inventory.",
       "cap.packing.",
       "cap.runs.",
+      "cap.shipments.",
+      "cap.settlement.",
       "cap.incidents.",
       "cap.returns.",
     ]);
@@ -335,6 +356,7 @@ export function buildRolePreset(roleId: RoleId): RoleDoc {
       "sections.clientes",
       "sections.inventario",
       "sections.salidas",
+      "sections.embarques",
     ]);
     applyCapabilityKeys(capabilities, [
       "cap.orders.view",
@@ -357,6 +379,12 @@ export function buildRolePreset(roleId: RoleId): RoleDoc {
       "cap.packing.finish",
       "cap.dispatch.request",
       "cap.dispatch.cancel_request",
+      "cap.shipments.view",
+      "cap.shipments.create",
+      "cap.shipments.edit",
+      "cap.shipments.send",
+      "cap.shipments.receive",
+      "cap.shipments.close",
       "cap.incidents.view",
       "cap.incidents.create",
       "cap.incidents.resolve",
@@ -370,6 +398,7 @@ export function buildRolePreset(roleId: RoleId): RoleDoc {
       "sections.clientes",
       "sections.inventario",
       "sections.salidas",
+      "sections.embarques",
     ]);
     applyCapabilityKeys(capabilities, [
       "cap.orders.view",
@@ -388,11 +417,40 @@ export function buildRolePreset(roleId: RoleId): RoleDoc {
       "cap.packing.finish",
       "cap.dispatch.request",
       "cap.dispatch.cancel_request",
+      "cap.shipments.view",
+      "cap.shipments.create",
+      "cap.shipments.edit",
+      "cap.shipments.send",
+      "cap.shipments.receive",
       "cap.incidents.view",
       "cap.incidents.create",
       "cap.incidents.resolve",
+      "cap.settlement.view",
+      "cap.settlement.reconcile",
     ]);
     capabilities["cap.packing.box.reopen"] = false;
+  } else if (roleId === "durango_operativo") {
+    applySectionKeys(sections, ["sections.durango"]);
+    applyCapabilityKeys(capabilities, [
+      "cap.orders.view",
+      "cap.packing.view",
+      "cap.packing.box.create",
+      "cap.packing.box.edit_open",
+      "cap.packing.box.close",
+      "cap.packing.finish",
+      "cap.shipments.view",
+      "cap.shipments.receive",
+      "cap.delivery.view",
+      "cap.delivery.mark_delivered",
+      "cap.delivery.mark_partial",
+      "cap.delivery.report_incident",
+      "cap.payments.view",
+      "cap.payments.register",
+      "cap.settlement.view",
+      "cap.settlement.send",
+      "cap.incidents.view",
+      "cap.incidents.create",
+    ]);
   } else {
     applySectionKeys(sections, ["sections.salidas", "sections.pedidos"]);
     applyCapabilityKeys(capabilities, [
@@ -405,6 +463,8 @@ export function buildRolePreset(roleId: RoleId): RoleDoc {
       "cap.delivery.capture_proof",
       "cap.payments.view",
       "cap.payments.register",
+      "cap.settlement.view",
+      "cap.settlement.send",
       "cap.incidents.create",
       "cap.incidents.view",
     ]);
@@ -442,6 +502,7 @@ export const DEFAULT_ROLE_PRESETS: Record<RoleId, RoleDoc> = {
   administrativo: buildRolePreset("administrativo"),
   operativo: buildRolePreset("operativo"),
   repartidor: buildRolePreset("repartidor"),
+  durango_operativo: buildRolePreset("durango_operativo"),
 };
 
 /** Etiquetas en español para cada sección del sistema. */
@@ -458,6 +519,8 @@ export const SECTION_LABELS: Record<SectionKey, string> = {
   "sections.rutas": "Rutas y entregas",
   "sections.localidades": "Localidades",
   "sections.salidas": "Salidas y empaque",
+  "sections.embarques": "Embarques GDL-Durango",
+  "sections.durango": "Operación Durango",
   "sections.usuarios": "Usuarios y roles",
 };
 
@@ -523,6 +586,13 @@ export const CAPABILITY_LABELS: Record<CapabilityKey, string> = {
   // Transferencias
   "cap.transfers.create": "Crear transferencia",
   "cap.transfers.execute": "Ejecutar transferencia",
+  // Embarques
+  "cap.shipments.view": "Ver embarques",
+  "cap.shipments.create": "Crear embarques",
+  "cap.shipments.edit": "Editar embarques",
+  "cap.shipments.send": "Marcar embarque enviado",
+  "cap.shipments.receive": "Recibir embarque",
+  "cap.shipments.close": "Cerrar embarque",
   // Entregas
   "cap.delivery.view": "Ver entregas",
   "cap.delivery.mark_delivered": "Marcar como entregado",
@@ -534,6 +604,10 @@ export const CAPABILITY_LABELS: Record<CapabilityKey, string> = {
   "cap.payments.register": "Registrar pago",
   "cap.payments.refund": "Reembolsar pago",
   "cap.payments.override": "Forzar pago",
+  // Conciliación
+  "cap.settlement.view": "Ver conciliación",
+  "cap.settlement.send": "Registrar dinero enviado",
+  "cap.settlement.reconcile": "Conciliar dinero recibido",
   // Devoluciones
   "cap.returns.view": "Ver devoluciones",
   "cap.returns.create": "Crear devolución",

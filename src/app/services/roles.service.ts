@@ -156,6 +156,8 @@ export class RolesService {
       "rutas" in map ||
       "localidades" in map ||
       "salidas" in map ||
+      "embarques" in map ||
+      "durango" in map ||
       "usuarios" in map;
     if (!hasShort) return null;
 
@@ -172,6 +174,8 @@ export class RolesService {
       "sections.rutas": map["rutas"],
       "sections.localidades": map["localidades"],
       "sections.salidas": map["salidas"],
+      "sections.embarques": map["embarques"],
+      "sections.durango": map["durango"],
       "sections.usuarios": map["usuarios"],
     });
   }

@@ -1,0 +1,559 @@
+<section class="shipments-page">
+  <header class="page-head">
+    <div class="title-wrap">
+      <span class="head-icon material-symbols-rounded" aria-hidden="true">package_2</span>
+      <div>
+        <h1>Embarques</h1>
+        <p>Seguimiento de movimientos entre GDL y Durango.</p>
+      </div>
+    </div>
+    <div class="head-actions">
+      <button
+        type="button"
+        class="btn ghost refresh-btn"
+        [disabled]="loading()"
+        [attr.aria-busy]="loading()"
+        (click)="refresh()"
+      >
+        <span class="material-symbols-rounded" aria-hidden="true">refresh</span>
+        <span class="action-label">Actualizar</span>
+      </button>
+      <button type="button" class="btn primary new-shipment-btn" (click)="openCreate()">
+        <span class="material-symbols-rounded" aria-hidden="true">add</span>
+        Nuevo embarque
+      </button>
+    </div>
+  </header>
+
+  @if (error() && activeShipments().length > 0) {
+    <p class="alert error" role="alert">
+      <span class="material-symbols-rounded" aria-hidden="true">error</span>
+      {{ error() }}
+    </p>
+  }
+  @if (toast()) {
+    <p class="alert ok" role="status">
+      <span class="material-symbols-rounded" aria-hidden="true">check_circle</span>
+      {{ toast() }}
+    </p>
+  }
+
+  <section class="kpi-strip" aria-label="Resumen de embarques">
+    <article>
+      <span class="kpi-icon material-symbols-rounded" aria-hidden="true">inventory_2</span>
+      @if (loading()) {
+        <span class="kpi-loading" aria-hidden="true"></span>
+      } @else {
+        <span class="kpi-copy"><small>Activos</small><strong>{{ kpis().active }}</strong></span>
+      }
+    </article>
+    <article>
+      <span class="kpi-icon material-symbols-rounded" aria-hidden="true">local_shipping</span>
+      @if (loading()) {
+        <span class="kpi-loading" aria-hidden="true"></span>
+      } @else {
+        <span class="kpi-copy"><small>En tránsito</small><strong>{{ kpis().inTransit }}</strong></span>
+      }
+    </article>
+    <article>
+      <span class="kpi-icon material-symbols-rounded" aria-hidden="true">move_to_inbox</span>
+      @if (loading()) {
+        <span class="kpi-loading" aria-hidden="true"></span>
+      } @else {
+        <span class="kpi-copy"><small>Por recibir</small><strong>{{ kpis().pendingReceive }}</strong></span>
+      }
+    </article>
+    <article>
+      <span class="kpi-icon material-symbols-rounded" aria-hidden="true">package_2</span>
+      @if (loading()) {
+        <span class="kpi-loading" aria-hidden="true"></span>
+      } @else {
+        <span class="kpi-copy"><small>Paquetes</small><strong>{{ kpis().packages }}</strong></span>
+      }
+    </article>
+    <article>
+      <span class="kpi-icon material-symbols-rounded" aria-hidden="true">warning</span>
+      @if (loading()) {
+        <span class="kpi-loading" aria-hidden="true"></span>
+      } @else {
+        <span class="kpi-copy"><small>Incidencias</small><strong>{{ kpis().incidents }}</strong></span>
+      }
+    </article>
+  </section>
+
+  <section class="shipment-toolbar" aria-label="Buscar y filtrar embarques">
+    <div class="toolbar-row">
+      <label class="search-field">
+        <span class="material-symbols-rounded" aria-hidden="true">search</span>
+        <span class="visually-hidden">Buscar clienta o pedido</span>
+        <input
+          type="search"
+          [ngModel]="searchTerm()"
+          (ngModelChange)="searchTerm.set($event)"
+          placeholder="Buscar clienta o pedido"
+        />
+      </label>
+
+      <div class="desktop-filters">
+        <label class="toolbar-select">
+          <span class="visually-hidden">Estado</span>
+          <select [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
+            <option value="all">Estado</option>
+            <option value="draft">Preparando</option>
+            <option value="sent">En tránsito</option>
+            <option value="partial_received">Por recibir</option>
+            <option value="received">Recibidos</option>
+            <option value="incident">Con incidencia</option>
+          </select>
+        </label>
+        <label class="toolbar-select date-select">
+          <span class="material-symbols-rounded" aria-hidden="true">calendar_today</span>
+          <span class="visually-hidden">Fecha de salida</span>
+          <select [ngModel]="dateFilter()" (ngModelChange)="dateFilter.set($event)">
+            <option value="all">Fecha</option>
+            <option value="today">Hoy</option>
+            <option value="7d">Últimos 7 días</option>
+            <option value="30d">Últimos 30 días</option>
+          </select>
+        </label>
+        <button type="button" class="btn ghost more-filters" (click)="filterSheetOpen.set(true)">
+          <span class="material-symbols-rounded" aria-hidden="true">filter_list</span>
+          Más filtros
+        </button>
+        <label class="toolbar-select sort-select">
+          <span class="select-prefix">Ordenar</span>
+          <select [ngModel]="sortOrder()" (ngModelChange)="sortOrder.set($event)">
+            <option value="recent">Más recientes</option>
+            <option value="oldest">Más antiguos</option>
+          </select>
+        </label>
+      </div>
+
+      <button type="button" class="btn ghost mobile-filter-button" (click)="filterSheetOpen.set(true)">
+        <span class="material-symbols-rounded" aria-hidden="true">filter_list</span>
+        Filtros
+      </button>
+    </div>
+
+    @if (hasActiveFilters()) {
+      <div class="active-filters" aria-label="Filtros activos">
+        @if (destinationFilter() !== 'all') {
+          <button type="button" class="filter-chip" (click)="removeDestinationFilter()">
+            Destino: {{ locationLabel(destinationFilter()) }}
+            <span class="material-symbols-rounded" aria-hidden="true">close</span>
+          </button>
+        }
+        @if (originFilter() !== 'all') {
+          <button type="button" class="filter-chip" (click)="originFilter.set('all')">
+            Origen: {{ locationLabel(originFilter()) }}
+            <span class="material-symbols-rounded" aria-hidden="true">close</span>
+          </button>
+        }
+        @if (statusFilter() !== 'all') {
+          <button type="button" class="filter-chip" (click)="removeStatusFilter()">
+            {{ statusFilter() === 'received' ? 'Recibidos' : statusFilter() === 'sent' ? 'En tránsito' : statusFilter() === 'draft' ? 'Preparando' : statusFilter() === 'incident' ? 'Con incidencia' : 'Por recibir' }}
+            <span class="material-symbols-rounded" aria-hidden="true">close</span>
+          </button>
+        }
+        @if (dateFilter() !== 'all') {
+          <button type="button" class="filter-chip" (click)="dateFilter.set('all')">
+            {{ dateFilter() === 'today' ? 'Hoy' : dateFilter() === '7d' ? 'Últimos 7 días' : 'Últimos 30 días' }}
+            <span class="material-symbols-rounded" aria-hidden="true">close</span>
+          </button>
+        }
+        @if (businessFilter() !== 'all') {
+          <button type="button" class="filter-chip" (click)="businessFilter.set('all')">
+            {{ businessFilter() === 'bm' ? 'BM' : 'Catálogo' }}
+            <span class="material-symbols-rounded" aria-hidden="true">close</span>
+          </button>
+        }
+        <button type="button" class="clear-filters" (click)="clearFilters()">Limpiar filtros</button>
+      </div>
+    }
+  </section>
+
+  @if (loading()) {
+    <section class="shipment-skeletons" aria-label="Cargando embarques" aria-live="polite">
+      @for (placeholder of [1, 2, 3, 4, 5]; track placeholder) {
+        <div class="shipment-skeleton"><span></span><span></span><span></span></div>
+      }
+    </section>
+  } @else if (error() && activeShipments().length === 0) {
+    <article class="empty-card">
+      <span class="empty-icon material-symbols-rounded" aria-hidden="true">cloud_off</span>
+      <strong>No fue posible cargar los embarques.</strong>
+      <p>{{ error() }}</p>
+      <button type="button" class="btn primary" (click)="refresh()">Reintentar</button>
+    </article>
+  } @else if (activeShipments().length === 0) {
+    <article class="empty-card">
+      <span class="empty-icon material-symbols-rounded" aria-hidden="true">inventory_2</span>
+      <strong>No hay embarques activos</strong>
+      <p>Los nuevos movimientos entre bodegas aparecerán aquí.</p>
+      <button type="button" class="btn primary" (click)="openCreate()">
+        <span class="material-symbols-rounded" aria-hidden="true">add</span>
+        Nuevo embarque
+      </button>
+    </article>
+  } @else if (filteredShipments().length === 0) {
+    <article class="empty-card compact-empty">
+      <span class="empty-icon material-symbols-rounded" aria-hidden="true">search_off</span>
+      <strong>No encontramos pedidos con estos filtros.</strong>
+      <button type="button" class="btn ghost" (click)="clearFilters()">Limpiar filtros</button>
+    </article>
+  } @else {
+    <section class="shipments-panel" aria-labelledby="active-shipments-title">
+      <header class="panel-head">
+        <div>
+          <h2 id="active-shipments-title">Embarques activos</h2>
+          <p>{{ filteredShipments().length }} de {{ activeShipments().length }} movimientos</p>
+        </div>
+      </header>
+
+      <div class="list-head" aria-hidden="true">
+        <span>Clienta / pedido</span>
+        <span>Ruta</span>
+        <span>Contenido</span>
+        <span>Salida</span>
+        <span>Estado</span>
+        <span>Acciones</span>
+      </div>
+
+      <div class="shipment-list">
+        @for (shipment of filteredShipments(); track shipment.shipment_id) {
+          <article class="shipment-card">
+            <div class="shipment-row">
+              <div class="shipment-customer">
+                <span class="shipment-icon material-symbols-rounded" aria-hidden="true">package_2</span>
+                <span class="shipment-customer__text">
+                  <strong>{{ shipmentCustomerName(shipment) }}</strong>
+                  <span class="shipment-order-number">{{ shipmentOrderLabel(shipment) }}</span>
+                </span>
+              </div>
+
+              <div class="route-cell" data-label="Ruta">
+                <span>{{ locationLabel(shipment.origin_location) }}</span>
+                <span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span>
+                <span>{{ locationLabel(shipment.destination_location) }}</span>
+              </div>
+
+              <div class="content-cell" data-label="Contenido">
+                <span>{{ shipmentContentSummary(shipment) }}</span>
+                <span class="business-chips">
+                  @for (label of shipmentBusinessLabels(shipment); track label) {
+                    <small class="business-chip">{{ label }}</small>
+                  }
+                </span>
+              </div>
+
+              <div class="date-cell" data-label="Salida">{{ shipmentDepartureDate(shipment) }}</div>
+
+              <div class="status-cell" data-label="Estado">
+                <span class="pill" [class]="shipmentDisplayStatusClass(shipment)">
+                  <span class="material-symbols-rounded" aria-hidden="true">{{ shipmentDisplayStatusIcon(shipment) }}</span>
+                  {{ shipmentDisplayStatusLabel(shipment) }}
+                </span>
+                @if (isShipmentDuplicate(shipment)) {
+                  <span class="pill status-duplicate">{{ duplicateLabel(shipment) }}</span>
+                }
+              </div>
+
+              <div class="shipment-actions" data-label="Acciones">
+                @if (shipment.status === 'sent' || shipment.status === 'partial_received') {
+                  <button
+                    type="button"
+                    class="btn row-action primary-outline"
+                    [disabled]="saving()"
+                    (click)="receiveShipment(shipment)"
+                  >
+                    Confirmar recepción
+                  </button>
+                } @else if (shipment.status === 'draft') {
+                  <button
+                    type="button"
+                    class="btn row-action primary-outline"
+                    [disabled]="saving() || isShipmentDuplicate(shipment)"
+                    (click)="sendShipment(shipment)"
+                  >
+                    Enviar
+                  </button>
+                } @else {
+                  <button type="button" class="detail-link" (click)="openDetail(shipment)">Ver detalle</button>
+                }
+
+                <div class="action-menu-wrap">
+                  <button
+                    type="button"
+                    class="icon-btn menu-trigger"
+                    aria-label="Más acciones"
+                    [attr.aria-expanded]="actionMenuShipmentId() === shipment.shipment_id"
+                    (click)="toggleActionMenu(shipment.shipment_id, $event)"
+                  >
+                    <span class="material-symbols-rounded" aria-hidden="true">more_vert</span>
+                  </button>
+                  @if (actionMenuShipmentId() === shipment.shipment_id) {
+                    <div class="action-menu" role="menu">
+                      <button type="button" role="menuitem" (click)="openDetail(shipment)">Ver detalle</button>
+                      @if (isShipmentDuplicate(shipment) && shipment.status === 'draft') {
+                        <button type="button" class="danger-action" role="menuitem" (click)="closeShipment(shipment); closeActionMenu()">
+                          Cerrar duplicado
+                        </button>
+                      }
+                    </div>
+                  }
+                </div>
+              </div>
+            </div>
+          </article>
+        }
+      </div>
+    </section>
+  }
+
+  <button type="button" class="fab" (click)="openCreate()" aria-label="Crear nuevo embarque">
+    <span class="material-symbols-rounded" aria-hidden="true">add</span>
+  </button>
+
+  @if (selectedShipment(); as shipment) {
+    <app-shipment-detail
+      [shipment]="shipment"
+      [saving]="saving()"
+      (close)="closeDetail()"
+      (receive)="receiveShipment($event)"
+      (send)="sendShipment($event)"
+      (openOrder)="openOrder($event)"
+    />
+  }
+
+  @if (filterSheetOpen()) {
+    <button type="button" class="filter-backdrop" aria-label="Cerrar filtros" (click)="filterSheetOpen.set(false)"></button>
+    <aside class="filter-sheet" role="dialog" aria-modal="true" aria-labelledby="filter-sheet-title">
+      <header>
+        <h2 id="filter-sheet-title">Filtros</h2>
+        <button type="button" class="icon-btn" aria-label="Cerrar" autofocus (click)="filterSheetOpen.set(false)">
+          <span class="material-symbols-rounded" aria-hidden="true">close</span>
+        </button>
+      </header>
+      <div class="filter-sheet-body">
+        <label class="field">
+          <span>Estado</span>
+          <select [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
+            <option value="all">Todos</option>
+            <option value="draft">Preparando</option>
+            <option value="sent">En tránsito</option>
+            <option value="partial_received">Por recibir</option>
+            <option value="received">Recibidos</option>
+            <option value="incident">Con incidencia</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Origen</span>
+          <select [ngModel]="originFilter()" (ngModelChange)="originFilter.set($event)">
+            <option value="all">Todos</option>
+            @for (location of locationOptions().origins; track location) {
+              <option [value]="location">{{ locationLabel(location) }}</option>
+            }
+          </select>
+        </label>
+        <label class="field">
+          <span>Destino</span>
+          <select [ngModel]="destinationFilter()" (ngModelChange)="destinationFilter.set($event)">
+            <option value="all">Todos</option>
+            @for (location of locationOptions().destinations; track location) {
+              <option [value]="location">{{ locationLabel(location) }}</option>
+            }
+          </select>
+        </label>
+        <label class="field">
+          <span>Fecha</span>
+          <select [ngModel]="dateFilter()" (ngModelChange)="dateFilter.set($event)">
+            <option value="all">Cualquier fecha</option>
+            <option value="today">Hoy</option>
+            <option value="7d">Últimos 7 días</option>
+            <option value="30d">Últimos 30 días</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Tipo</span>
+          <select [ngModel]="businessFilter()" (ngModelChange)="businessFilter.set($event)">
+            <option value="all">BM y Catálogo</option>
+            <option value="bm">BM</option>
+            <option value="catalogo">Catálogo</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Ordenar por</span>
+          <select [ngModel]="sortOrder()" (ngModelChange)="sortOrder.set($event)">
+            <option value="recent">Más recientes</option>
+            <option value="oldest">Más antiguos</option>
+          </select>
+        </label>
+      </div>
+      <footer>
+        <button type="button" class="btn ghost" (click)="clearFilters()">Limpiar</button>
+        <button type="button" class="btn primary" (click)="filterSheetOpen.set(false)">
+          Ver {{ filteredShipments().length }} resultados
+        </button>
+      </footer>
+    </aside>
+  }
+
+  @if (createOpen()) {
+    <button type="button" class="drawer-backdrop" aria-label="Cerrar nuevo embarque" (click)="closeCreate()"></button>
+    <aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="new-shipment-title">
+      <header class="drawer-head">
+        <div>
+          <h2 id="new-shipment-title">Nuevo embarque</h2>
+          <p>Selecciona paquetes armados y, si aplica, artículos sueltos.</p>
+        </div>
+        <button type="button" class="icon-btn" aria-label="Cerrar" (click)="closeCreate()">
+          <span class="material-symbols-rounded" aria-hidden="true">close</span>
+        </button>
+      </header>
+
+      <div class="drawer-body">
+        <label class="field">
+          <span>Título</span>
+          <input
+            type="text"
+            [ngModel]="shipmentTitle()"
+            (ngModelChange)="shipmentTitle.set($event)"
+            placeholder="Embarque GDL a Durango"
+          />
+        </label>
+        <label class="field">
+          <span>Notas</span>
+          <textarea
+            rows="3"
+            [ngModel]="shipmentNotes()"
+            (ngModelChange)="shipmentNotes.set($event)"
+            placeholder="Instrucciones generales"
+          ></textarea>
+        </label>
+
+        <section class="drawer-section">
+          <div class="section-title-row">
+            <div>
+              <h3>Paquetes armados</h3>
+              <p class="muted">{{ candidates().length }} de {{ allCandidates().length }} pedidos listos</p>
+            </div>
+            <label class="field compact-field">
+              <span>Ruta</span>
+              <select [ngModel]="routeFilter()" (ngModelChange)="routeFilter.set($event)">
+                <option value="all">Todas las rutas</option>
+                @for (route of routeOptions(); track route.routeId) {
+                  <option [value]="route.routeId">{{ route.name }}</option>
+                }
+              </select>
+            </label>
+          </div>
+          @if (allCandidates().length === 0) {
+            <p class="muted">No hay pedidos empacados/listos para embarcar.</p>
+          } @else if (candidates().length === 0) {
+            <p class="muted">No hay pedidos listos para la ruta seleccionada.</p>
+          } @else {
+            <div class="candidate-list">
+              @for (order of candidates(); track order.order_id) {
+                <label class="candidate-row">
+                  <input
+                    type="checkbox"
+                    [checked]="!!selectedOrders()[order.order_id]"
+                    (change)="toggleOrder(order.order_id, $any($event.target).checked)"
+                  />
+                  <span class="candidate-main">
+                    <strong>{{ order.customerName }}</strong>
+                    <small>{{ order.routeName }} / {{ order.localityName }}</small>
+                    <small>
+                      {{ businessLabel(order.business_id) }} · {{ order.packageCount }} paquetes ·
+                      {{ money(order.balanceDue) }} por cobrar
+                    </small>
+                  </span>
+                </label>
+              }
+            </div>
+          }
+        </section>
+
+        <section class="drawer-section loose-section">
+          <h3>Artículo suelto</h3>
+          <div class="form-grid">
+            <label class="field">
+              <span>Pedido</span>
+              <select
+                [ngModel]="looseOrderId()"
+                (ngModelChange)="looseOrderId.set($event); looseOrderItemId.set('')"
+              >
+                <option value="">Selecciona</option>
+                @for (order of candidates(); track order.order_id) {
+                  <option [value]="order.order_id">
+                    {{ order.customerName }} · {{ order.routeName }} / {{ order.localityName }}
+                  </option>
+                }
+              </select>
+            </label>
+            <label class="field">
+              <span>Artículo</span>
+              <select [ngModel]="looseOrderItemId()" (ngModelChange)="looseOrderItemId.set($event)">
+                <option value="">Selecciona</option>
+                @for (item of selectedOrderItems(); track item.item_id) {
+                  <option [value]="item.item_id">{{ item.title }} · {{ item.quantity }} pza</option>
+                }
+              </select>
+            </label>
+            <label class="field">
+              <span>Instrucción</span>
+              <select [ngModel]="looseInstruction()" (ngModelChange)="looseInstruction.set($event)">
+                <option value="add_to_package">Agregar a paquete existente</option>
+                <option value="create_new_package">Crear paquete nuevo</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Nota</span>
+              <input
+                type="text"
+                [ngModel]="looseNotes()"
+                (ngModelChange)="looseNotes.set($event)"
+                placeholder="Ej. Va con paquete AA-2"
+              />
+            </label>
+          </div>
+          <button type="button" class="btn ghost add-loose" (click)="addLooseItem()">
+            <span class="material-symbols-rounded" aria-hidden="true">add</span>
+            Agregar suelto
+          </button>
+
+          @if (looseDrafts().length > 0) {
+            <div class="loose-list">
+              @for (item of looseDrafts(); track item.item_id) {
+                <div class="loose-row">
+                  <span>
+                    <strong>{{ item.title }}</strong>
+                    <small>
+                      {{ item.customer_name }} ·
+                      {{ item.instruction === 'create_new_package' ? 'paquete nuevo' : 'agregar a paquete' }}
+                    </small>
+                  </span>
+                  <button
+                    type="button"
+                    class="icon-btn danger-icon-btn"
+                    aria-label="Eliminar artículo suelto"
+                    (click)="removeLooseItem(item.item_id)"
+                  >
+                    <span class="material-symbols-rounded" aria-hidden="true">delete</span>
+                  </button>
+                </div>
+              }
+            </div>
+          }
+        </section>
+      </div>
+
+      <footer class="drawer-footer">
+        <button type="button" class="btn ghost" (click)="closeCreate()">Cancelar</button>
+        <button type="button" class="btn primary" [disabled]="saving()" (click)="createShipment()">
+          Crear embarque en proceso
+        </button>
+      </footer>
+    </aside>
+  }
+</section>

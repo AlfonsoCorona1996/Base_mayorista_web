@@ -489,6 +489,13 @@
   outline-offset: 1px;
 }
 
+.order-status-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
 .order-head {
   display: flex;
   justify-content: space-between;
@@ -837,6 +844,56 @@
   gap: 10px;
 }
 
+.bulk-shipment-sheet {
+  width: min(600px, 100%);
+  gap: 12px;
+}
+
+.bulk-shipment-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.bulk-shipment-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #eaf3ff;
+  color: #1265cc;
+  flex: 0 0 auto;
+}
+
+.bulk-shipment-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.bulk-shipment-summary span {
+  min-width: 0;
+  border: 1px solid #d8e4f2;
+  border-radius: 12px;
+  background: #f7faff;
+  padding: 9px 10px;
+  color: #5c6f89;
+  font-size: 0.76rem;
+  line-height: 1.25;
+}
+
+.bulk-shipment-summary strong {
+  display: block;
+  color: #10233f;
+  font-size: 0.95rem;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .bitacora-selection-summary {
   margin: 0;
   border: 1px solid #d7e3f2;
@@ -990,6 +1047,14 @@
 
   .sheet-backdrop {
     padding: 10px;
+  }
+
+  .bulk-shipment-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .bulk-shipment-head {
+    align-items: center;
   }
 
   .intent-tabs {
@@ -1918,6 +1983,7 @@
 .td-updated { white-space: nowrap; color: var(--ios-muted); font-size: 0.78rem; }
 .td-action { width: 32px; }
 .orders-table td.td-customer { text-align: left; }
+.orders-table td.td-status { min-width: 146px; }
 
 .td-total-value {
   color: inherit;
@@ -1934,6 +2000,14 @@
 .tc-arrow { font-size: 1.1rem; color: #cbd5e1; }
 
 /* Status badges en tabla */
+.trow-status-stack {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
 .trow-status {
   display: inline-block;
   border-radius: 6px;
@@ -1950,9 +2024,12 @@
 .trow-status--route    { background: #dbeafe; color: #1d4ed8; }
 .trow-status--ready    { background: #ede9fe; color: #6d28d9; }
 .trow-status--pay      { background: #fef9c3; color: #ca8a04; }
+.trow-status--pay-danger { background: #ffe4e6; color: #be123c; }
 .trow-status--partial  { background: #fff7ed; color: #ea580c; }
 .trow-status--paid     { background: #dcfce7; color: #166534; }
 .trow-status--cancel   { background: #fef2f2; color: #dc2626; }
+.trow-status--durango  { background: #e0e7ff; color: #4338ca; }
+.trow-status--shipment-draft { background: #eef2ff; color: #4f46e5; }
 
 .trow-empty {
   text-align: center;

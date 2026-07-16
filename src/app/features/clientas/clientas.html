@@ -399,7 +399,7 @@
 
         @if (action.items.length > 0) {
           <div class="action-list">
-            @for (item of action.items; track item.customer.customer_id) {
+            @for (item of action.items; track item.trackId) {
               <button type="button" class="action-row" (click)="openProfile(item.customer.customer_id)">
                 <span [class]="'client-avatar ' + avatarClass(item.customer)">{{ initials(item.customer) }}</span>
                 <span>

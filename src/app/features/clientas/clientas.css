@@ -428,6 +428,15 @@
   gap: 10px;
 }
 
+.mobile-client-main > div,
+.client-cell > span,
+.stacked-cell {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  align-content: center;
+}
+
 .mobile-client-card h3,
 .client-cell strong {
   margin: 0;
@@ -687,6 +696,7 @@
 .action-row strong,
 .action-row small {
   display: block;
+  line-height: 1.25;
 }
 
 .action-row strong {

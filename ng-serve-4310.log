@@ -1,0 +1,1853 @@
+[33m>[39m Building...
+[32m√[39m Building...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m                  [2m | [22m [1mRaw size[22m
+[32mchunk-G3FO6VSH.js[39m  [2m | [22m[2m-[22m                      [2m | [22m [36m31.79 kB[39m[2m | [22m
+[32mchunk-HJPDEH6J.js[39m  [2m | [22m[2m-[22m                      [2m | [22m [36m30.00 kB[39m[2m | [22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m                   [2m | [22m [36m16.73 kB[39m[2m | [22m
+[32mchunk-DG7NBSBH.js[39m  [2m | [22m[2m-[22m                      [2m | [22m  [36m4.63 kB[39m[2m | [22m
+[32mchunk-NCMUWKQU.js[39m  [2m | [22m[2m-[22m                      [2m | [22m  [36m4.61 kB[39m[2m | [22m
+[32mstyles.css[39m         [2m | [22m[2mstyles[22m                 [2m | [22m  [36m1.67 kB[39m[2m | [22m
+[32mchunk-CZJLB7T5.js[39m  [2m | [22m[2m-[22m                      [2m | [22m  [36m1.08 kB[39m[2m | [22m
+[32mchunk-SDXRDPII.js[39m  [2m | [22m[2m-[22m                      [2m | [22m[36m871 bytes[39m[2m | [22m
+[32mchunk-EEIOSG77.js[39m  [2m | [22m[2m-[22m                      [2m | [22m[36m770 bytes[39m[2m | [22m
+
+[1m [22m                  [2m | [22m[1mInitial total[22m          [2m | [22m [1m92.15 kB[22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m                  [2m | [22m [1mRaw size[22m
+[32mchunk-H5D2YJZE.js[39m  [2m | [22m[2mpedido-detalle[22m         [2m | [22m  [36m1.21 MB[39m[2m | [22m
+[32mchunk-MTCG3HDP.js[39m  [2m | [22m[2mpedidos[22m                [2m | [22m[36m353.85 kB[39m[2m | [22m
+[32mchunk-MP5JZWAK.js[39m  [2m | [22m[2mcatalog[22m                [2m | [22m[36m330.71 kB[39m[2m | [22m
+[32mchunk-XYLZW3C2.js[39m  [2m | [22m[2madministracion[22m         [2m | [22m[36m253.04 kB[39m[2m | [22m
+[32mchunk-ZVFUCCDY.js[39m  [2m | [22m[2mruta-detalle[22m           [2m | [22m[36m235.45 kB[39m[2m | [22m
+[32mchunk-QZTEQXOD.js[39m  [2m | [22m[2mreview[22m                 [2m | [22m[36m234.41 kB[39m[2m | [22m
+[32mchunk-D3IPSH7N.js[39m  [2m | [22m[2minventario[22m             [2m | [22m[36m223.61 kB[39m[2m | [22m
+[32mchunk-O53CGRKX.js[39m  [2m | [22m[2mchats-page-component[22m   [2m | [22m[36m213.88 kB[39m[2m | [22m
+[32mchunk-XYTRJSHL.js[39m  [2m | [22m[2mclientas[22m               [2m | [22m[36m210.32 kB[39m[2m | [22m
+[32mchunk-J4KQMO4C.js[39m  [2m | [22m[2musuarios[22m               [2m | [22m[36m185.35 kB[39m[2m | [22m
+[32mchunk-JYYNPXC2.js[39m  [2m | [22m[2mclienta-detalle[22m        [2m | [22m[36m168.65 kB[39m[2m | [22m
+[32mchunk-VJLVS4FW.js[39m  [2m | [22m[2mcatalog-detail[22m         [2m | [22m[36m149.96 kB[39m[2m | [22m
+[32mchunk-2DGNGCNZ.js[39m  [2m | [22m[2mretiro-ganancias-page[22m  [2m | [22m[36m142.17 kB[39m[2m | [22m
+[32mchunk-U2S5FRV5.js[39m  [2m | [22m[2mrutas[22m                  [2m | [22m[36m137.74 kB[39m[2m | [22m
+[32mchunk-WHHWD2R5.js[39m  [2m | [22m[2mproveedores-operaciones[22m[2m | [22m[36m134.13 kB[39m[2m | [22m
+[2m...and 38 more lazy chunks files. Use "--verbose" to show all the files.[22m
+
+Application bundle generation complete. [41.116 seconds] - 2026-07-13T21:31:55.998Z
+
+Watch mode enabled. Watching for file changes...
+NOTE: Raw file sizes do not reflect development server per-request transformations.
+[2m3:31:57 p.m.[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m Re-optimizing dependencies because vite config has changed
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://127.0.0.1:[1m4310[22m/[39m
+[2m[32m  ➜[39m[22m[2m  press [22m[1mh + enter[22m[2m to show help[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m         [2m | [22m[1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m          [2m | [22m[36m16.73 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m         [2m | [22m[1mRaw size[22m
+[32mchunk-372BVGR3.js[39m  [2m | [22m[2membarques-page[22m[2m | [22m[36m76.47 kB[39m[2m | [22m
+
+Application bundle generation complete. [29.916 seconds] - 2026-07-13T21:39:03.178Z
+
+Page reload sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m         [2m | [22m[1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m          [2m | [22m[36m16.73 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m         [2m | [22m[1mRaw size[22m
+[32mchunk-RW7Y747N.js[39m  [2m | [22m[2membarques-page[22m[2m | [22m[36m80.56 kB[39m[2m | [22m
+
+Application bundle generation complete. [1.783 seconds] - 2026-07-13T21:39:04.989Z
+
+Component update sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [11.960 seconds] - 2026-07-13T21:39:46.430Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'openOrderOperationsSheet' does not exist on type 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:162:62:
+[37m      162 │ ...on" class="menuItem" (click)="[32mopenOrderOperationsSheet[37m(current)">
+          ╵                                  [32m~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:206:15:
+[37m      206 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'canMarkDelivered' does not exist on type 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:166:66:
+[37m      166 │ ...menuItem" [disabled]="![32mcanMarkDelivered[37m(current) || savingOper...
+          ╵                           [32m~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:206:15:
+[37m      206 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'savingOperationalAction' does not exist on type 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:166:95:
+[37m      166 │ ...livered(current) || [32msavingOperationalAction[37m()" (click)="markDe...
+          ╵                        [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:206:15:
+[37m      206 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'markDeliveredFromHeader' does not exist on type 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:166:131:
+[37m      166 │ ...gOperationalAction()" (click)="[32mmarkDeliveredFromHeader[37m(current)">
+          ╵                                   [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:206:15:
+[37m      206 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'canCreateShipmentFromOrder' does not exist on type 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:170:66:
+[37m      170 │ ...tem" [disabled]="![32mcanCreateShipmentFromOrder[37m(current) || savin...
+          ╵                      [32m~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:206:15:
+[37m      206 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'savingOperationalAction' does not exist on type 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:170:105:
+[37m      170 │ ...omOrder(current) || [32msavingOperationalAction[37m()" (click)="quickS...
+          ╵                        [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:206:15:
+[37m      206 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'quickShipToDurango' does not exist on type 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:170:141:
+[37m      170 │ ...savingOperationalAction()" (click)="[32mquickShipToDurango[37m(current)">
+          ╵                                        [32m~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:206:15:
+[37m      206 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [10.221 seconds] - 2026-07-13T21:39:56.668Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'openOrderOperationsSheet' does not exist on type 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:162:62:
+[37m      162 │ ...on" class="menuItem" (click)="[32mopenOrderOperationsSheet[37m(current)">
+          ╵                                  [32m~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:207:15:
+[37m      207 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'canMarkDelivered' does not exist on type 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:166:66:
+[37m      166 │ ...menuItem" [disabled]="![32mcanMarkDelivered[37m(current) || savingOper...
+          ╵                           [32m~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:207:15:
+[37m      207 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'savingOperationalAction' does not exist on type 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:166:95:
+[37m      166 │ ...livered(current) || [32msavingOperationalAction[37m()" (click)="markDe...
+          ╵                        [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:207:15:
+[37m      207 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'markDeliveredFromHeader' does not exist on type 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:166:131:
+[37m      166 │ ...gOperationalAction()" (click)="[32mmarkDeliveredFromHeader[37m(current)">
+          ╵                                   [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:207:15:
+[37m      207 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'canCreateShipmentFromOrder' does not exist on type 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:170:66:
+[37m      170 │ ...tem" [disabled]="![32mcanCreateShipmentFromOrder[37m(current) || savin...
+          ╵                      [32m~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:207:15:
+[37m      207 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'savingOperationalAction' does not exist on type 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:170:105:
+[37m      170 │ ...omOrder(current) || [32msavingOperationalAction[37m()" (click)="quickS...
+          ╵                        [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:207:15:
+[37m      207 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'quickShipToDurango' does not exist on type 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:170:141:
+[37m      170 │ ...savingOperationalAction()" (click)="[32mquickShipToDurango[37m(current)">
+          ╵                                        [32m~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:207:15:
+[37m      207 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [8.465 seconds] - 2026-07-13T21:40:05.151Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'openOrderOperationsSheet' does not exist on type 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:162:62:
+[37m      162 │ ...on" class="menuItem" (click)="[32mopenOrderOperationsSheet[37m(current)">
+          ╵                                  [32m~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:207:15:
+[37m      207 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'canMarkDelivered' does not exist on type 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:166:66:
+[37m      166 │ ...menuItem" [disabled]="![32mcanMarkDelivered[37m(current) || savingOper...
+          ╵                           [32m~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:207:15:
+[37m      207 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'savingOperationalAction' does not exist on type 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:166:95:
+[37m      166 │ ...livered(current) || [32msavingOperationalAction[37m()" (click)="markDe...
+          ╵                        [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:207:15:
+[37m      207 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'markDeliveredFromHeader' does not exist on type 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:166:131:
+[37m      166 │ ...gOperationalAction()" (click)="[32mmarkDeliveredFromHeader[37m(current)">
+          ╵                                   [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:207:15:
+[37m      207 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'canCreateShipmentFromOrder' does not exist on type 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:170:66:
+[37m      170 │ ...tem" [disabled]="![32mcanCreateShipmentFromOrder[37m(current) || savin...
+          ╵                      [32m~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:207:15:
+[37m      207 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'savingOperationalAction' does not exist on type 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:170:105:
+[37m      170 │ ...omOrder(current) || [32msavingOperationalAction[37m()" (click)="quickS...
+          ╵                        [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:207:15:
+[37m      207 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'quickShipToDurango' does not exist on type 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:170:141:
+[37m      170 │ ...savingOperationalAction()" (click)="[32mquickShipToDurango[37m(current)">
+          ╵                                        [32m~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:207:15:
+[37m      207 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [7.298 seconds] - 2026-07-13T21:40:12.459Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'openOrderOperationsSheet' does not exist on type 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:162:62:
+[37m      162 │ ...on" class="menuItem" (click)="[32mopenOrderOperationsSheet[37m(current)">
+          ╵                                  [32m~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:207:15:
+[37m      207 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'canMarkDelivered' does not exist on type 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:166:66:
+[37m      166 │ ...menuItem" [disabled]="![32mcanMarkDelivered[37m(current) || savingOper...
+          ╵                           [32m~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:207:15:
+[37m      207 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'markDeliveredFromHeader' does not exist on type 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:166:131:
+[37m      166 │ ...gOperationalAction()" (click)="[32mmarkDeliveredFromHeader[37m(current)">
+          ╵                                   [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:207:15:
+[37m      207 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'canCreateShipmentFromOrder' does not exist on type 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:170:66:
+[37m      170 │ ...tem" [disabled]="![32mcanCreateShipmentFromOrder[37m(current) || savin...
+          ╵                      [32m~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:207:15:
+[37m      207 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'quickShipToDurango' does not exist on type 'PedidoDetallePage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedido-detalle.html:170:141:
+[37m      170 │ ...savingOperationalAction()" (click)="[32mquickShipToDurango[37m(current)">
+          ╵                                        [32m~~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component PedidoDetallePage.
+
+    src/app/features/pedidos/pedido-detalle.ts:207:15:
+[37m      207 │   templateUrl: [32m"./pedido-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m                  [2m | [22m [1mRaw size[22m
+[32mchunk-G3FO6VSH.js[39m  [2m | [22m[2m-[22m                      [2m | [22m [36m31.79 kB[39m[2m | [22m
+[32mchunk-HJPDEH6J.js[39m  [2m | [22m[2m-[22m                      [2m | [22m [36m30.00 kB[39m[2m | [22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m                   [2m | [22m [36m16.73 kB[39m[2m | [22m
+[32mchunk-DG7NBSBH.js[39m  [2m | [22m[2m-[22m                      [2m | [22m  [36m4.63 kB[39m[2m | [22m
+[32mchunk-NCMUWKQU.js[39m  [2m | [22m[2m-[22m                      [2m | [22m  [36m4.61 kB[39m[2m | [22m
+[32mstyles.css[39m         [2m | [22m[2mstyles[22m                 [2m | [22m  [36m1.67 kB[39m[2m | [22m
+[32mchunk-CZJLB7T5.js[39m  [2m | [22m[2m-[22m                      [2m | [22m  [36m1.08 kB[39m[2m | [22m
+[32mchunk-SDXRDPII.js[39m  [2m | [22m[2m-[22m                      [2m | [22m[36m871 bytes[39m[2m | [22m
+[32mchunk-EEIOSG77.js[39m  [2m | [22m[2m-[22m                      [2m | [22m[36m770 bytes[39m[2m | [22m
+
+[1m [22m                  [2m | [22m[1mInitial total[22m          [2m | [22m [1m92.15 kB[22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m                  [2m | [22m [1mRaw size[22m
+[32mchunk-QGVI6FLD.js[39m  [2m | [22m[2mpedido-detalle[22m         [2m | [22m  [36m1.22 MB[39m[2m | [22m
+[32mchunk-MTCG3HDP.js[39m  [2m | [22m[2mpedidos[22m                [2m | [22m[36m353.85 kB[39m[2m | [22m
+[32mchunk-MP5JZWAK.js[39m  [2m | [22m[2mcatalog[22m                [2m | [22m[36m330.71 kB[39m[2m | [22m
+[32mchunk-XYLZW3C2.js[39m  [2m | [22m[2madministracion[22m         [2m | [22m[36m253.04 kB[39m[2m | [22m
+[32mchunk-ZVFUCCDY.js[39m  [2m | [22m[2mruta-detalle[22m           [2m | [22m[36m235.45 kB[39m[2m | [22m
+[32mchunk-QZTEQXOD.js[39m  [2m | [22m[2mreview[22m                 [2m | [22m[36m234.41 kB[39m[2m | [22m
+[32mchunk-D3IPSH7N.js[39m  [2m | [22m[2minventario[22m             [2m | [22m[36m223.61 kB[39m[2m | [22m
+[32mchunk-O53CGRKX.js[39m  [2m | [22m[2mchats-page-component[22m   [2m | [22m[36m213.88 kB[39m[2m | [22m
+[32mchunk-XYTRJSHL.js[39m  [2m | [22m[2mclientas[22m               [2m | [22m[36m210.32 kB[39m[2m | [22m
+[32mchunk-J4KQMO4C.js[39m  [2m | [22m[2musuarios[22m               [2m | [22m[36m185.35 kB[39m[2m | [22m
+[32mchunk-JYYNPXC2.js[39m  [2m | [22m[2mclienta-detalle[22m        [2m | [22m[36m168.65 kB[39m[2m | [22m
+[32mchunk-VJLVS4FW.js[39m  [2m | [22m[2mcatalog-detail[22m         [2m | [22m[36m149.96 kB[39m[2m | [22m
+[32mchunk-2DGNGCNZ.js[39m  [2m | [22m[2mretiro-ganancias-page[22m  [2m | [22m[36m142.17 kB[39m[2m | [22m
+[32mchunk-U2S5FRV5.js[39m  [2m | [22m[2mrutas[22m                  [2m | [22m[36m137.74 kB[39m[2m | [22m
+[32mchunk-WHHWD2R5.js[39m  [2m | [22m[2mproveedores-operaciones[22m[2m | [22m[36m134.13 kB[39m[2m | [22m
+[2m...and 38 more lazy chunks files. Use "--verbose" to show all the files.[22m
+
+Application bundle generation complete. [11.277 seconds] - 2026-07-13T21:40:58.451Z
+
+Page reload sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m         [2m | [22m[1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m          [2m | [22m[36m16.73 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m         [2m | [22m[1mRaw size[22m
+[32mchunk-OBPEJDYJ.js[39m  [2m | [22m[2mpedido-detalle[22m[2m | [22m [36m1.24 MB[39m[2m | [22m
+
+Application bundle generation complete. [11.305 seconds] - 2026-07-13T21:41:23.529Z
+
+Component update sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m         [2m | [22m[1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m          [2m | [22m[36m16.73 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m         [2m | [22m[1mRaw size[22m
+[32mchunk-36OLQXX5.js[39m  [2m | [22m[2mpedido-detalle[22m[2m | [22m [36m1.24 MB[39m[2m | [22m
+
+Application bundle generation complete. [13.326 seconds] - 2026-07-13T21:41:37.023Z
+
+Component update sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m         [2m | [22m[1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m          [2m | [22m[36m16.73 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m         [2m | [22m[1mRaw size[22m
+[32mchunk-AZLJ7JXI.js[39m  [2m | [22m[2mpedido-detalle[22m[2m | [22m [36m1.24 MB[39m[2m | [22m
+
+Application bundle generation complete. [12.656 seconds] - 2026-07-13T21:41:58.559Z
+
+Component update sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m         [2m | [22m[1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m          [2m | [22m[36m16.73 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m         [2m | [22m[1mRaw size[22m
+[32mchunk-D5DAHPEG.js[39m  [2m | [22m[2membarques-page[22m[2m | [22m[36m82.78 kB[39m[2m | [22m
+
+Application bundle generation complete. [9.407 seconds] - 2026-07-13T21:47:10.913Z
+
+Page reload sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m         [2m | [22m[1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m          [2m | [22m[36m16.73 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m         [2m | [22m[1mRaw size[22m
+[32mchunk-2ORKVSXP.js[39m  [2m | [22m[2membarques-page[22m[2m | [22m[36m85.50 kB[39m[2m | [22m
+
+Application bundle generation complete. [3.747 seconds] - 2026-07-13T21:47:19.580Z
+
+Component update sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m         [2m | [22m[1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m          [2m | [22m[36m16.73 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m         [2m | [22m[1mRaw size[22m
+[32mchunk-FOGUQTNB.js[39m  [2m | [22m[2mpedido-detalle[22m[2m | [22m [36m1.24 MB[39m[2m | [22m
+
+Application bundle generation complete. [14.579 seconds] - 2026-07-13T21:47:46.176Z
+
+Component update sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m         [2m | [22m[1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m          [2m | [22m[36m16.73 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m         [2m | [22m[1mRaw size[22m
+[32mchunk-RXI3H6GC.js[39m  [2m | [22m[2mpedido-detalle[22m[2m | [22m [36m1.24 MB[39m[2m | [22m
+
+Application bundle generation complete. [13.671 seconds] - 2026-07-13T21:47:59.869Z
+
+Page reload sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m         [2m | [22m[1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m          [2m | [22m[36m16.73 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m         [2m | [22m[1mRaw size[22m
+[32mchunk-C3IKEILY.js[39m  [2m | [22m[2mpedido-detalle[22m[2m | [22m [36m1.24 MB[39m[2m | [22m
+
+Application bundle generation complete. [12.927 seconds] - 2026-07-13T21:48:12.814Z
+
+Page reload sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m         [2m | [22m[1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m          [2m | [22m[36m16.73 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m         [2m | [22m[1mRaw size[22m
+[32mchunk-WZC7AEJ3.js[39m  [2m | [22m[2mpedido-detalle[22m[2m | [22m [36m1.24 MB[39m[2m | [22m
+
+Application bundle generation complete. [12.626 seconds] - 2026-07-13T21:48:25.461Z
+
+Component update sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m         [2m | [22m[1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m          [2m | [22m[36m16.73 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m         [2m | [22m[1mRaw size[22m
+[32mchunk-C6E2DBVN.js[39m  [2m | [22m[2mpedido-detalle[22m[2m | [22m [36m1.24 MB[39m[2m | [22m
+[32mchunk-OMEU7GY7.js[39m  [2m | [22m[2membarques-page[22m[2m | [22m[36m85.90 kB[39m[2m | [22m
+
+Application bundle generation complete. [14.942 seconds] - 2026-07-13T21:48:40.421Z
+
+Component update sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [14.090 seconds] - 2026-07-13T21:58:30.069Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'canCreateShipmentForOrder' does not exist on type 'PedidosPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.ts:448:52:
+[37m      448 │ ...edRows().filter((order) => this.[32mcanCreateShipmentForOrder[37m(order))
+          ╵                                    [32m~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'canCreateShipmentForOrder' does not exist on type 'PedidosPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.ts:451:53:
+[37m      451 │ ...dRows().filter((order) => !this.[32mcanCreateShipmentForOrder[37m(order))
+          ╵                                    [32m~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [5.839 seconds] - 2026-07-13T21:58:50.242Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'canCreateShipmentForOrder' does not exist on type 'PedidosPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.ts:448:52:
+[37m      448 │ ...edRows().filter((order) => this.[32mcanCreateShipmentForOrder[37m(order))
+          ╵                                    [32m~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'canCreateShipmentForOrder' does not exist on type 'PedidosPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.ts:451:53:
+[37m      451 │ ...dRows().filter((order) => !this.[32mcanCreateShipmentForOrder[37m(order))
+          ╵                                    [32m~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'bulkShipmentDestinationValue' does not exist on type 'PedidosPage'. Did you mean 'bulkShipmentDestination'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.ts:1611:29:
+[37m      1611 │     const destination = this.[32mbulkShipmentDestinationValue[37m();
+           ╵                              [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  'bulkShipmentDestination' is declared here.
+
+    src/app/features/pedidos/pedidos.ts:168:2:
+[37m      168 │   [32mbulkShipmentDestination[37m = signal<"durango" | "gdl" | "otro">("d...
+          ╵   [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'shipmentItemsForOrder' does not exist on type 'PedidosPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.ts:1628:57:
+[37m      1628 │ ...ectedRows.flatMap((order) => this.[32mshipmentItemsForOrder[37m(order));
+           ╵                                      [32m~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'bulkShipmentTitle' does not exist on type 'PedidosPage'. Did you mean 'bulkShipmentNotes'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.ts:1634:20:
+[37m      1634 │         title: this.[32mbulkShipmentTitle[37m(destination),
+           ╵                     [32m~~~~~~~~~~~~~~~~~[0m
+
+  'bulkShipmentNotes' is declared here.
+
+    src/app/features/pedidos/pedidos.ts:170:2:
+[37m      170 │   [32mbulkShipmentNotes[37m = signal("");
+          ╵   [32m~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'shipmentBusinessSummariesFor' does not exist on type 'PedidosPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.ts:1638:33:
+[37m      1638 │ ...ness_summaries: this.[32mshipmentBusinessSummariesFor[37m(selectedRows),
+           ╵                         [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'advanceTableBulkProgress' does not exist on type 'PedidosPage'. Did you mean 'updateTableBulkProgress'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.ts:1640:11:
+[37m      1640 │       this.[32madvanceTableBulkProgress[37m(1);
+           ╵            [32m~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  'updateTableBulkProgress' is declared here.
+
+    src/app/features/pedidos/pedidos.ts:2431:10:
+[37m      2431 │   private [32mupdateTableBulkProgress[37m(current: number): void {
+           ╵           [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'advanceTableBulkProgress' does not exist on type 'PedidosPage'. Did you mean 'updateTableBulkProgress'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.ts:1653:15:
+[37m      1653 │           this.[32madvanceTableBulkProgress[37m(1);
+           ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  'updateTableBulkProgress' is declared here.
+
+    src/app/features/pedidos/pedidos.ts:2431:10:
+[37m      2431 │   private [32mupdateTableBulkProgress[37m(current: number): void {
+           ╵           [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'finishTableBulkProgressSoon' does not exist on type 'PedidosPage'. Did you mean 'finishTableBulkProgress'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.ts:1663:11:
+[37m      1663 │       this.[32mfinishTableBulkProgressSoon[37m();
+           ╵            [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  'finishTableBulkProgress' is declared here.
+
+    src/app/features/pedidos/pedidos.ts:2437:10:
+[37m      2437 │   private [32mfinishTableBulkProgress[37m(): void {
+           ╵           [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'bulkShipmentDestinationLabel' does not exist on type 'PedidosPage'. Did you mean 'bulkShipmentDestination'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.ts:1669:34:
+[37m      1669 │ ...stinationLabel = this.[32mbulkShipmentDestinationLabel[37m(destination);
+           ╵                          [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  'bulkShipmentDestination' is declared here.
+
+    src/app/features/pedidos/pedidos.ts:168:2:
+[37m      168 │   [32mbulkShipmentDestination[37m = signal<"durango" | "gdl" | "otro">("d...
+          ╵   [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [7.280 seconds] - 2026-07-13T22:00:35.319Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'advanceTableBulkProgress' does not exist on type 'PedidosPage'. Did you mean 'updateTableBulkProgress'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.ts:1641:11:
+[37m      1641 │       this.[32madvanceTableBulkProgress[37m(1);
+           ╵            [32m~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  'updateTableBulkProgress' is declared here.
+
+    src/app/features/pedidos/pedidos.ts:2542:10:
+[37m      2542 │   private [32mupdateTableBulkProgress[37m(current: number): void {
+           ╵           [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'advanceTableBulkProgress' does not exist on type 'PedidosPage'. Did you mean 'updateTableBulkProgress'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.ts:1654:15:
+[37m      1654 │           this.[32madvanceTableBulkProgress[37m(1);
+           ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  'updateTableBulkProgress' is declared here.
+
+    src/app/features/pedidos/pedidos.ts:2542:10:
+[37m      2542 │   private [32mupdateTableBulkProgress[37m(current: number): void {
+           ╵           [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'finishTableBulkProgressSoon' does not exist on type 'PedidosPage'. Did you mean 'finishTableBulkProgress'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.ts:1664:11:
+[37m      1664 │       this.[32mfinishTableBulkProgressSoon[37m();
+           ╵            [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  'finishTableBulkProgress' is declared here.
+
+    src/app/features/pedidos/pedidos.ts:2548:10:
+[37m      2548 │   private [32mfinishTableBulkProgress[37m(): void {
+           ╵           [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [4.446 seconds] - 2026-07-13T22:00:53.867Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'advanceTableBulkProgress' does not exist on type 'PedidosPage'. Did you mean 'updateTableBulkProgress'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.ts:1711:11:
+[37m      1711 │       this.[32madvanceTableBulkProgress[37m(1);
+           ╵            [32m~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  'updateTableBulkProgress' is declared here.
+
+    src/app/features/pedidos/pedidos.ts:2612:10:
+[37m      2612 │   private [32mupdateTableBulkProgress[37m(current: number): void {
+           ╵           [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'advanceTableBulkProgress' does not exist on type 'PedidosPage'. Did you mean 'updateTableBulkProgress'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.ts:1724:15:
+[37m      1724 │           this.[32madvanceTableBulkProgress[37m(1);
+           ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  'updateTableBulkProgress' is declared here.
+
+    src/app/features/pedidos/pedidos.ts:2612:10:
+[37m      2612 │   private [32mupdateTableBulkProgress[37m(current: number): void {
+           ╵           [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'finishTableBulkProgressSoon' does not exist on type 'PedidosPage'. Did you mean 'finishTableBulkProgress'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/pedidos/pedidos.ts:1734:11:
+[37m      1734 │       this.[32mfinishTableBulkProgressSoon[37m();
+           ╵            [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  'finishTableBulkProgress' is declared here.
+
+    src/app/features/pedidos/pedidos.ts:2618:10:
+[37m      2618 │   private [32mfinishTableBulkProgress[37m(): void {
+           ╵           [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m                  [2m | [22m [1mRaw size[22m
+[32mchunk-G3FO6VSH.js[39m  [2m | [22m[2m-[22m                      [2m | [22m [36m31.79 kB[39m[2m | [22m
+[32mchunk-HJPDEH6J.js[39m  [2m | [22m[2m-[22m                      [2m | [22m [36m30.00 kB[39m[2m | [22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m                   [2m | [22m [36m16.73 kB[39m[2m | [22m
+[32mchunk-DG7NBSBH.js[39m  [2m | [22m[2m-[22m                      [2m | [22m  [36m4.63 kB[39m[2m | [22m
+[32mchunk-NCMUWKQU.js[39m  [2m | [22m[2m-[22m                      [2m | [22m  [36m4.61 kB[39m[2m | [22m
+[32mstyles.css[39m         [2m | [22m[2mstyles[22m                 [2m | [22m  [36m1.67 kB[39m[2m | [22m
+[32mchunk-CZJLB7T5.js[39m  [2m | [22m[2m-[22m                      [2m | [22m  [36m1.08 kB[39m[2m | [22m
+[32mchunk-SDXRDPII.js[39m  [2m | [22m[2m-[22m                      [2m | [22m[36m871 bytes[39m[2m | [22m
+[32mchunk-EEIOSG77.js[39m  [2m | [22m[2m-[22m                      [2m | [22m[36m770 bytes[39m[2m | [22m
+
+[1m [22m                  [2m | [22m[1mInitial total[22m          [2m | [22m [1m92.15 kB[22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m                  [2m | [22m [1mRaw size[22m
+[32mchunk-C6E2DBVN.js[39m  [2m | [22m[2mpedido-detalle[22m         [2m | [22m  [36m1.24 MB[39m[2m | [22m
+[32mchunk-7B7O64CB.js[39m  [2m | [22m[2mpedidos[22m                [2m | [22m[36m367.27 kB[39m[2m | [22m
+[32mchunk-MP5JZWAK.js[39m  [2m | [22m[2mcatalog[22m                [2m | [22m[36m330.71 kB[39m[2m | [22m
+[32mchunk-XYLZW3C2.js[39m  [2m | [22m[2madministracion[22m         [2m | [22m[36m253.04 kB[39m[2m | [22m
+[32mchunk-ZVFUCCDY.js[39m  [2m | [22m[2mruta-detalle[22m           [2m | [22m[36m235.45 kB[39m[2m | [22m
+[32mchunk-QZTEQXOD.js[39m  [2m | [22m[2mreview[22m                 [2m | [22m[36m234.41 kB[39m[2m | [22m
+[32mchunk-D3IPSH7N.js[39m  [2m | [22m[2minventario[22m             [2m | [22m[36m223.61 kB[39m[2m | [22m
+[32mchunk-O53CGRKX.js[39m  [2m | [22m[2mchats-page-component[22m   [2m | [22m[36m213.88 kB[39m[2m | [22m
+[32mchunk-XYTRJSHL.js[39m  [2m | [22m[2mclientas[22m               [2m | [22m[36m210.32 kB[39m[2m | [22m
+[32mchunk-J4KQMO4C.js[39m  [2m | [22m[2musuarios[22m               [2m | [22m[36m185.35 kB[39m[2m | [22m
+[32mchunk-JYYNPXC2.js[39m  [2m | [22m[2mclienta-detalle[22m        [2m | [22m[36m168.65 kB[39m[2m | [22m
+[32mchunk-VJLVS4FW.js[39m  [2m | [22m[2mcatalog-detail[22m         [2m | [22m[36m149.96 kB[39m[2m | [22m
+[32mchunk-2DGNGCNZ.js[39m  [2m | [22m[2mretiro-ganancias-page[22m  [2m | [22m[36m142.17 kB[39m[2m | [22m
+[32mchunk-U2S5FRV5.js[39m  [2m | [22m[2mrutas[22m                  [2m | [22m[36m137.74 kB[39m[2m | [22m
+[32mchunk-WHHWD2R5.js[39m  [2m | [22m[2mproveedores-operaciones[22m[2m | [22m[36m134.13 kB[39m[2m | [22m
+[2m...and 38 more lazy chunks files. Use "--verbose" to show all the files.[22m
+
+Application bundle generation complete. [7.509 seconds] - 2026-07-13T22:01:03.170Z
+
+Page reload sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m  [2m | [22m [1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m   [2m | [22m [36m16.73 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m  [2m | [22m [1mRaw size[22m
+[32mchunk-6HDYHMJU.js[39m  [2m | [22m[2mpedidos[22m[2m | [22m[36m367.33 kB[39m[2m | [22m
+
+Application bundle generation complete. [8.900 seconds] - 2026-07-13T22:01:12.092Z
+
+Page reload sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m  [2m | [22m [1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m   [2m | [22m [36m16.73 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m  [2m | [22m [1mRaw size[22m
+[32mchunk-VAPBFC6C.js[39m  [2m | [22m[2mpedidos[22m[2m | [22m[36m380.61 kB[39m[2m | [22m
+
+Application bundle generation complete. [6.352 seconds] - 2026-07-13T22:01:31.236Z
+
+Component update sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m  [2m | [22m [1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m   [2m | [22m [36m16.73 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m  [2m | [22m [1mRaw size[22m
+[32mchunk-43AIXGFJ.js[39m  [2m | [22m[2mpedidos[22m[2m | [22m[36m383.52 kB[39m[2m | [22m
+
+Application bundle generation complete. [8.426 seconds] - 2026-07-13T22:01:55.834Z
+
+Component update sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m  [2m | [22m [1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m   [2m | [22m [36m16.73 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m  [2m | [22m [1mRaw size[22m
+[32mchunk-6GGBUUSY.js[39m  [2m | [22m[2mpedidos[22m[2m | [22m[36m383.85 kB[39m[2m | [22m
+
+Application bundle generation complete. [6.033 seconds] - 2026-07-13T22:02:23.352Z
+
+Component update sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m  [2m | [22m [1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m   [2m | [22m [36m16.73 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m  [2m | [22m [1mRaw size[22m
+[32mchunk-EJPNQPY2.js[39m  [2m | [22m[2mpedidos[22m[2m | [22m[36m384.92 kB[39m[2m | [22m
+
+Application bundle generation complete. [6.273 seconds] - 2026-07-13T22:04:18.597Z
+
+Component update sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m  [2m | [22m [1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m   [2m | [22m [36m16.73 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m  [2m | [22m [1mRaw size[22m
+[32mchunk-R45WGNZG.js[39m  [2m | [22m[2mpedidos[22m[2m | [22m[36m385.13 kB[39m[2m | [22m
+
+Application bundle generation complete. [7.197 seconds] - 2026-07-13T22:04:41.398Z
+
+Component update sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m                  [2m | [22m [1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m                   [2m | [22m [36m16.73 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m                  [2m | [22m [1mRaw size[22m
+[32mchunk-43C4R73O.js[39m  [2m | [22m[2mpedido-detalle[22m         [2m | [22m  [36m1.24 MB[39m[2m | [22m
+[32mchunk-UUKUGPSG.js[39m  [2m | [22m[2mpedidos[22m                [2m | [22m[36m385.13 kB[39m[2m | [22m
+[32mchunk-AT62APD2.js[39m  [2m | [22m[2mcatalog[22m                [2m | [22m[36m330.71 kB[39m[2m | [22m
+[32mchunk-L3D66Q5M.js[39m  [2m | [22m[2madministracion[22m         [2m | [22m[36m253.04 kB[39m[2m | [22m
+[32mchunk-7ND7VYXT.js[39m  [2m | [22m[2mruta-detalle[22m           [2m | [22m[36m235.45 kB[39m[2m | [22m
+[32mchunk-7MHQRM6E.js[39m  [2m | [22m[2minventario[22m             [2m | [22m[36m223.61 kB[39m[2m | [22m
+[32mchunk-YCJVXXLG.js[39m  [2m | [22m[2mclientas[22m               [2m | [22m[36m210.32 kB[39m[2m | [22m
+[32mchunk-H7QW6VGZ.js[39m  [2m | [22m[2mclienta-detalle[22m        [2m | [22m[36m168.65 kB[39m[2m | [22m
+[32mchunk-CGSAU6WC.js[39m  [2m | [22m[2mcatalog-detail[22m         [2m | [22m[36m149.96 kB[39m[2m | [22m
+[32mchunk-MTMSTUHN.js[39m  [2m | [22m[2mretiro-ganancias-page[22m  [2m | [22m[36m142.17 kB[39m[2m | [22m
+[32mchunk-ORFY7X3A.js[39m  [2m | [22m[2mrutas[22m                  [2m | [22m[36m137.74 kB[39m[2m | [22m
+[32mchunk-IVVRZX5P.js[39m  [2m | [22m[2mproveedores-operaciones[22m[2m | [22m[36m134.13 kB[39m[2m | [22m
+[32mchunk-PMQZBRN7.js[39m  [2m | [22m[2mdashboard[22m              [2m | [22m[36m114.33 kB[39m[2m | [22m
+[32mchunk-SYZFGGUH.js[39m  [2m | [22m[2msalida-detalle-page[22m    [2m | [22m [36m89.16 kB[39m[2m | [22m
+[32mchunk-JZBPP4ED.js[39m  [2m | [22m[2membarques-page[22m         [2m | [22m [36m85.90 kB[39m[2m | [22m
+[2m...and 2 more lazy chunks files. Use "--verbose" to show all the files.[22m
+
+Application bundle generation complete. [18.276 seconds] - 2026-07-13T22:33:24.539Z
+
+Page reload sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [10.142 seconds] - 2026-07-13T22:33:42.206Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'normalizeCollectionEvent' does not exist on type 'OrdersService'. Did you mean 'normalizeCollectionStatus'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/orders.service.ts:825:27:
+[37m      825 │ ...ap((entry) => this.[32mnormalizeCollectionEvent[37m(entry.id, entry.da...
+          ╵                       [32m~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  'normalizeCollectionStatus' is declared here.
+
+    src/app/core/orders.service.ts:1810:10:
+[37m      1810 │   private [32mnormalizeCollectionStatus[37m(value: unknown): CollectionS...
+           ╵           [32m~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS4111: Property 'balance_due' comes from an index signature, so it must be accessed with ['balance_due'].[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/orders.service.ts:855:44:
+[37m      855 │     const nextBalance = Number(recalculated.[32mbalance_due[37m || 0);
+          ╵                                             [32m~~~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [11.411 seconds] - 2026-07-13T22:34:27.375Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS4111: Property 'balance_due' comes from an index signature, so it must be accessed with ['balance_due'].[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/orders.service.ts:855:44:
+[37m      855 │     const nextBalance = Number(recalculated.[32mbalance_due[37m || 0);
+          ╵                                             [32m~~~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [4.669 seconds] - 2026-07-13T22:35:56.861Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS4111: Property 'balance_due' comes from an index signature, so it must be accessed with ['balance_due'].[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/orders.service.ts:855:44:
+[37m      855 │     const nextBalance = Number(recalculated.[32mbalance_due[37m || 0);
+          ╵                                             [32m~~~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [2.688 seconds] - 2026-07-13T22:36:05.162Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS4111: Property 'balance_due' comes from an index signature, so it must be accessed with ['balance_due'].[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/orders.service.ts:855:44:
+[37m      855 │     const nextBalance = Number(recalculated.[32mbalance_due[37m || 0);
+          ╵                                             [32m~~~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [3.541 seconds] - 2026-07-13T22:43:11.290Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS4111: Property 'balance_due' comes from an index signature, so it must be accessed with ['balance_due'].[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/orders.service.ts:855:44:
+[37m      855 │     const nextBalance = Number(recalculated.[32mbalance_due[37m || 0);
+          ╵                                             [32m~~~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [2.896 seconds] - 2026-07-13T22:43:33.924Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS4111: Property 'balance_due' comes from an index signature, so it must be accessed with ['balance_due'].[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/orders.service.ts:855:44:
+[37m      855 │     const nextBalance = Number(recalculated.[32mbalance_due[37m || 0);
+          ╵                                             [32m~~~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [2.016 seconds] - 2026-07-13T22:43:40.379Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS4111: Property 'balance_due' comes from an index signature, so it must be accessed with ['balance_due'].[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/orders.service.ts:855:44:
+[37m      855 │     const nextBalance = Number(recalculated.[32mbalance_due[37m || 0);
+          ╵                                             [32m~~~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [2.112 seconds] - 2026-07-13T22:43:47.057Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS4111: Property 'balance_due' comes from an index signature, so it must be accessed with ['balance_due'].[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/orders.service.ts:855:44:
+[37m      855 │     const nextBalance = Number(recalculated.[32mbalance_due[37m || 0);
+          ╵                                             [32m~~~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [2.654 seconds] - 2026-07-13T22:44:02.333Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS4111: Property 'balance_due' comes from an index signature, so it must be accessed with ['balance_due'].[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/orders.service.ts:855:44:
+[37m      855 │     const nextBalance = Number(recalculated.[32mbalance_due[37m || 0);
+          ╵                                             [32m~~~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [1.746 seconds] - 2026-07-13T22:44:09.254Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS4111: Property 'balance_due' comes from an index signature, so it must be accessed with ['balance_due'].[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/orders.service.ts:855:44:
+[37m      855 │     const nextBalance = Number(recalculated.[32mbalance_due[37m || 0);
+          ╵                                             [32m~~~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [2.226 seconds] - 2026-07-13T22:44:18.397Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS4111: Property 'balance_due' comes from an index signature, so it must be accessed with ['balance_due'].[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/orders.service.ts:855:44:
+[37m      855 │     const nextBalance = Number(recalculated.[32mbalance_due[37m || 0);
+          ╵                                             [32m~~~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [2.537 seconds] - 2026-07-13T22:44:33.504Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS4111: Property 'balance_due' comes from an index signature, so it must be accessed with ['balance_due'].[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/orders.service.ts:855:44:
+[37m      855 │     const nextBalance = Number(recalculated.[32mbalance_due[37m || 0);
+          ╵                                             [32m~~~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [2.858 seconds] - 2026-07-13T22:45:18.856Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS4111: Property 'balance_due' comes from an index signature, so it must be accessed with ['balance_due'].[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/orders.service.ts:855:44:
+[37m      855 │     const nextBalance = Number(recalculated.[32mbalance_due[37m || 0);
+          ╵                                             [32m~~~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [6.406 seconds] - 2026-07-13T22:45:31.005Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS4111: Property 'balance_due' comes from an index signature, so it must be accessed with ['balance_due'].[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/orders.service.ts:855:44:
+[37m      855 │     const nextBalance = Number(recalculated.[32mbalance_due[37m || 0);
+          ╵                                             [32m~~~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [16.032 seconds] - 2026-07-13T22:51:03.063Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS4111: Property 'balance_due' comes from an index signature, so it must be accessed with ['balance_due'].[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/orders.service.ts:855:44:
+[37m      855 │     const nextBalance = Number(recalculated.[32mbalance_due[37m || 0);
+          ╵                                             [32m~~~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [15.417 seconds] - 2026-07-13T22:51:18.503Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS4111: Property 'balance_due' comes from an index signature, so it must be accessed with ['balance_due'].[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/orders.service.ts:855:44:
+[37m      855 │     const nextBalance = Number(recalculated.[32mbalance_due[37m || 0);
+          ╵                                             [32m~~~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [12.941 seconds] - 2026-07-13T22:51:31.456Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS4111: Property 'balance_due' comes from an index signature, so it must be accessed with ['balance_due'].[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/orders.service.ts:855:44:
+[37m      855 │     const nextBalance = Number(recalculated.[32mbalance_due[37m || 0);
+          ╵                                             [32m~~~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [15.132 seconds] - 2026-07-13T22:51:57.506Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS4111: Property 'balance_due' comes from an index signature, so it must be accessed with ['balance_due'].[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/orders.service.ts:855:44:
+[37m      855 │     const nextBalance = Number(recalculated.[32mbalance_due[37m || 0);
+          ╵                                             [32m~~~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [15.012 seconds] - 2026-07-13T22:52:12.535Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS4111: Property 'balance_due' comes from an index signature, so it must be accessed with ['balance_due'].[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/orders.service.ts:855:44:
+[37m      855 │     const nextBalance = Number(recalculated.[32mbalance_due[37m || 0);
+          ╵                                             [32m~~~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [16.637 seconds] - 2026-07-13T22:52:29.229Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS4111: Property 'balance_due' comes from an index signature, so it must be accessed with ['balance_due'].[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/orders.service.ts:855:44:
+[37m      855 │     const nextBalance = Number(recalculated.[32mbalance_due[37m || 0);
+          ╵                                             [32m~~~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [15.977 seconds] - 2026-07-13T22:52:50.144Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS4111: Property 'balance_due' comes from an index signature, so it must be accessed with ['balance_due'].[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/orders.service.ts:855:44:
+[37m      855 │     const nextBalance = Number(recalculated.[32mbalance_due[37m || 0);
+          ╵                                             [32m~~~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [18.902 seconds] - 2026-07-13T22:53:48.293Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS4111: Property 'balance_due' comes from an index signature, so it must be accessed with ['balance_due'].[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/core/orders.service.ts:855:44:
+[37m      855 │     const nextBalance = Number(recalculated.[32mbalance_due[37m || 0);
+          ╵                                             [32m~~~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m                  [2m | [22m [1mRaw size[22m
+[32mchunk-G3FO6VSH.js[39m  [2m | [22m[2m-[22m                      [2m | [22m [36m31.79 kB[39m[2m | [22m
+[32mchunk-HJPDEH6J.js[39m  [2m | [22m[2m-[22m                      [2m | [22m [36m30.00 kB[39m[2m | [22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m                   [2m | [22m [36m16.73 kB[39m[2m | [22m
+[32mchunk-DG7NBSBH.js[39m  [2m | [22m[2m-[22m                      [2m | [22m  [36m4.63 kB[39m[2m | [22m
+[32mchunk-NCMUWKQU.js[39m  [2m | [22m[2m-[22m                      [2m | [22m  [36m4.61 kB[39m[2m | [22m
+[32mstyles.css[39m         [2m | [22m[2mstyles[22m                 [2m | [22m  [36m1.67 kB[39m[2m | [22m
+[32mchunk-CZJLB7T5.js[39m  [2m | [22m[2m-[22m                      [2m | [22m  [36m1.08 kB[39m[2m | [22m
+[32mchunk-SDXRDPII.js[39m  [2m | [22m[2m-[22m                      [2m | [22m[36m871 bytes[39m[2m | [22m
+[32mchunk-EEIOSG77.js[39m  [2m | [22m[2m-[22m                      [2m | [22m[36m770 bytes[39m[2m | [22m
+
+[1m [22m                  [2m | [22m[1mInitial total[22m          [2m | [22m [1m92.15 kB[22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m                  [2m | [22m [1mRaw size[22m
+[32mchunk-R3YC6AX5.js[39m  [2m | [22m[2mpedido-detalle[22m         [2m | [22m  [36m1.28 MB[39m[2m | [22m
+[32mchunk-VCLNMXEN.js[39m  [2m | [22m[2mpedidos[22m                [2m | [22m[36m385.13 kB[39m[2m | [22m
+[32mchunk-B2WDOXKQ.js[39m  [2m | [22m[2mcatalog[22m                [2m | [22m[36m330.71 kB[39m[2m | [22m
+[32mchunk-6NOJ3US6.js[39m  [2m | [22m[2madministracion[22m         [2m | [22m[36m253.04 kB[39m[2m | [22m
+[32mchunk-3C4NSFLS.js[39m  [2m | [22m[2mruta-detalle[22m           [2m | [22m[36m235.45 kB[39m[2m | [22m
+[32mchunk-QZTEQXOD.js[39m  [2m | [22m[2mreview[22m                 [2m | [22m[36m234.41 kB[39m[2m | [22m
+[32mchunk-XNHOIUNI.js[39m  [2m | [22m[2minventario[22m             [2m | [22m[36m223.61 kB[39m[2m | [22m
+[32mchunk-O53CGRKX.js[39m  [2m | [22m[2mchats-page-component[22m   [2m | [22m[36m213.88 kB[39m[2m | [22m
+[32mchunk-2ERKVLXA.js[39m  [2m | [22m[2mclientas[22m               [2m | [22m[36m210.32 kB[39m[2m | [22m
+[32mchunk-J4KQMO4C.js[39m  [2m | [22m[2musuarios[22m               [2m | [22m[36m185.35 kB[39m[2m | [22m
+[32mchunk-4YS2CAIN.js[39m  [2m | [22m[2mclienta-detalle[22m        [2m | [22m[36m168.65 kB[39m[2m | [22m
+[32mchunk-AP7FSJAM.js[39m  [2m | [22m[2mcatalog-detail[22m         [2m | [22m[36m149.96 kB[39m[2m | [22m
+[32mchunk-CFJ6LZUM.js[39m  [2m | [22m[2mretiro-ganancias-page[22m  [2m | [22m[36m142.17 kB[39m[2m | [22m
+[32mchunk-EPIIX53W.js[39m  [2m | [22m[2mrutas[22m                  [2m | [22m[36m137.74 kB[39m[2m | [22m
+[32mchunk-2CDKHRFP.js[39m  [2m | [22m[2mproveedores-operaciones[22m[2m | [22m[36m134.13 kB[39m[2m | [22m
+[2m...and 39 more lazy chunks files. Use "--verbose" to show all the files.[22m
+
+Application bundle generation complete. [3.522 seconds] - 2026-07-13T22:54:45.941Z
+
+Page reload sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m  [2m | [22m [1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m   [2m | [22m [36m16.73 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m  [2m | [22m [1mRaw size[22m
+[32mchunk-WFGZAGEA.js[39m  [2m | [22m[2mpedidos[22m[2m | [22m[36m385.14 kB[39m[2m | [22m
+
+Application bundle generation complete. [5.203 seconds] - 2026-07-13T22:56:59.202Z
+
+Component update sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m  [2m | [22m [1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m   [2m | [22m [36m16.73 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m  [2m | [22m [1mRaw size[22m
+[32mchunk-VKPKHDOT.js[39m  [2m | [22m[2mpedidos[22m[2m | [22m[36m385.27 kB[39m[2m | [22m
+
+Application bundle generation complete. [27.610 seconds] - 2026-07-13T22:57:31.698Z
+
+Page reload sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m         [2m | [22m[1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m          [2m | [22m[36m16.73 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m         [2m | [22m[1mRaw size[22m
+[32mchunk-ARQFIAIC.js[39m  [2m | [22m[2membarques-page[22m[2m | [22m[36m93.66 kB[39m[2m | [22m
+
+Application bundle generation complete. [2.432 seconds] - 2026-07-13T22:57:56.621Z
+
+Page reload sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m                  [2m | [22m [1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m                   [2m | [22m [36m16.73 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m                  [2m | [22m [1mRaw size[22m
+[32mchunk-GTCSMPEI.js[39m  [2m | [22m[2mpedido-detalle[22m         [2m | [22m  [36m1.28 MB[39m[2m | [22m
+[32mchunk-VJS4JC35.js[39m  [2m | [22m[2mpedidos[22m                [2m | [22m[36m385.27 kB[39m[2m | [22m
+[32mchunk-5I6YC6V6.js[39m  [2m | [22m[2mcatalog[22m                [2m | [22m[36m330.71 kB[39m[2m | [22m
+[32mchunk-BG2RORPH.js[39m  [2m | [22m[2madministracion[22m         [2m | [22m[36m253.04 kB[39m[2m | [22m
+[32mchunk-AVSCWKNT.js[39m  [2m | [22m[2mruta-detalle[22m           [2m | [22m[36m235.45 kB[39m[2m | [22m
+[32mchunk-E5ARJEFH.js[39m  [2m | [22m[2minventario[22m             [2m | [22m[36m223.61 kB[39m[2m | [22m
+[32mchunk-B546TFMH.js[39m  [2m | [22m[2mclientas[22m               [2m | [22m[36m210.32 kB[39m[2m | [22m
+[32mchunk-I5ZDJY4P.js[39m  [2m | [22m[2mclienta-detalle[22m        [2m | [22m[36m168.65 kB[39m[2m | [22m
+[32mchunk-IESBCZHL.js[39m  [2m | [22m[2mcatalog-detail[22m         [2m | [22m[36m149.96 kB[39m[2m | [22m
+[32mchunk-7LP2NDS5.js[39m  [2m | [22m[2mretiro-ganancias-page[22m  [2m | [22m[36m142.17 kB[39m[2m | [22m
+[32mchunk-Y63JP4HJ.js[39m  [2m | [22m[2mrutas[22m                  [2m | [22m[36m137.74 kB[39m[2m | [22m
+[32mchunk-RZSCSQRT.js[39m  [2m | [22m[2mproveedores-operaciones[22m[2m | [22m[36m134.13 kB[39m[2m | [22m
+[32mchunk-PO3RBBFF.js[39m  [2m | [22m[2mdurango-page[22m           [2m | [22m[36m122.69 kB[39m[2m | [22m
+[32mchunk-4MYZSRIF.js[39m  [2m | [22m[2mdashboard[22m              [2m | [22m[36m114.33 kB[39m[2m | [22m
+[32mchunk-YKMRYJPU.js[39m  [2m | [22m[2membarques-page[22m         [2m | [22m [36m93.66 kB[39m[2m | [22m
+[2m...and 2 more lazy chunks files. Use "--verbose" to show all the files.[22m
+
+Application bundle generation complete. [5.041 seconds] - 2026-07-13T23:01:08.929Z
+
+Page reload sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m [2m | [22m[1mRaw size[22m
+[32mstyles.css[39m         [2m | [22m[2mstyles[22m[2m | [22m [36m2.90 kB[39m[2m | [22m
+
+Application bundle generation complete. [0.465 seconds] - 2026-07-14T01:04:39.607Z
+
+Stylesheet update sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m [2m | [22m[1mRaw size[22m
+[32mstyles.css[39m         [2m | [22m[2mstyles[22m[2m | [22m [36m2.86 kB[39m[2m | [22m
+
+Application bundle generation complete. [0.053 seconds] - 2026-07-14T01:23:56.442Z
+
+Stylesheet update sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [17.770 seconds] - 2026-07-14T01:32:10.302Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'loose' does not exist on type '{ active: number; inTransit: number; pendingReceive: number; packages: number; incidents: number; }'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/embarques/embarques.page.html:48:24:
+[37m      48 │       <strong>{{ kpis().[32mloose[37m }}</strong>
+         ╵                         [32m~~~~~[0m
+
+  Error occurs in the template of component EmbarquesPage.
+
+    src/app/features/embarques/embarques.page.ts:32:15:
+[37m      32 │   templateUrl: [32m"./embarques.page.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'balance' does not exist on type '{ active: number; inTransit: number; pendingReceive: number; packages: number; incidents: number; }'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/embarques/embarques.page.html:53:30:
+[37m      53 │       <strong>{{ money(kpis().[32mbalance[37m) }}</strong>
+         ╵                               [32m~~~~~~~[0m
+
+  Error occurs in the template of component EmbarquesPage.
+
+    src/app/features/embarques/embarques.page.ts:32:15:
+[37m      32 │   templateUrl: [32m"./embarques.page.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [3.224 seconds] - 2026-07-14T01:34:41.708Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'loose' does not exist on type '{ active: number; inTransit: number; pendingReceive: number; packages: number; incidents: number; }'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/embarques/embarques.page.html:48:24:
+[37m      48 │       <strong>{{ kpis().[32mloose[37m }}</strong>
+         ╵                         [32m~~~~~[0m
+
+  Error occurs in the template of component EmbarquesPage.
+
+    src/app/features/embarques/embarques.page.ts:32:15:
+[37m      32 │   templateUrl: [32m"./embarques.page.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'balance' does not exist on type '{ active: number; inTransit: number; pendingReceive: number; packages: number; incidents: number; }'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/embarques/embarques.page.html:53:30:
+[37m      53 │       <strong>{{ money(kpis().[32mbalance[37m) }}</strong>
+         ╵                               [32m~~~~~~~[0m
+
+  Error occurs in the template of component EmbarquesPage.
+
+    src/app/features/embarques/embarques.page.ts:32:15:
+[37m      32 │   templateUrl: [32m"./embarques.page.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m                  [2m | [22m [1mRaw size[22m
+[32mchunk-G3FO6VSH.js[39m  [2m | [22m[2m-[22m                      [2m | [22m [36m31.79 kB[39m[2m | [22m
+[32mchunk-HJPDEH6J.js[39m  [2m | [22m[2m-[22m                      [2m | [22m [36m30.00 kB[39m[2m | [22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m                   [2m | [22m [36m16.73 kB[39m[2m | [22m
+[32mchunk-DG7NBSBH.js[39m  [2m | [22m[2m-[22m                      [2m | [22m  [36m4.63 kB[39m[2m | [22m
+[32mchunk-NCMUWKQU.js[39m  [2m | [22m[2m-[22m                      [2m | [22m  [36m4.61 kB[39m[2m | [22m
+[32mstyles.css[39m         [2m | [22m[2mstyles[22m                 [2m | [22m  [36m2.86 kB[39m[2m | [22m
+[32mchunk-CZJLB7T5.js[39m  [2m | [22m[2m-[22m                      [2m | [22m  [36m1.08 kB[39m[2m | [22m
+[32mchunk-SDXRDPII.js[39m  [2m | [22m[2m-[22m                      [2m | [22m[36m871 bytes[39m[2m | [22m
+[32mchunk-EEIOSG77.js[39m  [2m | [22m[2m-[22m                      [2m | [22m[36m770 bytes[39m[2m | [22m
+
+[1m [22m                  [2m | [22m[1mInitial total[22m          [2m | [22m [1m93.34 kB[22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m                  [2m | [22m [1mRaw size[22m
+[32mchunk-GTCSMPEI.js[39m  [2m | [22m[2mpedido-detalle[22m         [2m | [22m  [36m1.28 MB[39m[2m | [22m
+[32mchunk-VJS4JC35.js[39m  [2m | [22m[2mpedidos[22m                [2m | [22m[36m385.27 kB[39m[2m | [22m
+[32mchunk-5I6YC6V6.js[39m  [2m | [22m[2mcatalog[22m                [2m | [22m[36m330.71 kB[39m[2m | [22m
+[32mchunk-BG2RORPH.js[39m  [2m | [22m[2madministracion[22m         [2m | [22m[36m253.04 kB[39m[2m | [22m
+[32mchunk-AVSCWKNT.js[39m  [2m | [22m[2mruta-detalle[22m           [2m | [22m[36m235.45 kB[39m[2m | [22m
+[32mchunk-QZTEQXOD.js[39m  [2m | [22m[2mreview[22m                 [2m | [22m[36m234.41 kB[39m[2m | [22m
+[32mchunk-E5ARJEFH.js[39m  [2m | [22m[2minventario[22m             [2m | [22m[36m223.61 kB[39m[2m | [22m
+[32mchunk-O53CGRKX.js[39m  [2m | [22m[2mchats-page-component[22m   [2m | [22m[36m213.88 kB[39m[2m | [22m
+[32mchunk-B546TFMH.js[39m  [2m | [22m[2mclientas[22m               [2m | [22m[36m210.32 kB[39m[2m | [22m
+[32mchunk-J4KQMO4C.js[39m  [2m | [22m[2musuarios[22m               [2m | [22m[36m185.35 kB[39m[2m | [22m
+[32mchunk-I5ZDJY4P.js[39m  [2m | [22m[2mclienta-detalle[22m        [2m | [22m[36m168.65 kB[39m[2m | [22m
+[32mchunk-IESBCZHL.js[39m  [2m | [22m[2mcatalog-detail[22m         [2m | [22m[36m149.96 kB[39m[2m | [22m
+[32mchunk-7LP2NDS5.js[39m  [2m | [22m[2mretiro-ganancias-page[22m  [2m | [22m[36m142.17 kB[39m[2m | [22m
+[32mchunk-Y63JP4HJ.js[39m  [2m | [22m[2mrutas[22m                  [2m | [22m[36m137.74 kB[39m[2m | [22m
+[32mchunk-RZSCSQRT.js[39m  [2m | [22m[2mproveedores-operaciones[22m[2m | [22m[36m134.13 kB[39m[2m | [22m
+[2m...and 39 more lazy chunks files. Use "--verbose" to show all the files.[22m
+
+Application bundle generation complete. [8.819 seconds] - 2026-07-14T01:35:35.794Z
+
+Page reload sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m          [2m | [22m [36m16.73 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mchunk-MCTHF3K7.js[39m  [2m | [22m[2membarques-page[22m[2m | [22m[36m139.22 kB[39m[2m | [22m
+
+Application bundle generation complete. [13.126 seconds] - 2026-07-14T01:38:53.738Z
+
+Component update sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m          [2m | [22m [36m16.73 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mchunk-JSPGCAWD.js[39m  [2m | [22m[2membarques-page[22m[2m | [22m[36m139.15 kB[39m[2m | [22m
+
+Application bundle generation complete. [22.979 seconds] - 2026-07-14T01:48:04.344Z
+
+Component update sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m          [2m | [22m [36m16.73 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mchunk-4PNDEPSG.js[39m  [2m | [22m[2membarques-page[22m[2m | [22m[36m139.15 kB[39m[2m | [22m
+
+Application bundle generation complete. [10.349 seconds] - 2026-07-14T01:51:15.397Z
+
+Component update sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [7.042 seconds] - 2026-07-14T01:57:05.037Z
+
+[1m[33m[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8113: ShipmentDetailComponent is not used within the template of EmbarquesPage[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/embarques/embarques.page.ts:36:25:
+[37m      36 │   imports: [FormsModule, [32mShipmentDetailComponent[37m],
+         ╵                          [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'hasShipmentIncident' does not exist on type 'EmbarquesPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/embarques/embarques.page.ts:138:47:
+[37m      138 │ ...status === "incident") return this.[32mhasShipmentIncident[37m(shipment);
+          ╵                                       [32m~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'expandedItems' does not exist on type 'EmbarquesPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/embarques/embarques.page.ts:533:9:
+[37m      533 │     this.[32mexpandedItems[37m.update((current) => ({ ...current, [itemId...
+          ╵          [32m~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS7006: Parameter 'current' implicitly has an 'any' type.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/embarques/embarques.page.ts:533:31:
+[37m      533 │     this.expandedItems.update(([32mcurrent[37m) => ({ ...current, [itemId...
+          ╵                                [32m~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'expandedItems' does not exist on type 'EmbarquesPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/embarques/embarques.page.ts:537:18:
+[37m      537 │     return !!this.[32mexpandedItems[37m()[itemId];
+          ╵                   [32m~~~~~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [5.558 seconds] - 2026-07-14T01:57:33.410Z
+
+[1m[33m[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mNG8113: ShipmentDetailComponent is not used within the template of EmbarquesPage[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/embarques/embarques.page.ts:36:25:
+[37m      36 │   imports: [FormsModule, [32mShipmentDetailComponent[37m],
+         ╵                          [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2551: Property 'shipmentDateLabel' does not exist on type 'EmbarquesPage'. Did you mean 'shipmentOrderLabel'?[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/embarques/embarques.page.html:131:26:
+[37m      131 │                 <small>{{ [32mshipmentDateLabel[37m(shipment) }}</small>
+          ╵                           [32m~~~~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component EmbarquesPage.
+
+    src/app/features/embarques/embarques.page.ts:37:15:
+[37m      37 │   templateUrl: [32m"./embarques.page.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'shipmentDate' does not exist on type 'EmbarquesPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/embarques/embarques.page.html:132:25:
+[37m      132 │                 <span>{{ [32mshipmentDate[37m(shipment) }}</span>
+          ╵                          [32m~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component EmbarquesPage.
+
+    src/app/features/embarques/embarques.page.ts:37:15:
+[37m      37 │   templateUrl: [32m"./embarques.page.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'isItemExpanded' does not exist on type 'EmbarquesPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/embarques/embarques.page.html:233:44:
+[37m      233 │ ...              [attr.aria-expanded]="[32misItemExpanded[37m(item.item_id)"
+          ╵                                        [32m~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component EmbarquesPage.
+
+    src/app/features/embarques/embarques.page.ts:37:15:
+[37m      37 │   templateUrl: [32m"./embarques.page.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'toggleItem' does not exist on type 'EmbarquesPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/embarques/embarques.page.html:234:31:
+[37m      234 │                       (click)="[32mtoggleItem[37m(item.item_id, $event)"
+          ╵                                [32m~~~~~~~~~~[0m
+
+  Error occurs in the template of component EmbarquesPage.
+
+    src/app/features/embarques/embarques.page.ts:37:15:
+[37m      37 │   templateUrl: [32m"./embarques.page.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'isItemExpanded' does not exist on type 'EmbarquesPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/embarques/embarques.page.html:236:25:
+[37m      236 │                       {{ [32misItemExpanded[37m(item.item_id) ? 'Ocultar'...
+          ╵                          [32m~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component EmbarquesPage.
+
+    src/app/features/embarques/embarques.page.ts:37:15:
+[37m      37 │   templateUrl: [32m"./embarques.page.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'isItemExpanded' does not exist on type 'EmbarquesPage'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/embarques/embarques.page.html:239:23:
+[37m      239 │                   @if ([32misItemExpanded[37m(item.item_id)) {
+          ╵                        [32m~~~~~~~~~~~~~~[0m
+
+  Error occurs in the template of component EmbarquesPage.
+
+    src/app/features/embarques/embarques.page.ts:37:15:
+[37m      37 │   templateUrl: [32m"./embarques.page.html"[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m                [2m | [22m [1mRaw size[22m
+[32mchunk-G3FO6VSH.js[39m  [2m | [22m[2m-[22m                    [2m | [22m [36m31.79 kB[39m[2m | [22m
+[32mchunk-HJPDEH6J.js[39m  [2m | [22m[2m-[22m                    [2m | [22m [36m30.00 kB[39m[2m | [22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m                 [2m | [22m [36m16.73 kB[39m[2m | [22m
+[32mchunk-DG7NBSBH.js[39m  [2m | [22m[2m-[22m                    [2m | [22m  [36m4.63 kB[39m[2m | [22m
+[32mchunk-NCMUWKQU.js[39m  [2m | [22m[2m-[22m                    [2m | [22m  [36m4.61 kB[39m[2m | [22m
+[32mstyles.css[39m         [2m | [22m[2mstyles[22m               [2m | [22m  [36m2.86 kB[39m[2m | [22m
+[32mchunk-CZJLB7T5.js[39m  [2m | [22m[2m-[22m                    [2m | [22m  [36m1.08 kB[39m[2m | [22m
+[32mchunk-SDXRDPII.js[39m  [2m | [22m[2m-[22m                    [2m | [22m[36m871 bytes[39m[2m | [22m
+[32mchunk-EEIOSG77.js[39m  [2m | [22m[2m-[22m                    [2m | [22m[36m770 bytes[39m[2m | [22m
+
+[1m [22m                  [2m | [22m[1mInitial total[22m        [2m | [22m [1m93.34 kB[22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m                [2m | [22m [1mRaw size[22m
+[32mchunk-GTCSMPEI.js[39m  [2m | [22m[2mpedido-detalle[22m       [2m | [22m  [36m1.28 MB[39m[2m | [22m
+[32mchunk-VJS4JC35.js[39m  [2m | [22m[2mpedidos[22m              [2m | [22m[36m385.27 kB[39m[2m | [22m
+[32mchunk-5I6YC6V6.js[39m  [2m | [22m[2mcatalog[22m              [2m | [22m[36m330.71 kB[39m[2m | [22m
+[32mchunk-BG2RORPH.js[39m  [2m | [22m[2madministracion[22m       [2m | [22m[36m253.04 kB[39m[2m | [22m
+[32mchunk-AVSCWKNT.js[39m  [2m | [22m[2mruta-detalle[22m         [2m | [22m[36m235.45 kB[39m[2m | [22m
+[32mchunk-QZTEQXOD.js[39m  [2m | [22m[2mreview[22m               [2m | [22m[36m234.41 kB[39m[2m | [22m
+[32mchunk-E5ARJEFH.js[39m  [2m | [22m[2minventario[22m           [2m | [22m[36m223.61 kB[39m[2m | [22m
+[32mchunk-O53CGRKX.js[39m  [2m | [22m[2mchats-page-component[22m [2m | [22m[36m213.88 kB[39m[2m | [22m
+[32mchunk-B546TFMH.js[39m  [2m | [22m[2mclientas[22m             [2m | [22m[36m210.32 kB[39m[2m | [22m
+[32mchunk-JX6RPNGD.js[39m  [2m | [22m[2membarques-page[22m       [2m | [22m[36m200.81 kB[39m[2m | [22m
+[32mchunk-J4KQMO4C.js[39m  [2m | [22m[2musuarios[22m             [2m | [22m[36m185.35 kB[39m[2m | [22m
+[32mchunk-I5ZDJY4P.js[39m  [2m | [22m[2mclienta-detalle[22m      [2m | [22m[36m168.65 kB[39m[2m | [22m
+[32mchunk-IESBCZHL.js[39m  [2m | [22m[2mcatalog-detail[22m       [2m | [22m[36m149.96 kB[39m[2m | [22m
+[32mchunk-7LP2NDS5.js[39m  [2m | [22m[2mretiro-ganancias-page[22m[2m | [22m[36m142.17 kB[39m[2m | [22m
+[32mchunk-Y63JP4HJ.js[39m  [2m | [22m[2mrutas[22m                [2m | [22m[36m137.74 kB[39m[2m | [22m
+[2m...and 39 more lazy chunks files. Use "--verbose" to show all the files.[22m
+
+Application bundle generation complete. [7.589 seconds] - 2026-07-14T01:59:37.908Z
+
+Page reload sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m          [2m | [22m [36m16.73 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mchunk-7TPPV2RB.js[39m  [2m | [22m[2membarques-page[22m[2m | [22m[36m201.47 kB[39m[2m | [22m
+
+Application bundle generation complete. [5.282 seconds] - 2026-07-14T02:03:47.068Z
+
+Component update sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m          [2m | [22m [36m16.73 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mchunk-JIIFHGIN.js[39m  [2m | [22m[2membarques-page[22m[2m | [22m[36m201.99 kB[39m[2m | [22m
+
+Application bundle generation complete. [4.435 seconds] - 2026-07-14T02:05:38.389Z
+
+Component update sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m          [2m | [22m [36m16.73 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mchunk-YIJLULEC.js[39m  [2m | [22m[2membarques-page[22m[2m | [22m[36m206.26 kB[39m[2m | [22m
+
+Application bundle generation complete. [4.728 seconds] - 2026-07-14T02:05:54.775Z
+
+Component update sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m          [2m | [22m [36m16.73 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mchunk-7AXLFVYS.js[39m  [2m | [22m[2membarques-page[22m[2m | [22m[36m209.57 kB[39m[2m | [22m
+
+Application bundle generation complete. [3.573 seconds] - 2026-07-14T02:06:17.652Z
+
+Component update sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m          [2m | [22m [36m16.73 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mchunk-UQ4VHWTQ.js[39m  [2m | [22m[2membarques-page[22m[2m | [22m[36m210.27 kB[39m[2m | [22m
+
+Application bundle generation complete. [4.586 seconds] - 2026-07-14T02:06:30.157Z
+
+Component update sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m          [2m | [22m [36m16.73 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mchunk-SHKPZIHA.js[39m  [2m | [22m[2membarques-page[22m[2m | [22m[36m210.74 kB[39m[2m | [22m
+
+Application bundle generation complete. [4.154 seconds] - 2026-07-14T02:08:30.055Z
+
+Component update sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m          [2m | [22m [36m16.73 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m         [2m | [22m [1mRaw size[22m
+[32mchunk-6T5E5WFU.js[39m  [2m | [22m[2membarques-page[22m[2m | [22m[36m210.85 kB[39m[2m | [22m
+
+Application bundle generation complete. [32.525 seconds] - 2026-07-16T00:19:34.367Z
+
+Component update sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [43.266 seconds] - 2026-07-16T02:31:09.303Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module './features/public/order-tracker/order-tracker-detail' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/app.routes.ts:219:13:
+[37m      219 │       import([32m"./features/public/order-tracker/order-tracker-detai[37m...
+          ╵              [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "./features/public/order-tracker/order-tracker-detail"[0m
+
+    src/app/app.routes.ts:212:36:
+[37m      212 │ ...=> import([32m"./features/public/order-tracker/order-tracker-detai[37m...
+          ╵              [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [15.004 seconds] - 2026-07-16T02:31:24.349Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2307: Cannot find module './features/public/order-tracker/order-tracker-detail' or its corresponding type declarations.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/app.routes.ts:219:13:
+[37m      219 │       import([32m"./features/public/order-tracker/order-tracker-detai[37m...
+          ╵              [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+[31mX [41;31m[[41;97mERROR[41;31m][0m [1mCould not resolve "./features/public/order-tracker/order-tracker-detail"[0m
+
+    src/app/app.routes.ts:212:36:
+[37m      212 │ ...=> import([32m"./features/public/order-tracker/order-tracker-detai[37m...
+          ╵              [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m                [2m | [22m [1mRaw size[22m
+[32mchunk-G3FO6VSH.js[39m  [2m | [22m[2m-[22m                    [2m | [22m [36m31.79 kB[39m[2m | [22m
+[32mchunk-HJPDEH6J.js[39m  [2m | [22m[2m-[22m                    [2m | [22m [36m30.00 kB[39m[2m | [22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m                 [2m | [22m [36m16.86 kB[39m[2m | [22m
+[32mchunk-DG7NBSBH.js[39m  [2m | [22m[2m-[22m                    [2m | [22m  [36m4.63 kB[39m[2m | [22m
+[32mchunk-NCMUWKQU.js[39m  [2m | [22m[2m-[22m                    [2m | [22m  [36m4.61 kB[39m[2m | [22m
+[32mstyles.css[39m         [2m | [22m[2mstyles[22m               [2m | [22m  [36m2.86 kB[39m[2m | [22m
+[32mchunk-CZJLB7T5.js[39m  [2m | [22m[2m-[22m                    [2m | [22m  [36m1.08 kB[39m[2m | [22m
+[32mchunk-SDXRDPII.js[39m  [2m | [22m[2m-[22m                    [2m | [22m[36m871 bytes[39m[2m | [22m
+[32mchunk-EEIOSG77.js[39m  [2m | [22m[2m-[22m                    [2m | [22m[36m770 bytes[39m[2m | [22m
+
+[1m [22m                  [2m | [22m[1mInitial total[22m        [2m | [22m [1m93.47 kB[22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m                [2m | [22m [1mRaw size[22m
+[32mchunk-GTCSMPEI.js[39m  [2m | [22m[2mpedido-detalle[22m       [2m | [22m  [36m1.28 MB[39m[2m | [22m
+[32mchunk-VJS4JC35.js[39m  [2m | [22m[2mpedidos[22m              [2m | [22m[36m385.27 kB[39m[2m | [22m
+[32mchunk-5I6YC6V6.js[39m  [2m | [22m[2mcatalog[22m              [2m | [22m[36m330.71 kB[39m[2m | [22m
+[32mchunk-BG2RORPH.js[39m  [2m | [22m[2madministracion[22m       [2m | [22m[36m253.04 kB[39m[2m | [22m
+[32mchunk-AVSCWKNT.js[39m  [2m | [22m[2mruta-detalle[22m         [2m | [22m[36m235.45 kB[39m[2m | [22m
+[32mchunk-QZTEQXOD.js[39m  [2m | [22m[2mreview[22m               [2m | [22m[36m234.41 kB[39m[2m | [22m
+[32mchunk-E5ARJEFH.js[39m  [2m | [22m[2minventario[22m           [2m | [22m[36m223.61 kB[39m[2m | [22m
+[32mchunk-O53CGRKX.js[39m  [2m | [22m[2mchats-page-component[22m [2m | [22m[36m213.88 kB[39m[2m | [22m
+[32mchunk-6T5E5WFU.js[39m  [2m | [22m[2membarques-page[22m       [2m | [22m[36m210.85 kB[39m[2m | [22m
+[32mchunk-B546TFMH.js[39m  [2m | [22m[2mclientas[22m             [2m | [22m[36m210.32 kB[39m[2m | [22m
+[32mchunk-J4KQMO4C.js[39m  [2m | [22m[2musuarios[22m             [2m | [22m[36m185.35 kB[39m[2m | [22m
+[32mchunk-556O46HJ.js[39m  [2m | [22m[2mclienta-detalle[22m      [2m | [22m[36m168.65 kB[39m[2m | [22m
+[32mchunk-IESBCZHL.js[39m  [2m | [22m[2mcatalog-detail[22m       [2m | [22m[36m149.96 kB[39m[2m | [22m
+[32mchunk-7LP2NDS5.js[39m  [2m | [22m[2mretiro-ganancias-page[22m[2m | [22m[36m142.17 kB[39m[2m | [22m
+[32mchunk-Y63JP4HJ.js[39m  [2m | [22m[2mrutas[22m                [2m | [22m[36m137.74 kB[39m[2m | [22m
+[2m...and 41 more lazy chunks files. Use "--verbose" to show all the files.[22m
+
+Application bundle generation complete. [28.662 seconds] - 2026-07-16T02:36:03.645Z
+
+Page reload sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m                [2m | [22m [1mRaw size[22m
+[32mchunk-3MXMWQSE.js[39m  [2m | [22m[2m-[22m                    [2m | [22m [36m31.86 kB[39m[2m | [22m
+[32mchunk-PL6SLJEE.js[39m  [2m | [22m[2m-[22m                    [2m | [22m [36m30.00 kB[39m[2m | [22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m                 [2m | [22m [36m16.86 kB[39m[2m | [22m
+[32mchunk-TMRKEIQQ.js[39m  [2m | [22m[2m-[22m                    [2m | [22m  [36m4.63 kB[39m[2m | [22m
+[32mchunk-VUA7WUP4.js[39m  [2m | [22m[2m-[22m                    [2m | [22m  [36m4.61 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m                [2m | [22m [1mRaw size[22m
+[32mchunk-2A4QXVVH.js[39m  [2m | [22m[2mpedido-detalle[22m       [2m | [22m  [36m1.28 MB[39m[2m | [22m
+[32mchunk-2BDWBJK4.js[39m  [2m | [22m[2mpedidos[22m              [2m | [22m[36m385.27 kB[39m[2m | [22m
+[32mchunk-LSXQ2G3G.js[39m  [2m | [22m[2mcatalog[22m              [2m | [22m[36m330.71 kB[39m[2m | [22m
+[32mchunk-5WEUF3XN.js[39m  [2m | [22m[2madministracion[22m       [2m | [22m[36m253.04 kB[39m[2m | [22m
+[32mchunk-VCBE4DL7.js[39m  [2m | [22m[2mruta-detalle[22m         [2m | [22m[36m235.45 kB[39m[2m | [22m
+[32mchunk-3KOW6GFG.js[39m  [2m | [22m[2mreview[22m               [2m | [22m[36m234.41 kB[39m[2m | [22m
+[32mchunk-YOW4TSE4.js[39m  [2m | [22m[2minventario[22m           [2m | [22m[36m223.61 kB[39m[2m | [22m
+[32mchunk-L6DL2XJX.js[39m  [2m | [22m[2mchats-page-component[22m [2m | [22m[36m213.88 kB[39m[2m | [22m
+[32mchunk-E56T2XRY.js[39m  [2m | [22m[2membarques-page[22m       [2m | [22m[36m210.85 kB[39m[2m | [22m
+[32mchunk-K7ZVF2DW.js[39m  [2m | [22m[2mclientas[22m             [2m | [22m[36m210.32 kB[39m[2m | [22m
+[32mchunk-LEDXJ4US.js[39m  [2m | [22m[2musuarios[22m             [2m | [22m[36m185.35 kB[39m[2m | [22m
+[32mchunk-7A4NVHJD.js[39m  [2m | [22m[2mclienta-detalle[22m      [2m | [22m[36m168.91 kB[39m[2m | [22m
+[32mchunk-MEEOMYKE.js[39m  [2m | [22m[2mcatalog-detail[22m       [2m | [22m[36m149.96 kB[39m[2m | [22m
+[32mchunk-QNJPEO2D.js[39m  [2m | [22m[2mretiro-ganancias-page[22m[2m | [22m[36m142.17 kB[39m[2m | [22m
+[32mchunk-H7BGGFIQ.js[39m  [2m | [22m[2mrutas[22m                [2m | [22m[36m137.74 kB[39m[2m | [22m
+[2m...and 27 more lazy chunks files. Use "--verbose" to show all the files.[22m
+
+Application bundle generation complete. [42.881 seconds] - 2026-07-16T02:36:47.408Z
+
+Page reload sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m          [2m | [22m [1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m           [2m | [22m [36m16.86 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m          [2m | [22m [1mRaw size[22m
+[32mchunk-7SKIJOPH.js[39m  [2m | [22m[2mclienta-detalle[22m[2m | [22m[36m172.15 kB[39m[2m | [22m
+
+Application bundle generation complete. [10.354 seconds] - 2026-07-16T02:36:57.916Z
+
+Page reload sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+Application bundle generation failed. [12.551 seconds] - 2026-07-16T02:39:36.039Z
+
+[1m[31m[31mX [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'legacy' does not exist on type 'TrackLinkAdminState'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/features/clientas/clienta-detalle.html:431:32:
+[37m      431 │           @if (trackLinkMeta()?.[32mlegacy[37m) {
+          ╵                                 [32m~~~~~~[0m
+
+  Error occurs in the template of component ClientaDetallePage.
+
+    src/app/features/clientas/clienta-detalle.ts:100:15:
+[37m      100 │   templateUrl: [32m"./clienta-detalle.html"[37m,
+          ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[39m[22m
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m                [2m | [22m [1mRaw size[22m
+[32mchunk-3MXMWQSE.js[39m  [2m | [22m[2m-[22m                    [2m | [22m [36m31.86 kB[39m[2m | [22m
+[32mchunk-PL6SLJEE.js[39m  [2m | [22m[2m-[22m                    [2m | [22m [36m30.00 kB[39m[2m | [22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m                 [2m | [22m [36m16.86 kB[39m[2m | [22m
+[32mchunk-TMRKEIQQ.js[39m  [2m | [22m[2m-[22m                    [2m | [22m  [36m4.63 kB[39m[2m | [22m
+[32mchunk-VUA7WUP4.js[39m  [2m | [22m[2m-[22m                    [2m | [22m  [36m4.61 kB[39m[2m | [22m
+[32mstyles.css[39m         [2m | [22m[2mstyles[22m               [2m | [22m  [36m2.86 kB[39m[2m | [22m
+[32mchunk-CZJLB7T5.js[39m  [2m | [22m[2m-[22m                    [2m | [22m  [36m1.08 kB[39m[2m | [22m
+[32mchunk-SDXRDPII.js[39m  [2m | [22m[2m-[22m                    [2m | [22m[36m871 bytes[39m[2m | [22m
+[32mchunk-EEIOSG77.js[39m  [2m | [22m[2m-[22m                    [2m | [22m[36m770 bytes[39m[2m | [22m
+
+[1m [22m                  [2m | [22m[1mInitial total[22m        [2m | [22m [1m93.54 kB[22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m                [2m | [22m [1mRaw size[22m
+[32mchunk-2A4QXVVH.js[39m  [2m | [22m[2mpedido-detalle[22m       [2m | [22m  [36m1.28 MB[39m[2m | [22m
+[32mchunk-2BDWBJK4.js[39m  [2m | [22m[2mpedidos[22m              [2m | [22m[36m385.27 kB[39m[2m | [22m
+[32mchunk-LSXQ2G3G.js[39m  [2m | [22m[2mcatalog[22m              [2m | [22m[36m330.71 kB[39m[2m | [22m
+[32mchunk-5WEUF3XN.js[39m  [2m | [22m[2madministracion[22m       [2m | [22m[36m253.04 kB[39m[2m | [22m
+[32mchunk-VCBE4DL7.js[39m  [2m | [22m[2mruta-detalle[22m         [2m | [22m[36m235.45 kB[39m[2m | [22m
+[32mchunk-3KOW6GFG.js[39m  [2m | [22m[2mreview[22m               [2m | [22m[36m234.41 kB[39m[2m | [22m
+[32mchunk-YOW4TSE4.js[39m  [2m | [22m[2minventario[22m           [2m | [22m[36m223.61 kB[39m[2m | [22m
+[32mchunk-L6DL2XJX.js[39m  [2m | [22m[2mchats-page-component[22m [2m | [22m[36m213.88 kB[39m[2m | [22m
+[32mchunk-E56T2XRY.js[39m  [2m | [22m[2membarques-page[22m       [2m | [22m[36m210.85 kB[39m[2m | [22m
+[32mchunk-K7ZVF2DW.js[39m  [2m | [22m[2mclientas[22m             [2m | [22m[36m210.32 kB[39m[2m | [22m
+[32mchunk-LEDXJ4US.js[39m  [2m | [22m[2musuarios[22m             [2m | [22m[36m185.35 kB[39m[2m | [22m
+[32mchunk-3L6ZAB7E.js[39m  [2m | [22m[2mclienta-detalle[22m      [2m | [22m[36m182.71 kB[39m[2m | [22m
+[32mchunk-MEEOMYKE.js[39m  [2m | [22m[2mcatalog-detail[22m       [2m | [22m[36m149.96 kB[39m[2m | [22m
+[32mchunk-QNJPEO2D.js[39m  [2m | [22m[2mretiro-ganancias-page[22m[2m | [22m[36m142.17 kB[39m[2m | [22m
+[32mchunk-H7BGGFIQ.js[39m  [2m | [22m[2mrutas[22m                [2m | [22m[36m137.74 kB[39m[2m | [22m
+[2m...and 41 more lazy chunks files. Use "--verbose" to show all the files.[22m
+
+Application bundle generation complete. [28.902 seconds] - 2026-07-16T02:41:03.941Z
+
+Page reload sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m          [2m | [22m [1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m           [2m | [22m [36m16.86 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m          [2m | [22m [1mRaw size[22m
+[32mchunk-XEK55TSY.js[39m  [2m | [22m[2mclienta-detalle[22m[2m | [22m[36m189.28 kB[39m[2m | [22m
+
+Application bundle generation complete. [15.055 seconds] - 2026-07-16T02:41:22.075Z
+
+Component update sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m        [2m | [22m[1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m         [2m | [22m[36m16.86 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m        [2m | [22m[1mRaw size[22m
+[32mchunk-NHD4TQ4R.js[39m  [2m | [22m[2morder-tracker[22m[2m | [22m[36m90.50 kB[39m[2m | [22m
+
+Application bundle generation complete. [60.833 seconds] - 2026-07-16T03:54:31.528Z
+
+Page reload sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m               [2m | [22m[1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m                [2m | [22m[36m16.86 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m               [2m | [22m[1mRaw size[22m
+[32mchunk-KRSENS6U.js[39m  [2m | [22m[2morder-tracker-detail[22m[2m | [22m[36m66.63 kB[39m[2m | [22m
+
+Application bundle generation complete. [15.039 seconds] - 2026-07-16T04:01:15.170Z
+
+Component update sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m               [2m | [22m[1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m                [2m | [22m[36m16.86 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m               [2m | [22m[1mRaw size[22m
+[32mchunk-TUBKSURB.js[39m  [2m | [22m[2morder-tracker[22m       [2m | [22m[36m90.50 kB[39m[2m | [22m
+[32mchunk-5YVLHFCB.js[39m  [2m | [22m[2morder-tracker-detail[22m[2m | [22m[36m67.88 kB[39m[2m | [22m
+[32mchunk-JMYUOHU4.js[39m  [2m | [22m[2m-[22m                   [2m | [22m [36m1.72 kB[39m[2m | [22m
+
+Application bundle generation complete. [17.861 seconds] - 2026-07-16T04:03:17.866Z
+
+Page reload sent to client(s).

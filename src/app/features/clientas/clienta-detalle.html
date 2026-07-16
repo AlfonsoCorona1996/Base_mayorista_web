@@ -412,28 +412,90 @@
       Link de seguimiento
     </h2>
     <p class="cd-track-hint">
-      Genera un enlace personal para que la clienta pueda ver sus pedidos sin iniciar sesión.
+      La clienta puede consultar pedidos, pagos y devoluciones sin iniciar sesión.
+      El enlace es personal y debe compartirse únicamente con ella.
     </p>
 
-    @if (trackLink()) {
-      <div class="cd-track-box">
-        <span class="cd-track-url">{{ trackLink() }}</span>
-        <button type="button" class="btn btn-ghost cd-track-copy" (click)="copyTrackLink()">
-          <span class="material-symbols-rounded">
-            {{ trackLinkCopied() ? 'check_circle' : 'content_copy' }}
-          </span>
-          {{ trackLinkCopied() ? 'Copiado' : 'Copiar' }}
-        </button>
+    @if (trackLinkLoading() && !trackLinkMeta()) {
+      <div class="cd-track-loading" role="status">
+        <span class="material-symbols-rounded" aria-hidden="true">progress_activity</span>
+        Consultando enlace…
       </div>
+    } @else {
+      @if (trackLink()) {
+        <div class="cd-track-status-row">
+          <span class="cd-track-status">
+            <span class="material-symbols-rounded" aria-hidden="true">verified_user</span>
+            Enlace activo
+          </span>
+          @if (trackLinkMeta()?.legacy) {
+            <span class="cd-track-legacy">Versión anterior</span>
+          }
+        </div>
+
+        <div class="cd-track-box">
+          <span class="cd-track-url">{{ trackLink() }}</span>
+          <button type="button" class="btn btn-ghost cd-track-copy" (click)="copyTrackLink()">
+            <span class="material-symbols-rounded" aria-hidden="true">
+              {{ trackLinkCopied() ? 'check_circle' : 'content_copy' }}
+            </span>
+            {{ trackLinkCopied() ? 'Copiado' : 'Copiar' }}
+          </button>
+        </div>
+
+        @if (trackLinkMeta()?.last_access_at; as lastAccess) {
+          <p class="cd-track-access">
+            Última consulta: {{ lastAccess | date:'d MMM y, h:mm a' }}
+          </p>
+        }
+
+        <div class="cd-track-actions">
+          <a class="btn btn-secondary" [attr.href]="trackLink()" target="_blank" rel="noopener noreferrer">
+            <span class="material-symbols-rounded" aria-hidden="true">open_in_new</span>
+            Abrir
+          </a>
+          <button type="button" class="btn btn-secondary" (click)="shareTrackLink()" [disabled]="trackLinkLoading()">
+            <span class="material-symbols-rounded" aria-hidden="true">chat</span>
+            Compartir por WhatsApp
+          </button>
+          <button type="button" class="btn btn-secondary" (click)="generateTrackLink()" [disabled]="trackLinkLoading()">
+            <span class="material-symbols-rounded" aria-hidden="true">refresh</span>
+            {{ trackLinkLoading() ? 'Procesando…' : 'Regenerar' }}
+          </button>
+          <button type="button" class="btn btn-ghost cd-track-revoke" (click)="revokeTrackLink()" [disabled]="trackLinkLoading()">
+            <span class="material-symbols-rounded" aria-hidden="true">link_off</span>
+            Revocar
+          </button>
+        </div>
+      } @else {
+        <div class="cd-track-empty">
+          <span class="material-symbols-rounded" aria-hidden="true">link_off</span>
+          <div>
+            <strong>Sin enlace activo</strong>
+            <p>Genera un enlace seguro para comenzar a compartir el seguimiento.</p>
+          </div>
+        </div>
+        <button type="button"
+          class="btn btn-secondary cd-track-gen"
+          [disabled]="trackLinkLoading()"
+          (click)="generateTrackLink()">
+          <span class="material-symbols-rounded" aria-hidden="true">add_link</span>
+          {{ trackLinkLoading() ? 'Generando…' : 'Generar enlace seguro' }}
+        </button>
+      }
     }
 
-    <button type="button"
-      class="btn btn-secondary cd-track-gen"
-      [disabled]="trackLinkLoading()"
-      (click)="generateTrackLink()">
-      <span class="material-symbols-rounded">{{ trackLink() ? 'refresh' : 'link' }}</span>
-      {{ trackLinkLoading() ? 'Generando…' : trackLink() ? 'Regenerar link' : 'Generar link' }}
-    </button>
+    @if (trackLinkError()) {
+      <p class="cd-track-message cd-track-message--error" role="alert">{{ trackLinkError() }}</p>
+    }
+    @if (trackLinkNotice()) {
+      <p class="cd-track-message cd-track-message--success" role="status">{{ trackLinkNotice() }}</p>
+    }
+
+    <p class="cd-track-security">
+      <span class="material-symbols-rounded" aria-hidden="true">shield_lock</span>
+      Cualquier persona con este enlace puede consultar la información pública de la clienta.
+    </p>
   </section>
 
   <!-- ── Notificaciones WhatsApp ── -->

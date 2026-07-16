@@ -1,12 +1,11 @@
-<section class="catalog-import-page">
-  <header class="import-head">
-    <div>
-      <p class="kicker">
-        <span class="material-symbols-rounded" aria-hidden="true">upload_file</span>
-        Catalogo importado
-      </p>
-      <h2>Productos de Catalogo</h2>
-      <p>Importa el Excel, mapea columnas y actualiza productos por SKU.</p>
+<section class="products-console">
+  <header class="console-head">
+    <div class="head-title">
+      <span class="head-icon material-symbols-rounded" aria-hidden="true">inventory_2</span>
+      <div>
+        <h2>Productos</h2>
+        <p>Catálogo importado, precios, calidad e historial de Excel.</p>
+      </div>
     </div>
     <div class="head-actions">
       <button type="button" class="btn btn-ghost" (click)="reload()" [disabled]="pageState().loading">
@@ -15,57 +14,76 @@
       </button>
       <button type="button" class="btn btn-primary" (click)="openImportModal()" [disabled]="parsing()">
         <span class="material-symbols-rounded" aria-hidden="true">upload_file</span>
-        {{ parsing() ? "Leyendo..." : "Importar Excel" }}
+        Importar Excel
       </button>
     </div>
   </header>
 
-  @if (importModalOpen()) {
-    <div class="modal-backdrop" (click)="closeImportModal()">
-      <section class="import-modal" role="dialog" aria-modal="true" aria-labelledby="catalog-import-modal-title" (click)="$event.stopPropagation()">
-        <div class="modal-head">
-          <div>
-            <p class="kicker">
-              <span class="material-symbols-rounded" aria-hidden="true">storefront</span>
-              Proveedor del catalogo
-            </p>
-            <h3 id="catalog-import-modal-title">Importar catalogo</h3>
-          </div>
-          <button type="button" class="icon-btn" aria-label="Cerrar" (click)="closeImportModal()" [disabled]="parsing() || importing()">
-            <span class="material-symbols-rounded" aria-hidden="true">close</span>
-          </button>
-        </div>
+  <nav class="console-tabs" aria-label="Secciones de productos importados">
+    <button type="button" [class.active]="consoleTab() === 'products'" (click)="setConsoleTab('products')">
+      <span class="material-symbols-rounded" aria-hidden="true">table_rows</span>
+      Productos
+    </button>
+    <button type="button" [class.active]="consoleTab() === 'imports'" (click)="setConsoleTab('imports')">
+      <span class="material-symbols-rounded" aria-hidden="true">history</span>
+      Importaciones
+    </button>
+    <button type="button" [class.active]="consoleTab() === 'quality'" (click)="setConsoleTab('quality')">
+      <span class="material-symbols-rounded" aria-hidden="true">rule</span>
+      Calidad
+    </button>
+  </nav>
 
-        <label class="field">
-          <span>Proveedor padre *</span>
-          <select class="input" [ngModel]="selectedSupplierId()" (ngModelChange)="onSupplierSelected($event)" [disabled]="parsing() || importing()">
-            <option value="">Selecciona proveedor</option>
-            @for (supplier of catalogSuppliers(); track supplier.supplier_id) {
-              <option [value]="supplier.supplier_id">{{ supplier.display_name }}</option>
-            }
-          </select>
-        </label>
-
-        @if (catalogSuppliers().length === 0) {
-          <p class="modal-hint error-text">No hay proveedores activos de Catalogo. Crea o activa el proveedor antes de importar.</p>
-        } @else {
-          <p class="modal-hint">Este proveedor se guardara como padre de todos los articulos importados.</p>
-        }
-
-        @if (supplierPickerError()) {
-          <p class="modal-hint error-text">{{ supplierPickerError() }}</p>
-        }
-
-        <label class="file-picker" [class.is-disabled]="!selectedSupplier() || parsing()">
-          <span class="material-symbols-rounded" aria-hidden="true">upload_file</span>
-          <span>{{ parsing() ? "Leyendo Excel..." : "Elegir archivo Excel" }}</span>
-          <input type="file" accept=".xlsx,.xls" (change)="onFileSelected($event)" [disabled]="!selectedSupplier() || parsing()" hidden />
-        </label>
-      </section>
+  <section class="supplier-switcher" aria-label="Proveedores de catálogo">
+    <div class="supplier-switcher-head">
+      <span class="material-symbols-rounded" aria-hidden="true">storefront</span>
+      <div>
+        <strong>Proveedor activo</strong>
+        <small>Las métricas, productos, importaciones y alertas se calculan solo para este proveedor.</small>
+      </div>
     </div>
-  }
+    <div class="supplier-tabs">
+      @for (supplier of supplierOptions(); track supplier.key) {
+        <button type="button" [class.active]="activeCatalogSupplierKey() === supplier.key" (click)="selectCatalogSupplier(supplier.key)">
+          <strong>{{ supplier.label }}</strong>
+          <span>{{ supplier.productCount }} productos</span>
+          @if (supplier.issueCount > 0) {
+            <em>{{ supplier.issueCount }} revisar</em>
+          }
+        </button>
+      }
+    </div>
+  </section>
 
-  @if (importJobs.latestActiveJob(); as job) {
+  <section class="kpi-strip" aria-label="Indicadores de catálogo importado">
+    <article>
+      <span class="material-symbols-rounded" aria-hidden="true">inventory_2</span>
+      <small>Total</small>
+      <strong>{{ productKpis().total }}</strong>
+    </article>
+    <article>
+      <span class="material-symbols-rounded ok" aria-hidden="true">check_circle</span>
+      <small>Actualizados</small>
+      <strong>{{ productKpis().updated }}</strong>
+    </article>
+    <article>
+      <span class="material-symbols-rounded warn" aria-hidden="true">schedule</span>
+      <small>Precio viejo</small>
+      <strong>{{ productKpis().stale }}</strong>
+    </article>
+    <article>
+      <span class="material-symbols-rounded danger" aria-hidden="true">error</span>
+      <small>Sin precio</small>
+      <strong>{{ productKpis().missingPrice }}</strong>
+    </article>
+    <article>
+      <span class="material-symbols-rounded info" aria-hidden="true">warning</span>
+      <small>Revisar</small>
+      <strong>{{ productKpis().review }}</strong>
+    </article>
+  </section>
+
+  @if (activeSupplierJob(); as job) {
     <section class="job-panel">
       <div class="job-head">
         <span class="material-symbols-rounded" aria-hidden="true">sync</span>
@@ -91,274 +109,573 @@
     </div>
   }
 
-  @if (headers().length > 0) {
-    <section class="import-panel">
-      <div class="import-panel-head">
-        <div>
-          <h3>{{ fileName() }}</h3>
-          <p>{{ rawRows().length }} fila(s) detectadas · {{ headers().length }} columna(s){{ validating() ? " · Validando..." : "" }}</p>
-        </div>
-        <button type="button" class="btn btn-primary" (click)="importValidRows()" [disabled]="!canImport()">
-          <span class="material-symbols-rounded" aria-hidden="true">cloud_upload</span>
-          {{ validating() ? "Validando..." : importing() ? "Importando..." : "Importar validas" }}
-        </button>
+  @if (consoleTab() === 'products') {
+    <section class="panel">
+      <div class="toolbar">
+        <label class="field search-field">
+          <span class="material-symbols-rounded" aria-hidden="true">search</span>
+          <input class="input" type="search" [ngModel]="search()" (ngModelChange)="onSearchChange($event)" placeholder="Buscar por SKU" />
+        </label>
+        <p>{{ products().length }} en esta vista · {{ scopedCatalogProducts().length }} guardado(s) de {{ activeCatalogSupplier()?.label || "este proveedor" }}</p>
       </div>
 
-      <div class="stats-grid">
-        <article>
-          <span>Total</span>
-          <strong>{{ preview().total }}</strong>
-        </article>
-        <article>
-          <span>Validas</span>
-          <strong>{{ preview().valid }}</strong>
-        </article>
-        <article>
-          <span>Sin SKU</span>
-          <strong>{{ preview().missingSku }}</strong>
-        </article>
-        <article>
-          <span>SKU duplicado</span>
-          <strong>{{ preview().duplicateSku }}</strong>
-        </article>
-        <article>
-          <span>Valores inválidos</span>
-          <strong>{{ preview().invalidValues }}</strong>
-        </article>
-      </div>
-
-      <div class="mapping-layout">
-        <div class="mapping-grid mapping-grid--compact">
-          <label class="field">
-            <span>SKU *</span>
-            <select class="input" [ngModel]="mapping().skuColumn" (ngModelChange)="setMappingField('skuColumn', $event)">
-              <option value="">Selecciona columna</option>
-              @for (header of headers(); track header) {
-                <option [value]="header">{{ header }}</option>
-              }
-            </select>
-          </label>
-
-          <label class="field">
-            <span>Marca</span>
-            <select class="input" [ngModel]="mapping().brandColumn" (ngModelChange)="setMappingField('brandColumn', $event)">
-              <option value="">Sin mapear</option>
-              @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
-            </select>
-          </label>
-
-          <label class="field">
-            <span>Categoria</span>
-            <select class="input" [ngModel]="mapping().categoryColumn" (ngModelChange)="setMappingField('categoryColumn', $event)">
-              <option value="">Sin mapear</option>
-              @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
-            </select>
-          </label>
-
-          <label class="field">
-            <span>Color</span>
-            <select class="input" [ngModel]="mapping().colorColumn" (ngModelChange)="setMappingField('colorColumn', $event)">
-              <option value="">Sin mapear</option>
-              @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
-            </select>
-          </label>
-
-          <label class="field">
-            <span>Talla</span>
-            <select class="input" [ngModel]="mapping().sizeColumn" (ngModelChange)="setMappingField('sizeColumn', $event)">
-              <option value="">Sin mapear</option>
-              @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
-            </select>
-          </label>
-
-          <div class="field price-field">
-            <div class="price-cost-labels">
-              <span>Precio costo</span>
-              <span>Descuento %</span>
-            </div>
-            <div class="price-cost-row">
-              <select class="input" [ngModel]="mapping().priceCostColumn" (ngModelChange)="setMappingField('priceCostColumn', $event)">
-                <option value="">Sin mapear</option>
-                @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
-              </select>
-              <input class="input" type="number" min="0" max="100" step="1" [ngModel]="mapping().priceCostDiscountPct" (ngModelChange)="setPercentField('priceCostDiscountPct', $event)" />
-            </div>
-          </div>
-
-          <label class="field">
-            <span>Precio clienta - aumento %</span>
-            <input class="input" type="number" min="0" max="100" step="1" [ngModel]="mapping().priceClientaMarkupPct" (ngModelChange)="setPercentField('priceClientaMarkupPct', $event)" />
-          </label>
-        </div>
-
-        <div class="field name-field">
-          <span>Nombre (puede combinar columnas)</span>
-          <div class="name-columns">
-            @for (header of headers(); track header) {
-              <label>
-                <input
-                  type="checkbox"
-                  [checked]="isNameColumnSelected(header)"
-                  (change)="toggleNameColumn(header, $any($event.target).checked)"
-                />
-                <span>{{ header }}</span>
-              </label>
-            }
-          </div>
-        </div>
-      </div>
-
-      <div class="preview-wrap">
-        <h3>Vista previa</h3>
-        @if (validating()) {
-          <p class="empty">Validando filas sin congelar la app...</p>
-        }
-        <div class="preview-table-scroll">
-          <table class="preview-table">
+      @if (pageState().error) {
+        <p class="empty">{{ pageState().error }}</p>
+      } @else if (pageState().loading && products().length === 0) {
+        <p class="empty">Cargando productos...</p>
+      } @else if (products().length === 0) {
+        <p class="empty">No hay productos importados para mostrar.</p>
+      } @else {
+        <div class="table-scroll desktop-products">
+          <table class="modern-table">
             <thead>
               <tr>
-                <th>Fila</th>
+                <th>Producto</th>
+                <th>Proveedor</th>
+                <th>Costo</th>
+                <th>Clienta</th>
+                <th>Última actualización</th>
                 <th>Estado</th>
-                <th>SKU</th>
-                <th>Nombre</th>
-                <th>Marca</th>
-                <th>Categoria</th>
-                <th>Precio costo</th>
-                <th>Precio clienta</th>
-                <th>Color</th>
-                <th>Talla</th>
               </tr>
             </thead>
             <tbody>
-              @for (row of preview().sample; track row.rowNumber) {
-                <tr [class.invalid]="!row.valid">
-                  <td>{{ row.rowNumber }}</td>
-                  <td>{{ row.valid ? "OK" : row.issue }}</td>
-                  <td>{{ row.sku || "-" }}</td>
-                  <td>{{ row.name }}</td>
-                  <td>{{ row.brand_name || "-" }}</td>
-                  <td>{{ row.category || "-" }}</td>
+              @for (product of products(); track product.product_id) {
+                <tr>
                   <td>
-                    @if (row.price_cost_excel !== null && row.price_cost_excel !== undefined) {
-                      <span class="price-formula price-formula--cost">
-                        <span>{{ row.price_cost_excel | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
-                        <span>- {{ row.price_cost_discount_pct || 0 }}%</span>
-                        <strong>{{ row.price_cost | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong>
-                      </span>
-                    } @else {
-                      -
-                    }
+                    <div class="product-cell">
+                      @if (product.image_url) {
+                        <img [src]="product.image_url" alt="" />
+                      } @else {
+                        <span class="product-avatar material-symbols-rounded" aria-hidden="true">inventory_2</span>
+                      }
+                      <div>
+                        <strong>{{ product.name }}</strong>
+                        <small>{{ product.sku }} · {{ product.category || "Sin categoría" }}</small>
+                      </div>
+                    </div>
                   </td>
+                  <td>{{ product.supplier_name || "-" }}</td>
+                  <td>{{ product.price_cost | currency:'MXN':'symbol-narrow':'1.0-0' }}</td>
+                  <td>{{ product.price_clienta | currency:'MXN':'symbol-narrow':'1.0-0' }}</td>
+                  <td>{{ shortDate(product.last_price_imported_at || product.last_imported_at) }}</td>
                   <td>
-                    @if (row.price_cost_excel !== null && row.price_cost_excel !== undefined) {
-                      <span class="price-formula price-formula--clienta">
-                        <span>{{ row.price_cost_excel | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
-                        <span>+ {{ row.price_clienta_markup_pct || 0 }}%</span>
-                        <strong>{{ row.price_clienta | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong>
-                      </span>
-                    } @else {
-                      -
-                    }
+                    <div class="pill-row">
+                      @for (pill of productHealth(product); track pill.label) {
+                        <span class="health-pill" [class]="'health-pill ' + pill.tone">
+                          <span class="material-symbols-rounded" aria-hidden="true">{{ pill.icon }}</span>
+                          {{ pill.label }}
+                        </span>
+                      }
+                    </div>
                   </td>
-                  <td>{{ row.color || "-" }}</td>
-                  <td>{{ row.size || "-" }}</td>
                 </tr>
               }
             </tbody>
           </table>
         </div>
+
+        <div class="mobile-products">
+          @for (product of products(); track product.product_id) {
+            <article class="product-card">
+              <div class="product-card-head">
+                @if (product.image_url) {
+                  <img [src]="product.image_url" alt="" />
+                } @else {
+                  <span class="product-avatar material-symbols-rounded" aria-hidden="true">inventory_2</span>
+                }
+                <div>
+                  <strong>{{ product.name }}</strong>
+                  <small>{{ product.sku }}</small>
+                </div>
+              </div>
+              <div class="product-card-meta">
+                <span>{{ product.supplier_name || "Sin proveedor" }}</span>
+                <span>{{ product.category || "Sin categoría" }}</span>
+              </div>
+              <div class="mini-grid">
+                <span><small>Costo</small><strong>{{ product.price_cost | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></span>
+                <span><small>Clienta</small><strong>{{ product.price_clienta | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></span>
+                <span><small>Actualizado</small><strong>{{ shortDate(product.last_price_imported_at || product.last_imported_at) }}</strong></span>
+              </div>
+              <div class="pill-row">
+                @for (pill of productHealth(product); track pill.label) {
+                  <span class="health-pill" [class]="'health-pill ' + pill.tone">
+                    <span class="material-symbols-rounded" aria-hidden="true">{{ pill.icon }}</span>
+                    {{ pill.label }}
+                  </span>
+                }
+              </div>
+            </article>
+          }
+        </div>
+
+        @if (pageState().hasMore) {
+          <button type="button" class="btn btn-ghost more-btn" (click)="loadMoreProducts()" [disabled]="pageState().loading">
+            <span class="material-symbols-rounded" aria-hidden="true">expand_more</span>
+            {{ pageState().loading ? "Cargando..." : "Cargar más" }}
+          </button>
+        }
+      }
+    </section>
+  }
+
+  @if (consoleTab() === 'imports') {
+    <section class="imports-layout">
+      <div class="panel import-history">
+        <div class="panel-head">
+          <div>
+            <h3>Historial de importaciones</h3>
+            <p>{{ scopedImportJobs().length }} registro(s) de {{ activeCatalogSupplier()?.label || "este proveedor" }}</p>
+          </div>
+        </div>
+        @if (scopedImportJobs().length === 0) {
+          <p class="empty">Aún no hay importaciones registradas para este proveedor.</p>
+        } @else {
+          <div class="job-list">
+            @for (job of scopedImportJobs(); track job.job_id) {
+              <article class="job-card" [class.active]="selectedJobId() === job.job_id" (click)="selectJob(job)">
+                <div class="job-card-main">
+                  <span class="job-icon material-symbols-rounded" aria-hidden="true">upload_file</span>
+                  <div>
+                    <strong>{{ job.file_name }}</strong>
+                    <small>{{ job.supplier_name || "Sin proveedor" }} · {{ formatDate(job.completed_at || job.updated_at || job.created_at) }}</small>
+                  </div>
+                </div>
+                <div class="job-card-meta">
+                  <span class="health-pill" [class]="'health-pill ' + jobStatusClass(job)">{{ jobStatusLabel(job) }}</span>
+                  <span>{{ job.import_mode === 'full' ? 'Completo' : 'Parcial' }}</span>
+                  <span>{{ job.processed_rows }}/{{ job.valid_rows }} filas</span>
+                </div>
+                <div class="job-card-actions">
+                  <button type="button" class="btn btn-ghost" (click)="openCorrection(job, $event)">
+                    <span class="material-symbols-rounded" aria-hidden="true">edit_note</span>
+                    Corrección
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-danger"
+                    (click)="rollbackJob(job, $event)"
+                    [disabled]="job.status !== 'completed' || job.rollback_status === 'completed' || rollbackBusyId() === job.job_id"
+                  >
+                    <span class="material-symbols-rounded" aria-hidden="true">undo</span>
+                    {{ rollbackBusyId() === job.job_id ? "Revirtiendo..." : "Revertir" }}
+                  </button>
+                </div>
+              </article>
+            }
+          </div>
+        }
       </div>
 
-      @if (rejectedRows().length > 0) {
-        <div class="preview-wrap">
-          <h3>Filas que no se importarán</h3>
-          <div class="preview-table-scroll">
-            <table class="preview-table rejected-table">
-              <thead>
-                <tr>
-                  <th>Fila</th>
-                  <th>Razón</th>
-                  <th>SKU</th>
-                  <th>Nombre</th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (row of rejectedRows().slice(0, 100); track row.rowNumber) {
-                  <tr class="invalid">
-                    <td>{{ row.rowNumber }}</td>
-                    <td>{{ row.issue }}</td>
-                    <td>{{ row.sku || "-" }}</td>
-                    <td>{{ row.name }}</td>
-                  </tr>
-                }
-              </tbody>
-            </table>
+      <div class="panel import-detail">
+        @if (selectedJob(); as job) {
+          <div class="panel-head">
+            <div>
+              <h3>{{ job.file_name }}</h3>
+              <p>{{ job.supplier_name || "Sin proveedor" }} · {{ job.created_by_name || "Usuario no registrado" }}</p>
+            </div>
+            <span class="health-pill" [class]="'health-pill ' + jobStatusClass(job)">{{ jobStatusLabel(job) }}</span>
           </div>
-          @if (rejectedRows().length > 100) {
-            <p class="empty">Mostrando 100 de {{ rejectedRows().length }} filas rechazadas.</p>
+          <div class="detail-kpis">
+            <span><small>Creados</small><strong>{{ job.created_products }}</strong></span>
+            <span><small>Actualizados</small><strong>{{ job.updated_products }}</strong></span>
+            <span><small>Sin cambio</small><strong>{{ job.unchanged_rows }}</strong></span>
+            <span><small>Fallidos</small><strong>{{ job.failed_rows }}</strong></span>
+            <span><small>No vinieron</small><strong>{{ job.not_in_file_count }}</strong></span>
+          </div>
+          @if (selectedJobRowsLoading()) {
+            <p class="empty">Cargando filas...</p>
+          } @else if (selectedJobRows().length === 0) {
+            <p class="empty">Selecciona una importación reciente para ver auditoría por SKU.</p>
+          } @else {
+            <div class="table-scroll">
+              <table class="modern-table compact">
+                <thead>
+                  <tr>
+                    <th>Fila</th>
+                    <th>SKU</th>
+                    <th>Estado</th>
+                    <th>Precio antes</th>
+                    <th>Precio después</th>
+                    <th>Detalle</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (row of selectedJobRows(); track row.row_id) {
+                    <tr>
+                      <td>{{ row.row_number }}</td>
+                      <td><strong>{{ row.sku || "-" }}</strong></td>
+                      <td><span class="health-pill" [class]="'health-pill ' + rowStatusClass(row.status)">{{ rowStatusLabel(row.status) }}</span></td>
+                      <td>{{ row.price_before?.['price_clienta'] || "-" }}</td>
+                      <td>{{ row.price_after?.['price_clienta'] || "-" }}</td>
+                      <td>{{ row.issue || (row.changed_fields.length ? row.changed_fields.join(", ") : "-") }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        } @else {
+          <div class="empty-detail">
+            <span class="material-symbols-rounded" aria-hidden="true">history</span>
+            <p>Selecciona una importación para ver detalle, cambios por SKU y acciones de reversión.</p>
+          </div>
+        }
+      </div>
+    </section>
+  }
+
+  @if (consoleTab() === 'quality') {
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <h3>Calidad de catálogo</h3>
+          <p>Productos de {{ activeCatalogSupplier()?.label || "este proveedor" }} que necesitan revisión antes de venderse.</p>
+        </div>
+      </div>
+      @if (qualityProducts().length === 0) {
+        <p class="empty">No hay alertas de calidad para este proveedor.</p>
+      } @else {
+        <div class="quality-grid">
+          @for (product of qualityProducts(); track product.product_id) {
+            <article class="quality-card">
+              <div>
+                <strong>{{ product.name }}</strong>
+                <small>{{ product.sku }} · {{ product.supplier_name || "Sin proveedor" }}</small>
+              </div>
+              <div class="pill-row">
+                @for (pill of productHealth(product); track pill.label) {
+                  <span class="health-pill" [class]="'health-pill ' + pill.tone">
+                    <span class="material-symbols-rounded" aria-hidden="true">{{ pill.icon }}</span>
+                    {{ pill.label }}
+                  </span>
+                }
+              </div>
+            </article>
           }
         </div>
       }
     </section>
   }
 
-  <section class="products-panel">
-    <div class="products-head">
-      <div>
-        <h3>Productos importados</h3>
-        <p>{{ products().length }} producto(s) en esta vista</p>
-      </div>
-      <label class="field search-field">
-        <span class="material-symbols-rounded" aria-hidden="true">search</span>
-        <input class="input" type="search" [ngModel]="search()" (ngModelChange)="onSearchChange($event)" placeholder="Buscar por SKU..." />
-      </label>
-    </div>
+  @if (importModalOpen()) {
+    <div class="wizard-backdrop" (click)="closeImportModal()">
+      <section class="wizard" role="dialog" aria-modal="true" aria-labelledby="import-wizard-title" (click)="$event.stopPropagation()">
+        <header class="wizard-head">
+          <div class="head-title">
+            <span class="head-icon material-symbols-rounded" aria-hidden="true">upload_file</span>
+            <div>
+              <h3 id="import-wizard-title">Importar Excel</h3>
+              <p>{{ fileName() || "Carga un archivo y revisa antes de aplicar cambios." }}</p>
+            </div>
+          </div>
+          <button type="button" class="icon-btn" aria-label="Cerrar" (click)="closeImportModal()" [disabled]="parsing() || importing()">
+            <span class="material-symbols-rounded" aria-hidden="true">close</span>
+          </button>
+        </header>
 
-    @if (pageState().error) {
-      <p class="empty">{{ pageState().error }}</p>
-    } @else if (pageState().loading && products().length === 0) {
-      <p class="empty">Cargando productos...</p>
-    } @else if (products().length === 0) {
-      <p class="empty">No hay productos importados para mostrar.</p>
-    } @else {
-      <div class="preview-table-scroll">
-        <table class="preview-table catalog-products-table">
-          <thead>
-            <tr>
-              <th>SKU</th>
-              <th>Nombre</th>
-              <th>Marca</th>
-              <th>Proveedor</th>
-              <th>Categoría</th>
-              <th>Color</th>
-              <th>Talla</th>
-              <th>Costo</th>
-              <th>Clienta</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (product of products(); track product.product_id) {
-              <tr>
-                <td><strong class="sku">{{ product.sku }}</strong></td>
-                <td>{{ product.name }}</td>
-                <td>{{ product.brand_name || "-" }}</td>
-                <td>{{ product.supplier_name || "-" }}</td>
-                <td>{{ product.category || "-" }}</td>
-                <td>{{ product.color || "-" }}</td>
-                <td>{{ product.size || "-" }}</td>
-                <td>{{ product.price_cost | currency:'MXN':'symbol-narrow':'1.0-0' }}</td>
-                <td>{{ product.price_clienta | currency:'MXN':'symbol-narrow':'1.0-0' }}</td>
-              </tr>
-            }
-          </tbody>
-        </table>
-      </div>
-      @if (pageState().hasMore) {
-        <button type="button" class="btn btn-ghost more-btn" (click)="loadMoreProducts()" [disabled]="pageState().loading">
-          <span class="material-symbols-rounded" aria-hidden="true">expand_more</span>
-          {{ pageState().loading ? "Cargando..." : "Cargar más" }}
-        </button>
-      }
-    }
-  </section>
+        <nav class="wizard-steps" aria-label="Pasos de importación">
+          <button type="button" [class.active]="wizardStep() === 'file'" (click)="setWizardStep('file')">Archivo</button>
+          <button type="button" [class.active]="wizardStep() === 'headers'" [disabled]="!canEnterStep('headers')" (click)="setWizardStep('headers')">Encabezados</button>
+          <button type="button" [class.active]="wizardStep() === 'columns'" [disabled]="!canEnterStep('columns')" (click)="setWizardStep('columns')">Columnas</button>
+          <button type="button" [class.active]="wizardStep() === 'prices'" [disabled]="!canEnterStep('prices')" (click)="setWizardStep('prices')">Precios</button>
+          <button type="button" [class.active]="wizardStep() === 'review'" [disabled]="!canEnterStep('review')" (click)="setWizardStep('review')">Revisión</button>
+          <button type="button" [class.active]="wizardStep() === 'result'" [disabled]="!canEnterStep('result')" (click)="setWizardStep('result')">Resultado</button>
+        </nav>
+
+        <div class="wizard-body">
+          @if (wizardStep() === 'file') {
+            <div class="wizard-section">
+              <label class="field">
+                <span>Proveedor padre *</span>
+                <select class="input" [ngModel]="selectedSupplierId()" (ngModelChange)="onSupplierSelected($event)" [disabled]="parsing() || importing()">
+                  <option value="">Selecciona proveedor</option>
+                  @for (supplier of catalogSuppliers(); track supplier.supplier_id) {
+                    <option [value]="supplier.supplier_id">{{ supplier.display_name }}</option>
+                  }
+                </select>
+              </label>
+              <div class="field">
+                <span>Modo de importación</span>
+                <div class="segmented">
+                  <label>
+                    <input type="radio" name="importMode" value="full" [ngModel]="importMode()" (ngModelChange)="importMode.set($event)" />
+                    <span>Catálogo completo</span>
+                  </label>
+                  <label>
+                    <input type="radio" name="importMode" value="partial" [ngModel]="importMode()" (ngModelChange)="importMode.set($event)" />
+                    <span>Actualización parcial</span>
+                  </label>
+                </div>
+              </div>
+              <label class="file-picker" [class.is-disabled]="!selectedSupplier() || parsing()">
+                <span class="material-symbols-rounded" aria-hidden="true">upload_file</span>
+                <span>{{ parsing() ? "Leyendo Excel..." : fileName() || "Elegir archivo Excel" }}</span>
+                <input type="file" accept=".xlsx,.xls" (change)="onFileSelected($event)" [disabled]="!selectedSupplier() || parsing()" hidden />
+              </label>
+              @if (supplierPickerError()) {
+                <p class="form-alert danger">{{ supplierPickerError() }}</p>
+              }
+            </div>
+          }
+
+          @if (wizardStep() === 'headers') {
+            <div class="wizard-section">
+              <div class="section-copy">
+                <h4>Fila de encabezados</h4>
+                <p>Detectamos la fila {{ (headerRowIndex() || 0) + 1 }} en la hoja {{ sourceSheetName() || "principal" }}. Puedes corregirla si el Excel trae texto arriba.</p>
+              </div>
+              <label class="field">
+                <span>Usar como encabezado</span>
+                <select class="input" [ngModel]="headerRowIndex()" (ngModelChange)="onHeaderRowSelected($event)">
+                  @for (candidate of headerCandidates(); track candidate.rowIndex) {
+                    <option [ngValue]="candidate.rowIndex">Fila {{ candidate.rowNumber }} · {{ candidate.labels.join(" / ") }}</option>
+                  }
+                </select>
+              </label>
+              <div class="header-preview">
+                @for (candidate of headerCandidates(); track candidate.rowIndex) {
+                  <button type="button" [class.active]="headerRowIndex() === candidate.rowIndex" (click)="onHeaderRowSelected(candidate.rowIndex)">
+                    <strong>Fila {{ candidate.rowNumber }}</strong>
+                    <span>{{ candidate.labels.join(" · ") }}</span>
+                  </button>
+                }
+              </div>
+            </div>
+          }
+
+          @if (wizardStep() === 'columns') {
+            <div class="wizard-section">
+              <div class="mapping-grid">
+                <label class="field">
+                  <span>SKU / código *</span>
+                  <select class="input" [ngModel]="mapping().skuColumn" (ngModelChange)="setMappingField('skuColumn', $event)">
+                    <option value="">Selecciona columna</option>
+                    @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Marca</span>
+                  <select class="input" [ngModel]="mapping().brandColumn" (ngModelChange)="setMappingField('brandColumn', $event)">
+                    <option value="">Sin mapear</option>
+                    @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Categoría</span>
+                  <select class="input" [ngModel]="mapping().categoryColumn" (ngModelChange)="setMappingField('categoryColumn', $event)">
+                    <option value="">Sin mapear</option>
+                    @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Color</span>
+                  <select class="input" [ngModel]="mapping().colorColumn" (ngModelChange)="setMappingField('colorColumn', $event)">
+                    <option value="">Sin mapear</option>
+                    @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Talla</span>
+                  <select class="input" [ngModel]="mapping().sizeColumn" (ngModelChange)="setMappingField('sizeColumn', $event)">
+                    <option value="">Sin mapear</option>
+                    @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
+                  </select>
+                </label>
+                <label class="field">
+                  <span>ID proveedor</span>
+                  <select class="input" [ngModel]="mapping().impulsProductIdColumn" (ngModelChange)="setMappingField('impulsProductIdColumn', $event)">
+                    <option value="">Sin mapear</option>
+                    @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
+                  </select>
+                </label>
+              </div>
+              <div class="field name-field">
+                <span>Nombre (puede combinar columnas)</span>
+                <div class="name-columns">
+                  @for (header of headers(); track header) {
+                    <label>
+                      <input type="checkbox" [checked]="isNameColumnSelected(header)" (change)="toggleNameColumn(header, $any($event.target).checked)" />
+                      <span>{{ header }}</span>
+                    </label>
+                  }
+                </div>
+              </div>
+
+              <section class="columns-preview">
+                <div class="section-copy">
+                  <h4>Vista previa de columnas</h4>
+                  <p>Revisa ejemplos reales del Excel antes de continuar.</p>
+                </div>
+                <div class="column-sample-grid">
+                  @for (entry of mappedColumnPreview(); track entry.label) {
+                    <article [class.is-empty]="entry.values.length === 0">
+                      <div>
+                        <strong>{{ entry.label }}</strong>
+                        <small>{{ entry.column || (entry.required ? "Pendiente" : "Sin mapear") }}</small>
+                      </div>
+                      @if (entry.values.length > 0) {
+                        <ul>
+                          @for (value of entry.values; track value) {
+                            <li>{{ value }}</li>
+                          }
+                        </ul>
+                      } @else {
+                        <p>{{ entry.required ? "Selecciona una columna para ver ejemplos." : "No se usará en la importación." }}</p>
+                      }
+                    </article>
+                  }
+                </div>
+              </section>
+
+              <section class="mapped-result-preview">
+                <div class="section-copy">
+                  <h4>Cómo quedarán los productos</h4>
+                  <p>Primeras filas interpretadas con el mapeo actual.</p>
+                </div>
+                @if (validating()) {
+                  <p class="empty">Actualizando vista previa...</p>
+                } @else if (mappedResultRows().length === 0) {
+                  <p class="empty">Selecciona columnas para construir la vista previa.</p>
+                } @else {
+                  <div class="table-scroll">
+                    <table class="modern-table compact mapped-preview-table">
+                      <thead>
+                        <tr>
+                          <th>Fila</th>
+                          <th>SKU</th>
+                          <th>Nombre</th>
+                          <th>Color</th>
+                          <th>Talla</th>
+                          <th>Estado</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (row of mappedResultRows(); track row.rowNumber) {
+                          <tr [class.invalid]="!row.valid">
+                            <td>{{ row.rowNumber }}</td>
+                            <td>{{ row.sku || "-" }}</td>
+                            <td>{{ row.name }}</td>
+                            <td>{{ row.color || "-" }}</td>
+                            <td>{{ row.size || "-" }}</td>
+                            <td>{{ row.valid ? "OK" : row.issue }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                }
+              </section>
+            </div>
+          }
+
+          @if (wizardStep() === 'prices') {
+            <div class="wizard-section">
+              <div class="mapping-grid">
+                <label class="field">
+                  <span>Precio costo del Excel *</span>
+                  <select class="input" [ngModel]="mapping().priceCostColumn" (ngModelChange)="setMappingField('priceCostColumn', $event)">
+                    <option value="">Selecciona columna</option>
+                    @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Descuento costo %</span>
+                  <input class="input" type="number" min="0" max="100" step="1" [ngModel]="mapping().priceCostDiscountPct" (ngModelChange)="setPercentField('priceCostDiscountPct', $event)" />
+                </label>
+                <label class="field">
+                  <span>Aumento precio clienta %</span>
+                  <input class="input" type="number" min="0" max="100" step="1" [ngModel]="mapping().priceClientaMarkupPct" (ngModelChange)="setPercentField('priceClientaMarkupPct', $event)" />
+                </label>
+              </div>
+              <div class="price-examples">
+                @for (row of preview().sample.slice(0, 3); track row.rowNumber) {
+                  <article>
+                    <strong>{{ row.sku || "Sin SKU" }}</strong>
+                    <span>Costo {{ row.price_cost | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+                    <span>Clienta {{ row.price_clienta | currency:'MXN':'symbol-narrow':'1.0-0' }}</span>
+                  </article>
+                }
+              </div>
+            </div>
+          }
+
+          @if (wizardStep() === 'review') {
+            <div class="wizard-section">
+              <div class="stats-grid">
+                <article><span>Total</span><strong>{{ preview().total }}</strong></article>
+                <article><span>Válidas</span><strong>{{ preview().valid }}</strong></article>
+                <article><span>Sin SKU</span><strong>{{ preview().missingSku }}</strong></article>
+                <article><span>Duplicadas</span><strong>{{ preview().duplicateSku }}</strong></article>
+                <article><span>Inválidas</span><strong>{{ preview().invalidValues }}</strong></article>
+              </div>
+              @if (criticalImportIssues().length > 0) {
+                <div class="form-alert danger">
+                  @for (issue of criticalImportIssues(); track issue) { <span>{{ issue }}</span> }
+                </div>
+              }
+              @if (importWarnings().length > 0) {
+                <div class="form-alert warn">
+                  @for (warning of importWarnings(); track warning) { <span>{{ warning }}</span> }
+                </div>
+              }
+              <div class="table-scroll">
+                <table class="modern-table compact">
+                  <thead>
+                    <tr>
+                      <th>Fila</th>
+                      <th>Estado</th>
+                      <th>SKU</th>
+                      <th>Nombre</th>
+                      <th>Costo</th>
+                      <th>Clienta</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (row of preview().sample; track row.rowNumber) {
+                      <tr [class.invalid]="!row.valid">
+                        <td>{{ row.rowNumber }}</td>
+                        <td>{{ row.valid ? "OK" : row.issue }}</td>
+                        <td>{{ row.sku || "-" }}</td>
+                        <td>{{ row.name }}</td>
+                        <td>{{ row.price_cost | currency:'MXN':'symbol-narrow':'1.0-0' }}</td>
+                        <td>{{ row.price_clienta | currency:'MXN':'symbol-narrow':'1.0-0' }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          }
+
+          @if (wizardStep() === 'result') {
+            <div class="wizard-section result-state">
+              <span class="material-symbols-rounded" aria-hidden="true">check_circle</span>
+              <h4>Importación enviada</h4>
+              <p>{{ success() || "La importación se está procesando." }}</p>
+              <button type="button" class="btn btn-primary" (click)="closeImportModal()">
+                Ver consola
+              </button>
+            </div>
+          }
+        </div>
+
+        <footer class="wizard-footer">
+          <button type="button" class="btn btn-ghost" (click)="prevWizardStep()" [disabled]="wizardStep() === 'file' || importing()">Atrás</button>
+          @if (wizardStep() === 'review') {
+            <button type="button" class="btn btn-primary" (click)="importValidRows()" [disabled]="!canImport()">
+              <span class="material-symbols-rounded" aria-hidden="true">cloud_upload</span>
+              {{ validating() ? "Validando..." : importing() ? "Importando..." : "Importar válidas" }}
+            </button>
+          } @else if (wizardStep() !== 'result') {
+            <button type="button" class="btn btn-primary" (click)="nextWizardStep()" [disabled]="!canEnterStep(wizardStep() === 'file' ? 'headers' : wizardStep() === 'headers' ? 'columns' : wizardStep() === 'columns' ? 'prices' : 'review')">
+              Siguiente
+            </button>
+          } @else {
+            <button type="button" class="btn btn-primary" (click)="closeImportModal()">Cerrar</button>
+          }
+        </footer>
+      </section>
+    </div>
+  }
 </section>

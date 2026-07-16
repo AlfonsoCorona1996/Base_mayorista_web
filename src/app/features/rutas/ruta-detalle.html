@@ -6,18 +6,27 @@
     <div class="title-block">
       <span class="title-icon material-symbols-rounded">route</span>
       <div>
-        <h1>{{ routePlan()?.name || "Ruta" }}</h1>
-        <p>{{ routePlan()?.notes || "Detalle operativo y financiero de la ruta." }}</p>
+        <h1>{{ routePlan()?.name || "Ruta 360" }}</h1>
+        <p>{{ routePlan()?.notes || "Consola operativa, financiera y logistica de la ruta." }}</p>
       </div>
     </div>
-    <button type="button" class="btn btn-secondary" (click)="reload()" [disabled]="loading()">
-      <span class="material-symbols-rounded">refresh</span>
-      {{ loading() ? "Actualizando..." : "Actualizar" }}
-    </button>
+    <div class="header-actions">
+      <button type="button" class="btn btn-secondary" (click)="reload()" [disabled]="loading()">
+        <span class="material-symbols-rounded">refresh</span>
+        {{ loading() ? "Actualizando..." : "Actualizar" }}
+      </button>
+      <button type="button" class="btn btn-primary" (click)="openRunPlanner()" [disabled]="pendingOrders().length === 0">
+        <span class="material-symbols-rounded">add_road</span>
+        Preparar salida
+      </button>
+    </div>
   </header>
 
   @if (error()) {
     <div class="alert alert-error">{{ error() }}</div>
+  }
+  @if (success()) {
+    <div class="alert alert-success">{{ success() }}</div>
   }
 
   @if (routePlan(); as route) {
@@ -31,6 +40,19 @@
         <article class="kpi-card"><span class="material-symbols-rounded">wallet</span><div><small>Por cobrar</small><strong>{{ m.balanceDue | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></div></article>
         <article class="kpi-card"><span class="material-symbols-rounded">assignment_late</span><div><small>Pendientes</small><strong>{{ m.pendingOrders }}</strong></div></article>
         <article class="kpi-card"><span class="material-symbols-rounded">inventory_2</span><div><small>Inversión necesaria</small><strong>{{ m.investmentNeeded | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></div></article>
+      </section>
+    }
+
+    @if (bestAction(); as action) {
+      <section class="next-action-panel">
+        <span class="material-symbols-rounded">{{ action.icon }}</span>
+        <div>
+          <strong>{{ action.title }}</strong>
+          <p>{{ action.body }}</p>
+        </div>
+        <button type="button" class="btn btn-primary" (click)="handleBestAction(action)">
+          {{ action.label }}
+        </button>
       </section>
     }
 
@@ -49,7 +71,7 @@
           <header class="panel-head">
             <div>
               <h2>Próxima operación</h2>
-              <p>Pedidos listos o solicitados para salir.</p>
+              <p>Pedidos listos para salida, agrupables por localidad.</p>
             </div>
             <span class="count-pill">{{ pendingOrders().length }}</span>
           </header>
@@ -62,10 +84,62 @@
                   <span class="material-symbols-rounded">receipt_long</span>
                   <div>
                     <strong>{{ row.customerName }}</strong>
-                    <small>{{ orderStatusLabel(row.order.status) }} · {{ row.sale | currency:'MXN':'symbol-narrow':'1.0-0' }}</small>
+                    <small>{{ row.localityName }} · {{ orderStatusLabel(row.order.status) }}</small>
                   </div>
-                  <em>{{ row.cost | currency:'MXN':'symbol-narrow':'1.0-0' }}</em>
+                  <em>{{ row.sale | currency:'MXN':'symbol-narrow':'1.0-0' }}</em>
                 </a>
+              }
+            </div>
+          }
+        </article>
+
+        <article class="panel">
+          <header class="panel-head">
+            <div>
+              <h2>Salidas recientes</h2>
+              <p>Estado, gasto y utilidad por salida.</p>
+            </div>
+            <button type="button" class="btn btn-ghost" (click)="setTab('runs')">Ver todas</button>
+          </header>
+          @if (runInsights().length === 0) {
+            <p class="empty">No hay salidas registradas para esta ruta.</p>
+          } @else {
+            <div class="compact-list">
+              @for (row of runInsights().slice(0, 4); track row.run.runId) {
+                <a class="compact-row" [routerLink]="['/main/salidas', row.run.runId]">
+                  <span class="material-symbols-rounded">local_shipping</span>
+                  <div>
+                    <strong>{{ row.run.scheduled_at | date:'dd MMM yy':'':'es-MX' }}</strong>
+                    <small>{{ runStatusLabel(row.run.status) }} · {{ row.ordersCount }} pedidos · {{ expenseSourceLabel(row.expenseSource) }}</small>
+                  </div>
+                  <em>{{ row.netProfit | currency:'MXN':'symbol-narrow':'1.0-0' }}</em>
+                </a>
+              }
+            </div>
+          }
+        </article>
+
+        <article class="panel">
+          <header class="panel-head">
+            <div>
+              <h2>Localidades con foco</h2>
+              <p>Entrega, pedidos y cobranza por zona.</p>
+            </div>
+            <button type="button" class="btn btn-ghost" (click)="setTab('localities')">Gestionar</button>
+          </header>
+          @if (localityInsights().length === 0) {
+            <p class="empty">Esta ruta aun no tiene localidades.</p>
+          } @else {
+            <div class="compact-list">
+              @for (row of localityInsights().slice(0, 4); track row.localityId) {
+                <button type="button" class="compact-row compact-button" (click)="openLocalityEditor(row.localityId)">
+                  <span class="avatar">{{ row.index + 1 }}</span>
+                  <div>
+                    <strong>{{ row.locality?.name || row.localityId }}</strong>
+                    <small>{{ row.customers }} clientas · {{ row.pendingOrders }} pedidos pendientes</small>
+                  </div>
+                  <em>{{ row.balanceDue | currency:'MXN':'symbol-narrow':'1.0-0' }}</em>
+                </button>
               }
             </div>
           }
@@ -100,25 +174,42 @@
 
     @if (activeTab() === "runs") {
       <section class="panel">
-        <header class="panel-head">
+        <header class="panel-head panel-head-actions">
           <div>
             <h2>Salidas</h2>
-            <p>Venta, inversión, gasto y utilidad por salida.</p>
+            <p>Prepara salidas aqui; entrega y paradas viven en el detalle de salida.</p>
           </div>
+          <button type="button" class="btn btn-primary" (click)="openRunPlanner()" [disabled]="pendingOrders().length === 0">
+            <span class="material-symbols-rounded">add_road</span>
+            Preparar salida
+          </button>
         </header>
         @if (runInsights().length === 0) {
           <p class="empty">No hay salidas registradas para esta ruta.</p>
         } @else {
-          <div class="data-list">
+          <div class="data-list run-list">
             @for (row of runInsights(); track row.run.runId) {
-              <a class="data-row" [routerLink]="['/main/salidas', row.run.runId]">
-                <div><strong>{{ row.run.scheduled_at | date:'dd MMM yy' }}</strong><small>{{ runStatusLabel(row.run.status) }} · {{ row.ordersCount }} pedidos</small></div>
+              <article class="data-row operational-row">
+                <button type="button" class="row-main" (click)="goRun(row.run.runId)">
+                  <strong>{{ row.run.scheduled_at | date:'dd MMM yy':'':'es-MX' }}</strong>
+                  <small><span class="status-pill" [class]="runStatusClass(row.run.status)">{{ runStatusLabel(row.run.status) }}</span> {{ row.ordersCount }} pedidos · {{ row.packages }} paquetes</small>
+                </button>
                 <div><span>Venta</span><strong>{{ row.saleTotal | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></div>
                 <div><span>Costo</span><strong>{{ row.cost | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></div>
                 <div><span>Gasto</span><strong>{{ row.expense | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong><small>{{ expenseSourceLabel(row.expenseSource) }}</small></div>
                 <div><span>Utilidad</span><strong [class.money-danger]="row.netProfit < 0">{{ row.netProfit | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></div>
-                <div><span>Por cobrar</span><strong>{{ row.balanceDue | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></div>
-              </a>
+                <div><span>Por cobrar</span><strong [class.money-danger]="row.balanceDue > 0">{{ row.balanceDue | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></div>
+                <div class="row-actions">
+                  @if (row.needsRealExpense) {
+                    <button type="button" class="icon-btn mini danger-soft" (click)="openExpenseSheet(row.run.runId)" aria-label="Registrar gasto real">
+                      <span class="material-symbols-rounded">local_gas_station</span>
+                    </button>
+                  }
+                  <button type="button" class="icon-btn mini" (click)="goRun(row.run.runId)" aria-label="Ver salida">
+                    <span class="material-symbols-rounded">open_in_new</span>
+                  </button>
+                </div>
+              </article>
             }
           </div>
         }
@@ -127,24 +218,56 @@
 
     @if (activeTab() === "orders") {
       <section class="panel">
-        <header class="panel-head">
+        <header class="panel-head panel-head-actions">
           <div>
             <h2>Pedidos pendientes por salir</h2>
-            <p>Venta general, ganancia e inversión necesaria.</p>
+            <p>Selecciona pedidos para preparar una salida o agregarlos a una existente.</p>
+          </div>
+          <div class="panel-actions">
+            <button type="button" class="btn btn-secondary" (click)="selectAllPendingOrders()" [disabled]="pendingOrders().length === 0">
+              <span class="material-symbols-rounded">select_all</span>
+              {{ selectedPendingOrderIds().length === pendingOrders().length && pendingOrders().length > 0 ? "Limpiar" : "Todos" }}
+            </button>
+            <button type="button" class="btn btn-secondary" (click)="openAssignOrdersSheet()" [disabled]="selectedPendingOrderIds().length === 0 || openRuns().length === 0">
+              <span class="material-symbols-rounded">playlist_add</span>
+              Agregar a salida
+            </button>
+            <button type="button" class="btn btn-primary" (click)="openRunPlanner(selectedPendingOrderIds())" [disabled]="selectedPendingOrderIds().length === 0">
+              <span class="material-symbols-rounded">add_road</span>
+              Nueva salida
+            </button>
           </div>
         </header>
+        @if (selectedPendingRows().length > 0) {
+          <div class="selection-summary">
+            <span>{{ selectedPendingRows().length }} seleccionado(s)</span>
+            <strong>{{ sumPendingRows(selectedPendingRows()).sale | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong>
+            <small>Ganancia {{ sumPendingRows(selectedPendingRows()).grossProfit | currency:'MXN':'symbol-narrow':'1.0-0' }} · Por cobrar {{ sumPendingRows(selectedPendingRows()).balanceDue | currency:'MXN':'symbol-narrow':'1.0-0' }}</small>
+          </div>
+        }
         @if (pendingOrders().length === 0) {
           <p class="empty">No hay pedidos pendientes.</p>
         } @else {
-          <div class="data-list">
+          <div class="data-list order-select-list">
             @for (row of pendingOrders(); track row.order.order_id) {
-              <a class="data-row" [routerLink]="['/main/pedidos', row.order.order_id]">
-                <div><strong>{{ row.customerName }}</strong><small>{{ orderStatusLabel(row.order.status) }}</small></div>
+              <article class="data-row selectable-row" [class.selected]="selectedPendingOrderIds().includes(row.order.order_id)">
+                <label class="select-box">
+                  <input type="checkbox" [checked]="selectedPendingOrderIds().includes(row.order.order_id)" (change)="togglePendingOrder(row.order.order_id)" />
+                  <span></span>
+                </label>
+                <a class="row-main" [routerLink]="['/main/pedidos', row.order.order_id]">
+                  <strong>{{ row.customerName }}</strong>
+                  <small>{{ row.localityName }} · {{ orderStatusLabel(row.order.status) }}</small>
+                  @if (row.hasRouteDataIssue) {
+                    <span class="warning-line"><span class="material-symbols-rounded">warning</span>Falta ruta o localidad clara</span>
+                  }
+                </a>
                 <div><span>Venta</span><strong>{{ row.sale | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></div>
                 <div><span>Costo</span><strong>{{ row.cost | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></div>
                 <div><span>Ganancia</span><strong>{{ row.grossProfit | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></div>
-                <div><span>Por cobrar</span><strong>{{ row.balanceDue | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></div>
-              </a>
+                <div><span>Paquetes</span><strong>{{ row.packages }}</strong></div>
+                <div><span>Por cobrar</span><strong [class.money-danger]="row.balanceDue > 0">{{ row.balanceDue | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></div>
+              </article>
             }
           </div>
         }
@@ -164,8 +287,8 @@
         } @else {
           <div class="data-list">
             @for (row of customerInsights(); track row.customer.customer_id) {
-              <a class="data-row" [routerLink]="['/main/clientas', row.customer.customer_id]">
-                <div><strong>{{ row.customer.first_name }} {{ row.customer.last_name }}</strong><small>{{ row.lastOrder ? (row.lastOrder | date:'dd MMM yy') : "Sin compras" }}</small></div>
+              <a class="data-row customer-row" [routerLink]="['/main/clientas', row.customer.customer_id]">
+                <div><strong>{{ row.customer.first_name }} {{ row.customer.last_name }}</strong><small>{{ row.lastOrder ? (row.lastOrder | date:'dd MMM yy':'':'es-MX') : "Sin compras" }}</small></div>
                 <div><span>Ventas</span><strong>{{ row.netSales | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></div>
                 <div><span>Pedidos</span><strong>{{ row.orders }}</strong></div>
                 <div><span>Ticket</span><strong>{{ row.ticket | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></div>
@@ -178,49 +301,168 @@
     }
 
     @if (activeTab() === "expenses") {
-      <section class="panel">
-        <header class="panel-head">
-          <div>
-            <h2>Gastos de ruta</h2>
-            <p>Gastos asociados por ruta y, cuando exista, por salida.</p>
-          </div>
-        </header>
-        @if (!financeAvailable()) {
-          <p class="empty">No tienes permisos o acceso para consultar gastos financieros.</p>
-        } @else if (routeExpenses().length === 0) {
-          <p class="empty">No hay gastos registrados para esta ruta.</p>
-        } @else {
-          <div class="data-list">
-            @for (expense of routeExpenses(); track expense.expense_id) {
-              <div class="data-row">
-                <div><strong>{{ expense.notes || "Gasto de ruta" }}</strong><small>{{ expense.occurred_at | date:'dd MMM yy' }} · {{ expense.category }}</small></div>
-                <div><span>Monto</span><strong>{{ expense.amount | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></div>
-                <div><span>Salida</span><strong>{{ expense.route_run_id || "General" }}</strong></div>
+      <section class="expenses-layout">
+        <article class="panel">
+          <header class="panel-head panel-head-actions">
+            <div>
+              <h2>Gastos de ruta</h2>
+              <p>Registra gasto general o particular por salida.</p>
+            </div>
+            <button type="button" class="btn btn-primary" (click)="openExpenseSheet()" [disabled]="!financeAvailable()">
+              <span class="material-symbols-rounded">add_card</span>
+              Registrar gasto
+            </button>
+          </header>
+          @if (!financeAvailable()) {
+            <p class="empty">No tienes permisos o acceso para consultar gastos financieros. Se conservan los estimados operativos.</p>
+          } @else if (routeExpenses().length === 0) {
+            <p class="empty">No hay gastos registrados para esta ruta.</p>
+          } @else {
+            <div class="data-list expense-list">
+              @for (expense of routeExpenses(); track expense.expense_id) {
+                <article class="data-row expense-row">
+                  <div><strong>{{ expense.notes || "Gasto de ruta" }}</strong><small>{{ expense.occurred_at | date:'dd MMM yy':'':'es-MX' }} · {{ expenseCategoryLabel(expense.category) }}</small></div>
+                  <div><span>Monto</span><strong>{{ expense.amount | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></div>
+                  <div><span>Salida</span><strong>{{ expense.route_run_id || "General" }}</strong></div>
+                </article>
+              }
+            </div>
+          }
+        </article>
+
+        <article class="panel">
+          <header class="panel-head panel-head-actions">
+            <div>
+              <h2>Plantillas sugeridas</h2>
+              <p>Gasolina, casetas y gastos frecuentes. No crean egresos hasta confirmarlos.</p>
+            </div>
+            <button type="button" class="btn btn-secondary" (click)="openTemplateForm()">
+              <span class="material-symbols-rounded">add</span>
+              Plantilla
+            </button>
+          </header>
+          @if (route.expense_templates?.length) {
+            <div class="template-grid">
+              @for (template of route.expense_templates || []; track template.template_id) {
+                <article class="template-card" [class.paused]="template.active === false">
+                  <div>
+                    <strong>{{ template.label }}</strong>
+                    <small>{{ expenseCategoryLabel(template.category) }} · {{ template.amount | currency:'MXN':'symbol-narrow':'1.0-0' }}</small>
+                    @if (template.notes) {
+                      <p>{{ template.notes }}</p>
+                    }
+                  </div>
+                  <div class="template-actions">
+                    <button type="button" class="icon-btn mini" (click)="applyExpenseTemplate(template)" [disabled]="!financeAvailable()" aria-label="Aplicar plantilla">
+                      <span class="material-symbols-rounded">playlist_add_check</span>
+                    </button>
+                    <button type="button" class="icon-btn mini" (click)="toggleTemplateActive(template)" aria-label="Activar o pausar plantilla">
+                      <span class="material-symbols-rounded">{{ template.active === false ? "play_arrow" : "pause" }}</span>
+                    </button>
+                  </div>
+                </article>
+              }
+            </div>
+          } @else {
+            <p class="empty">Aun no hay plantillas. Crea una para sugerir gastos al preparar salidas.</p>
+          }
+
+          @if (templateFormOpen()) {
+            <div class="inline-form">
+              <label>Nombre<input class="input" [(ngModel)]="templateDraft.label" name="template_label" placeholder="Gasolina promedio" /></label>
+              <label>Monto<input class="input" type="number" min="0" [(ngModel)]="templateDraft.amount" name="template_amount" placeholder="0" /></label>
+              <label>Categoria
+                <select class="input" [(ngModel)]="templateDraft.category" name="template_category">
+                  @for (category of expenseCategoryOptions; track category.value) {
+                    <option [value]="category.value">{{ category.label }}</option>
+                  }
+                </select>
+              </label>
+              <label class="wide">Notas<input class="input" [(ngModel)]="templateDraft.notes" name="template_notes" placeholder="Ej. ida y vuelta" /></label>
+              <div class="form-actions">
+                <button type="button" class="btn btn-secondary" (click)="closeTemplateForm()">Cancelar</button>
+                <button type="button" class="btn btn-primary" (click)="saveExpenseTemplate()" [disabled]="saving()">Guardar plantilla</button>
               </div>
-            }
-          </div>
-        }
+            </div>
+          }
+        </article>
       </section>
     }
 
     @if (activeTab() === "localities") {
       <section class="panel">
-        <header class="panel-head">
+        <header class="panel-head panel-head-actions">
           <div>
             <h2>Localidades</h2>
-            <p>Orden operativo de entrega dentro de la ruta.</p>
+            <p>Orden de entrega, notas operativas, clientas y pendientes por localidad.</p>
           </div>
+          <button type="button" class="btn btn-primary" (click)="openCreateLocalitySheet()">
+            <span class="material-symbols-rounded">add_location_alt</span>
+            Nueva localidad
+          </button>
         </header>
-        @if (route.locality_ids.length === 0) {
-          <p class="empty">Esta ruta aún no tiene localidades.</p>
+
+        <div class="locality-toolbar">
+          <select class="input" [ngModel]="existingLocalityId()" (ngModelChange)="existingLocalityId.set($event)" [ngModelOptions]="{ standalone: true }">
+            <option value="">Agregar localidad existente</option>
+            @for (locality of availableLocalities(); track locality.locality_id) {
+              <option [value]="locality.locality_id">{{ locality.name }}</option>
+            }
+          </select>
+          <button type="button" class="btn btn-secondary" (click)="addExistingLocalityToRoute()" [disabled]="!existingLocalityId()">
+            <span class="material-symbols-rounded">add</span>
+            Agregar
+          </button>
+        </div>
+
+        @if (localityInsights().length === 0) {
+          <p class="empty">Esta ruta aun no tiene localidades.</p>
         } @else {
           <div class="locality-list">
-            @for (localityId of route.locality_ids; track localityId; let idx = $index) {
-              <article class="locality-row">
-                <span>{{ idx + 1 }}</span>
-                <div>
-                  <strong>{{ localityName(localityId) }}</strong>
-                  <small>{{ localityCustomerCount(localityId) }} clientas</small>
+            @for (row of localityInsights(); track row.localityId) {
+              <article class="locality-card" [class.inactive]="row.locality?.active === false">
+                <div class="locality-rank">{{ row.index + 1 }}</div>
+                <div class="locality-main">
+                  <div class="locality-title">
+                    <strong>{{ row.locality?.name || row.localityId }}</strong>
+                    <span class="status-pill" [class.tone-gray]="row.locality?.active === false" [class.tone-green]="row.locality?.active !== false">
+                      {{ row.locality?.active === false ? "Inactiva" : "Activa" }}
+                    </span>
+                  </div>
+                  <small>{{ row.locality?.delivery_reference || "Referencia pendiente" }}</small>
+                  @if (row.locality?.delivery_notes) {
+                    <p>{{ row.locality?.delivery_notes }}</p>
+                  }
+                  @if (row.dataIssues.length) {
+                    <div class="chip-row">
+                      @for (issue of row.dataIssues; track issue) {
+                        <span class="chip warning">{{ issue }}</span>
+                      }
+                    </div>
+                  }
+                </div>
+                <div class="locality-metrics">
+                  <span><small>Clientas</small><strong>{{ row.customers }}</strong></span>
+                  <span><small>Pendientes</small><strong>{{ row.pendingOrders }}</strong></span>
+                  <span><small>Venta</small><strong>{{ row.netSales | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></span>
+                  <span><small>Debe</small><strong [class.money-danger]="row.balanceDue > 0">{{ row.balanceDue | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></span>
+                </div>
+                <div class="row-actions">
+                  <button type="button" class="icon-btn mini" (click)="reorderLocality(row.index, -1)" [disabled]="row.index === 0" aria-label="Subir localidad">
+                    <span class="material-symbols-rounded">keyboard_arrow_up</span>
+                  </button>
+                  <button type="button" class="icon-btn mini" (click)="reorderLocality(row.index, 1)" [disabled]="row.index === localityInsights().length - 1" aria-label="Bajar localidad">
+                    <span class="material-symbols-rounded">keyboard_arrow_down</span>
+                  </button>
+                  <button type="button" class="icon-btn mini" (click)="openLocalityEditor(row.localityId)" aria-label="Editar localidad">
+                    <span class="material-symbols-rounded">edit</span>
+                  </button>
+                  <button type="button" class="icon-btn mini" (click)="toggleLocalityActive(row.localityId)" aria-label="Activar o desactivar localidad">
+                    <span class="material-symbols-rounded">{{ row.locality?.active === false ? "toggle_off" : "toggle_on" }}</span>
+                  </button>
+                  <button type="button" class="icon-btn mini danger-soft" (click)="removeLocalityFromRoute(row.localityId)" aria-label="Quitar localidad de la ruta">
+                    <span class="material-symbols-rounded">link_off</span>
+                  </button>
                 </div>
               </article>
             }
@@ -230,3 +472,224 @@
     }
   }
 </section>
+
+@if (runPlannerOpen()) {
+  <div class="sheet-backdrop" (click)="closeRunPlanner()"></div>
+  <aside class="side-sheet wide-sheet" role="dialog" aria-label="Preparar salida">
+    <header class="sheet-head">
+      <div>
+        <span class="sheet-icon material-symbols-rounded">add_road</span>
+        <div>
+          <h2>Preparar salida</h2>
+          <p>Selecciona pedidos, localidades y gastos sugeridos.</p>
+        </div>
+      </div>
+      <button type="button" class="icon-btn" (click)="closeRunPlanner()" aria-label="Cerrar">
+        <span class="material-symbols-rounded">close</span>
+      </button>
+    </header>
+
+    <div class="sheet-body">
+      <section class="form-section">
+        <h3>Datos de salida</h3>
+        <div class="form-grid">
+          <label>Fecha<input class="input" type="date" [(ngModel)]="runPlannerDraft.date" name="run_date" /></label>
+          <label>Estado inicial
+            <select class="input" [(ngModel)]="runPlannerDraft.status" name="run_status">
+              <option value="scheduled">Programada</option>
+              <option value="draft">Borrador</option>
+            </select>
+          </label>
+          <label>Gasto estimado<input class="input" type="number" min="0" [(ngModel)]="runPlannerDraft.estimatedExpense" name="run_estimated_expense" placeholder="0" /></label>
+          <label>Responsable<input class="input" [(ngModel)]="runPlannerDraft.driverName" name="run_driver_name" placeholder="Nombre" /></label>
+          <label>ID responsable<input class="input" [(ngModel)]="runPlannerDraft.driverUid" name="run_driver_uid" placeholder="Opcional si existe usuario" /></label>
+          <label class="wide">Notas<input class="input" [(ngModel)]="runPlannerDraft.notes" name="run_notes" placeholder="Casetas, combustible, instrucciones, etc." /></label>
+        </div>
+      </section>
+
+      <section class="form-section">
+        <div class="section-title-row">
+          <h3>Pedidos incluidos</h3>
+          <span class="count-pill">{{ plannerSelectedOrders().length }}</span>
+        </div>
+        <div class="sheet-metrics">
+          <span><small>Venta</small><strong>{{ plannerTotals().sale | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></span>
+          <span><small>Inversión</small><strong>{{ plannerTotals().cost | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></span>
+          <span><small>Ganancia</small><strong>{{ plannerTotals().grossProfit | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></span>
+          <span><small>Por cobrar</small><strong>{{ plannerTotals().balanceDue | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong></span>
+        </div>
+        <div class="choice-list">
+          @for (row of pendingOrders(); track row.order.order_id) {
+            <label class="choice-row">
+              <input type="checkbox" [checked]="runPlannerSelectedOrderIds().includes(row.order.order_id)" (change)="togglePlannerOrder(row.order.order_id)" />
+              <span></span>
+              <div>
+                <strong>{{ row.customerName }}</strong>
+                <small>{{ row.localityName }} · {{ row.sale | currency:'MXN':'symbol-narrow':'1.0-0' }} · {{ row.packages }} paquetes</small>
+              </div>
+              @if (row.balanceDue > 0) {
+                <em>{{ row.balanceDue | currency:'MXN':'symbol-narrow':'1.0-0' }}</em>
+              }
+            </label>
+          }
+        </div>
+      </section>
+
+      <section class="form-section">
+        <div class="section-title-row">
+          <h3>Localidades planeadas</h3>
+          <span class="count-pill">{{ runPlannerSelectedLocalityIds().length }}</span>
+        </div>
+        <div class="chip-choice-grid">
+          @for (row of localityInsights(); track row.localityId) {
+            <label class="chip-choice" [class.selected]="runPlannerSelectedLocalityIds().includes(row.localityId)">
+              <input type="checkbox" [checked]="runPlannerSelectedLocalityIds().includes(row.localityId)" (change)="togglePlannerLocality(row.localityId)" />
+              <span>{{ row.index + 1 }}. {{ row.locality?.name || row.localityId }}</span>
+            </label>
+          }
+        </div>
+      </section>
+
+      <section class="form-section">
+        <div class="section-title-row">
+          <h3>Gastos sugeridos</h3>
+          <small>Solo se registran si los seleccionas y guardas la salida.</small>
+        </div>
+        @if (activeExpenseTemplates().length === 0) {
+          <p class="empty compact-empty">Sin plantillas de gasto configuradas.</p>
+        } @else {
+          <div class="choice-list">
+            @for (template of activeExpenseTemplates(); track template.template_id) {
+              <label class="choice-row">
+                <input type="checkbox" [checked]="runPlannerSelectedTemplateIds().includes(template.template_id)" (change)="togglePlannerTemplate(template.template_id)" [disabled]="!financeAvailable()" />
+                <span></span>
+                <div>
+                  <strong>{{ template.label }}</strong>
+                  <small>{{ expenseCategoryLabel(template.category) }} · {{ template.notes || "Sin notas" }}</small>
+                </div>
+                <em>{{ template.amount | currency:'MXN':'symbol-narrow':'1.0-0' }}</em>
+              </label>
+            }
+          </div>
+        }
+      </section>
+    </div>
+
+    <footer class="sheet-footer">
+      <button type="button" class="btn btn-secondary" (click)="closeRunPlanner()">Cancelar</button>
+      <button type="button" class="btn btn-primary" (click)="savePreparedRun()" [disabled]="saving() || plannerSelectedOrders().length === 0">
+        {{ saving() ? "Guardando..." : "Preparar salida" }}
+      </button>
+    </footer>
+  </aside>
+}
+
+@if (assignSheetOpen()) {
+  <div class="sheet-backdrop" (click)="closeAssignSheet()"></div>
+  <aside class="bottom-sheet" role="dialog" aria-label="Agregar pedidos a salida">
+    <header class="sheet-head">
+      <div>
+        <span class="sheet-icon material-symbols-rounded">playlist_add</span>
+        <div>
+          <h2>Agregar a salida</h2>
+          <p>{{ selectedPendingRows().length }} pedido(s) seleccionado(s).</p>
+        </div>
+      </div>
+      <button type="button" class="icon-btn" (click)="closeAssignSheet()" aria-label="Cerrar">
+        <span class="material-symbols-rounded">close</span>
+      </button>
+    </header>
+    <div class="sheet-body">
+      <label>Salida
+        <select class="input" [ngModel]="assignRunId()" (ngModelChange)="assignRunId.set($event)" [ngModelOptions]="{ standalone: true }">
+          @for (run of openRuns(); track run.runId) {
+            <option [value]="run.runId">{{ run.scheduled_at | date:'dd MMM yy':'':'es-MX' }} · {{ runStatusLabel(run.status) }}</option>
+          }
+        </select>
+      </label>
+    </div>
+    <footer class="sheet-footer">
+      <button type="button" class="btn btn-secondary" (click)="closeAssignSheet()">Cancelar</button>
+      <button type="button" class="btn btn-primary" (click)="addOrdersToRun()" [disabled]="saving() || !assignRunId()">Agregar pedidos</button>
+    </footer>
+  </aside>
+}
+
+@if (expenseSheetOpen()) {
+  <div class="sheet-backdrop" (click)="closeExpenseSheet()"></div>
+  <aside class="bottom-sheet" role="dialog" aria-label="Registrar gasto">
+    <header class="sheet-head">
+      <div>
+        <span class="sheet-icon material-symbols-rounded">local_gas_station</span>
+        <div>
+          <h2>Registrar gasto</h2>
+          <p>General de ruta o ligado a una salida.</p>
+        </div>
+      </div>
+      <button type="button" class="icon-btn" (click)="closeExpenseSheet()" aria-label="Cerrar">
+        <span class="material-symbols-rounded">close</span>
+      </button>
+    </header>
+    <div class="sheet-body">
+      <div class="form-grid">
+        <label>Monto<input class="input" type="number" min="0" [(ngModel)]="expenseDraft.amount" name="expense_amount" placeholder="0" /></label>
+        <label>Fecha<input class="input" type="date" [(ngModel)]="expenseDraft.occurred_at" name="expense_date" /></label>
+        <label>Categoria
+          <select class="input" [(ngModel)]="expenseDraft.category" name="expense_category">
+            @for (category of expenseCategoryOptions; track category.value) {
+              <option [value]="category.value">{{ category.label }}</option>
+            }
+          </select>
+        </label>
+        <label>Salida
+          <select class="input" [(ngModel)]="expenseDraft.route_run_id" name="expense_run">
+            <option value="">General de ruta</option>
+            @for (run of routeRunsForRoute(); track run.runId) {
+              <option [value]="run.runId">{{ run.scheduled_at | date:'dd MMM yy':'':'es-MX' }} · {{ runStatusLabel(run.status) }}</option>
+            }
+          </select>
+        </label>
+        <label class="wide">Notas<input class="input" [(ngModel)]="expenseDraft.notes" name="expense_notes" placeholder="Gasolina, casetas, estacionamiento..." /></label>
+      </div>
+    </div>
+    <footer class="sheet-footer">
+      <button type="button" class="btn btn-secondary" (click)="closeExpenseSheet()">Cancelar</button>
+      <button type="button" class="btn btn-primary" (click)="saveRouteExpense()" [disabled]="saving()">Guardar gasto</button>
+    </footer>
+  </aside>
+}
+
+@if (localitySheetOpen()) {
+  <div class="sheet-backdrop" (click)="closeLocalitySheet()"></div>
+  <aside class="side-sheet" role="dialog" aria-label="Editar localidad">
+    <header class="sheet-head">
+      <div>
+        <span class="sheet-icon material-symbols-rounded">edit_location</span>
+        <div>
+          <h2>{{ localityEditorMode() === "create" ? "Nueva localidad" : "Editar localidad" }}</h2>
+          <p>Datos utiles para entrega y orden operativo.</p>
+        </div>
+      </div>
+      <button type="button" class="icon-btn" (click)="closeLocalitySheet()" aria-label="Cerrar">
+        <span class="material-symbols-rounded">close</span>
+      </button>
+    </header>
+    <div class="sheet-body">
+      <div class="form-grid single">
+        <label>Nombre<input class="input" [(ngModel)]="localityDraft.name" name="locality_name" placeholder="Nombre de localidad" /></label>
+        <label>Referencia<input class="input" [(ngModel)]="localityDraft.delivery_reference" name="locality_reference" placeholder="Punto de entrega, entrada, tienda..." /></label>
+        <label>Instrucciones<textarea class="input textarea" [(ngModel)]="localityDraft.delivery_notes" name="locality_delivery_notes" placeholder="Como llegar, donde estacionarse, horarios..."></textarea></label>
+        <label>Notas internas<textarea class="input textarea" [(ngModel)]="localityDraft.notes" name="locality_notes" placeholder="Notas administrativas"></textarea></label>
+        <label>Nota de orden<input class="input" [(ngModel)]="localityDraft.sort_notes" name="locality_sort_notes" placeholder="Ej. pasar primero por carretera" /></label>
+        <label class="switch-line">
+          <input type="checkbox" [(ngModel)]="localityDraft.active" name="locality_active" />
+          <span>Localidad activa</span>
+        </label>
+      </div>
+    </div>
+    <footer class="sheet-footer">
+      <button type="button" class="btn btn-secondary" (click)="closeLocalitySheet()">Cancelar</button>
+      <button type="button" class="btn btn-primary" (click)="saveLocalityFromRoute()" [disabled]="saving()">Guardar localidad</button>
+    </footer>
+  </aside>
+}

@@ -16,6 +16,13 @@ interface ValidateRequest {
 
 type WorkerRequest = ParseRequest | ValidateRequest;
 
+interface HeaderCandidate {
+  rowIndex: number;
+  rowNumber: number;
+  score: number;
+  labels: string[];
+}
+
 interface ImportMapping {
   skuColumn: string;
   nameColumns: string[];
@@ -78,6 +85,53 @@ function rowToRecord(headers: string[], row: unknown[]): Record<string, unknown>
 
 function nonEmptyCount(row: unknown[]): number {
   return row.filter((value) => String(value ?? "").trim().length > 0).length;
+}
+
+const HEADER_KEYWORDS = [
+  "sku",
+  "codigo",
+  "clave",
+  "cod",
+  "modelo",
+  "producto",
+  "descripcion",
+  "articulo",
+  "nombre",
+  "costo",
+  "precio",
+  "marca",
+  "categoria",
+  "linea",
+  "familia",
+  "color",
+  "talla",
+  "medida",
+  "barcode",
+  "barra",
+  "generico",
+  "catalogo",
+];
+
+function headerScore(row: unknown[], rowIndex: number): HeaderCandidate | null {
+  const labels = row.map((value) => String(value ?? "").trim()).filter(Boolean);
+  const nonEmpty = labels.length;
+  if (nonEmpty < 2) return null;
+  const normalized = labels.map((value) => normalizeHeaderKey(value));
+  const keywordHits = normalized.filter((value) => HEADER_KEYWORDS.some((keyword) => value.includes(normalizeHeaderKey(keyword)))).length;
+  const numericLike = labels.filter((value) => /^\$?\s*[\d,.]+%?$/.test(value)).length;
+  const shortLabels = labels.filter((value) => value.length <= 32).length;
+  const score = keywordHits * 12 + nonEmpty * 2 + shortLabels - numericLike * 6 - rowIndex * 0.15;
+  if (score <= 0) return null;
+  return { rowIndex, rowNumber: rowIndex + 1, score, labels: labels.slice(0, 8) };
+}
+
+function detectHeaderCandidates(matrix: unknown[][]): HeaderCandidate[] {
+  return matrix
+    .slice(0, 40)
+    .map((row, index) => headerScore(row, index))
+    .filter((candidate): candidate is HeaderCandidate => Boolean(candidate))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5);
 }
 
 function nonEmptyRecordCount(row: Record<string, unknown>): number {
@@ -240,7 +294,8 @@ self.onmessage = (event: MessageEvent<WorkerRequest>) => {
     if (!sheetName) throw new Error("El archivo no tiene hojas.");
     const sheet = workbook.Sheets[sheetName];
     const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: "", raw: false });
-    const headerIndex = matrix.findIndex((row) => nonEmptyCount(row) >= 2);
+    const headerCandidates = detectHeaderCandidates(matrix);
+    const headerIndex = headerCandidates[0]?.rowIndex ?? matrix.findIndex((row) => nonEmptyCount(row) >= 2);
     if (headerIndex < 0) throw new Error("No se detectaron encabezados.");
 
     const headers = uniqueHeaders(matrix[headerIndex] || []);
@@ -252,7 +307,17 @@ self.onmessage = (event: MessageEvent<WorkerRequest>) => {
         __row_empty: nonEmptyCount(row) === 0,
       }));
 
-    self.postMessage({ ok: true, type: "parse", fileName: message.fileName, headers, rawRows });
+    self.postMessage({
+      ok: true,
+      type: "parse",
+      fileName: message.fileName,
+      sheetName,
+      matrix,
+      headerIndex,
+      headerCandidates,
+      headers,
+      rawRows,
+    });
   } catch (error: any) {
     self.postMessage({ ok: false, type: message.type, error: error?.message || "No se pudo leer el Excel." });
   }

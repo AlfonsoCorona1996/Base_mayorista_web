@@ -1,0 +1,417 @@
+<section class="durango-page">
+  <header class="page-head">
+    <div class="title-wrap">
+      <span class="head-icon material-symbols-rounded" aria-hidden="true">warehouse</span>
+      <div>
+        <h1>Durango</h1>
+        <p>Recibir, empacar, entregar, cobrar y enviar dinero sin abrir administración completa.</p>
+      </div>
+    </div>
+    <div class="head-actions">
+      <button type="button" class="btn ghost" [disabled]="loading()" (click)="refresh()">
+        <span class="material-symbols-rounded" aria-hidden="true">refresh</span>
+        Actualizar
+      </button>
+      <button type="button" class="btn primary" (click)="openExpense()">
+        <span class="material-symbols-rounded" aria-hidden="true">receipt_long</span>
+        Registrar gasto
+      </button>
+    </div>
+  </header>
+
+  @if (error()) {
+    <p class="alert error">{{ error() }}</p>
+  }
+  @if (toast()) {
+    <p class="alert ok">{{ toast() }}</p>
+  }
+
+  <nav class="tab-strip" aria-label="Operación Durango">
+    <button type="button" [class.active]="tab() === 'recibir'" (click)="setTab('recibir')">
+      <span class="material-symbols-rounded" aria-hidden="true">move_to_inbox</span>
+      <span>Por recibir</span>
+      <strong>{{ counts().recibir }}</strong>
+    </button>
+    <button type="button" [class.active]="tab() === 'empacar'" (click)="setTab('empacar')">
+      <span class="material-symbols-rounded" aria-hidden="true">inventory_2</span>
+      <span>Por empacar</span>
+      <strong>{{ counts().empacar }}</strong>
+    </button>
+    <button type="button" [class.active]="tab() === 'entregar'" (click)="setTab('entregar')">
+      <span class="material-symbols-rounded" aria-hidden="true">local_shipping</span>
+      <span>Por entregar</span>
+      <strong>{{ counts().entregar }}</strong>
+    </button>
+    <button type="button" [class.active]="tab() === 'cobrar'" (click)="setTab('cobrar')">
+      <span class="material-symbols-rounded" aria-hidden="true">payments</span>
+      <span>Por cobrar</span>
+      <strong>{{ counts().cobrar }}</strong>
+    </button>
+    <button type="button" [class.active]="tab() === 'dinero'" (click)="setTab('dinero')">
+      <span class="material-symbols-rounded" aria-hidden="true">account_balance</span>
+      <span>Dinero</span>
+      <strong>{{ counts().dinero }}</strong>
+    </button>
+    <button type="button" [class.active]="tab() === 'historial'" (click)="setTab('historial')">
+      <span class="material-symbols-rounded" aria-hidden="true">history</span>
+      <span>Historial</span>
+      <strong>{{ counts().historial }}</strong>
+    </button>
+  </nav>
+
+  @if (loading()) {
+    <article class="empty-card">Cargando operación...</article>
+  } @else {
+    @if (tab() === 'recibir') {
+      <section class="work-list">
+        @if (receiveRows().length === 0) {
+          <article class="empty-card">No hay paquetes pendientes por recibir.</article>
+        }
+        @for (row of receiveRows(); track row.shipment.shipment_id + row.item.item_id) {
+          <article class="work-card">
+            <div class="card-main">
+              <span class="card-icon material-symbols-rounded" aria-hidden="true">{{ row.item.type === 'package' ? 'inventory_2' : 'category' }}</span>
+              <div>
+                <h2>{{ row.item.customer_name }}</h2>
+                <p>{{ businessLabel(row.item) }} · {{ row.item.title }} · {{ row.shipment.title }}</p>
+                @if (row.item.notes) {
+                  <small>{{ row.item.notes }}</small>
+                }
+              </div>
+            </div>
+            <button type="button" class="btn primary" [disabled]="saving()" (click)="markReceived(row)">
+              <span class="material-symbols-rounded" aria-hidden="true">download_done</span>
+              Recibir
+            </button>
+            <button type="button" class="btn ghost content-toggle" (click)="toggleContent('receive-' + row.shipment.shipment_id + '-' + row.item.item_id)">
+              <span class="material-symbols-rounded" aria-hidden="true">{{ isContentOpen('receive-' + row.shipment.shipment_id + '-' + row.item.item_id) ? 'expand_less' : 'expand_more' }}</span>
+              Ver artículos
+            </button>
+            @if (isContentOpen('receive-' + row.shipment.shipment_id + '-' + row.item.item_id)) {
+              <div class="content-list">
+                @for (item of receiveContent(row); track item.title + item.quantity + item.detail) {
+                  <div class="content-row">
+                    <span>{{ item.quantity }}x</span>
+                    <strong>{{ item.title }}</strong>
+                    @if (item.detail) { <small>{{ item.detail }}</small> }
+                  </div>
+                }
+              </div>
+            }
+          </article>
+        }
+      </section>
+    }
+
+    @if (tab() === 'empacar') {
+      <section class="work-list">
+        @if (packRows().length === 0) {
+          <article class="empty-card">No hay pedidos pendientes de empacar en Durango.</article>
+        }
+        @for (order of packRows(); track order.order_id) {
+          <article class="work-card">
+            <button type="button" class="card-main click-card" (click)="openOrder(order.order_id)">
+              <span class="card-icon material-symbols-rounded" aria-hidden="true">inventory_2</span>
+              <div>
+                <h2>{{ customerName(order) }}</h2>
+                <p>{{ businessLabel(order) }} · {{ order.items.length }} artículos · {{ order.fulfillment_status }}</p>
+                <small>{{ money(orderBalance(order)) }} por cobrar</small>
+              </div>
+            </button>
+            <div class="button-row">
+              <button type="button" class="btn ghost" (click)="toggleContent('order-' + order.order_id)">
+                <span class="material-symbols-rounded" aria-hidden="true">{{ isContentOpen('order-' + order.order_id) ? 'expand_less' : 'expand_more' }}</span>
+                Ver artículos
+              </button>
+              <button type="button" class="btn ghost" (click)="openExpense(order)">Gasto</button>
+              <button type="button" class="btn primary" [disabled]="saving()" (click)="markPacked(order)">Empacado</button>
+            </div>
+            @if (isContentOpen('order-' + order.order_id)) {
+              <div class="content-list">
+                @for (item of orderContent(order); track item.title + item.quantity + item.detail) {
+                  <div class="content-row">
+                    <span>{{ item.quantity }}x</span>
+                    <strong>{{ item.title }}</strong>
+                    @if (item.detail) { <small>{{ item.detail }}</small> }
+                  </div>
+                }
+              </div>
+            }
+          </article>
+        }
+      </section>
+    }
+
+    @if (tab() === 'entregar') {
+      <div class="holder-filter" role="group" aria-label="Filtrar custodia Durango">
+        <button type="button" [class.active]="deliveryFilter() === 'todos'" (click)="deliveryFilter.set('todos')">Todos</button>
+        <button type="button" [class.active]="deliveryFilter() === 'lupita'" (click)="deliveryFilter.set('lupita')">En Durango / Lupita</button>
+        <button type="button" [class.active]="deliveryFilter() === 'briselda'" (click)="deliveryFilter.set('briselda')">Con Briselda</button>
+        <button type="button" [class.active]="deliveryFilter() === 'entregados'" (click)="deliveryFilter.set('entregados')">Entregados</button>
+        <button type="button" [class.active]="deliveryFilter() === 'no_entregados'" (click)="deliveryFilter.set('no_entregados')">No entregados</button>
+        <button type="button" [class.active]="deliveryFilter() === 'cobros'" (click)="deliveryFilter.set('cobros')">Cobros reportados</button>
+      </div>
+      <section class="work-list">
+        @if (deliveryRowsFiltered().length === 0) {
+          <article class="empty-card">No hay pedidos listos para entregar.</article>
+        }
+        @for (order of deliveryRowsFiltered(); track order.order_id) {
+          <article class="work-card">
+            <button type="button" class="card-main click-card" (click)="openOrder(order.order_id)">
+              <span class="card-icon material-symbols-rounded" aria-hidden="true">local_shipping</span>
+              <div>
+                <h2>{{ customerName(order) }}</h2>
+                <p>{{ businessLabel(order) }} · {{ holderLabel(order) }}</p>
+                <small>{{ money(orderBalance(order)) }} por cobrar</small>
+              </div>
+            </button>
+            <div class="button-row">
+              <button type="button" class="btn ghost" (click)="toggleContent('order-' + order.order_id)">
+                <span class="material-symbols-rounded" aria-hidden="true">{{ isContentOpen('order-' + order.order_id) ? 'expand_less' : 'expand_more' }}</span>
+                Ver artículos
+              </button>
+              @if (currentHolderName(order) === 'Briselda') {
+                <button type="button" class="btn ghost" [disabled]="saving()" (click)="returnToLupita(order)">Regresó a Lupita</button>
+              } @else {
+                <button type="button" class="btn ghost" [disabled]="saving()" (click)="assignDelivery(order)">Entregar a Briselda</button>
+              }
+              <button type="button" class="btn ghost" (click)="openExpense(order)">Gasto</button>
+              <button type="button" class="btn primary" [disabled]="saving()" (click)="markDelivered(order)">Confirmar entrega</button>
+              <button type="button" class="btn danger" [disabled]="saving()" (click)="openNotDelivered(order)">No se entregó</button>
+            </div>
+            @if (isContentOpen('order-' + order.order_id)) {
+              <div class="content-list">
+                @for (item of orderContent(order); track item.title + item.quantity + item.detail) {
+                  <div class="content-row">
+                    <span>{{ item.quantity }}x</span>
+                    <strong>{{ item.title }}</strong>
+                    @if (item.detail) { <small>{{ item.detail }}</small> }
+                  </div>
+                }
+              </div>
+            }
+          </article>
+        }
+      </section>
+    }
+
+    @if (tab() === 'cobrar') {
+      <section class="work-list">
+        @if (collectionRows().length === 0) {
+          <article class="empty-card">No hay cobros pendientes para Durango.</article>
+        }
+        @for (order of collectionRows(); track order.order_id) {
+          <article class="work-card">
+            <button type="button" class="card-main click-card" (click)="openOrder(order.order_id)">
+              <span class="card-icon danger-icon material-symbols-rounded" aria-hidden="true">payments</span>
+              <div>
+                <h2>{{ customerName(order) }}</h2>
+                <p>{{ businessLabel(order) }} · cobro {{ order.customer_payment_status }}</p>
+                <small>{{ money(orderBalance(order)) }} pendiente</small>
+              </div>
+            </button>
+            <div class="button-row">
+              <button type="button" class="btn ghost" (click)="toggleContent('order-' + order.order_id)">
+                <span class="material-symbols-rounded" aria-hidden="true">{{ isContentOpen('order-' + order.order_id) ? 'expand_less' : 'expand_more' }}</span>
+                Ver artículos
+              </button>
+              <button type="button" class="btn ghost" (click)="openExpense(order)">Gasto</button>
+              <button type="button" class="btn primary" [disabled]="saving()" (click)="openCollection(order)">Reportar cobro</button>
+            </div>
+            @if (isContentOpen('order-' + order.order_id)) {
+              <div class="content-list">
+                @for (item of orderContent(order); track item.title + item.quantity + item.detail) {
+                  <div class="content-row">
+                    <span>{{ item.quantity }}x</span>
+                    <strong>{{ item.title }}</strong>
+                    @if (item.detail) { <small>{{ item.detail }}</small> }
+                  </div>
+                }
+              </div>
+            }
+          </article>
+        }
+      </section>
+    }
+
+    @if (tab() === 'dinero') {
+      <section class="work-list">
+        @if (moneyRows().length === 0) {
+          <article class="empty-card">No hay dinero pendiente por enviar.</article>
+        }
+        @for (order of moneyRows(); track order.order_id) {
+          <article class="work-card">
+            <button type="button" class="card-main click-card" (click)="openOrder(order.order_id)">
+              <span class="card-icon material-symbols-rounded" aria-hidden="true">account_balance</span>
+              <div>
+                <h2>{{ customerName(order) }}</h2>
+                <p>{{ businessLabel(order) }} · cobrado {{ money(orderPaid(order)) }}</p>
+                <small>Conciliación: {{ order.settlement_status }}</small>
+              </div>
+            </button>
+            <div class="button-row">
+              <button type="button" class="btn ghost" (click)="toggleContent('order-' + order.order_id)">
+                <span class="material-symbols-rounded" aria-hidden="true">{{ isContentOpen('order-' + order.order_id) ? 'expand_less' : 'expand_more' }}</span>
+                Ver artículos
+              </button>
+              <button type="button" class="btn primary" [disabled]="saving()" (click)="markMoneySent(order)">Dinero enviado</button>
+            </div>
+            @if (isContentOpen('order-' + order.order_id)) {
+              <div class="content-list">
+                @for (item of orderContent(order); track item.title + item.quantity + item.detail) {
+                  <div class="content-row">
+                    <span>{{ item.quantity }}x</span>
+                    <strong>{{ item.title }}</strong>
+                    @if (item.detail) { <small>{{ item.detail }}</small> }
+                  </div>
+                }
+              </div>
+            }
+          </article>
+        }
+      </section>
+    }
+
+    @if (tab() === 'historial') {
+      <section class="work-list">
+        @if (historyRows().length === 0) {
+          <article class="empty-card">Aún no hay historial operativo.</article>
+        }
+        @for (order of historyRows(); track order.order_id) {
+          <article class="work-card compact">
+            <button type="button" class="card-main click-card" (click)="openOrder(order.order_id)">
+              <span class="card-icon material-symbols-rounded" aria-hidden="true">history</span>
+              <div>
+                <h2>{{ customerName(order) }}</h2>
+                <p>{{ businessLabel(order) }} · entrega {{ order.delivery_status }} · cobro {{ order.customer_payment_status }}</p>
+                <small>Conciliación: {{ order.settlement_status }}</small>
+              </div>
+            </button>
+            <button type="button" class="btn ghost content-toggle" (click)="toggleContent('order-' + order.order_id)">
+              <span class="material-symbols-rounded" aria-hidden="true">{{ isContentOpen('order-' + order.order_id) ? 'expand_less' : 'expand_more' }}</span>
+              Ver artículos
+            </button>
+            @if (isContentOpen('order-' + order.order_id)) {
+              <div class="content-list">
+                @for (item of orderContent(order); track item.title + item.quantity + item.detail) {
+                  <div class="content-row">
+                    <span>{{ item.quantity }}x</span>
+                    <strong>{{ item.title }}</strong>
+                    @if (item.detail) { <small>{{ item.detail }}</small> }
+                  </div>
+                }
+              </div>
+            }
+          </article>
+        }
+      </section>
+    }
+  }
+
+  @if (collectionOrder(); as order) {
+    <div class="sheet-backdrop" (click)="closeCollection()"></div>
+    <aside class="bottom-sheet" role="dialog" aria-modal="true" aria-label="Registrar cobro">
+      <header>
+        <div>
+          <h2>Reportar cobro</h2>
+          <p>{{ customerName(order) }} · {{ businessLabel(order) }}</p>
+        </div>
+        <button type="button" class="icon-btn" (click)="closeCollection()">
+          <span class="material-symbols-rounded" aria-hidden="true">close</span>
+        </button>
+      </header>
+      <div class="sheet-body">
+        <div class="amount-card">
+          <small>Saldo pendiente</small>
+          <strong>{{ money(orderBalance(order)) }}</strong>
+        </div>
+        <label class="field">
+          <span>Monto cobrado</span>
+          <input type="number" min="0" step="1" [ngModel]="collectionAmount()" (ngModelChange)="collectionAmount.set($event)" />
+        </label>
+        <label class="field">
+          <span>Método</span>
+          <select [ngModel]="collectionMethod()" (ngModelChange)="collectionMethod.set($event)">
+            <option value="efectivo">Efectivo</option>
+            <option value="transferencia">Transferencia</option>
+            <option value="tarjeta">Tarjeta</option>
+            <option value="otro">Otro</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Nota</span>
+          <textarea rows="3" [ngModel]="collectionNote()" (ngModelChange)="collectionNote.set($event)" placeholder="A quién le pagó, referencia, etc."></textarea>
+        </label>
+      </div>
+      <footer>
+        <button type="button" class="btn ghost" (click)="closeCollection()">Cancelar</button>
+        <button type="button" class="btn primary" [disabled]="saving()" (click)="saveCollection()">Reportar cobro</button>
+      </footer>
+    </aside>
+  }
+
+  @if (deliveryIssueOrder(); as order) {
+    <div class="sheet-backdrop" (click)="closeNotDelivered()"></div>
+    <aside class="bottom-sheet" role="dialog" aria-modal="true" aria-label="No se entregó">
+      <header>
+        <div>
+          <h2>No se entregó</h2>
+          <p>{{ customerName(order) }} · {{ holderLabel(order) }}</p>
+        </div>
+        <button type="button" class="icon-btn" (click)="closeNotDelivered()">
+          <span class="material-symbols-rounded" aria-hidden="true">close</span>
+        </button>
+      </header>
+      <div class="sheet-body">
+        <label class="field">
+          <span>Motivo</span>
+          <textarea rows="4" [ngModel]="deliveryIssueReason()" (ngModelChange)="deliveryIssueReason.set($event)" placeholder="Ej. no estaba, pidió otro día, dirección incorrecta"></textarea>
+        </label>
+      </div>
+      <footer>
+        <button type="button" class="btn ghost" (click)="closeNotDelivered()">Cancelar</button>
+        <button type="button" class="btn danger" [disabled]="saving()" (click)="markNotDelivered(order)">Guardar motivo</button>
+      </footer>
+    </aside>
+  }
+
+  @if (expenseOpen()) {
+    <div class="sheet-backdrop" (click)="closeExpense()"></div>
+    <aside class="bottom-sheet" role="dialog" aria-modal="true" aria-label="Registrar gasto Durango">
+      <header>
+        <div>
+          <h2>Registrar gasto</h2>
+          <p>{{ expenseSubtitle() }}</p>
+        </div>
+        <button type="button" class="icon-btn" (click)="closeExpense()">
+          <span class="material-symbols-rounded" aria-hidden="true">close</span>
+        </button>
+      </header>
+      <div class="sheet-body">
+        <label class="field">
+          <span>Categoría</span>
+          <select [ngModel]="expenseCategory()" (ngModelChange)="expenseCategory.set($event)">
+            <option value="taxi">Taxi</option>
+            <option value="paqueteria">Paquetería</option>
+            <option value="gasolina">Gasolina</option>
+            <option value="entrega">Entrega</option>
+            <option value="otro">Otro</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Monto</span>
+          <input type="number" min="0" step="1" [ngModel]="expenseAmount()" (ngModelChange)="expenseAmount.set($event)" />
+        </label>
+        <label class="field">
+          <span>Nota</span>
+          <textarea rows="3" [ngModel]="expenseNote()" (ngModelChange)="expenseNote.set($event)" placeholder="Ej. taxi para entregar pedido, paquetería, etc."></textarea>
+        </label>
+        <p class="sheet-help">Este gasto queda pendiente de aprobación GDL y todavía no afecta finanzas.</p>
+      </div>
+      <footer>
+        <button type="button" class="btn ghost" (click)="closeExpense()">Cancelar</button>
+        <button type="button" class="btn primary" [disabled]="saving()" (click)="saveExpenseReport()">Guardar reporte</button>
+      </footer>
+    </aside>
+  }
+</section>

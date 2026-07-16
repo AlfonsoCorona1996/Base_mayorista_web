@@ -41,10 +41,20 @@ export interface RouteRunDoc {
   status: RouteRunStatus;
   driver?: { uid: string; name: string } | null;
   notes?: string | null;
+  locality_ids?: string[];
+  estimated_expense?: number | null;
+  created_from?: string | null;
   counts: RunCounts;
   createdAt?: string | null;
   createdBy?: RunActor | null;
   updatedAt?: string | null;
+}
+
+export interface CreateDraftRunOptions {
+  localityIds?: string[];
+  estimatedExpense?: number | null;
+  notes?: string | null;
+  createdFrom?: string | null;
 }
 
 export interface RouteRunStopDoc {
@@ -122,6 +132,7 @@ export class RouteRunsService {
     routeName: string,
     actor: RunActor,
     scheduledDate?: Date | null,
+    options?: CreateDraftRunOptions,
   ): Promise<string> {
     const runId = `run_${ulid()}`;
     const scheduledAt = this.resolveScheduledDate(scheduledDate || new Date());
@@ -131,6 +142,10 @@ export class RouteRunsService {
       route_name_snapshot: routeName || routeId,
       scheduled_at: Timestamp.fromDate(scheduledAt),
       status: "draft",
+      locality_ids: Array.isArray(options?.localityIds) ? options.localityIds.filter(Boolean) : [],
+      estimated_expense: this.toNullableAmount(options?.estimatedExpense),
+      notes: options?.notes || null,
+      created_from: options?.createdFrom || null,
       counts: {
         orders_total: 0,
         packages_total: 0,
@@ -467,6 +482,13 @@ export class RouteRunsService {
     return date;
   }
 
+  private toNullableAmount(value: unknown): number | null {
+    if (value === null || value === undefined || value === "") return null;
+    const parsed = typeof value === "number" ? value : Number(value);
+    if (!Number.isFinite(parsed)) return null;
+    return Math.max(0, Number(parsed.toFixed(2)));
+  }
+
   private normalizeRun(runId: string, data: Record<string, any>): RouteRunDoc {
     return {
       runId,
@@ -476,6 +498,9 @@ export class RouteRunsService {
       status: (data["status"] || "draft") as RouteRunStatus,
       driver: data["driver"] || null,
       notes: data["notes"] || null,
+      locality_ids: Array.isArray(data["locality_ids"]) ? data["locality_ids"].map((value: unknown) => String(value || "")).filter(Boolean) : [],
+      estimated_expense: this.toNullableAmount(data["estimated_expense"]),
+      created_from: data["created_from"] || null,
       counts: {
         orders_total: Number(data["counts"]?.["orders_total"] || 0),
         packages_total: Number(data["counts"]?.["packages_total"] || 0),

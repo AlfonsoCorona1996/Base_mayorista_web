@@ -15,9 +15,11 @@ export type AppPermission =
   | "rutas"
   | "localidades"
   | "salidas"
+  | "embarques"
+  | "durango"
   | "usuarios";
 
-export type AppRole = "super_admin" | "admin" | "operativo" | "administrativo" | "repartidor";
+export type AppRole = "super_admin" | "admin" | "operativo" | "administrativo" | "repartidor" | "durango_operativo";
 export type PermissionMap = Record<AppPermission, boolean>;
 
 export interface AdminProfile {
@@ -44,6 +46,8 @@ export const ALL_PERMISSIONS: AppPermission[] = [
   "rutas",
   "localidades",
   "salidas",
+  "embarques",
+  "durango",
   "usuarios",
 ];
 
@@ -61,6 +65,8 @@ const SECTION_BY_PERMISSION: Record<AppPermission, string> = {
   rutas: "sections.rutas",
   localidades: "sections.localidades",
   salidas: "sections.salidas",
+  embarques: "sections.embarques",
+  durango: "sections.durango",
   usuarios: "sections.usuarios",
 };
 
@@ -77,7 +83,14 @@ export function buildDefaultPermissions(): PermissionMap {
 }
 
 export function normalizeRole(value: unknown): AppRole {
-  if (value === "super_admin" || value === "admin" || value === "administrativo" || value === "operativo" || value === "repartidor")
+  if (
+    value === "super_admin" ||
+    value === "admin" ||
+    value === "administrativo" ||
+    value === "operativo" ||
+    value === "repartidor" ||
+    value === "durango_operativo"
+  )
     return value;
   return "operativo";
 }
@@ -93,10 +106,13 @@ export function buildPermissionsForRole(role: AppRole, custom?: Partial<Permissi
     out.clientas = true;
     out.inventario = true;
     out.salidas = true;
+    out.embarques = true;
     out.administracion = true;
   } else if (role === "repartidor") {
     out.pedidos = true;
     out.salidas = true;
+  } else if (role === "durango_operativo") {
+    out.durango = true;
   } else {
     out.pedidos = true;
     out.proveedores = true;
@@ -104,6 +120,7 @@ export function buildPermissionsForRole(role: AppRole, custom?: Partial<Permissi
     out.clientas = true;
     out.inventario = true;
     out.salidas = true;
+    out.embarques = true;
   }
   if (custom) {
     for (const key of ALL_PERMISSIONS) out[key] = Boolean(custom[key]);
@@ -165,6 +182,8 @@ export class AccessService {
       { permission: "dashboard", route: "/main/dashboard" },
       { permission: "pedidos", route: "/main/pedidos" },
       { permission: "salidas", route: "/main/salidas" },
+      { permission: "embarques", route: "/main/embarques" },
+      { permission: "durango", route: "/main/durango" },
       { permission: "validacion", route: "/main/validacion" },
       { permission: "inventario", route: "/main/inventario" },
       { permission: "administracion", route: "/main/administracion" },

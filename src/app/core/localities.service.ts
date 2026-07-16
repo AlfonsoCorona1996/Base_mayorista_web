@@ -7,6 +7,9 @@ export interface Locality {
   name: string;
   active: boolean;
   notes?: string;
+  delivery_reference?: string | null;
+  delivery_notes?: string | null;
+  sort_notes?: string | null;
   created_at?: any;
   updated_at?: any;
 }
@@ -46,6 +49,9 @@ export class LocalitiesService {
       locality_id: localityId,
       name: (locality.name || localityId).trim(),
       active: locality.active ?? true,
+      delivery_reference: this.toOptionalText(locality.delivery_reference),
+      delivery_notes: this.toOptionalText(locality.delivery_notes),
+      sort_notes: this.toOptionalText(locality.sort_notes),
       created_at: locality.created_at ?? now,
       updated_at: now,
       notes: locality.notes || "",
@@ -70,8 +76,17 @@ export class LocalitiesService {
       name: (data.name || localityId).trim(),
       active: data.active ?? true,
       notes: data.notes || "",
+      delivery_reference: this.toOptionalText(data.delivery_reference),
+      delivery_notes: this.toOptionalText(data.delivery_notes),
+      sort_notes: this.toOptionalText(data.sort_notes),
       created_at: data.created_at ?? null,
       updated_at: data.updated_at ?? null,
     };
+  }
+
+  private toOptionalText(value: unknown): string | null {
+    if (value === null || value === undefined) return null;
+    const text = String(value).trim();
+    return text || null;
   }
 }

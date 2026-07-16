@@ -98,29 +98,6 @@
         </div>
       </div>
       <div class="status-actions">
-        <div class="order-head-menu" (click)="$event.stopPropagation()">
-          <button
-            type="button"
-            class="order-head-menu-btn"
-            aria-label="Opciones del pedido"
-            [attr.aria-expanded]="orderHeadMenuOpen()"
-            (click)="toggleOrderHeadMenu($event)"
-          >
-            <span class="material-symbols-rounded" aria-hidden="true">more_vert</span>
-          </button>
-          @if (orderHeadMenuOpen()) {
-            <div class="order-head-menu-dropdown" (click)="$event.stopPropagation()">
-              <button type="button" class="menuItem" [disabled]="!canChangeCustomer(current)" (click)="openChangeCustomerModal(current)">
-                <span class="material-symbols-rounded" aria-hidden="true">person_search</span>
-                Cambiar clienta
-              </button>
-              <button type="button" class="menuItem danger" [disabled]="deletingOrder() || !canDeleteOrder(current)" (click)="requestDeleteOrder(current)">
-                <span class="material-symbols-rounded" aria-hidden="true">delete</span>
-                {{ deletingOrder() ? "Eliminando..." : "Eliminar pedido" }}
-              </button>
-            </div>
-          }
-        </div>
         @if (vm.phase; as phase) {
           <button
             type="button"
@@ -167,9 +144,40 @@
             (click)="openPaymentModal()"
           >
             <span class="material-symbols-rounded btn-icon" aria-hidden="true">payments</span>
-            Cerrar pedido
+            Registrar cobro
           </button>
         }
+        <div class="order-head-menu" (click)="$event.stopPropagation()">
+          <button
+            type="button"
+            class="order-head-menu-btn"
+            aria-label="Opciones del pedido"
+            [attr.aria-expanded]="orderHeadMenuOpen()"
+            (click)="toggleOrderHeadMenu($event)"
+          >
+            <span class="material-symbols-rounded" aria-hidden="true">more_vert</span>
+          </button>
+          @if (orderHeadMenuOpen()) {
+            <div class="order-head-menu-dropdown" (click)="$event.stopPropagation()">
+              <button type="button" class="menuItem" (click)="openOrderOperationsSheet(current)">
+                <span class="material-symbols-rounded" aria-hidden="true">route</span>
+                Gestionar entrega/embarque
+              </button>
+              <button type="button" class="menuItem" [disabled]="!canMarkDelivered(current) || savingOperationalAction()" (click)="markDeliveredFromHeader(current)">
+                <span class="material-symbols-rounded" aria-hidden="true">task_alt</span>
+                Marcar entregado
+              </button>
+              <button type="button" class="menuItem" [disabled]="!canChangeCustomer(current)" (click)="openChangeCustomerModal(current)">
+                <span class="material-symbols-rounded" aria-hidden="true">person_search</span>
+                Cambiar clienta
+              </button>
+              <button type="button" class="menuItem danger" [disabled]="deletingOrder() || !canDeleteOrder(current)" (click)="requestDeleteOrder(current)">
+                <span class="material-symbols-rounded" aria-hidden="true">delete</span>
+                {{ deletingOrder() ? "Eliminando..." : "Eliminar pedido" }}
+              </button>
+            </div>
+          }
+        </div>
       </div>
       @if (waProgressVisible()) {
         <div class="wa-progress-row">
@@ -204,8 +212,167 @@
       }
     </header>
 
+    <section class="final-flow-strip" aria-label="Flujo final del pedido">
+      @for (pill of finalStatePills(current); track pill.title) {
+        <article class="final-flow-pill" [class]="'tone-' + pill.tone">
+          <span class="material-symbols-rounded" aria-hidden="true">{{ pill.icon }}</span>
+          <div>
+            <small>{{ pill.title }}</small>
+            <strong>{{ pill.label }}</strong>
+          </div>
+        </article>
+      }
+    </section>
+
+    @if (hasDurangoReview(current)) {
+      <section class="durango-review-panel" aria-label="Revision GDL de Durango">
+        <div class="durango-review-head">
+          <span class="material-symbols-rounded" aria-hidden="true">verified</span>
+          <div>
+            <h2>Revisión GDL</h2>
+            <p>Valida dinero y gastos reportados desde Durango antes de cerrar finanzas.</p>
+          </div>
+        </div>
+
+        @if (durangoCollectionEvents(current); as events) {
+          @for (event of events; track event.event_id) {
+            <article class="durango-review-card durango-review-card--money">
+              <div class="durango-review-card-main">
+                <span class="durango-review-icon material-symbols-rounded" aria-hidden="true">payments</span>
+                <div>
+                  <div class="durango-review-title-row">
+                    <h3>Clienta pagó {{ formatCurrency(event.amount) }}</h3>
+                    <span class="review-status" [class]="'review-status tone-' + collectionVerificationTone(event)">
+                      {{ collectionVerificationLabel(event) }}
+                    </span>
+                  </div>
+                  <p>
+                    {{ collectionReporter(event) }} reportó cobro en Durango ·
+                    {{ collectionMethodLabel(event.method) }} ·
+                    {{ dateShort(event.created_at) }}
+                  </p>
+                  @if (event.note) {
+                    <small>{{ event.note }}</small>
+                  }
+                </div>
+              </div>
+              <div class="durango-review-actions">
+                @if (event.verification_status === "reported") {
+                  <button type="button" class="btn ghost" [disabled]="collectionDecisionSaving() || !canReviewDurangoMoney()" (click)="confirmDurangoCollection(event)">Confirmar recibido</button>
+                  <button type="button" class="btn primary" [disabled]="collectionDecisionSaving() || !canReviewDurangoMoney()" (click)="reconcileDurangoCollection(event)">Conciliar</button>
+                  <button type="button" class="btn ghost" [disabled]="collectionDecisionSaving() || !canReviewDurangoMoney()" (click)="markDurangoCollectionDifference(event)">Diferencia</button>
+                  <button type="button" class="btn danger" [disabled]="collectionDecisionSaving() || !canReviewDurangoMoney()" (click)="rejectDurangoCollection(event)">Rechazar</button>
+                } @else if (event.verification_status === "confirmed") {
+                  <button type="button" class="btn primary" [disabled]="collectionDecisionSaving() || !canReviewDurangoMoney() || current.settlement_status === 'reconciled'" (click)="reconcileDurangoCollection(event)">Conciliar</button>
+                  <button type="button" class="btn ghost" [disabled]="collectionDecisionSaving() || !canReviewDurangoMoney()" (click)="markDurangoCollectionDifference(event)">Diferencia</button>
+                }
+              </div>
+            </article>
+          }
+        }
+
+        @if (pendingDurangoExpenseReports(current); as reports) {
+          @for (report of reports; track report.report_id) {
+            <article class="durango-review-card durango-review-card--expense">
+              <div class="durango-review-card-main">
+                <span class="durango-review-icon material-symbols-rounded" aria-hidden="true">receipt_long</span>
+                <div>
+                  <div class="durango-review-title-row">
+                    <h3>Gasto {{ expenseReportCategoryLabel(report) }} · {{ formatCurrency(report.amount) }}</h3>
+                    <span class="review-status tone-warn">Pendiente GDL</span>
+                  </div>
+                  <p>
+                    Reportó {{ expenseReportReporter(report) }} ·
+                    {{ dateShort(report.occurred_at) }}
+                  </p>
+                  @if (report.note) {
+                    <small>{{ report.note }}</small>
+                  }
+                </div>
+              </div>
+              <div class="durango-review-actions">
+                <button type="button" class="btn primary" [disabled]="expenseDecisionSaving() || !canApproveOperationalExpense()" (click)="approveOperationalExpense(report)">Aprobar gasto</button>
+                <button type="button" class="btn danger" [disabled]="expenseDecisionSaving() || !canApproveOperationalExpense()" (click)="rejectOperationalExpense(report)">Rechazar</button>
+              </div>
+            </article>
+          }
+        }
+      </section>
+    }
+
     @if (actionToast()) {
       <div class="action-toast" role="status" aria-live="polite">{{ actionToast() }}</div>
+    }
+
+    @if (operationsSheetOpen()) {
+      <div class="sheet-backdrop sheet-backdrop--center" (click)="closeOrderOperationsSheet()">
+        <div class="sheet order-ops-sheet" role="dialog" aria-modal="true" aria-labelledby="order-ops-title" (click)="$event.stopPropagation()">
+          <div class="sheet-handle" aria-hidden="true"></div>
+          <div class="payment-sheet-header">
+            <span class="material-symbols-rounded payment-sheet-icon" aria-hidden="true">route</span>
+            <div>
+              <h2 id="order-ops-title">Entrega y embarque</h2>
+              <p class="muted">Controla logística sin mezclar cobro ni conciliación.</p>
+            </div>
+          </div>
+
+          <div class="ops-state-grid">
+            @for (pill of finalStatePills(current); track pill.title) {
+              <article class="ops-state-pill" [class]="'tone-' + pill.tone">
+                <span class="material-symbols-rounded" aria-hidden="true">{{ pill.icon }}</span>
+                <div>
+                  <small>{{ pill.title }}</small>
+                  <strong>{{ pill.label }}</strong>
+                </div>
+              </article>
+            }
+          </div>
+
+          <div class="ops-actions-grid ops-actions-grid--single">
+            <button type="button" class="ops-action primary-action" [disabled]="!canMarkDelivered(current) || savingOperationalAction()" (click)="markDeliveredFromOperations(current)">
+              <span class="material-symbols-rounded" aria-hidden="true">task_alt</span>
+              <strong>Marcar entregado</strong>
+              <small>No modifica cobro ni conciliación</small>
+            </button>
+          </div>
+
+          <section class="ops-custom-shipment">
+            <h3>Otro destino</h3>
+            @if (activeShipmentForOrder(current); as activeShipmentId) {
+              <p class="ops-warning">
+                <span class="material-symbols-rounded" aria-hidden="true">info</span>
+                Este pedido ya está en un embarque activo: {{ activeShipmentId }}.
+              </p>
+            }
+            <label class="sheet-field">
+              <span class="sheet-label">Destino</span>
+              <select class="input" [ngModel]="operationalDestination()" (ngModelChange)="operationalDestination.set($event)">
+                <option value="durango">Durango</option>
+                <option value="gdl">GDL</option>
+                <option value="otro">Otro</option>
+              </select>
+            </label>
+            @if (operationalDestination() === 'otro') {
+              <label class="sheet-field">
+                <span class="sheet-label">Nombre del destino</span>
+                <input class="input" type="text" [ngModel]="operationalCustomDestination()" (ngModelChange)="operationalCustomDestination.set($event)" placeholder="Ej. paquetería, bodega externa, tienda" />
+              </label>
+            }
+            <label class="sheet-field">
+              <span class="sheet-label">Notas del embarque</span>
+              <textarea class="input ops-notes" rows="3" [ngModel]="operationalNotes()" (ngModelChange)="operationalNotes.set($event)" placeholder="Instrucciones, responsable, referencia, etc."></textarea>
+            </label>
+            <button type="button" class="btn primary with-icon" [disabled]="!canCreateShipmentFromOrder(current) || savingOperationalAction()" (click)="createShipmentFromOperations(current)">
+              <span class="material-symbols-rounded btn-icon" aria-hidden="true">package_2</span>
+              Crear embarque en proceso
+            </button>
+          </section>
+
+          <div class="sheet-actions">
+            <button type="button" class="btn ghost" [disabled]="savingOperationalAction()" (click)="closeOrderOperationsSheet()">Cerrar</button>
+          </div>
+        </div>
+      </div>
     }
 
     @if (popupAlertOpen()) {
@@ -1952,6 +2119,46 @@
     </aside>
   }
 
+  @if (priceWarningOpen() && priceWarningProduct(); as warningProduct) {
+    <div class="sheet-backdrop sheet-backdrop--center price-warning-backdrop" (click)="resolvePriceWarning('cancel')">
+      <div class="sheet price-warning-sheet" role="dialog" aria-modal="true" aria-labelledby="price-warning-title" (click)="$event.stopPropagation()">
+        <div class="sheet-handle" aria-hidden="true"></div>
+        <div class="price-warning-head">
+          <span class="material-symbols-rounded" aria-hidden="true">warning</span>
+          <div>
+            <h2 id="price-warning-title">Revisar precio</h2>
+            <p>Este producto puede tener precio desactualizado.</p>
+          </div>
+        </div>
+        <div class="price-warning-product">
+          @if (warningProduct.image_url) {
+            <img [src]="warningProduct.image_url" alt="" />
+          } @else {
+            <span class="material-symbols-rounded" aria-hidden="true">inventory_2</span>
+          }
+          <div>
+            <strong>{{ warningProduct.name }}</strong>
+            <small>{{ warningProduct.sku }} · {{ warningProduct.supplier_name || "Sin proveedor" }}</small>
+          </div>
+        </div>
+        <div class="price-warning-grid">
+          <span><small>Precio clienta</small><strong>{{ formatCurrency(warningProduct.price_clienta || 0) }}</strong></span>
+          <span><small>Precio costo</small><strong>{{ formatCurrency(warningProduct.price_cost || 0) }}</strong></span>
+          <span><small>Última actualización</small><strong>{{ dateShort(warningProduct.last_price_imported_at || warningProduct.last_imported_at) }}</strong></span>
+        </div>
+        <p class="price-warning-reason">{{ priceWarningReason() }}</p>
+        @if (priceWarningLatestImportLabel()) {
+          <p class="price-warning-note">Última importación completa: {{ priceWarningLatestImportLabel() }}</p>
+        }
+        <div class="sheet-actions price-warning-actions">
+          <button type="button" class="btn ghost" (click)="resolvePriceWarning('review')">Revisar precio</button>
+          <button type="button" class="btn primary" (click)="resolvePriceWarning('use')">Usar de todos modos</button>
+          <button type="button" class="btn danger" (click)="resolvePriceWarning('cancel')">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  }
+
   @if (addItemModalOpen()) {
     <div class="sheet-backdrop sheet-backdrop--add-item" (click)="closeAddItemModal()">
       <div class="sheet full sheet-add-item-ios" role="dialog" aria-modal="true" aria-labelledby="add-item-modal-title" (click)="$event.stopPropagation()">
@@ -2400,13 +2607,13 @@
 
         <div class="payment-sheet-header">
           <span class="material-symbols-rounded payment-sheet-icon" aria-hidden="true">payments</span>
-          <h2 id="payment-modal-title">Cerrar pedido</h2>
+          <h2 id="payment-modal-title">Registrar cobro</h2>
         </div>
 
         @if (!['en_ruta','entregado','delivered','delivered_partial','pago_pendiente','pagado_parcial'].includes(current.status)) {
           <div class="payment-context-note">
             <span class="material-symbols-rounded" style="font-size:16px;flex-shrink:0">info</span>
-            El pedido est&aacute; en estado <strong>{{ statusLabel(current.status) }}</strong>. Al cerrar se marcar&aacute; como entregado y pagado (o con saldo pendiente seg&uacute;n el monto).
+            El pedido est&aacute; en estado <strong>{{ statusLabel(current.status) }}</strong>. Este registro solo actualiza el cobro; entrega y conciliaci&oacute;n se controlan por separado.
           </div>
         }
 
@@ -2484,7 +2691,7 @@
             @if (paymentSaving()) {
               Guardando...
             } @else {
-              Confirmar y cerrar pedido
+              Guardar cobro
             }
           </button>
           <button type="button" class="btn ghost" [disabled]="paymentSaving()" (click)="closePaymentModal()">

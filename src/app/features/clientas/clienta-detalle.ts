@@ -2,6 +2,7 @@ import { Component, ChangeDetectionStrategy, inject, signal, computed, OnInit } 
 import { ActivatedRoute, Router, RouterLink } from "@angular/router";
 import { CurrencyPipe, DatePipe, NgClass, PercentPipe, UpperCasePipe } from "@angular/common";
 import { FormsModule } from "@angular/forms";
+import { HttpErrorResponse } from "@angular/common/http";
 import { lastValueFrom } from "rxjs";
 import { CustomersService, Customer } from "../../core/customers.service";
 import { RoutesService } from "../../core/routes.service";
@@ -16,6 +17,24 @@ export interface WaNotifType {
   label: string;
   description: string;
   default: boolean;
+}
+
+interface TrackLinkAdminState {
+  enabled: boolean;
+  legacy: boolean;
+  version: number | null;
+  tracking_url: string | null;
+  created_at: string | null;
+  rotated_at: string | null;
+  revoked_at: string | null;
+  last_access_at: string | null;
+}
+
+interface TrackLinkGenerateResult {
+  token: string;
+  tracking_url: string;
+  enabled: boolean;
+  version: number;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -110,6 +129,9 @@ export default class ClientaDetallePage implements OnInit {
   trackLink        = signal<string | null>(null);
   trackLinkLoading = signal(false);
   trackLinkCopied  = signal(false);
+  trackLinkMeta = signal<TrackLinkAdminState | null>(null);
+  trackLinkError = signal<string | null>(null);
+  trackLinkNotice = signal<string | null>(null);
 
   // ── Notificaciones WhatsApp ───────────────────────────────────────────
   waTypes       = signal<WaNotifType[]>([]);
@@ -261,14 +283,10 @@ export default class ClientaDetallePage implements OnInit {
     this.customer.set(c);
     this.followUpDraft.set(c.follow_up_at ? String(c.follow_up_at).slice(0, 10) : "");
 
-    // Pre-cargar link de tracking si ya existe
-    if ((c as any).tracking_token) {
-      this.trackLink.set(this.buildTrackUrl((c as any).tracking_token));
-    }
-
     await Promise.all([
       this.loadOrders(id),
       this.loadWaTypes(),
+      this.loadTrackLink(),
     ]);
 
     this.loading.set(false);
@@ -276,22 +294,33 @@ export default class ClientaDetallePage implements OnInit {
 
   // ── Link de seguimiento ──────────────────────────────────────────────
 
-  private buildTrackUrl(token: string): string {
-    return `${window.location.origin}/track/${token}`;
-  }
-
   async generateTrackLink(): Promise<void> {
+    const rotate = Boolean(this.trackLink());
+    if (rotate && !window.confirm("El enlace anterior dejará de funcionar. ¿Quieres generar uno nuevo?")) return;
     this.trackLinkLoading.set(true);
+    this.trackLinkError.set(null);
+    this.trackLinkNotice.set(null);
     try {
       const result = await lastValueFrom(
-        this.api.post<{ token: string; tracking_url: string }>(
+        this.api.post<TrackLinkGenerateResult>(
           "/api/admin/track/generate",
-          { customer_id: this.customerId() }
+          { customer_id: this.customerId(), rotate }
         )
       );
-      this.trackLink.set(this.buildTrackUrl(result.token));
-    } catch (err: any) {
-      console.error("[TrackLink] Error:", err);
+      this.trackLink.set(result.tracking_url);
+      this.trackLinkMeta.set({
+        enabled: true,
+        legacy: false,
+        version: result.version,
+        tracking_url: result.tracking_url,
+        created_at: new Date().toISOString(),
+        rotated_at: rotate ? new Date().toISOString() : null,
+        revoked_at: null,
+        last_access_at: null,
+      });
+      this.trackLinkNotice.set(rotate ? "Enlace regenerado. El anterior ya no funciona." : "Enlace seguro creado correctamente.");
+    } catch (error: unknown) {
+      this.trackLinkError.set(this.trackErrorMessage(error, "No se pudo generar el enlace."));
     } finally {
       this.trackLinkLoading.set(false);
     }
@@ -303,8 +332,64 @@ export default class ClientaDetallePage implements OnInit {
     try {
       await navigator.clipboard.writeText(link);
       this.trackLinkCopied.set(true);
+      this.trackLinkNotice.set("Enlace copiado al portapapeles.");
+      this.trackLinkError.set(null);
       setTimeout(() => this.trackLinkCopied.set(false), 2500);
-    } catch {}
+    } catch {
+      this.trackLinkError.set("No se pudo copiar automáticamente. Selecciona y copia el enlace manualmente.");
+    }
+  }
+
+  shareTrackLink(): void {
+    const link = this.trackLink();
+    const customer = this.customer();
+    if (!link || !customer?.whatsapp) {
+      this.trackLinkError.set("La clienta no tiene un WhatsApp registrado para compartir el enlace.");
+      return;
+    }
+    const digits = customer.whatsapp.replace(/\D/g, "");
+    const phone = digits.length === 10 ? `52${digits}` : digits;
+    const message = `Hola ${customer.first_name}, este es tu enlace personal de Base Mayorista para revisar pedidos, pagos y devoluciones: ${link}`;
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+  }
+
+  async revokeTrackLink(): Promise<void> {
+    if (!this.trackLink() || !window.confirm("¿Revocar este enlace? La clienta dejará de tener acceso inmediatamente.")) return;
+    this.trackLinkLoading.set(true);
+    this.trackLinkError.set(null);
+    this.trackLinkNotice.set(null);
+    try {
+      await lastValueFrom(this.api.delete<void>(`/api/admin/track/${encodeURIComponent(this.customerId())}`));
+      this.trackLink.set(null);
+      this.trackLinkMeta.set({ enabled: false, legacy: false, version: null, tracking_url: null, created_at: null, rotated_at: null, revoked_at: new Date().toISOString(), last_access_at: null });
+      this.trackLinkNotice.set("Enlace revocado. Ya no puede utilizarse.");
+    } catch (error: unknown) {
+      this.trackLinkError.set(this.trackErrorMessage(error, "No se pudo revocar el enlace."));
+    } finally {
+      this.trackLinkLoading.set(false);
+    }
+  }
+
+  private async loadTrackLink(): Promise<void> {
+    this.trackLinkLoading.set(true);
+    this.trackLinkError.set(null);
+    try {
+      const result = await lastValueFrom(
+        this.api.get<TrackLinkAdminState>(`/api/admin/track/${encodeURIComponent(this.customerId())}`),
+      );
+      this.trackLinkMeta.set(result);
+      this.trackLink.set(result.enabled ? result.tracking_url : null);
+    } catch (error: unknown) {
+      this.trackLinkError.set(this.trackErrorMessage(error, "No se pudo consultar el estado del enlace."));
+    } finally {
+      this.trackLinkLoading.set(false);
+    }
+  }
+
+  private trackErrorMessage(error: unknown, fallback: string): string {
+    if (!(error instanceof HttpErrorResponse) || !error.error || typeof error.error !== "object") return fallback;
+    const payload = error.error as { message?: unknown };
+    return typeof payload.message === "string" && payload.message.trim() ? payload.message : fallback;
   }
 
   // ── Notificaciones WA ────────────────────────────────────────────────

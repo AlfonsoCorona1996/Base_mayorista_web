@@ -226,6 +226,14 @@
   line-height: 1.15;
 }
 
+.route-cell,
+.locality-main {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  align-content: center;
+}
+
 .route-cell small,
 .locality-main small,
 .cell-note {

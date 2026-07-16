@@ -87,8 +87,10 @@ const CAPABILITY_GROUPS: CapabilityGroup[] = [
       (key) => key.startsWith("cap.dispatch.") || key.startsWith("cap.runs.") || key.startsWith("cap.transfers."),
     ),
   },
+  { title: "Embarques", keys: CAPABILITY_KEYS.filter((key) => key.startsWith("cap.shipments.")) },
   { title: "Entregas", keys: CAPABILITY_KEYS.filter((key) => key.startsWith("cap.delivery.")) },
   { title: "Pagos", keys: CAPABILITY_KEYS.filter((key) => key.startsWith("cap.payments.")) },
+  { title: "Conciliación", keys: CAPABILITY_KEYS.filter((key) => key.startsWith("cap.settlement.")) },
   { title: "Administración financiera", keys: CAPABILITY_KEYS.filter((key) => key.startsWith("cap.finance.")) },
   { title: "Devoluciones", keys: CAPABILITY_KEYS.filter((key) => key.startsWith("cap.returns.")) },
   { title: "Incidencias y auditoría", keys: CAPABILITY_KEYS.filter((key) => key.startsWith("cap.incidents.") || key.startsWith("cap.audit.")) },
@@ -107,6 +109,8 @@ const SECTION_CAPABILITY_PREFIXES: Record<SectionKey, string[]> = {
   "sections.rutas": ["cap.runs.", "cap.delivery."],
   "sections.localidades": [],
   "sections.salidas": ["cap.packing.", "cap.dispatch.", "cap.transfers."],
+  "sections.embarques": ["cap.shipments."],
+  "sections.durango": ["cap.shipments.", "cap.packing.", "cap.delivery.", "cap.payments.", "cap.settlement."],
   "sections.usuarios": ["cap.users.", "cap.roles.", "cap.audit."],
 };
 
@@ -981,6 +985,8 @@ export default class UsuariosPage {
       rutas: this.resolveSectionValue(roleId, sectionOverrides, "sections.rutas"),
       localidades: this.resolveSectionValue(roleId, sectionOverrides, "sections.localidades"),
       salidas: this.resolveSectionValue(roleId, sectionOverrides, "sections.salidas"),
+      embarques: this.resolveSectionValue(roleId, sectionOverrides, "sections.embarques"),
+      durango: this.resolveSectionValue(roleId, sectionOverrides, "sections.durango"),
       usuarios: roleId === "super_admin" ? this.resolveSectionValue(roleId, sectionOverrides, "sections.usuarios") : false,
     };
   }
@@ -1254,7 +1260,14 @@ export default class UsuariosPage {
   }
 
   private isRoleId(value: string): value is RoleId {
-    return value === "super_admin" || value === "admin" || value === "administrativo" || value === "operativo" || value === "repartidor";
+    return (
+      value === "super_admin" ||
+      value === "admin" ||
+      value === "administrativo" ||
+      value === "operativo" ||
+      value === "repartidor" ||
+      value === "durango_operativo"
+    );
   }
 
   private isLoginType(value: string): value is UserLoginType {

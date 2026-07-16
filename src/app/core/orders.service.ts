@@ -54,6 +54,14 @@ export type OrderStatus =
 
 export type OrderItemState = OrderStatus | "sin_estado";
 export type CollectionStatus = "none" | "pending" | "paid" | "remind_later";
+export type OrderFulfillmentStatus = "pending" | "packing_gdl" | "packed_gdl" | "packing_durango" | "packed_durango";
+export type OrderCustodyStatus = "gdl" | "shipment" | "durango" | "delivery_staff" | "customer";
+export type OrderDeliveryStatus = "pending" | "delivered" | "not_delivered" | "incident";
+export type OrderCustomerPaymentStatus = "pending" | "partial" | "collected";
+export type OrderSettlementStatus = "not_applicable" | "pending" | "sent_to_gdl" | "received" | "reconciled" | "difference";
+export type OrderHolderLocation = "gdl" | "in_transit" | "durango" | "delivery_staff" | "customer" | "other";
+export type CollectionMethod = "efectivo" | "transferencia" | "tarjeta" | "otro";
+export type OrderCollectionVerificationStatus = "reported" | "confirmed" | "rejected" | "difference";
 
 export interface OrderItem {
   item_id: string;
@@ -77,6 +85,10 @@ export interface OrderItem {
   price_clienta?: number | null;
   price_public?: number | null;
   price_cost?: number | null;
+  price_source_import_id?: string | null;
+  price_source_imported_at?: unknown;
+  price_warning_ack_at?: string | null;
+  price_warning_reason?: string | null;
   discount_pct?: number | null;
   inventory_id?: string | null;
   image_url?: string | null;
@@ -165,6 +177,15 @@ export interface Order {
   dispatch_request: OrderDispatchRequest;
   route_run_id?: string | null;
   route_stop_id?: string | null;
+  shipment_id?: string | null;
+  fulfillment_status?: OrderFulfillmentStatus;
+  custody_status?: OrderCustodyStatus;
+  delivery_status?: OrderDeliveryStatus;
+  customer_payment_status?: OrderCustomerPaymentStatus;
+  settlement_status?: OrderSettlementStatus;
+  current_holder_location?: OrderHolderLocation;
+  current_holder_user_id?: string | null;
+  current_holder_name?: string | null;
   has_returns?: boolean;
   delivered_at?: string | null;
   paid_at?: string | null;
@@ -611,6 +632,313 @@ export class OrdersService {
     }
   }
 
+  async updateOperationalState(
+    orderId: string,
+    patch: Partial<
+      Pick<
+        Order,
+        | "fulfillment_status"
+        | "custody_status"
+        | "delivery_status"
+        | "customer_payment_status"
+        | "settlement_status"
+        | "current_holder_location"
+        | "current_holder_user_id"
+        | "current_holder_name"
+        | "shipment_id"
+      >
+    >,
+    message = "Estado operativo actualizado",
+  ): Promise<void> {
+    const now = new Date().toISOString();
+    const cleanPatch = Object.fromEntries(
+      Object.entries(patch).filter(([, value]) => value !== undefined),
+    ) as typeof patch;
+    if (Object.keys(cleanPatch).length === 0) return;
+
+    this.rows.update((current) =>
+      current.map((order) => (order.order_id === orderId ? { ...order, ...cleanPatch, updated_at: now } : order)),
+    );
+    await updateDoc(doc(this.colRef, orderId), {
+      ...cleanPatch,
+      updated_at: serverTimestamp(),
+    });
+    await this.logEvent(orderId, "ORDER_OPERATION_UPDATED", message, cleanPatch);
+  }
+
+  async markOrderDelivered(orderId: string, note?: string): Promise<void> {
+    const now = new Date().toISOString();
+    this.rows.update((current) =>
+      current.map((order) =>
+        order.order_id === orderId
+          ? {
+              ...order,
+              status: "delivered",
+              delivery_status: "delivered",
+              custody_status: "customer",
+              current_holder_location: "customer",
+              delivered_at: order.delivered_at || now,
+              updated_at: now,
+              timeline: [
+                ...order.timeline,
+                { id: `t-${Date.now()}`, label: "Pedido entregado", created_at: now },
+              ],
+            }
+          : order,
+      ),
+    );
+    await updateDoc(doc(this.colRef, orderId), {
+      status: "delivered",
+      delivery_status: "delivered",
+      custody_status: "customer",
+      current_holder_location: "customer",
+      delivered_at: serverTimestamp(),
+      updated_at: serverTimestamp(),
+      timeline: this.getById(orderId)?.timeline || [],
+      ...(note ? { notes: note } : {}),
+    });
+    await this.consumeInventoryForDelivery(orderId).catch((error) => {
+      console.error("[OrdersService] No se pudo consumir inventario al entregar", error);
+    });
+    await this.supplierOperations.removeByOrder(orderId).catch(() => null);
+    await this.logEvent(orderId, "ORDER_DELIVERED", note || "Pedido marcado como entregado");
+  }
+
+  async markOrderDeliveryIssue(orderId: string, deliveryStatus: Extract<OrderDeliveryStatus, "not_delivered" | "incident">, note?: string) {
+    await this.updateOperationalState(
+      orderId,
+      {
+        delivery_status: deliveryStatus,
+        custody_status: "durango",
+        current_holder_location: "durango",
+      },
+      note || (deliveryStatus === "incident" ? "Incidencia de entrega" : "Pedido no entregado"),
+    );
+  }
+
+  async registerCustomerCollection(
+    orderId: string,
+    amount: number,
+    method: CollectionMethod = "efectivo",
+    collectedByName?: string | null,
+    note?: string | null,
+    options: RegisterCollectionOptions = {},
+  ): Promise<string> {
+    const currentOrder = this.getById(orderId);
+    const previousPaid = Math.max(0, Number(currentOrder?.totals?.paid_amount || 0));
+    const paymentReceived = Math.max(0, Number.isFinite(amount) ? amount : 0);
+    const safePaid = Number((previousPaid + paymentReceived).toFixed(2));
+    const calculated = currentOrder
+      ? calculateOrderFinancials({ ...currentOrder, totals: { ...currentOrder.totals, paid_amount: safePaid } })
+      : null;
+    const safeTotal = calculated?.netAmount ?? Math.max(0, Number(currentOrder?.totals?.total_amount || 0));
+    const balanceDue = calculated?.balanceDue ?? Math.max(0, safeTotal - safePaid);
+    const persistedTotals = currentOrder
+      ? toPersistedOrderTotals({ ...currentOrder, totals: { ...currentOrder.totals, paid_amount: safePaid } })
+      : {
+          total_amount: safeTotal,
+          net_amount: safeTotal,
+          paid_amount: safePaid,
+          balance_due: balanceDue,
+          discount_amount: 0,
+          overpayment_amount: Math.max(0, safePaid - safeTotal),
+        };
+
+    let nextStatus: OrderStatus;
+    if (safePaid <= 0) nextStatus = "pago_pendiente";
+    else if (balanceDue <= 0) nextStatus = "pagado";
+    else nextStatus = "pagado_parcial";
+
+    const customerPaymentStatus: OrderCustomerPaymentStatus =
+      safePaid <= 0 ? "pending" : balanceDue <= 0 ? "collected" : "partial";
+    const settlementStatus: OrderSettlementStatus = paymentReceived > 0 ? "pending" : currentOrder?.settlement_status || "not_applicable";
+    const now = new Date().toISOString();
+    const actor = this.currentActor(collectedByName || undefined);
+    const eventId = ulid();
+
+    this.rows.update((current) =>
+      current.map((order) => {
+        if (order.order_id !== orderId) return order;
+        return {
+          ...order,
+          status: nextStatus,
+          updated_at: now,
+          paid_at: customerPaymentStatus === "collected" ? now : order.paid_at || null,
+          customer_payment_status: customerPaymentStatus,
+          settlement_status: settlementStatus,
+          collection_status: customerPaymentStatus === "collected" ? "paid" : balanceDue > 0 ? "pending" : order.collection_status || "none",
+          collection_reminder_at: customerPaymentStatus === "collected" ? null : order.collection_reminder_at || null,
+          collection_note: note || (customerPaymentStatus === "collected" ? "Cobro liquidado." : order.collection_note || null),
+          totals: persistedTotals as unknown as OrderTotals,
+          timeline: [
+            ...order.timeline,
+            { id: `t-${Date.now()}`, label: `Cobro registrado: $${paymentReceived}`, created_at: now },
+          ],
+        };
+      }),
+    );
+
+    await updateDoc(doc(this.colRef, orderId), {
+      status: nextStatus,
+      updated_at: serverTimestamp(),
+      totals: persistedTotals,
+      paid_at: customerPaymentStatus === "collected" ? serverTimestamp() : currentOrder?.paid_at || null,
+      customer_payment_status: customerPaymentStatus,
+      settlement_status: settlementStatus,
+      collection_status: customerPaymentStatus === "collected" ? "paid" : balanceDue > 0 ? "pending" : currentOrder?.collection_status || "none",
+      collection_reminder_at: customerPaymentStatus === "collected" ? null : currentOrder?.collection_reminder_at || null,
+      collection_note: note || (customerPaymentStatus === "collected" ? "Cobro liquidado." : currentOrder?.collection_note || null),
+      timeline: this.getById(orderId)?.timeline || [],
+    });
+
+    await setDoc(doc(FIRESTORE, "order_collection_events", eventId), {
+      event_id: eventId,
+      order_id: orderId,
+      business_id: currentOrder?.business_id || "bm",
+      amount: paymentReceived,
+      method,
+      status_after: customerPaymentStatus,
+      settlement_status_after: settlementStatus,
+      source_location: options.sourceLocation || "gdl",
+      verification_status: options.verificationStatus || "confirmed",
+      collected_by: actor,
+      reported_by: this.currentActor(options.reportedByName || collectedByName || undefined),
+      verified_by: options.verificationStatus === "reported" ? null : this.currentActor(),
+      verified_at: options.verificationStatus === "reported" ? null : serverTimestamp(),
+      note: note || null,
+      created_at: serverTimestamp(),
+    });
+    await this.logEvent(orderId, "CUSTOMER_COLLECTION_REGISTERED", `Cobro registrado: $${paymentReceived}`, {
+      amount: paymentReceived,
+      method,
+      balance_due: balanceDue,
+      business_id: currentOrder?.business_id || "bm",
+    });
+    return eventId;
+  }
+
+  async listCollectionEventsForOrder(orderId: string): Promise<OrderCollectionEvent[]> {
+    const target = String(orderId || "").trim();
+    if (!target) return [];
+    const snap = await getDocs(query(collection(FIRESTORE, "order_collection_events"), where("order_id", "==", target)));
+    return snap.docs
+      .map((entry) => this.normalizeCollectionEvent(entry.id, entry.data() as Record<string, any>))
+      .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
+  }
+
+  async confirmReportedCollection(event: OrderCollectionEvent, note?: string | null): Promise<void> {
+    await updateDoc(doc(FIRESTORE, "order_collection_events", event.event_id), {
+      verification_status: "confirmed",
+      verified_by: this.currentActor(),
+      verified_at: serverTimestamp(),
+      ...(note ? { verification_note: note } : {}),
+    });
+    await this.markSettlement(event.order_id, "received", note || "Dinero recibido de Durango");
+  }
+
+  async markCollectionDifference(event: OrderCollectionEvent, note?: string | null): Promise<void> {
+    await updateDoc(doc(FIRESTORE, "order_collection_events", event.event_id), {
+      verification_status: "difference",
+      verified_by: this.currentActor(),
+      verified_at: serverTimestamp(),
+      ...(note ? { verification_note: note } : {}),
+    });
+    await this.markSettlement(event.order_id, "difference", note || "Diferencia en cobro reportado");
+  }
+
+  async rejectReportedCollection(event: OrderCollectionEvent, reason: string): Promise<void> {
+    const order = this.getById(event.order_id);
+    if (!order) throw new Error("Pedido no encontrado");
+    const amount = Math.max(0, Number(event.amount || 0));
+    const nextPaid = Math.max(0, Number((Number(order.totals?.paid_amount || 0) - amount).toFixed(2)));
+    const recalculated = toPersistedOrderTotals({ ...order, totals: { ...order.totals, paid_amount: nextPaid } });
+    const nextBalance = Number(recalculated["balance_due"] || 0);
+    const nextPaymentStatus: OrderCustomerPaymentStatus = nextPaid <= 0 ? "pending" : nextBalance > 0 ? "partial" : "collected";
+    const nextStatus: OrderStatus = nextPaid <= 0 ? "pago_pendiente" : nextBalance > 0 ? "pagado_parcial" : "pagado";
+    const settlementStatus: OrderSettlementStatus = nextPaid > 0 ? "pending" : "not_applicable";
+    const now = new Date().toISOString();
+
+    this.rows.update((current) =>
+      current.map((row) =>
+        row.order_id === order.order_id
+          ? {
+              ...row,
+              status: nextStatus,
+              customer_payment_status: nextPaymentStatus,
+              settlement_status: settlementStatus,
+              totals: recalculated as unknown as OrderTotals,
+              collection_status: nextBalance > 0 ? "pending" : "paid",
+              collection_note: reason || "Cobro reportado rechazado.",
+              updated_at: now,
+            }
+          : row,
+      ),
+    );
+
+    await updateDoc(doc(this.colRef, order.order_id), {
+      status: nextStatus,
+      customer_payment_status: nextPaymentStatus,
+      settlement_status: settlementStatus,
+      totals: recalculated,
+      collection_status: nextBalance > 0 ? "pending" : "paid",
+      collection_note: reason || "Cobro reportado rechazado.",
+      updated_at: serverTimestamp(),
+    });
+    await updateDoc(doc(FIRESTORE, "order_collection_events", event.event_id), {
+      verification_status: "rejected",
+      rejected_reason: reason || "Cobro rechazado por GDL",
+      verified_by: this.currentActor(),
+      verified_at: serverTimestamp(),
+    });
+    await this.logEvent(order.order_id, "CUSTOMER_COLLECTION_REJECTED", "Cobro reportado rechazado", {
+      amount,
+      reason,
+      event_id: event.event_id,
+    });
+  }
+
+  async markSettlement(orderId: string, settlementStatus: OrderSettlementStatus, note?: string | null): Promise<void> {
+    const currentOrder = this.getById(orderId);
+    const deliveryStatus = currentOrder?.delivery_status || this.deriveDeliveryStatus(currentOrder || null);
+    const paymentStatus = currentOrder?.customer_payment_status || this.deriveCustomerPaymentStatus(currentOrder || null);
+    const shouldClose = settlementStatus === "reconciled" && deliveryStatus === "delivered" && paymentStatus === "collected";
+    const now = new Date().toISOString();
+
+    this.rows.update((current) =>
+      current.map((order) =>
+        order.order_id === orderId
+          ? {
+              ...order,
+              settlement_status: settlementStatus,
+              status: shouldClose ? "closed" : order.status,
+              closed_at: shouldClose ? now : order.closed_at || null,
+              updated_at: now,
+            }
+          : order,
+      ),
+    );
+    await updateDoc(doc(this.colRef, orderId), {
+      settlement_status: settlementStatus,
+      ...(shouldClose ? { status: "closed", closed_at: serverTimestamp() } : {}),
+      updated_at: serverTimestamp(),
+    });
+
+    const eventId = ulid();
+    await setDoc(doc(FIRESTORE, "order_settlement_events", eventId), {
+      event_id: eventId,
+      order_id: orderId,
+      business_id: currentOrder?.business_id || "bm",
+      status: settlementStatus,
+      note: note || null,
+      created_by: this.currentActor(),
+      created_at: serverTimestamp(),
+    });
+    await this.logEvent(orderId, "ORDER_SETTLEMENT_UPDATED", `Conciliación: ${settlementStatus}`, {
+      settlement_status: settlementStatus,
+      closed: shouldClose,
+    });
+  }
+
   async updatePlannedPackages(orderId: string, plannedPackages: number) {
     const now = new Date().toISOString();
     this.rows.update((current) =>
@@ -714,6 +1042,10 @@ export class OrdersService {
     } else {
       nextStatus = "pagado_parcial";
     }
+    const customerPaymentStatus: OrderCustomerPaymentStatus =
+      safePaid <= 0 ? "pending" : balanceDue <= 0 ? "collected" : "partial";
+    const settlementStatus: OrderSettlementStatus =
+      paymentReceived > 0 ? "pending" : currentOrder?.settlement_status || "not_applicable";
 
     const now = new Date().toISOString();
     this.rows.update((current) =>
@@ -724,11 +1056,11 @@ export class OrdersService {
           status: nextStatus,
           updated_at: now,
           paid_at: nextStatus === "pagado" ? now : order.paid_at || null,
-          closed_at: now,
-          delivered_at: order.delivered_at || now,
+          customer_payment_status: customerPaymentStatus,
+          settlement_status: settlementStatus,
           collection_status: nextStatus === "pagado" ? "paid" : (balanceDue > 0 ? "pending" : order.collection_status || "none"),
           collection_reminder_at: nextStatus === "pagado" ? null : order.collection_reminder_at || null,
-          collection_note: nextStatus === "pagado" ? "Cobro liquidado al registrar pago." : order.collection_note || null,
+          collection_note: nextStatus === "pagado" ? "Cobro liquidado; falta conciliación si el dinero no está en GDL." : order.collection_note || null,
           totals: persistedTotals as unknown as OrderTotals,
           timeline: [
             ...order.timeline,
@@ -743,14 +1075,22 @@ export class OrdersService {
       updated_at: serverTimestamp(),
       totals: persistedTotals,
       paid_at: nextStatus === "pagado" ? serverTimestamp() : currentOrder?.paid_at || null,
-      closed_at: serverTimestamp(),
-      delivered_at: currentOrder?.delivered_at || serverTimestamp(),
+      customer_payment_status: customerPaymentStatus,
+      settlement_status: settlementStatus,
       collection_status: nextStatus === "pagado" ? "paid" : (balanceDue > 0 ? "pending" : currentOrder?.collection_status || "none"),
       collection_reminder_at: nextStatus === "pagado" ? null : currentOrder?.collection_reminder_at || null,
-      collection_note: nextStatus === "pagado" ? "Cobro liquidado al registrar pago." : currentOrder?.collection_note || null,
+      collection_note: nextStatus === "pagado" ? "Cobro liquidado; falta conciliación si el dinero no está en GDL." : currentOrder?.collection_note || null,
     });
-    await this.consumeInventoryForDelivery(orderId).catch((error) => {
-      console.error("[OrdersService] No se pudo consumir inventario al cerrar", error);
+    await setDoc(doc(FIRESTORE, "order_collection_events", ulid()), {
+      order_id: orderId,
+      business_id: currentOrder?.business_id || "bm",
+      amount: paymentReceived,
+      method: "otro",
+      status_after: customerPaymentStatus,
+      settlement_status_after: settlementStatus,
+      collected_by: this.currentActor(),
+      note: "Cobro registrado desde pedido.",
+      created_at: serverTimestamp(),
     });
   }
 
@@ -1350,6 +1690,10 @@ export class OrdersService {
         packages_count: Math.max(0, Math.trunc(packagesCount)),
         completed_at: now,
       },
+      fulfillment_status: "packed_gdl" as OrderFulfillmentStatus,
+      custody_status: order.custody_status || "gdl" as OrderCustodyStatus,
+      delivery_status: order.delivery_status || "pending" as OrderDeliveryStatus,
+      current_holder_location: order.current_holder_location || "gdl" as OrderHolderLocation,
       dispatch_request: {
         status: (nextDispatch.status || "none") as "none" | "requested" | "accepted" | "rejected",
         requested_at: nextDispatch.requested_at ?? null,
@@ -1366,6 +1710,10 @@ export class OrdersService {
         packages_count: Math.max(0, Math.trunc(packagesCount)),
         completed_at: serverTimestamp(),
       },
+      fulfillment_status: "packed_gdl",
+      custody_status: order.custody_status || "gdl",
+      delivery_status: order.delivery_status || "pending",
+      current_holder_location: order.current_holder_location || "gdl",
       updated_at: serverTimestamp(),
     });
   }
@@ -1427,6 +1775,15 @@ export class OrdersService {
       },
       route_run_id: data.route_run_id ?? null,
       route_stop_id: data.route_stop_id ?? null,
+      shipment_id: data.shipment_id ?? null,
+      fulfillment_status: this.normalizeFulfillmentStatus(data.fulfillment_status, data),
+      custody_status: this.normalizeCustodyStatus(data.custody_status, data),
+      delivery_status: this.normalizeDeliveryStatus(data.delivery_status, data),
+      customer_payment_status: this.normalizeCustomerPaymentStatus(data.customer_payment_status, data),
+      settlement_status: this.normalizeSettlementStatus(data.settlement_status, data),
+      current_holder_location: this.normalizeHolderLocation(data.current_holder_location, data),
+      current_holder_user_id: data.current_holder_user_id ?? null,
+      current_holder_name: data.current_holder_name ?? null,
       has_returns: Boolean(data.has_returns || (Array.isArray(data.items) && data.items.some((item: any) => Number(item?.returned_qty || 0) > 0))),
       delivered_at: data.delivered_at ? toIso(data.delivered_at) : null,
       paid_at: data.paid_at ? toIso(data.paid_at) : null,
@@ -1454,4 +1811,136 @@ export class OrdersService {
     if (value === "pending" || value === "paid" || value === "remind_later") return value;
     return "none";
   }
+
+  private normalizeFulfillmentStatus(value: unknown, data: any): OrderFulfillmentStatus {
+    if (value === "pending" || value === "packing_gdl" || value === "packed_gdl" || value === "packing_durango" || value === "packed_durango") {
+      return value;
+    }
+    if (data?.packing?.status === "done" || ["ready_for_route", "assigned_to_run", "in_transit", "delivered", "entregado", "pagado", "closed"].includes(String(data?.status))) {
+      return "packed_gdl";
+    }
+    if (["packing", "empaque"].includes(String(data?.status))) return "packing_gdl";
+    return "pending";
+  }
+
+  private normalizeCustodyStatus(value: unknown, data: any): OrderCustodyStatus {
+    if (value === "gdl" || value === "shipment" || value === "durango" || value === "delivery_staff" || value === "customer") return value;
+    const status = String(data?.status || "");
+    if (data?.delivered_at || ["delivered", "entregado", "pagado", "closed"].includes(status)) return "customer";
+    if (data?.shipment_id) return "shipment";
+    if (data?.route_run_id || ["assigned_to_run", "in_transit", "en_ruta"].includes(status)) return "delivery_staff";
+    return "gdl";
+  }
+
+  private normalizeDeliveryStatus(value: unknown, data: any): OrderDeliveryStatus {
+    if (value === "pending" || value === "delivered" || value === "not_delivered" || value === "incident") return value;
+    const status = String(data?.status || "");
+    if (data?.delivered_at || ["delivered", "entregado", "pagado", "closed"].includes(status)) return "delivered";
+    if (status === "delivered_partial") return "incident";
+    return "pending";
+  }
+
+  private normalizeCustomerPaymentStatus(value: unknown, data: any): OrderCustomerPaymentStatus {
+    if (value === "pending" || value === "partial" || value === "collected") return value;
+    const paid = Number(data?.totals?.paid_amount || 0);
+    const balance = Number(data?.totals?.balance_due || 0);
+    if (paid <= 0) return "pending";
+    return balance <= 0 ? "collected" : "partial";
+  }
+
+  private normalizeSettlementStatus(value: unknown, data: any): OrderSettlementStatus {
+    if (value === "not_applicable" || value === "pending" || value === "sent_to_gdl" || value === "received" || value === "reconciled" || value === "difference") {
+      return value;
+    }
+    const status = String(data?.status || "");
+    const paid = Number(data?.totals?.paid_amount || 0);
+    const balance = Number(data?.totals?.balance_due || 0);
+    if (status === "closed" || (["pagado", "entregado"].includes(status) && paid > 0 && balance <= 0)) return "reconciled";
+    return paid > 0 ? "pending" : "not_applicable";
+  }
+
+  private normalizeHolderLocation(value: unknown, data: any): OrderHolderLocation {
+    if (value === "gdl" || value === "in_transit" || value === "durango" || value === "delivery_staff" || value === "customer" || value === "other") return value;
+    const custody = this.normalizeCustodyStatus(data?.custody_status, data);
+    if (custody === "shipment") return "in_transit";
+    if (custody === "delivery_staff") return "delivery_staff";
+    if (custody === "durango") return "durango";
+    if (custody === "customer") return "customer";
+    return "gdl";
+  }
+
+  private deriveDeliveryStatus(order: Order | null): OrderDeliveryStatus {
+    if (!order) return "pending";
+    return this.normalizeDeliveryStatus(order.delivery_status, order);
+  }
+
+  private deriveCustomerPaymentStatus(order: Order | null): OrderCustomerPaymentStatus {
+    if (!order) return "pending";
+    return this.normalizeCustomerPaymentStatus(order.customer_payment_status, order);
+  }
+
+  private normalizeCollectionEvent(id: string, data: Record<string, any>): OrderCollectionEvent {
+    const toIso = (value: any): string | null => {
+      if (!value) return null;
+      if (typeof value?.toDate === "function") return value.toDate().toISOString();
+      return String(value);
+    };
+    const method = data["method"];
+    const source = data["source_location"];
+    const verification = data["verification_status"];
+    const statusAfter = data["status_after"];
+    const settlementAfter = data["settlement_status_after"];
+    return {
+      event_id: String(data["event_id"] || id),
+      order_id: String(data["order_id"] || ""),
+      business_id: normalizeBusinessId(data["business_id"]),
+      amount: Number(data["amount"] || 0),
+      method: method === "transferencia" || method === "tarjeta" || method === "otro" ? method : "efectivo",
+      status_after: statusAfter === "partial" || statusAfter === "collected" ? statusAfter : "pending",
+      settlement_status_after:
+        settlementAfter === "sent_to_gdl" || settlementAfter === "received" || settlementAfter === "reconciled" || settlementAfter === "difference" || settlementAfter === "not_applicable"
+          ? settlementAfter
+          : "pending",
+      source_location: source === "durango" || source === "other" ? source : "gdl",
+      verification_status: verification === "reported" || verification === "rejected" || verification === "difference" ? verification : "confirmed",
+      collected_by: data["collected_by"] || null,
+      reported_by: data["reported_by"] || null,
+      verified_by: data["verified_by"] || null,
+      verified_at: toIso(data["verified_at"]),
+      note: data["note"] || null,
+      rejected_reason: data["rejected_reason"] || null,
+      created_at: toIso(data["created_at"]),
+    };
+  }
+
+  private currentActor(nameOverride?: string): { uid: string; name: string } {
+    const user = FIREBASE_AUTH.currentUser;
+    if (nameOverride) return { uid: user?.uid || "manual", name: nameOverride };
+    return user ? { uid: user.uid, name: user.displayName || user.email || "Usuario" } : { uid: "system", name: "Sistema" };
+  }
 }
+
+export interface OrderCollectionEvent {
+  event_id: string;
+  order_id: string;
+  business_id: BusinessId;
+  amount: number;
+  method: CollectionMethod;
+  status_after: OrderCustomerPaymentStatus;
+  settlement_status_after: OrderSettlementStatus;
+  source_location: "gdl" | "durango" | "other";
+  verification_status: OrderCollectionVerificationStatus;
+  collected_by: { uid: string; name: string } | null;
+  reported_by?: { uid: string; name: string } | null;
+  verified_by?: { uid: string; name: string } | null;
+  verified_at?: string | null;
+  note?: string | null;
+  rejected_reason?: string | null;
+  created_at?: string | null;
+}
+
+export type RegisterCollectionOptions = {
+  sourceLocation?: "gdl" | "durango" | "other";
+  verificationStatus?: OrderCollectionVerificationStatus;
+  reportedByName?: string | null;
+};

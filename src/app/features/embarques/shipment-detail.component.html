@@ -1,0 +1,95 @@
+<button type="button" class="detail-backdrop" aria-label="Cerrar detalle" (click)="close.emit()"></button>
+
+<aside class="detail-panel" role="dialog" aria-modal="true" aria-labelledby="shipment-detail-title">
+  <header class="detail-head">
+    <button type="button" class="icon-button" aria-label="Volver a embarques" autofocus (click)="close.emit()">
+      <span class="material-symbols-rounded" aria-hidden="true">arrow_back</span>
+    </button>
+    <h2 id="shipment-detail-title">Detalle del embarque</h2>
+  </header>
+
+  <div class="detail-body">
+    <section class="detail-identity">
+      <h3>{{ customerName() }}</h3>
+      <p>{{ orderLabel() }}</p>
+      <span class="status-badge" [class]="statusClass()">
+        <span class="material-symbols-rounded" aria-hidden="true">{{ statusIcon() }}</span>
+        {{ statusLabel() }}
+      </span>
+    </section>
+
+    <dl class="detail-summary">
+      <div>
+        <dt>Ruta</dt>
+        <dd class="route-value">
+          {{ locationLabel(shipment().origin_location) }}
+          <span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span>
+          {{ locationLabel(shipment().destination_location) }}
+        </dd>
+      </div>
+      <div>
+        <dt>Salida</dt>
+        <dd>{{ departureDate() }}</dd>
+      </div>
+      <div>
+        <dt>Contenido</dt>
+        <dd>{{ contentSummary() }}</dd>
+      </div>
+      <div>
+        <dt>Tipo</dt>
+        <dd><span class="business-chip">{{ businessLabels() }}</span></dd>
+      </div>
+    </dl>
+
+    <ol class="timeline" aria-label="Historial del embarque">
+      <li class="timeline-step complete">
+        <span class="timeline-marker material-symbols-rounded" aria-hidden="true">check</span>
+        <span><strong>Preparado en GDL</strong><small>{{ preparedDate() }}</small></span>
+      </li>
+      <li class="timeline-step" [class.complete]="shipment().status !== 'draft'" [class.current]="canReceive()">
+        <span class="timeline-marker" aria-hidden="true"></span>
+        <span><strong>En tránsito</strong><small>{{ departureDate() }}</small></span>
+      </li>
+      <li class="timeline-step" [class.complete]="shipment().status === 'received'">
+        <span class="timeline-marker" aria-hidden="true"></span>
+        <span>
+          <strong>{{ shipment().status === 'received' ? 'Recibido en Durango' : 'Pendiente de recibir en Durango' }}</strong>
+          <small>{{ shipment().status === 'received' ? receivedDate() : 'Recepción pendiente' }}</small>
+        </span>
+      </li>
+    </ol>
+
+    <section class="detail-content" aria-labelledby="shipment-content-title">
+      <h3 id="shipment-content-title">Contenido</h3>
+      <div class="content-list">
+        @for (item of shipment().items; track item.item_id) {
+          <button type="button" class="content-item" [disabled]="!item.order_id" (click)="openOrder.emit(item.order_id)">
+            <span class="content-icon material-symbols-rounded" aria-hidden="true">
+              {{ item.type === 'package' ? 'package_2' : 'category' }}
+            </span>
+            <span>
+              <strong>{{ item.title || 'Pedido completo' }}</strong>
+              <small>{{ item.customer_name }} · {{ item.quantity }} {{ item.quantity === 1 ? 'pieza' : 'piezas' }}</small>
+            </span>
+            <span class="material-symbols-rounded" aria-hidden="true">chevron_right</span>
+          </button>
+        }
+      </div>
+    </section>
+  </div>
+
+  <footer class="detail-footer">
+    <button type="button" class="detail-button secondary" [disabled]="!primaryItem()?.order_id" (click)="openPrimaryOrder()">
+      Ver contenido
+    </button>
+    @if (canReceive()) {
+      <button type="button" class="detail-button primary" [disabled]="saving()" (click)="receive.emit(shipment())">
+        Confirmar recepción
+      </button>
+    } @else if (canSend()) {
+      <button type="button" class="detail-button primary" [disabled]="saving()" (click)="send.emit(shipment())">
+        Enviar a Durango
+      </button>
+    }
+  </footer>
+</aside>
