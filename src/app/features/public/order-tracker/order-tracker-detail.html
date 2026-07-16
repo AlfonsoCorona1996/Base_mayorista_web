@@ -35,8 +35,8 @@
       </section>
 
       <section class="order-overview" aria-label="Resumen económico del pedido">
-        <article><span>Total clienta</span><strong>{{ response.order.totals.customer_total | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong><small>Lo que pagas por tu mercancía</small></article>
-        <article class="order-overview__profit"><span>Ganancia estimada</span><strong>{{ response.order.totals.estimated_profit | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong><small>{{ response.order.totals.estimated_profit_complete ? 'Con el precio público sugerido' : 'Estimación parcial por precios faltantes' }}</small></article>
+        <article><span>Total de tu pedido</span><strong>{{ response.order.totals.customer_total | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong><small>El total después de descuentos y devoluciones.</small></article>
+        <article class="order-overview__profit"><span>Posible ganancia</span><strong>{{ response.order.totals.estimated_profit | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong><small>{{ response.order.totals.estimated_profit_complete ? 'Lo que podrías ganar al venderlo.' : 'Esta cantidad puede cambiar.' }}</small></article>
       </section>
 
       <section class="detail-card progress-card" aria-labelledby="progress-title">
@@ -65,7 +65,7 @@
                 <div class="product-content">
                   <div class="product-title-row"><div><h3>{{ item.title }}</h3><p>@if (item.variant) { {{ item.variant }} } @if (item.variant && item.color) { · } @if (item.color) { {{ item.color }} }</p></div><span class="status-pill status-pill--{{ item.confirmation.tone }}"><span class="material-symbols-rounded" aria-hidden="true">{{ statusIcon(item.confirmation.key) }}</span>{{ item.confirmation.label }}</span></div>
                   <div class="quantity-row"><span>Pedidas: <strong>{{ item.ordered_quantity }}</strong></span><span>Confirmadas: <strong>{{ item.confirmed_quantity }}</strong></span>@if (item.returned_quantity > 0) { <span>Devueltas: <strong>{{ item.returned_quantity }}</strong></span> }</div>
-                  <div class="price-grid"><div><span>Tu precio</span><strong>{{ item.customer_unit_price | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></div><div><span>Precio público</span><strong>{{ item.public_unit_price === null ? 'Pendiente' : (item.public_unit_price | currency:'MXN':'symbol-narrow':'1.2-2') }}</strong></div><div><span>Ganancia estimada</span><strong class="profit-value">{{ item.estimated_profit === null ? 'Pendiente' : (item.estimated_profit | currency:'MXN':'symbol-narrow':'1.2-2') }}</strong></div></div>
+                  <div class="price-grid"><div><span>Lo que pagaste</span><strong>{{ item.customer_unit_price | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></div><div><span>Precio sugerido de venta</span><strong>{{ item.public_unit_price === null ? 'Aún por definir' : (item.public_unit_price | currency:'MXN':'symbol-narrow':'1.2-2') }}</strong></div><div><span>Posible ganancia</span><strong class="profit-value">{{ item.estimated_profit === null ? 'Aún por calcular' : (item.estimated_profit | currency:'MXN':'symbol-narrow':'1.2-2') }}</strong></div></div>
                 </div>
               </article>
             }
@@ -75,7 +75,7 @@
         <aside class="detail-sidebar">
           <section class="detail-card account-card" aria-labelledby="account-title">
             <div class="card-heading"><div><p class="eyebrow">Tu cuenta</p><h2 id="account-title">Resumen de pago</h2></div></div>
-            <dl><div><dt>Total clienta</dt><dd>{{ response.order.account.total | currency:'MXN':'symbol-narrow':'1.2-2' }}</dd></div><div><dt>Pagado</dt><dd>{{ response.order.account.paid | currency:'MXN':'symbol-narrow':'1.2-2' }}</dd></div><div class="account-balance"><dt>Por pagar</dt><dd>{{ response.order.account.pending | currency:'MXN':'symbol-narrow':'1.2-2' }}</dd></div><div class="account-credit"><dt>Saldo por devoluciones</dt><dd>{{ response.order.account.returns_credit | currency:'MXN':'symbol-narrow':'1.2-2' }}</dd></div></dl>
+            <dl><div><dt>Total de tu pedido</dt><dd>{{ response.order.account.total | currency:'MXN':'symbol-narrow':'1.2-2' }}</dd></div><div><dt>Ya pagaste</dt><dd>{{ response.order.account.paid | currency:'MXN':'symbol-narrow':'1.2-2' }}</dd></div><div class="account-balance"><dt>Te falta por pagar</dt><dd>{{ response.order.account.pending | currency:'MXN':'symbol-narrow':'1.2-2' }}</dd></div><div class="account-credit"><dt>Saldo a favor por devoluciones</dt><dd>{{ response.order.account.returns_credit | currency:'MXN':'symbol-narrow':'1.2-2' }}</dd></div></dl>
           </section>
 
           @if (response.order.returns.length > 0) {

@@ -39,7 +39,7 @@
       </section>
     } @else if (data(); as dashboard) {
       <section class="welcome" aria-labelledby="portal-title">
-        <p class="eyebrow">Tu cuenta en Base Mayorista</p>
+        <p class="eyebrow">Seguimiento de tus pedidos</p>
         <h1 id="portal-title">Hola, {{ dashboard.customer.first_name }}</h1>
         <p>Aquí puedes revisar tus pedidos, pagos y devoluciones con información actualizada.</p>
       </section>
@@ -47,15 +47,15 @@
       <section class="profit-hero" aria-labelledby="profit-title">
         <div class="profit-hero__icon"><span class="material-symbols-rounded" aria-hidden="true">trending_up</span></div>
         <div class="profit-hero__copy">
-          <p id="profit-title">Ganancia estimada con tus pedidos entregados</p>
+          <p id="profit-title">Lo que puedes ganar</p>
           <strong>{{ dashboard.summary.estimated_profit | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong>
           @if (!dashboard.summary.estimated_profit_complete) {
             <span class="estimate-note">
               <span class="material-symbols-rounded" aria-hidden="true">info</span>
-              Estimación parcial: faltan precios públicos en {{ dashboard.summary.incomplete_profit_orders }} pedido(s).
+              Aún falta definir el precio sugerido de algunos productos. Esta cantidad puede cambiar.
             </span>
           } @else {
-            <span>Calculada con el precio público sugerido menos tu precio de compra.</span>
+            <span>Una guía de lo que podrías ganar al vender tus pedidos entregados.</span>
           }
         </div>
       </section>
@@ -63,7 +63,7 @@
       <section class="summary-grid" aria-label="Resumen de tu cuenta">
         <article class="summary-card summary-card--due">
           <span class="summary-card__icon material-symbols-rounded" aria-hidden="true">payments</span>
-          <div><span>Total por pagar</span><strong>{{ dashboard.summary.total_due | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></div>
+          <div><span>Te falta por pagar</span><strong>{{ dashboard.summary.total_due | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></div>
         </article>
         <article class="summary-card summary-card--credit">
           <span class="summary-card__icon material-symbols-rounded" aria-hidden="true">account_balance_wallet</span>
@@ -106,10 +106,10 @@
                   </div>
                   <div class="order-card__body">
                     <div><p class="order-id">Pedido {{ shortOrderId(order.order_id) }}</p><p>{{ order.items_count }} producto(s) · {{ order.units_count }} pieza(s)</p></div>
-                    <div class="order-money"><span>Total clienta</span><strong>{{ order.totals.customer_total | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></div>
+                    <div class="order-money"><span>Total de tu pedido</span><strong>{{ order.totals.customer_total | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></div>
                   </div>
                   <div class="order-card__footer">
-                    <div class="order-profit"><span>Ganancia estimada</span><strong>{{ order.totals.estimated_profit | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong>@if (!order.totals.estimated_profit_complete) { <small>Estimación parcial</small> }</div>
+                    <div class="order-profit"><span>Posible ganancia</span><strong>{{ order.totals.estimated_profit | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong>@if (!order.totals.estimated_profit_complete) { <small>Esta cantidad puede cambiar</small> }</div>
                     <a class="detail-link" [routerLink]="['/track', token(), 'pedido', order.order_id]">Ver detalle <span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span></a>
                   </div>
                 </article>
@@ -127,8 +127,8 @@
               @for (order of history(); track order.order_id) {
                 <article class="order-card order-card--history">
                   <div class="order-card__top"><span class="status-pill status-pill--{{ order.status.tone }}"><span class="material-symbols-rounded" aria-hidden="true">{{ statusIcon(order.status.key) }}</span>{{ order.status.label }}</span><span class="order-date">{{ order.created_at | date:'d MMM y' }}</span></div>
-                  <div class="order-card__body"><div><p class="order-id">Pedido {{ shortOrderId(order.order_id) }}</p><p>{{ order.units_count }} pieza(s)@if (order.returned_units > 0) { · {{ order.returned_units }} devuelta(s) }</p></div><div class="order-money"><span>Total clienta</span><strong>{{ order.totals.customer_total | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></div></div>
-                  <div class="order-card__footer"><div class="order-profit"><span>Ganancia estimada</span><strong>{{ order.totals.estimated_profit | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></div><a class="detail-link" [routerLink]="['/track', token(), 'pedido', order.order_id]">Ver detalle <span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span></a></div>
+                  <div class="order-card__body"><div><p class="order-id">Pedido {{ shortOrderId(order.order_id) }}</p><p>{{ order.units_count }} pieza(s)@if (order.returned_units > 0) { · {{ order.returned_units }} devuelta(s) }</p></div><div class="order-money"><span>Total de tu pedido</span><strong>{{ order.totals.customer_total | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></div></div>
+                  <div class="order-card__footer"><div class="order-profit"><span>Posible ganancia</span><strong>{{ order.totals.estimated_profit | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></div><a class="detail-link" [routerLink]="['/track', token(), 'pedido', order.order_id]">Ver detalle <span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span></a></div>
                 </article>
               }
             </div>

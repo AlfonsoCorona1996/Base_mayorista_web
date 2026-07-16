@@ -1851,3 +1851,26 @@ Component update sent to client(s).
 Application bundle generation complete. [17.861 seconds] - 2026-07-16T04:03:17.866Z
 
 Page reload sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m               [2m | [22m[1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m                [2m | [22m[36m16.86 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m               [2m | [22m[1mRaw size[22m
+[32mchunk-R7LGJFST.js[39m  [2m | [22m[2morder-tracker[22m       [2m | [22m[36m90.30 kB[39m[2m | [22m
+[32mchunk-LD2JSC5A.js[39m  [2m | [22m[2morder-tracker-detail[22m[2m | [22m[36m68.01 kB[39m[2m | [22m
+
+Application bundle generation complete. [44.771 seconds] - 2026-07-16T05:32:46.663Z
+
+Component update sent to client(s).
+[33m>[39m Changes detected. Rebuilding...
+[32m√[39m Changes detected. Rebuilding...
+[1mInitial chunk files[22m[2m | [22m[1mNames[22m        [2m | [22m[1mRaw size[22m
+[32mmain.js[39m            [2m | [22m[2mmain[22m         [2m | [22m[36m16.86 kB[39m[2m | [22m
+
+[1mLazy chunk files[22m   [2m | [22m[1mNames[22m        [2m | [22m[1mRaw size[22m
+[32mchunk-5EZPF24E.js[39m  [2m | [22m[2morder-tracker[22m[2m | [22m[36m90.44 kB[39m[2m | [22m
+
+Application bundle generation complete. [17.823 seconds] - 2026-07-16T05:33:04.992Z
+
+Component update sent to client(s).
