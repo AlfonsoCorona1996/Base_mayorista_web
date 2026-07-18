@@ -280,6 +280,7 @@ a {
   font-size: 1.25rem;
   line-height: 1.25;
   overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
 }
 
 .stat-copy small {
@@ -399,11 +400,14 @@ a {
 }
 
 .advanced-filters {
+  grid-column: 1 / -1;
+  grid-row: 4;
   min-width: 0;
   position: relative;
 }
 
 .advanced-filters > summary {
+  width: calc(50% - var(--ui-space-4));
   min-height: var(--ui-touch-target-min);
   border: 1px solid #9dbcee;
   border-radius: var(--ui-radius-md);
@@ -449,11 +453,21 @@ a {
   border-radius: var(--ui-radius-md);
   padding: var(--ui-space-12);
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--ui-space-12);
   background: var(--inventory-soft);
 }
 
+.advanced-filter-panel > .field:first-child,
+.advanced-filter-panel > .check-control {
+  grid-column: 1 / -1;
+}
+
 .clear-filters {
+  grid-column: 2;
+  grid-row: 4;
+  align-self: start;
+  justify-self: end;
   min-height: var(--ui-touch-target-min);
   border: 0;
   padding: 0 var(--ui-space-12);
@@ -472,6 +486,8 @@ a {
   min-width: 0;
   display: grid;
   gap: 6px;
+  align-content: start;
+  align-self: start;
 }
 
 .field > span {
@@ -1028,6 +1044,12 @@ a {
   height: 26px;
 }
 
+.inventory-page:has(.advanced-filters[open]) .floating-create-button {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .returns-panel {
   padding: var(--ui-space-16);
 }
@@ -1316,6 +1338,13 @@ a {
   width: 18px;
   height: 18px;
   border-width: 2px;
+}
+
+.source-result-summary {
+  margin: 0;
+  color: var(--inventory-muted);
+  font-size: 0.75rem;
+  line-height: 1.4;
 }
 
 .source-results {
@@ -2021,6 +2050,24 @@ a {
   }
 }
 
+@media (max-width: 767px) {
+  .stat-card-featured .stat-copy strong {
+    font-size: clamp(0.92rem, 4vw, 1rem);
+    letter-spacing: -0.025em;
+    white-space: nowrap;
+    overflow-wrap: normal;
+  }
+}
+
+@media (min-width: 1024px) and (max-width: 1199px) {
+  .stat-card-featured .stat-copy strong {
+    font-size: 1.05rem;
+    letter-spacing: -0.025em;
+    white-space: nowrap;
+    overflow-wrap: normal;
+  }
+}
+
 @media (min-width: 768px) {
   .inventory-page {
     padding: var(--ui-page-padding-tablet);
@@ -2058,14 +2105,14 @@ a {
   }
 
   .filters-toolbar {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .search-control { grid-column: span 3; }
-  .filter-control { grid-column: span 1; }
-  .sort-control { grid-column: span 2; }
-  .advanced-filters { grid-column: span 2; }
-  .clear-filters { grid-column: span 1; }
+  .search-control { grid-column: 1 / -1; }
+  .filter-control { grid-column: auto; }
+  .sort-control { grid-column: 1 / -1; }
+  .advanced-filters { grid-column: 1 / -1; }
+  .clear-filters { grid-column: 2; }
 
   .advanced-filter-panel {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2242,32 +2289,6 @@ a {
     height: 42px;
   }
 
-  .filters-toolbar {
-    grid-template-columns: minmax(220px, 1.25fr) minmax(140px, 0.8fr) minmax(170px, 0.9fr) minmax(220px, 1.1fr) auto auto;
-  }
-
-  .search-control,
-  .filter-control,
-  .sort-control,
-  .advanced-filters,
-  .clear-filters {
-    grid-column: auto;
-  }
-
-  .advanced-filter-panel {
-    width: min(720px, calc(100vw - 96px));
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    position: absolute;
-    top: 100%;
-    right: 0;
-    z-index: 20;
-    box-shadow: 0 16px 36px rgba(17, 36, 66, 0.16);
-  }
-
-  .check-control {
-    grid-column: span 1;
-  }
-
   .result-summary {
     display: none;
   }
@@ -2374,10 +2395,30 @@ a {
     margin: 4px 0 0;
   }
 
+  .category-attributes-cell,
   .category-copy,
+  .attribute-copy,
   .cell-secondary,
   .cell-note {
     display: block;
+  }
+
+  .category-attributes-cell {
+    line-height: 1.25;
+  }
+
+  .category-copy {
+    color: #213957;
+    font-weight: 750;
+    line-height: 1.3;
+  }
+
+  .attribute-copy {
+    margin-top: 3px;
+    color: #526783;
+    font-size: 0.7rem;
+    font-weight: 650;
+    line-height: 1.3;
   }
 
   .cell-note {
@@ -2387,20 +2428,72 @@ a {
     text-overflow: ellipsis;
   }
 
-  .stock-inline {
+  .stock-cell {
+    min-width: 0;
+  }
+
+  .stock-metrics {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: stretch;
+  }
+
+  .stock-metric {
+    min-width: 0;
+    padding-inline: var(--ui-space-4);
+    display: grid;
+    align-content: center;
+    gap: 2px;
+    color: var(--inventory-navy);
+  }
+
+  .stock-metric:first-child {
+    padding-left: 0;
+  }
+
+  .stock-metric + .stock-metric {
+    border-left: 1px solid #e2e8f0;
+  }
+
+  .stock-metric strong {
+    font-size: 0.94rem;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+
+  .stock-metric small {
+    color: #657792;
+    font-size: 0.62rem;
+    font-weight: 700;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+
+  .stock-metric-warning strong,
+  .stock-metric-warning small {
+    color: #c56a00;
+  }
+
+  .stock-metric-available strong,
+  .stock-metric-available small {
+    color: #078a4b;
+  }
+
+  .stock-metric-available.stock-metric-empty strong,
+  .stock-metric-available.stock-metric-empty small {
+    color: var(--inventory-danger);
+  }
+
+  .stock-secondary {
+    margin-top: 6px;
     display: flex;
     flex-wrap: wrap;
-    align-items: center;
-    gap: 4px;
+    gap: 3px var(--ui-space-8);
+    color: var(--inventory-muted);
+    font-size: 0.62rem;
+    line-height: 1.3;
   }
-
-  .stock-inline i {
-    color: #a4afbe;
-    font-style: normal;
-  }
-
-  .stock-warning { color: #b56500; }
-  .stock-danger { color: #c51d34; }
 
   .reservation-links {
     margin-top: 4px;
@@ -2451,6 +2544,49 @@ a {
 
   .returns-list {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1200px) {
+  .stock-metric {
+    padding-inline: var(--ui-space-8);
+  }
+
+  .filters-toolbar {
+    grid-template-columns: minmax(220px, 1.25fr) minmax(140px, 0.8fr) minmax(170px, 0.9fr) minmax(220px, 1.1fr) auto auto;
+  }
+
+  .search-control,
+  .filter-control,
+  .sort-control,
+  .advanced-filters,
+  .clear-filters {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .advanced-filters > summary {
+    width: auto;
+  }
+
+  .clear-filters {
+    align-self: stretch;
+    justify-self: stretch;
+  }
+
+  .advanced-filter-panel {
+    width: min(720px, calc(100vw - 96px));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    position: absolute;
+    top: 100%;
+    right: 0;
+    z-index: 20;
+    box-shadow: 0 16px 36px rgba(17, 36, 66, 0.16);
+  }
+
+  .advanced-filter-panel > .field:first-child,
+  .advanced-filter-panel > .check-control {
+    grid-column: span 1;
   }
 }
 

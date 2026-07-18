@@ -304,21 +304,32 @@
                       </span>
                     </div>
                   </td>
-                  <td>
-                    <span class="category-copy">{{ item.category_hint || "Sin categoría" }}</span>
-                    @if (variantDescriptor(item); as descriptor) { <small class="cell-secondary">{{ descriptor }}</small> }
+                  <td class="category-attributes-cell">
+                    <span class="category-copy">{{ tableCategoryPath(item) }}</span>
+                    @if (tableAttributeDescriptor(item); as descriptor) { <small class="attribute-copy">{{ descriptor }}</small> }
                     @if (item.notes) { <small class="cell-note" [title]="item.notes">{{ item.notes }}</small> }
                   </td>
-                  <td>
-                    <div class="stock-inline">
-                      <span><strong>{{ formatCount(onHandQty(item)) }}</strong> física</span>
-                      <i aria-hidden="true">·</i>
-                      <span [class.stock-warning]="reservedQty(item) > 0"><strong>{{ formatCount(reservedQty(item)) }}</strong> reservada</span>
-                      <i aria-hidden="true">·</i>
-                      <span [class.stock-danger]="availableQty(item) === 0"><strong>{{ formatCount(availableQty(item)) }}</strong> disponible</span>
+                  <td class="stock-cell">
+                    <div class="stock-metrics" [attr.aria-label]="'Existencias de ' + item.title">
+                      <span class="stock-metric">
+                        <strong>{{ formatCount(onHandQty(item)) }}</strong>
+                        <small>Física</small>
+                      </span>
+                      <span class="stock-metric stock-metric-reserved" [class.stock-metric-warning]="reservedQty(item) > 0">
+                        <strong>{{ formatCount(reservedQty(item)) }}</strong>
+                        <small>Reservada</small>
+                      </span>
+                      <span class="stock-metric stock-metric-available" [class.stock-metric-empty]="availableQty(item) === 0">
+                        <strong>{{ formatCount(availableQty(item)) }}</strong>
+                        <small>Disponible</small>
+                      </span>
                     </div>
                     @if (reviewQty(item) > 0 || damagedQty(item) > 0 || reorderQty(item) > 0) {
-                      <small class="cell-secondary">Revisión {{ reviewQty(item) }} · Dañado {{ damagedQty(item) }} · Reponer {{ reorderQty(item) }}</small>
+                      <small class="stock-secondary">
+                        <span>Revisión {{ reviewQty(item) }}</span>
+                        <span>Dañado {{ damagedQty(item) }}</span>
+                        <span>Reponer {{ reorderQty(item) }}</span>
+                      </small>
                     }
                     @if (reservationEntries(item).length > 0) {
                       <div class="reservation-links">
@@ -588,6 +599,9 @@
                 <p class="source-search-message">Escribe al menos 2 caracteres.</p>
               } @else if (productSourceQuery().trim().length >= 2) {
                 @if (productSourceSuggestions().length > 0) {
+                  <p class="source-result-summary" role="status">
+                    {{ productSourceSuggestions().length }} opciones encontradas. Elige la variante y el color correctos.
+                  </p>
                   <div class="source-results" role="listbox" aria-label="Productos existentes">
                     @for (source of productSourceSuggestions(); track source.id) {
                       <button type="button" class="source-result" (click)="applyProductSource(source)">

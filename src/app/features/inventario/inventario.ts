@@ -70,6 +70,8 @@ interface InventoryDraft {
 export default class InventarioPage {
   private static readonly MAX_IMAGES = 8;
   private static readonly RESERVATION_PREVIEW_LIMIT = 2;
+  private static readonly CATALOG_SOURCE_RESULT_LIMIT = 48;
+  private static readonly PRODUCT_SOURCE_RESULT_LIMIT = 60;
 
   loading = signal(false);
   saving = signal(false);
@@ -154,46 +156,64 @@ export default class InventarioPage {
         const item = rawItem as unknown as Record<string, unknown>;
         const variantName = this.optionalText(item["variant_name"]);
         const sku = this.optionalText(item["sku"]);
-        const colors = this.sourceColorNames(item);
-        const matchingColor = colors.find((color) => this.normalizeSearchValue(color).includes(query));
-        const colorName = matchingColor || colors[0] || null;
-        const blob = this.normalizeSearchValue([
+        const itemColors = this.sourceColorNames(item);
+        const colors = itemColors.length > 0
+          ? itemColors
+          : (doc.product_colors || [])
+              .map((color) => this.optionalText(color.name))
+              .filter((color): color is string => Boolean(color));
+        const baseBlob = this.normalizeSearchValue([
           listingTitle,
           categoryHint || "",
           supplierLabel,
           variantName || "",
           sku || "",
-          colors.join(" "),
         ].join(" "));
+        const fullBlob = `${baseBlob} ${this.normalizeSearchValue(colors.join(" "))}`;
 
-        if (!blob.includes(query)) continue;
+        if (!this.sourceQueryMatches(fullBlob, query)) continue;
 
         const variantId = this.optionalText(item["variant_id"]);
-        matches.push({
-          id: `catalog:${doc.normalized_id}:${variantId || sku || index}:${colorName || ""}`,
-          kind: "catalog",
-          sourceLabel: businessId === "bm" ? "Catálogo BM" : "Catálogo",
-          businessId,
-          title: listingTitle || "Producto sin nombre",
-          categoryHint,
-          supplierId: doc.supplier_id || null,
-          variantName,
-          colorName,
-          sku,
-          productId: doc.normalized_id || null,
-          variantId,
-          priceCost: this.sourceCost(item["prices"]),
-          imageUrl: this.sourceImage(doc, item, colorName),
-          notes: this.optionalText(item["notes"]),
-        });
+        const unmatchedBaseTokens = this.sourceQueryTokens(query).filter((token) => !baseBlob.includes(token));
+        const matchingColors = unmatchedBaseTokens.length > 0
+          ? colors.filter((color) => {
+              const normalizedColor = this.normalizeSearchValue(color);
+              return unmatchedBaseTokens.every((token) => normalizedColor.includes(token));
+            })
+          : colors;
+        const colorsToShow: Array<string | null> = matchingColors.length > 0
+          ? matchingColors
+          : colors.length === 0
+            ? [null]
+            : [];
 
-        if (matches.length >= 6) break catalogMatches;
+        for (const colorName of colorsToShow) {
+          matches.push({
+            id: `catalog:${doc.normalized_id}:${variantId || sku || index}:${colorName || ""}`,
+            kind: "catalog",
+            sourceLabel: businessId === "bm" ? "Catálogo BM" : "Catálogo",
+            businessId,
+            title: listingTitle || "Producto sin nombre",
+            categoryHint,
+            supplierId: doc.supplier_id || null,
+            variantName,
+            colorName,
+            sku,
+            productId: doc.normalized_id || null,
+            variantId,
+            priceCost: this.sourceCost(item["prices"]),
+            imageUrl: this.sourceImage(doc, item, colorName),
+            notes: this.optionalText(item["notes"]),
+          });
+
+          if (matches.length >= InventarioPage.CATALOG_SOURCE_RESULT_LIMIT) break catalogMatches;
+        }
       }
     }
 
     for (const entry of this.manualProductHistory.search(this.productSourceQuery(), businessId)) {
       matches.push(this.manualSourceCandidate(entry));
-      if (matches.length >= 10) break;
+      if (matches.length >= InventarioPage.PRODUCT_SOURCE_RESULT_LIMIT) break;
     }
 
     return matches;
@@ -1047,6 +1067,24 @@ export default class InventarioPage {
     return out.length > 0 ? out.join(" · ") : null;
   }
 
+  tableCategoryPath(item: InventoryItem): string {
+    return (item.category_hint || "Sin categoría").replace(/\s*>\s*/g, " / ");
+  }
+
+  tableAttributeDescriptor(item: InventoryItem): string | null {
+    const attributes = [item.variant_name, item.color_name, item.size_label]
+      .map((value) => String(value || "").trim())
+      .filter(Boolean);
+    const seen = new Set<string>();
+    const uniqueAttributes = attributes.filter((value) => {
+      const normalized = this.normalizeSearchValue(value);
+      if (seen.has(normalized)) return false;
+      seen.add(normalized);
+      return true;
+    });
+    return uniqueAttributes.length > 0 ? uniqueAttributes.join(" · ") : null;
+  }
+
   canDecreaseStock(item: InventoryItem): boolean {
     return this.onHandQty(item) > this.reservedQty(item);
   }
@@ -1253,6 +1291,14 @@ export default class InventarioPage {
       : [];
     const single = this.optionalText(item["color"]);
     return [...new Set([...fromStock, ...fromNames, ...legacy, ...(single ? [single] : [])])];
+  }
+
+  private sourceQueryMatches(blob: string, query: string): boolean {
+    return this.sourceQueryTokens(query).every((token) => blob.includes(token));
+  }
+
+  private sourceQueryTokens(value: string): string[] {
+    return this.normalizeSearchValue(value).split(/\s+/).filter(Boolean);
   }
 
   private sourceCost(prices: unknown): number | null {
