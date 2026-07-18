@@ -2500,7 +2500,7 @@
               <span class="material-symbols-rounded" aria-hidden="true">person</span>
               Precio clienta
             </label>
-            <div class="money" [class.money-readonly]="!isManualSource()" [class.money-invalid]="priceRuleInvalid()">
+            <div class="money" [class.money-readonly]="!canEditClientaPrice(current)" [class.money-invalid]="priceRuleInvalid()">
               <span>MXN</span>
               <input
                 class="input"
@@ -2509,8 +2509,8 @@
                 (focus)="onPriceInputFocus('clienta')"
                 (input)="onPriceInputChange('clienta', $any($event.target).value)"
                 (blur)="onPriceInputBlur('clienta')"
-                [readonly]="!isManualSource()"
-                [disabled]="!canSubmitNewItem() || !vm.canEditItems || !isManualSource()"
+                [readonly]="!canEditClientaPrice(current)"
+                [disabled]="!canSubmitNewItem() || !canEditClientaPrice(current)"
               />
             </div>
           </div>

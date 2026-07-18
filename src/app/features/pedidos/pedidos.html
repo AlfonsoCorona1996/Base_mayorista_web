@@ -416,6 +416,9 @@
             <button type="button" class="table-bulk-menu-item" (click)="applyTableBulkAction('mark_pagado', $event)" [disabled]="!canApplyTableBulkAction('mark_pagado')">
               Marcar como pagados ({{ tableMarkPaidEligibleRows().length }})
             </button>
+            <button type="button" class="table-bulk-menu-item" (click)="applyTableBulkAction('mark_entregado', $event)" [disabled]="!canApplyTableBulkAction('mark_entregado')">
+              Marcar como entregados ({{ tableMarkDeliveredEligibleRows().length }})
+            </button>
             <button type="button" class="table-bulk-menu-item" (click)="applyTableBulkAction('mark_recibido', $event)" [disabled]="!canApplyTableBulkAction('mark_recibido')">
               Marcar como recibidos ({{ tableMarkReceivedEligibleRows().length }})
             </button>
@@ -751,6 +754,38 @@
         </table>
       </div>
     </section>
+  }
+
+  @if (bulkDeliveryConfirmOpen()) {
+    <div class="sheet-backdrop" (click)="closeBulkDeliveryConfirm($event)">
+      <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="bulk-delivery-title" (click)="$event.stopPropagation()">
+        <div class="sheet-handle" aria-hidden="true"></div>
+        <h2 id="bulk-delivery-title">Marcar pedidos como entregados</h2>
+        <p class="muted">
+          Se marcarán {{ tableMarkDeliveredEligibleRows().length }} pedido(s) como entregados. El estado de cobro y los pagos permanecerán sin cambios.
+        </p>
+        <div class="sheet-summary">
+          <span><strong>{{ tableMarkDeliveredEligibleRows().length }}</strong> por entregar</span>
+          <span><strong>{{ tableSelectedCount() }}</strong> seleccionados</span>
+        </div>
+        @if (tableSelectedCount() > tableMarkDeliveredEligibleRows().length) {
+          <div class="sheet-warning">
+            {{ tableSelectedCount() - tableMarkDeliveredEligibleRows().length }} pedido(s) se omitirán porque no están listos/en ruta, ya fueron entregados o no tienes permiso.
+          </div>
+        }
+        <div class="sheet-warning">
+          Esta acción descontará del inventario las piezas reservadas de los pedidos entregados. No registrará ningún pago.
+        </div>
+        <div class="sheet-actions">
+          <button type="button" class="btn primary" (click)="confirmBulkDelivery($event)" [disabled]="tableBulkActionLoading() || tableMarkDeliveredEligibleRows().length === 0">
+            Confirmar entregas
+          </button>
+          <button type="button" class="btn ghost" (click)="closeBulkDeliveryConfirm($event)" [disabled]="tableBulkActionLoading()">
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
   }
 
   @if (bulkShipmentOpen()) {

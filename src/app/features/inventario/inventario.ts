@@ -3,6 +3,7 @@ import { NgClass } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { RouterLink } from "@angular/router";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import type { DocumentData, QueryDocumentSnapshot } from "firebase/firestore";
 import { CategoriesService, Category } from "../../core/categories.service";
 import { STORAGE } from "../../core/firebase.providers";
 import { InventoryItem, InventoryReservation, InventoryService } from "../../core/inventory.service";
@@ -11,10 +12,31 @@ import { SuppliersService } from "../../core/suppliers.service";
 import { BusinessScopeService } from "../../core/business-scope.service";
 import { ReturnRecord, ReturnsService } from "../../core/returns.service";
 import { FeatureFlagsService } from "../../core/feature-flags.service";
+import { ManualProductEntry, ManualProductHistoryService } from "../../core/manual-product-history.service";
+import { NormalizedListingDoc, NormalizedListingsService } from "../../core/normalized-listings.service";
+import { BusinessId } from "../../core/rbac.constants";
 
 type StockFilter = "all" | "available" | "reserved" | "low" | "sold_out" | "without_price";
 type SortFilter = "updated_desc" | "name_asc" | "stock_low" | "stock_high" | "price_low" | "price_high";
 type ReservationEntry = { orderId: string; qty: number; orderNumber: string; status: string };
+
+interface InventorySourceCandidate {
+  id: string;
+  kind: "catalog" | "manual";
+  sourceLabel: string;
+  businessId: BusinessId;
+  title: string;
+  categoryHint: string | null;
+  supplierId: string | null;
+  variantName: string | null;
+  colorName: string | null;
+  sku: string | null;
+  productId: string | null;
+  variantId: string | null;
+  priceCost: number | null;
+  imageUrl: string | null;
+  notes: string | null;
+}
 
 interface InventoryDraft {
   inventory_id: string;
@@ -82,6 +104,13 @@ export default class InventarioPage {
   categoryTreeOpen = signal(false);
   categoryTreeParentId = signal<string | null>(null);
 
+  productSourceQuery = signal("");
+  productSourcesLoading = signal(false);
+  productSourcesError = signal<string | null>(null);
+  selectedProductSource = signal<InventorySourceCandidate | null>(null);
+  private catalogSourceDocs = signal<NormalizedListingDoc[]>([]);
+  private productSourcesScope: BusinessId | null = null;
+
   draft: InventoryDraft = this.emptyDraft();
 
   private inventory = inject(InventoryService);
@@ -90,6 +119,8 @@ export default class InventarioPage {
   private orders = inject(OrdersService);
   businessScope = inject(BusinessScopeService);
   private returnsService = inject(ReturnsService);
+  private normalizedListings = inject(NormalizedListingsService);
+  private manualProductHistory = inject(ManualProductHistoryService);
   features = inject(FeatureFlagsService);
 
   constructor() {
@@ -103,6 +134,70 @@ export default class InventarioPage {
   orderStatusById = computed(() => new Map(this.orders.list().map((order) => [order.order_id, order.status])));
   currentViewerImage = computed(() => this.imageViewerUrls()[this.imageViewerIndex()] || null);
   viewerHasMultipleImages = computed(() => this.imageViewerUrls().length > 1);
+
+  productSourceSuggestions = computed(() => {
+    const query = this.normalizeSearchValue(this.productSourceQuery());
+    if (query.length < 2) return [];
+
+    const businessId = this.businessScope.writeBusinessId();
+    const matches: InventorySourceCandidate[] = [];
+
+    catalogMatches: for (const doc of this.catalogSourceDocs()) {
+      if (this.businessScope.resolveBusinessId(doc.business_id) !== businessId) continue;
+
+      const listingTitle = String(doc.listing?.title || "").trim();
+      const categoryHint = String(doc.listing?.category_hint || "").trim() || null;
+      const supplierLabel = this.supplierName(doc.supplier_id);
+      const items = Array.isArray(doc.listing?.items) ? doc.listing.items : [];
+
+      for (const [index, rawItem] of items.entries()) {
+        const item = rawItem as unknown as Record<string, unknown>;
+        const variantName = this.optionalText(item["variant_name"]);
+        const sku = this.optionalText(item["sku"]);
+        const colors = this.sourceColorNames(item);
+        const matchingColor = colors.find((color) => this.normalizeSearchValue(color).includes(query));
+        const colorName = matchingColor || colors[0] || null;
+        const blob = this.normalizeSearchValue([
+          listingTitle,
+          categoryHint || "",
+          supplierLabel,
+          variantName || "",
+          sku || "",
+          colors.join(" "),
+        ].join(" "));
+
+        if (!blob.includes(query)) continue;
+
+        const variantId = this.optionalText(item["variant_id"]);
+        matches.push({
+          id: `catalog:${doc.normalized_id}:${variantId || sku || index}:${colorName || ""}`,
+          kind: "catalog",
+          sourceLabel: businessId === "bm" ? "Catálogo BM" : "Catálogo",
+          businessId,
+          title: listingTitle || "Producto sin nombre",
+          categoryHint,
+          supplierId: doc.supplier_id || null,
+          variantName,
+          colorName,
+          sku,
+          productId: doc.normalized_id || null,
+          variantId,
+          priceCost: this.sourceCost(item["prices"]),
+          imageUrl: this.sourceImage(doc, item, colorName),
+          notes: this.optionalText(item["notes"]),
+        });
+
+        if (matches.length >= 6) break catalogMatches;
+      }
+    }
+
+    for (const entry of this.manualProductHistory.search(this.productSourceQuery(), businessId)) {
+      matches.push(this.manualSourceCandidate(entry));
+      if (matches.length >= 10) break;
+    }
+
+    return matches;
+  });
 
   totalUnits = computed(() => this.rows().reduce((sum, row) => sum + this.onHandQty(row), 0));
   totalAvailableUnits = computed(() => this.rows().reduce((sum, row) => sum + this.availableQty(row), 0));
@@ -293,6 +388,7 @@ export default class InventarioPage {
   openCreateDialog() {
     this.startCreate();
     this.formDialogOpen.set(true);
+    void this.loadProductSources();
   }
 
   closeFormDialog() {
@@ -304,6 +400,9 @@ export default class InventarioPage {
     this.selectedCategoryId.set(null);
     this.categoryDropdownOpen.set(false);
     this.categoryTreeOpen.set(false);
+    this.productSourceQuery.set("");
+    this.selectedProductSource.set(null);
+    this.productSourcesError.set(null);
     this.error.set(null);
   }
 
@@ -314,6 +413,9 @@ export default class InventarioPage {
     this.categoryConfirmed.set(false);
     this.selectedCategoryId.set(null);
     this.categoryDropdownOpen.set(false);
+    this.productSourceQuery.set("");
+    this.selectedProductSource.set(null);
+    this.productSourcesError.set(null);
     this.error.set(null);
     this.success.set(null);
     this.deleteDialogItem.set(null);
@@ -346,10 +448,72 @@ export default class InventarioPage {
     this.categoryConfirmed.set(Boolean(item.category_hint));
     this.selectedCategoryId.set(this.findCategoryIdByPath(item.category_hint || ""));
     this.categoryDropdownOpen.set(false);
+    this.productSourceQuery.set("");
+    this.selectedProductSource.set(null);
+    this.productSourcesError.set(null);
     this.error.set(null);
     this.success.set(null);
     this.deleteDialogItem.set(null);
     this.formDialogOpen.set(true);
+  }
+
+  async loadProductSources(): Promise<void> {
+    const businessId = this.businessScope.writeBusinessId();
+    if (this.productSourcesScope === businessId) return;
+
+    this.productSourcesLoading.set(true);
+    this.productSourcesError.set(null);
+
+    const [catalogResult, manualResult] = await Promise.allSettled([
+      this.loadCatalogProductSources(),
+      this.manualProductHistory.load(businessId),
+    ]);
+
+    if (catalogResult.status === "fulfilled") {
+      this.catalogSourceDocs.set(catalogResult.value);
+    } else {
+      this.catalogSourceDocs.set([]);
+    }
+
+    this.productSourcesScope = catalogResult.status === "fulfilled" && manualResult.status === "fulfilled"
+      ? businessId
+      : null;
+    this.productSourcesLoading.set(false);
+
+    if (catalogResult.status === "rejected" && manualResult.status === "rejected") {
+      this.productSourcesError.set("No se pudieron cargar los productos existentes. Puedes completar el artículo manualmente.");
+    } else if (catalogResult.status === "rejected" || manualResult.status === "rejected") {
+      this.productSourcesError.set("Una de las fuentes no está disponible; se muestran los productos que sí pudieron cargarse.");
+    }
+  }
+
+  applyProductSource(candidate: InventorySourceCandidate): void {
+    this.draft.title = candidate.title;
+    this.draft.sku = candidate.sku || "";
+    this.draft.product_id = candidate.productId || "";
+    this.draft.variant_id = candidate.variantId || "";
+    this.draft.category_hint = candidate.categoryHint || "";
+    this.draft.supplier_id = candidate.supplierId || "";
+    this.draft.variant_name = candidate.variantName || "";
+    this.draft.color_name = candidate.colorName || "";
+    this.draft.size_label = "";
+    this.draft.unit_price = candidate.priceCost;
+    this.draft.notes = candidate.notes || "";
+    this.draft.image_urls = candidate.imageUrl ? [candidate.imageUrl] : [];
+
+    const categoryId = this.findCategoryIdByPath(candidate.categoryHint || "");
+    const categoryIsFinal = Boolean(categoryId && !this.hasCategoryChildren(categoryId));
+    this.categoryQuery.set(candidate.categoryHint || "");
+    this.selectedCategoryId.set(categoryIsFinal ? categoryId : null);
+    this.categoryConfirmed.set(categoryIsFinal);
+    this.categoryDropdownOpen.set(false);
+    this.selectedProductSource.set(candidate);
+    this.productSourceQuery.set("");
+  }
+
+  clearSelectedProductSource(): void {
+    this.selectedProductSource.set(null);
+    this.productSourceQuery.set("");
   }
 
   onCategoryInputChange(value: string) {
@@ -1053,6 +1217,121 @@ export default class InventarioPage {
       image_urls: [],
       source_reason: "devolucion",
     };
+  }
+
+  private manualSourceCandidate(entry: ManualProductEntry): InventorySourceCandidate {
+    return {
+      id: `manual:${entry.id}`,
+      kind: "manual",
+      sourceLabel: entry.business_id === "bm" ? "Manual BM" : "Manual Catálogo",
+      businessId: entry.business_id,
+      title: entry.title,
+      categoryHint: null,
+      supplierId: null,
+      variantName: entry.variant || null,
+      colorName: entry.color || null,
+      sku: null,
+      productId: null,
+      variantId: null,
+      priceCost: entry.price_cost,
+      imageUrl: entry.image_url,
+      notes: null,
+    };
+  }
+
+  private sourceColorNames(item: Record<string, unknown>): string[] {
+    const fromStock = Array.isArray(item["color_stock"])
+      ? item["color_stock"]
+          .map((entry) => this.recordValue(entry, "color_name"))
+          .filter((value): value is string => Boolean(value))
+      : [];
+    const fromNames = Array.isArray(item["color_names"])
+      ? item["color_names"].map((value) => this.optionalText(value)).filter((value): value is string => Boolean(value))
+      : [];
+    const legacy = Array.isArray(item["colors"])
+      ? item["colors"].map((value) => this.optionalText(value)).filter((value): value is string => Boolean(value))
+      : [];
+    const single = this.optionalText(item["color"]);
+    return [...new Set([...fromStock, ...fromNames, ...legacy, ...(single ? [single] : [])])];
+  }
+
+  private sourceCost(prices: unknown): number | null {
+    if (prices && typeof prices === "object" && !Array.isArray(prices)) {
+      const record = prices as Record<string, unknown>;
+      const rawValue = record["precio_costo"];
+      if (rawValue === null || rawValue === undefined || rawValue === "") return null;
+      const value = Number(rawValue);
+      return Number.isFinite(value) && value >= 0 ? value : null;
+    }
+
+    if (!Array.isArray(prices)) return null;
+    const costTier = prices.find((price) => {
+      const tierName = this.recordValue(price, "tier_name") || "";
+      return this.normalizeSearchValue(tierName).includes("costo");
+    });
+    const amount = costTier && typeof costTier === "object"
+      ? Number((costTier as Record<string, unknown>)["amount"])
+      : Number.NaN;
+    return Number.isFinite(amount) && amount >= 0 ? amount : null;
+  }
+
+  private async loadCatalogProductSources(): Promise<NormalizedListingDoc[]> {
+    const docs: NormalizedListingDoc[] = [];
+    let cursor: QueryDocumentSnapshot<DocumentData> | null | undefined;
+
+    for (let pageIndex = 0; pageIndex < 5; pageIndex += 1) {
+      const page = await this.normalizedListings.listValidated(200, cursor);
+      docs.push(...page.docs);
+      cursor = page.nextCursor;
+      if (!cursor) break;
+    }
+
+    return docs;
+  }
+
+  private sourceImage(
+    doc: NormalizedListingDoc,
+    item: Record<string, unknown>,
+    colorName: string | null,
+  ): string | null {
+    const normalizedColor = this.normalizeSearchValue(colorName);
+    if (normalizedColor) {
+      const colorImage = (doc.product_colors || []).find(
+        (color) => this.normalizeSearchValue(color.name) === normalizedColor,
+      )?.image_url;
+      if (colorImage) return colorImage;
+    }
+
+    const itemImage = this.optionalText(item["image_url"]);
+    if (itemImage) return itemImage;
+
+    if (Array.isArray(item["image_urls"])) {
+      const firstItemImage = item["image_urls"]
+        .map((value) => this.optionalText(value))
+        .find((value): value is string => Boolean(value));
+      if (firstItemImage) return firstItemImage;
+    }
+
+    return doc.cover_images?.[0] || doc.review?.preview_image_url || doc.preview_image_url || null;
+  }
+
+  private recordValue(value: unknown, key: string): string | null {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+    return this.optionalText((value as Record<string, unknown>)[key]);
+  }
+
+  private optionalText(value: unknown): string | null {
+    if (typeof value !== "string") return null;
+    const next = value.trim();
+    return next || null;
+  }
+
+  private normalizeSearchValue(value: unknown): string {
+    return String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .trim();
   }
 
   private trimOrNull(value: string): string | null {

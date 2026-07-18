@@ -2528,6 +2528,12 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     return true;
   }
 
+  canEditClientaPrice(order: Order | null = this.order()): boolean {
+    if (!order || !this.canEditItems(order)) return false;
+    if (this.isManualSource()) return true;
+    return this.isEditMode() && this.orderBusinessId(order) === "bm";
+  }
+
   nextStatus(order: Order | null): OrderStatus | null {
     if (!order) return null;
     const flow: OrderStatus[] = [

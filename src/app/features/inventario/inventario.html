@@ -1,28 +1,25 @@
-<section class="inventory-page">
+<main class="inventory-page">
   <header class="page-header">
-    <div>
+    <div class="page-heading">
       <h1>Inventario interno</h1>
-      <p>
-        Registra devoluciones o piezas sueltas que se quedan contigo. Ahora puedes crear articulos en modal, revisar
-        reservas activas reales y filtrar con mas precision.
-      </p>
+      <p>Registra devoluciones o piezas sueltas, consulta reservas activas y controla las existencias disponibles.</p>
     </div>
 
     <div class="header-actions">
-      <button type="button" class="btn btn-secondary" (click)="reload()" [disabled]="loading()">
+      <button type="button" class="btn btn-secondary refresh-button" (click)="reload()" [disabled]="loading()">
         <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
           <path d="M21 12a9 9 0 1 1-2.64-6.36"></path>
           <path d="M21 3v6h-6"></path>
         </svg>
-        {{ loading() ? "Actualizando..." : "Actualizar" }}
+        <span class="refresh-label">{{ loading() ? "Actualizando..." : "Actualizar" }}</span>
       </button>
 
-      <button type="button" class="btn btn-primary" (click)="openCreateDialog()">
+      <button type="button" class="btn btn-primary desktop-create-button" (click)="openCreateDialog()">
         <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
           <path d="M12 5v14"></path>
           <path d="M5 12h14"></path>
         </svg>
-        Nuevo item
+        Nuevo artículo
       </button>
     </div>
   </header>
@@ -30,7 +27,7 @@
   <nav class="inventory-tabs" aria-label="Vista de inventario">
     <button type="button" [class.active]="activeTab() === 'stock'" (click)="activeTab.set('stock')">
       <span>Stock</span>
-      <strong>{{ formatCount(totalAvailableUnits()) }}</strong>
+      <strong>{{ formatCount(rows().length) }}</strong>
     </button>
     @if (features.enabled('inventoryProductsV2')) {
       <button type="button" [class.active]="activeTab() === 'returns'" (click)="activeTab.set('returns')">
@@ -40,84 +37,6 @@
     }
   </nav>
 
-  @if (activeTab() === 'stock') {
-  <section class="stats-grid" aria-label="Resumen de inventario">
-    <button type="button" class="stat-card stat-card-featured" (click)="applyQuickFilter('all')">
-      <div class="stat-head">
-        <p>Inversion total</p>
-        <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <path d="M12 1v22"></path>
-          <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7H14.5a3.5 3.5 0 0 1 0 7H6"></path>
-        </svg>
-      </div>
-      <strong>{{ formatMoney(totalInvestment()) }}</strong>
-      <small>Calculado por existencias on hand</small>
-    </button>
-
-    <button type="button" class="stat-card" (click)="applyQuickFilter('sold_out')" [class.stat-card-active]="stockFilter() === 'sold_out'">
-      <div class="stat-head">
-        <p>Agotados</p>
-        <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-          <path d="M12 9v4"></path>
-          <path d="M12 17h.01"></path>
-        </svg>
-      </div>
-      <strong>{{ formatCount(soldOutCount()) }}</strong>
-    </button>
-
-    <button type="button" class="stat-card" (click)="applyQuickFilter('low')" [class.stat-card-active]="stockFilter() === 'low'">
-      <div class="stat-head">
-        <p>Pocas piezas</p>
-        <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <path d="M3 6h18"></path>
-          <path d="M3 12h12"></path>
-          <path d="M3 18h6"></path>
-        </svg>
-      </div>
-      <strong>{{ formatCount(lowStockCount()) }}</strong>
-    </button>
-
-    <button type="button" class="stat-card" (click)="applyQuickFilter('available')" [class.stat-card-active]="stockFilter() === 'available'">
-      <div class="stat-head">
-        <p>Disponible</p>
-        <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <path d="m5 13 4 4L19 7"></path>
-        </svg>
-      </div>
-      <strong>{{ formatCount(totalAvailableUnits()) }}</strong>
-    </button>
-
-    <button type="button" class="stat-card" (click)="applyQuickFilter('reserved')" [class.stat-card-active]="stockFilter() === 'reserved'">
-      <div class="stat-head">
-        <p>Con reserva</p>
-        <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <path d="M4 7h16v11H4z"></path>
-          <path d="M8 7V5h8v2"></path>
-          <path d="M8 12h8"></path>
-        </svg>
-      </div>
-      <strong>{{ formatCount(reservedCount()) }}</strong>
-    </button>
-
-    <button
-      type="button"
-      class="stat-card"
-      (click)="applyQuickFilter('without_price')"
-      [class.stat-card-active]="stockFilter() === 'without_price'"
-    >
-      <div class="stat-head">
-        <p>Sin precio</p>
-        <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <path d="M12 1v22"></path>
-          <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7H14.5a3.5 3.5 0 0 1 0 7H6"></path>
-          <path d="M4 4l16 16"></path>
-        </svg>
-      </div>
-      <strong>{{ formatCount(withoutPriceCount()) }}</strong>
-    </button>
-  </section>
-
   @if (error()) {
     <div class="alert alert-error" role="alert">{{ error() }}</div>
   }
@@ -126,398 +45,441 @@
     <div class="alert alert-success" role="status">{{ success() }}</div>
   }
 
-  <section class="panel filters-panel">
-    <div class="filters-head">
-      <h2>Filtros y orden</h2>
-      <div class="filters-head-actions">
-        <small>
-          @if (hasActiveFilters()) {
-            {{ activeFilterCount() }} filtro(s) activo(s)
-          } @else {
-            Sin filtros activos
-          }
-        </small>
-        <button type="button" class="btn btn-outline" (click)="clearFilters()" [disabled]="!hasActiveFilters()">
-          Limpiar
-        </button>
-      </div>
-    </div>
-
-    <div class="filters-main-row">
-      <label class="field" for="inventory-search">
-        <span>Buscar item</span>
-        <input
-          id="inventory-search"
-          type="text"
-          class="input"
-          [ngModel]="searchTerm()"
-          (ngModelChange)="searchTerm.set($event)"
-          placeholder="Nombre, SKU, categoria, proveedor, color o nota"
-        />
-      </label>
-
-      <label class="field" for="inventory-sort">
-        <span>Ordenar por</span>
-        <select
-          id="inventory-sort"
-          class="input"
-          [ngModel]="sortFilter()"
-          (ngModelChange)="onSortFilterChange($event)"
-        >
-          <option value="stock_low">Stock disponible (menor a mayor)</option>
-          <option value="stock_high">Stock disponible (mayor a menor)</option>
-          <option value="updated_desc">Actualizados recientemente</option>
-          <option value="name_asc">Nombre A-Z</option>
-          <option value="price_low">Precio (menor a mayor)</option>
-          <option value="price_high">Precio (mayor a menor)</option>
-        </select>
-      </label>
-    </div>
-
-    <div class="chip-row" role="group" aria-label="Filtrar por disponibilidad">
-      <button type="button" class="filter-chip" [class.filter-chip-active]="stockFilter() === 'all'" (click)="onStockFilterChange('all')">Todos</button>
-      <button type="button" class="filter-chip" [class.filter-chip-active]="stockFilter() === 'available'" (click)="onStockFilterChange('available')">Disponible</button>
-      <button type="button" class="filter-chip" [class.filter-chip-active]="stockFilter() === 'reserved'" (click)="onStockFilterChange('reserved')">Reservado</button>
-      <button type="button" class="filter-chip" [class.filter-chip-active]="stockFilter() === 'sold_out'" (click)="onStockFilterChange('sold_out')">Agotado</button>
-      <button type="button" class="filter-chip" [class.filter-chip-active]="stockFilter() === 'without_price'" (click)="onStockFilterChange('without_price')">Sin precio</button>
-      <button
-        type="button"
-        class="filter-chip"
-        [class.filter-chip-active]="hideSoldOut()"
-        (click)="hideSoldOut.set(!hideSoldOut())"
-        [attr.aria-pressed]="hideSoldOut()"
-      >
-        Ocultar agotados
+  @if (activeTab() === 'stock') {
+    <section class="stats-grid" aria-label="Resumen de inventario">
+      <button type="button" class="stat-card stat-card-featured" (click)="applyQuickFilter('all')">
+        <span class="stat-icon-wrap icon-blue" aria-hidden="true">
+          <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="9"></circle>
+            <path d="M12 6v12"></path>
+            <path d="M16 8.5h-6a2.5 2.5 0 0 0 0 5h4a2.5 2.5 0 0 1 0 5H8"></path>
+          </svg>
+        </span>
+        <span class="stat-copy">
+          <span>Inversión total</span>
+          <strong>{{ formatMoney(totalInvestment()) }}</strong>
+          <small>Valor de las existencias</small>
+        </span>
       </button>
-    </div>
 
-    <div class="advanced-filter-grid">
-      <label class="field">
-        <span>Categoria</span>
-        <select class="input" [ngModel]="filterCategoryPath()" (ngModelChange)="filterCategoryPath.set($event)">
-          <option value="all">Todas las categorias</option>
-          @for (path of categoryFilterOptions(); track path) {
-            <option [value]="path">{{ path }}</option>
+      <button type="button" class="stat-card" (click)="applyQuickFilter('available')" [class.stat-card-active]="stockFilter() === 'available'">
+        <span class="stat-icon-wrap icon-green" aria-hidden="true">
+          <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="m5 13 4 4L19 7"></path>
+          </svg>
+        </span>
+        <span class="stat-copy">
+          <span>Disponibles</span>
+          <strong>{{ formatCount(totalAvailableUnits()) }}</strong>
+          <small>Listas para salir</small>
+        </span>
+      </button>
+
+      <button type="button" class="stat-card" (click)="applyQuickFilter('sold_out')" [class.stat-card-active]="stockFilter() === 'sold_out'">
+        <span class="stat-icon-wrap icon-red" aria-hidden="true">
+          <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M6 6l12 12"></path>
+            <path d="M18 6 6 18"></path>
+          </svg>
+        </span>
+        <span class="stat-copy">
+          <span>Agotados</span>
+          <strong>{{ formatCount(soldOutCount()) }}</strong>
+          <small>Sin existencia física</small>
+        </span>
+      </button>
+
+      <button type="button" class="stat-card" (click)="applyQuickFilter('reserved')" [class.stat-card-active]="stockFilter() === 'reserved'">
+        <span class="stat-icon-wrap icon-amber" aria-hidden="true">
+          <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 7h16v12H4z"></path>
+            <path d="M8 7V5h8v2"></path>
+            <path d="M8 12h8"></path>
+          </svg>
+        </span>
+        <span class="stat-copy">
+          <span>Con reserva</span>
+          <strong>{{ formatCount(reservedCount()) }}</strong>
+          <small>Con reservas activas</small>
+        </span>
+      </button>
+
+      <button type="button" class="stat-card" (click)="applyQuickFilter('low')" [class.stat-card-active]="stockFilter() === 'low'">
+        <span class="stat-icon-wrap icon-orange" aria-hidden="true">
+          <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 9v4"></path>
+            <path d="M12 17h.01"></path>
+            <path d="M10.3 3.9 2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path>
+          </svg>
+        </span>
+        <span class="stat-copy">
+          <span>Pocas piezas</span>
+          <strong>{{ formatCount(lowStockCount()) }}</strong>
+          <small>Requieren atención</small>
+        </span>
+      </button>
+    </section>
+
+    <section class="inventory-workspace" aria-label="Artículos de inventario">
+      <div class="filters-toolbar">
+        <label class="search-control" for="inventory-search">
+          <span class="visually-hidden">Buscar artículo</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <circle cx="11" cy="11" r="7"></circle>
+            <path d="m20 20-4-4"></path>
+          </svg>
+          <input
+            id="inventory-search"
+            type="search"
+            [ngModel]="searchTerm()"
+            (ngModelChange)="searchTerm.set($event)"
+            placeholder="Buscar por nombre, SKU o proveedor"
+          />
+        </label>
+
+        <label class="filter-control">
+          <span>Estado</span>
+          <select [ngModel]="stockFilter()" (ngModelChange)="onStockFilterChange($event)">
+            <option value="all">Todos</option>
+            <option value="available">Disponible</option>
+            <option value="reserved">Con reserva</option>
+            <option value="low">Pocas piezas</option>
+            <option value="sold_out">Agotado</option>
+            <option value="without_price">Sin precio</option>
+          </select>
+        </label>
+
+        <label class="filter-control">
+          <span>Categoría</span>
+          <select [ngModel]="filterCategoryPath()" (ngModelChange)="filterCategoryPath.set($event)">
+            <option value="all">Todas las categorías</option>
+            @for (path of categoryFilterOptions(); track path) {
+              <option [value]="path">{{ path }}</option>
+            }
+          </select>
+        </label>
+
+        <label class="filter-control sort-control">
+          <span>Ordenar por</span>
+          <select [ngModel]="sortFilter()" (ngModelChange)="onSortFilterChange($event)">
+            <option value="stock_low">Stock disponible (menor a mayor)</option>
+            <option value="stock_high">Stock disponible (mayor a menor)</option>
+            <option value="updated_desc">Actualizados recientemente</option>
+            <option value="name_asc">Nombre A-Z</option>
+            <option value="price_low">Precio (menor a mayor)</option>
+            <option value="price_high">Precio (mayor a menor)</option>
+          </select>
+        </label>
+
+        <details class="advanced-filters">
+          <summary>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M4 6h16"></path><path d="M7 12h10"></path><path d="M10 18h4"></path>
+            </svg>
+            Más filtros
+            @if (activeFilterCount() > 0) { <strong>{{ activeFilterCount() }}</strong> }
+          </summary>
+          <div class="advanced-filter-panel">
+            <label class="field">
+              <span>Proveedor</span>
+              <select class="input" [ngModel]="filterSupplierId()" (ngModelChange)="filterSupplierId.set($event)">
+                <option value="all">Todos los proveedores</option>
+                @for (supplier of supplierOptions(); track supplier.supplier_id) {
+                  <option [value]="supplier.supplier_id">{{ supplier.display_name }}</option>
+                }
+              </select>
+            </label>
+            <label class="field">
+              <span>Stock mínimo</span>
+              <input type="number" min="0" class="input" [ngModel]="minStockFilter()" (ngModelChange)="onOptionalNumberFilterChange('minStock', $event)" placeholder="Sin mínimo" />
+            </label>
+            <label class="field">
+              <span>Stock máximo</span>
+              <input type="number" min="0" class="input" [ngModel]="maxStockFilter()" (ngModelChange)="onOptionalNumberFilterChange('maxStock', $event)" placeholder="Sin máximo" />
+            </label>
+            <label class="field">
+              <span>Precio mínimo</span>
+              <input type="number" min="0" step="0.01" class="input" [ngModel]="minPriceFilter()" (ngModelChange)="onOptionalNumberFilterChange('minPrice', $event)" placeholder="Sin mínimo" />
+            </label>
+            <label class="field">
+              <span>Precio máximo</span>
+              <input type="number" min="0" step="0.01" class="input" [ngModel]="maxPriceFilter()" (ngModelChange)="onOptionalNumberFilterChange('maxPrice', $event)" placeholder="Sin máximo" />
+            </label>
+            <label class="check-control">
+              <input type="checkbox" [ngModel]="hideSoldOut()" (ngModelChange)="hideSoldOut.set($event)" />
+              <span>Ocultar artículos agotados</span>
+            </label>
+          </div>
+        </details>
+
+        <button type="button" class="clear-filters" (click)="clearFilters()" [disabled]="!hasActiveFilters()">Limpiar</button>
+      </div>
+
+      @if (hasActiveFilters()) {
+        <div class="active-filter-row" aria-label="Filtros activos">
+          @if (stockFilter() !== 'all') {
+            <button type="button" (click)="stockFilter.set('all')">Estado: {{ stockFilter() }} <span aria-hidden="true">×</span></button>
           }
-        </select>
-      </label>
-
-      <label class="field">
-        <span>Proveedor</span>
-        <select class="input" [ngModel]="filterSupplierId()" (ngModelChange)="filterSupplierId.set($event)">
-          <option value="all">Todos los proveedores</option>
-          @for (supplier of supplierOptions(); track supplier.supplier_id) {
-            <option [value]="supplier.supplier_id">{{ supplier.display_name }}</option>
+          @if (filterCategoryPath() !== 'all') {
+            <button type="button" (click)="filterCategoryPath.set('all')">{{ filterCategoryPath() }} <span aria-hidden="true">×</span></button>
           }
-        </select>
-      </label>
+          @if (filterSupplierId() !== 'all') {
+            <button type="button" (click)="filterSupplierId.set('all')">{{ supplierName(filterSupplierId()) }} <span aria-hidden="true">×</span></button>
+          }
+          @if (minStockFilter() !== null || maxStockFilter() !== null) {
+            <button type="button" (click)="minStockFilter.set(null); maxStockFilter.set(null)">Rango de stock <span aria-hidden="true">×</span></button>
+          }
+          @if (minPriceFilter() !== null || maxPriceFilter() !== null) {
+            <button type="button" (click)="minPriceFilter.set(null); maxPriceFilter.set(null)">Rango de precio <span aria-hidden="true">×</span></button>
+          }
+          @if (searchTerm().trim()) {
+            <button type="button" (click)="searchTerm.set('')">Búsqueda: {{ searchTerm() }} <span aria-hidden="true">×</span></button>
+          }
+        </div>
+      }
 
-      <label class="field">
-        <span>Stock minimo</span>
-        <input
-          type="number"
-          min="0"
-          class="input"
-          [ngModel]="minStockFilter()"
-          (ngModelChange)="onOptionalNumberFilterChange('minStock', $event)"
-          placeholder="Ej: 1"
-        />
-      </label>
-
-      <label class="field">
-        <span>Stock maximo</span>
-        <input
-          type="number"
-          min="0"
-          class="input"
-          [ngModel]="maxStockFilter()"
-          (ngModelChange)="onOptionalNumberFilterChange('maxStock', $event)"
-          placeholder="Ej: 15"
-        />
-      </label>
-
-      <label class="field">
-        <span>Precio minimo</span>
-        <input
-          type="number"
-          min="0"
-          step="0.01"
-          class="input"
-          [ngModel]="minPriceFilter()"
-          (ngModelChange)="onOptionalNumberFilterChange('minPrice', $event)"
-          placeholder="Ej: 100"
-        />
-      </label>
-
-      <label class="field">
-        <span>Precio maximo</span>
-        <input
-          type="number"
-          min="0"
-          step="0.01"
-          class="input"
-          [ngModel]="maxPriceFilter()"
-          (ngModelChange)="onOptionalNumberFilterChange('maxPrice', $event)"
-          placeholder="Ej: 2000"
-        />
-      </label>
-    </div>
-  </section>
-
-  <section class="content-grid">
-    <article class="panel list-panel">
-      <div class="list-header">
-        <h2>Items registrados</h2>
-        <p>{{ filteredRows().length }} resultado(s)</p>
+      <div class="result-summary">
+        <strong>Artículos</strong>
+        <span>{{ filteredRows().length }} resultado(s)</span>
       </div>
 
       @if (loading()) {
-        <p class="empty">Cargando inventario...</p>
+        <div class="loading-state" role="status">
+          <span class="spinner" aria-hidden="true"></span>
+          <p>Cargando inventario...</p>
+        </div>
       } @else if (filteredRows().length === 0) {
         <div class="empty-state">
-          <p class="empty">No hay items para mostrar con esos filtros.</p>
+          <span class="empty-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="m4 8 8-4 8 4-8 4-8-4Z"></path><path d="m4 8 8 4 8-4v8l-8 4-8-4V8Z"></path>
+            </svg>
+          </span>
           @if (hasActiveFilters()) {
+            <h2>No hay resultados</h2>
+            <p>No encontramos artículos que coincidan con los filtros seleccionados.</p>
             <button type="button" class="btn btn-outline" (click)="clearFilters()">Restablecer filtros</button>
+          } @else {
+            <h2>Tu inventario está vacío</h2>
+            <p>Agrega el primer artículo para comenzar a controlar existencias y movimientos.</p>
+            <button type="button" class="btn btn-primary" (click)="openCreateDialog()">Agregar artículo</button>
           }
         </div>
       } @else {
-        <div class="inventory-list">
+        <div class="desktop-table-wrap">
+          <table class="inventory-table">
+            <caption class="visually-hidden">Listado de artículos del inventario interno</caption>
+            <thead>
+              <tr>
+                <th scope="col">Producto</th>
+                <th scope="col">Categoría / atributos</th>
+                <th scope="col">Existencias</th>
+                <th scope="col">Proveedor</th>
+                <th scope="col">Costo</th>
+                <th scope="col">Estado</th>
+                <th scope="col">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (item of filteredRows(); track item.inventory_id) {
+                <tr [ngClass]="businessScope.isBothMode() ? itemBusinessClass(item) : ''">
+                  <td>
+                    <div class="product-cell">
+                      @if (primaryImage(item); as imageUrl) {
+                        <button type="button" class="product-thumb" (click)="openImageViewer(item, 0)" [attr.aria-label]="'Abrir imagen de ' + item.title">
+                          <img [src]="imageUrl" alt="" />
+                          @if (item.image_urls.length > 1) { <span>+{{ item.image_urls.length - 1 }}</span> }
+                        </button>
+                      } @else {
+                        <span class="product-thumb product-thumb-empty" aria-hidden="true">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 5h16v14H4z"></path><path d="m4 16 5-5 4 4 2-2 5 5"></path><circle cx="15" cy="9" r="1.5"></circle></svg>
+                        </span>
+                      }
+                      <span class="product-copy">
+                        <strong>{{ item.title }}</strong>
+                        <small>SKU {{ item.sku || item.inventory_id }}</small>
+                        @if (businessScope.isBothMode()) {
+                          <span class="business-badge" [ngClass]="itemBusinessClass(item)">{{ itemBusinessLabel(item) }}</span>
+                        }
+                      </span>
+                    </div>
+                  </td>
+                  <td>
+                    <span class="category-copy">{{ item.category_hint || "Sin categoría" }}</span>
+                    @if (variantDescriptor(item); as descriptor) { <small class="cell-secondary">{{ descriptor }}</small> }
+                    @if (item.notes) { <small class="cell-note" [title]="item.notes">{{ item.notes }}</small> }
+                  </td>
+                  <td>
+                    <div class="stock-inline">
+                      <span><strong>{{ formatCount(onHandQty(item)) }}</strong> física</span>
+                      <i aria-hidden="true">·</i>
+                      <span [class.stock-warning]="reservedQty(item) > 0"><strong>{{ formatCount(reservedQty(item)) }}</strong> reservada</span>
+                      <i aria-hidden="true">·</i>
+                      <span [class.stock-danger]="availableQty(item) === 0"><strong>{{ formatCount(availableQty(item)) }}</strong> disponible</span>
+                    </div>
+                    @if (reviewQty(item) > 0 || damagedQty(item) > 0 || reorderQty(item) > 0) {
+                      <small class="cell-secondary">Revisión {{ reviewQty(item) }} · Dañado {{ damagedQty(item) }} · Reponer {{ reorderQty(item) }}</small>
+                    }
+                    @if (reservationEntries(item).length > 0) {
+                      <div class="reservation-links">
+                        @for (reservation of reservationPreviewEntries(item); track reservation.orderId) {
+                          <a [routerLink]="['/main/pedidos', reservation.orderId]">Pedido {{ reservation.orderNumber }}</a>
+                        }
+                        @if (reservationOverflowCount(item) > 0) { <small>+{{ reservationOverflowCount(item) }} más</small> }
+                      </div>
+                    }
+                  </td>
+                  <td>{{ supplierName(item.supplier_id) }}</td>
+                  <td>{{ item.unit_price ? formatMoney(item.unit_price) : "—" }}</td>
+                  <td>
+                    <div class="status-stack">
+                      <span class="stock-tag" [class]="'stock-tag ' + stockClass(item)">{{ stockTag(item) }}</span>
+                      @if (!item.unit_price || item.unit_price <= 0) { <span class="stock-tag tag-no-price">Sin precio</span> }
+                    </div>
+                  </td>
+                  <td>
+                    <div class="table-actions">
+                      <a [routerLink]="['/main/inventario', item.inventory_id]">Ver detalle</a>
+                      <details class="item-actions-menu">
+                        <summary [attr.aria-label]="'Acciones de ' + item.title"><span aria-hidden="true">⋮</span></summary>
+                        <div class="item-actions-popover">
+                          <strong>Ajustar existencia</strong>
+                          <div class="qty-control">
+                            <button type="button" class="qty-btn" (click)="adjustQty(item, -1)" [disabled]="!canDecreaseStock(item) || isBusy(item.inventory_id)" [attr.aria-label]="'Disminuir cantidad de ' + item.title">−</button>
+                            <span class="qty-value">{{ onHandQty(item) }}</span>
+                            <button type="button" class="qty-btn" (click)="adjustQty(item, 1)" [disabled]="isBusy(item.inventory_id)" [attr.aria-label]="'Aumentar cantidad de ' + item.title">+</button>
+                          </div>
+                          <button type="button" (click)="startEdit(item)">Editar artículo</button>
+                          <a [routerLink]="['/main/inventario', item.inventory_id]">Movimientos y detalle</a>
+                          <button type="button" class="danger-action" (click)="askRemove(item)" [disabled]="isBusy(item.inventory_id)">Eliminar artículo</button>
+                        </div>
+                      </details>
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <div class="mobile-inventory-list">
           @for (item of filteredRows(); track item.inventory_id) {
             <article class="inventory-card" [ngClass]="businessScope.isBothMode() ? itemBusinessClass(item) : ''" [class.card-out]="onHandQty(item) === 0">
-              <header class="inventory-card-header">
-                <div>
-                  <h3>{{ item.title }}</h3>
-                  <p class="card-category">
-                    {{ item.category_hint || "Sin categoria" }}
-                    @if (businessScope.isBothMode()) {
-                      <span class="business-badge" [ngClass]="itemBusinessClass(item)">{{ itemBusinessLabel(item) }}</span>
-                    }
-                  </p>
-                </div>
-                <span class="stock-tag" [class]="'stock-tag ' + stockClass(item)">
-                  {{ stockTag(item) }}
-                </span>
-              </header>
-
-              <div class="metrics-row">
-                <article class="metric-box">
-                  <p>On hand</p>
-                  <strong>{{ formatCount(onHandQty(item)) }}</strong>
-                </article>
-                <article class="metric-box metric-box-warn">
-                  <p>Reservado</p>
-                  <strong>{{ formatCount(reservedQty(item)) }}</strong>
-                </article>
-                <article class="metric-box metric-box-ok">
-                  <p>Disponible</p>
-                  <strong>{{ formatCount(availableQty(item)) }}</strong>
-                </article>
-                @if (reviewQty(item) > 0) {
-                  <article class="metric-box metric-box-warn">
-                    <p>En revisión</p>
-                    <strong>{{ formatCount(reviewQty(item)) }}</strong>
-                  </article>
-                }
-                @if (damagedQty(item) > 0) {
-                  <article class="metric-box">
-                    <p>Dañado</p>
-                    <strong>{{ formatCount(damagedQty(item)) }}</strong>
-                  </article>
-                }
-                @if (reorderQty(item) > 0) {
-                  <article class="metric-box metric-box-warn">
-                    <p>Reponer</p>
-                    <strong>{{ formatCount(reorderQty(item)) }}</strong>
-                  </article>
-                }
-              </div>
-
-              @if (hasReservations(item)) {
-                <div class="reservation-banner" role="status">
-                  <svg class="chip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                    <path d="M12 9v4"></path>
-                    <path d="M12 17h.01"></path>
-                    <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-                  </svg>
-                  <span>{{ reservationCount(item) }} pedido(s) activos reservan {{ formatCount(reservedQty(item)) }} pza(s)</span>
-                </div>
-              }
-
-              @if (primaryImage(item); as imageUrl) {
-                <div class="card-image-wrap">
-                  <button
-                    type="button"
-                    class="card-image-zoom"
-                    (click)="openImageViewer(item, 0)"
-                    [attr.aria-label]="'Abrir imagen de ' + item.title"
-                  >
-                    <img [src]="imageUrl" alt="Imagen de {{ item.title }}" class="card-image" />
-                    @if (item.image_urls.length > 1) {
-                      <span class="image-count">+{{ item.image_urls.length - 1 }} foto(s)</span>
-                    }
+              <div class="mobile-card-main">
+                @if (primaryImage(item); as imageUrl) {
+                  <button type="button" class="mobile-product-thumb" (click)="openImageViewer(item, 0)" [attr.aria-label]="'Abrir imagen de ' + item.title">
+                    <img [src]="imageUrl" alt="" />
+                    @if (item.image_urls.length > 1) { <span>+{{ item.image_urls.length - 1 }}</span> }
                   </button>
-                </div>
-              } @else {
-                <div class="card-image-wrap">
-                  <div class="card-image-placeholder" aria-hidden="true">
-                    <svg class="card-image-placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M4 7h4l2-2h4l2 2h4v12H4z"></path>
-                      <circle cx="12" cy="13" r="3"></circle>
-                    </svg>
-                    <span>Sin foto</span>
-                  </div>
-                </div>
-              }
-
-              <div class="card-detail-grid">
-                <p>
-                  <strong>Proveedor</strong>
-                  <span>{{ supplierName(item.supplier_id) }}</span>
-                </p>
-                <p>
-                  <strong>Precio</strong>
-                  <span>{{ item.unit_price ? formatMoney(item.unit_price) : "Sin precio" }}</span>
-                </p>
-
-                @if (variantDescriptor(item); as descriptor) {
-                  <p class="card-detail-full">
-                    <strong>Atributos</strong>
-                    <span>{{ descriptor }}</span>
-                  </p>
+                } @else {
+                  <span class="mobile-product-thumb product-thumb-empty" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 5h16v14H4z"></path><path d="m4 16 5-5 4 4 2-2 5 5"></path><circle cx="15" cy="9" r="1.5"></circle></svg>
+                  </span>
                 }
+
+                <div class="mobile-product-copy">
+                  <h2>{{ item.title }}</h2>
+                  <p>SKU: {{ item.sku || item.inventory_id }}</p>
+                  <span class="stock-tag" [class]="'stock-tag ' + stockClass(item)">{{ stockTag(item) }}</span>
+                  @if (businessScope.isBothMode()) {
+                    <span class="business-badge" [ngClass]="itemBusinessClass(item)">{{ itemBusinessLabel(item) }}</span>
+                  }
+                </div>
+
+                <details class="item-actions-menu mobile-actions-menu">
+                  <summary [attr.aria-label]="'Acciones de ' + item.title"><span aria-hidden="true">⋮</span></summary>
+                  <div class="item-actions-popover">
+                    <strong>Ajustar existencia</strong>
+                    <div class="qty-control">
+                      <button type="button" class="qty-btn" (click)="adjustQty(item, -1)" [disabled]="!canDecreaseStock(item) || isBusy(item.inventory_id)" [attr.aria-label]="'Disminuir cantidad de ' + item.title">−</button>
+                      <span class="qty-value">{{ onHandQty(item) }}</span>
+                      <button type="button" class="qty-btn" (click)="adjustQty(item, 1)" [disabled]="isBusy(item.inventory_id)" [attr.aria-label]="'Aumentar cantidad de ' + item.title">+</button>
+                    </div>
+                    <button type="button" (click)="startEdit(item)">Editar artículo</button>
+                    <a [routerLink]="['/main/inventario', item.inventory_id]">Movimientos y detalle</a>
+                    <button type="button" class="danger-action" (click)="askRemove(item)" [disabled]="isBusy(item.inventory_id)">Eliminar artículo</button>
+                  </div>
+                </details>
               </div>
 
-              @if (reservationEntries(item).length > 0) {
-                <div class="reservation-list">
-                  @for (reservation of reservationPreviewEntries(item); track reservation.orderId) {
-                    <div class="reservation-row">
-                      <a [routerLink]="['/main/pedidos', reservation.orderId]">Pedido {{ reservation.orderNumber }}</a>
-                      <span>{{ reservation.qty }} pza(s)</span>
+              <div class="mobile-stock-grid" aria-label="Existencias">
+                <span><small>Física</small><strong>{{ formatCount(onHandQty(item)) }}</strong></span>
+                <span><small>Reservada</small><strong>{{ formatCount(reservedQty(item)) }}</strong></span>
+                <span><small>Disponible</small><strong>{{ formatCount(availableQty(item)) }}</strong></span>
+              </div>
+
+              <div class="mobile-card-footer">
+                <span class="supplier-copy">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 21h18"></path><path d="M5 21V8l7-4 7 4v13"></path><path d="M9 21v-5h6v5"></path></svg>
+                  {{ supplierName(item.supplier_id) }}
+                </span>
+                <strong>{{ item.unit_price ? formatMoney(item.unit_price) : "Sin precio" }}</strong>
+              </div>
+
+              <details class="mobile-card-details">
+                <summary>Más información</summary>
+                <div>
+                  <p><strong>Categoría</strong><span>{{ item.category_hint || "Sin categoría" }}</span></p>
+                  @if (variantDescriptor(item); as descriptor) { <p><strong>Atributos</strong><span>{{ descriptor }}</span></p> }
+                  @if (reviewQty(item) > 0 || damagedQty(item) > 0 || reorderQty(item) > 0) {
+                    <p><strong>Otros estados</strong><span>Revisión {{ reviewQty(item) }} · Dañado {{ damagedQty(item) }} · Reponer {{ reorderQty(item) }}</span></p>
+                  }
+                  @if (reservationEntries(item).length > 0) {
+                    <div class="mobile-reservations">
+                      <strong>Reservas activas</strong>
+                      @for (reservation of reservationEntries(item); track reservation.orderId) {
+                        <a [routerLink]="['/main/pedidos', reservation.orderId]">Pedido {{ reservation.orderNumber }} · {{ reservation.qty }} pza(s)</a>
+                      }
                     </div>
                   }
-                  @if (reservationOverflowCount(item) > 0) {
-                    <p class="reservation-more">+{{ reservationOverflowCount(item) }} reserva(s) adicional(es)</p>
-                  }
+                  @if (item.notes) { <p><strong>Notas</strong><span>{{ item.notes }}</span></p> }
                 </div>
-              }
-
-              @if (item.notes) {
-                <p class="notes">{{ item.notes }}</p>
-              }
-
-              <div class="qty-row">
-                <strong>Ajustar on hand</strong>
-                <div class="qty-control">
-                  <button
-                    type="button"
-                    class="qty-btn"
-                    (click)="adjustQty(item, -1)"
-                    [disabled]="!canDecreaseStock(item) || isBusy(item.inventory_id)"
-                    [attr.aria-label]="'Disminuir cantidad de ' + item.title"
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                      <path d="M5 12h14"></path>
-                    </svg>
-                  </button>
-                  <span class="qty-value">{{ onHandQty(item) }}</span>
-                  <button
-                    type="button"
-                    class="qty-btn"
-                    (click)="adjustQty(item, 1)"
-                    [disabled]="isBusy(item.inventory_id)"
-                    [attr.aria-label]="'Aumentar cantidad de ' + item.title"
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                      <path d="M12 5v14"></path>
-                      <path d="M5 12h14"></path>
-                    </svg>
-                  </button>
-                </div>
-              </div>
-
-              <div class="card-actions">
-                <a class="btn btn-outline" [routerLink]="['/main/inventario', item.inventory_id]">
-                  <span>Movimientos</span>
-                </a>
-                <button type="button" class="btn btn-outline" (click)="startEdit(item)">
-                  <svg class="action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                    <path d="M12 20h9"></path>
-                    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path>
-                  </svg>
-                  <span>Editar</span>
-                </button>
-                <button
-                  type="button"
-                  class="btn btn-danger"
-                  (click)="askRemove(item)"
-                  [disabled]="isBusy(item.inventory_id)"
-                >
-                  <svg class="action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                    <path d="M3 6h18"></path>
-                    <path d="M8 6V4h8v2"></path>
-                    <path d="M19 6l-1 14H6L5 6"></path>
-                    <path d="M10 11v6"></path>
-                    <path d="M14 11v6"></path>
-                  </svg>
-                  <span>{{ isBusy(item.inventory_id) ? "Procesando..." : "Eliminar" }}</span>
-                </button>
-              </div>
+              </details>
             </article>
           }
         </div>
       }
-    </article>
-  </section>
+    </section>
   } @else {
-    <section class="returns-panel panel">
-      <div class="list-header">
-        <h2>Por revisar</h2>
-        <p>{{ pendingReturns().length }} pieza(s) pendientes de decisión</p>
+    <section class="returns-panel">
+      <div class="returns-header">
+        <div>
+          <h2>Por revisar</h2>
+          <p>{{ pendingReturns().length }} pieza(s) pendientes de decisión</p>
+        </div>
       </div>
 
       @if (pendingReturns().length === 0) {
         <div class="empty-state">
-          <p class="empty">No hay devoluciones pendientes de revisión.</p>
+          <span class="empty-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h16v14H4z"></path><path d="m9 11 2 2 4-4"></path></svg>
+          </span>
+          <h2>No hay devoluciones por revisar</h2>
+          <p>Las piezas pendientes de decisión aparecerán aquí.</p>
         </div>
       } @else {
         <div class="returns-list">
           @for (row of pendingReturns(); track row.return_id) {
             <article class="return-card" [ngClass]="businessScope.isBothMode() ? returnBusinessClass(row) : ''">
-              <div>
-                <div class="return-title-row">
+              <div class="return-title-row">
+                <div>
                   <h3>{{ returnProductTitle(row) }}</h3>
-                  <span class="stock-tag" [class.tag-ok]="row.status === 'restocked'" [class.tag-low]="row.status === 'pending_review'" [class.tag-out]="row.status === 'damaged'">
-                    {{ returnStatusLabel(row) }}
-                  </span>
-                </div>
-                <p class="card-category">
-                  Pedido {{ row.order_id }} · {{ returnProductMeta(row) }}
+                  <p>Pedido {{ row.order_id }} · {{ returnProductMeta(row) }}</p>
                   @if (businessScope.isBothMode()) {
                     <span class="business-badge" [ngClass]="returnBusinessClass(row)">{{ returnBusinessLabel(row) }}</span>
                   }
-                </p>
+                </div>
+                <span class="stock-tag tag-low">{{ returnStatusLabel(row) }}</span>
               </div>
-              <div class="metrics-row">
-                <article class="metric-box">
-                  <p>Piezas</p>
-                  <strong>{{ formatCount(row.qty) }}</strong>
-                </article>
-                <article class="metric-box">
-                  <p>Destino</p>
-                  <strong>{{ returnStatusLabel(row) }}</strong>
-                </article>
+              <div class="return-metrics">
+                <span><small>Piezas</small><strong>{{ formatCount(row.qty) }}</strong></span>
+                <span><small>Destino</small><strong>{{ returnStatusLabel(row) }}</strong></span>
               </div>
-              @if (row.reason) {
-                <p class="notes">{{ row.reason }}</p>
-              }
+              @if (row.reason) { <p class="return-reason">{{ row.reason }}</p> }
               @if (row.status === 'pending_review') {
-                <div class="card-actions">
-                  <button type="button" class="btn btn-primary" (click)="restockReturn(row)">
-                    <span>Enviar a stock</span>
-                  </button>
-                  <button type="button" class="btn btn-danger" (click)="markReturnDamaged(row)">
-                    <span>Marcar dañado</span>
-                  </button>
+                <div class="return-actions">
+                  <button type="button" class="btn btn-primary" (click)="restockReturn(row)">Enviar a stock</button>
+                  <button type="button" class="btn btn-danger" (click)="markReturnDamaged(row)">Marcar dañado</button>
                 </div>
               }
             </article>
@@ -526,20 +488,20 @@
       }
     </section>
   }
-</section>
+
+  <button type="button" class="floating-create-button" (click)="openCreateDialog()" aria-label="Agregar artículo">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>
+  </button>
+</main>
 
 @if (imageViewerOpen() && currentViewerImage(); as viewerImage) {
-  <div class="tree-overlay image-viewer-overlay" (click)="closeImageViewer()"></div>
+  <div class="overlay image-viewer-overlay" (click)="closeImageViewer()"></div>
   <aside class="image-viewer-sheet" role="dialog" aria-modal="true" aria-label="Vista de imagen">
     <header class="image-viewer-header">
       <p>{{ viewerPositionLabel() }}</p>
-      <button type="button" class="btn btn-ghost" (click)="closeImageViewer()">Cerrar</button>
+      <button type="button" class="icon-button" (click)="closeImageViewer()" aria-label="Cerrar vista de imagen">×</button>
     </header>
-
-    <div class="image-viewer-body">
-      <img [src]="viewerImage" alt="Imagen ampliada de inventario" class="image-viewer-photo" />
-    </div>
-
+    <div class="image-viewer-body"><img [src]="viewerImage" alt="Imagen ampliada de inventario" class="image-viewer-photo" /></div>
     @if (viewerHasMultipleImages()) {
       <div class="image-viewer-actions">
         <button type="button" class="btn btn-outline" (click)="showPreviousViewerImage()">Anterior</button>
@@ -550,266 +512,261 @@
 }
 
 @if (formDialogOpen()) {
-  <div class="tree-overlay" (click)="closeFormDialog()"></div>
-  <aside class="form-modal" role="dialog" aria-modal="true" [attr.aria-label]="editingId() ? 'Editar item' : 'Nuevo item'">
+  <div class="overlay form-overlay" (click)="closeFormDialog()"></div>
+  <aside class="form-modal" role="dialog" aria-modal="true" [attr.aria-labelledby]="editingId() ? 'edit-inventory-title' : 'new-inventory-title'">
     <header class="modal-header">
-      <div>
-        <h2>{{ editingId() ? "Editar item" : "Nuevo item" }}</h2>
-        <p>Completa los campos clave y guarda sin salir del listado.</p>
+      <button type="button" class="icon-button modal-back" (click)="closeFormDialog()" aria-label="Volver">←</button>
+      <span class="modal-title-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="m4 8 8-4 8 4-8 4-8-4Z"></path><path d="m4 8 8 4 8-4v8l-8 4-8-4V8Z"></path><path d="M12 12v8"></path></svg>
+      </span>
+      <div class="modal-heading">
+        <h2 [id]="editingId() ? 'edit-inventory-title' : 'new-inventory-title'">{{ editingId() ? "Editar artículo" : "Nuevo artículo" }}</h2>
+        <p>{{ editingId() ? "Actualiza la información del artículo sin cambiar su historial." : "Agrega un producto al inventario interno." }}</p>
       </div>
-      <button type="button" class="btn btn-ghost" (click)="closeFormDialog()">Cerrar</button>
+      <button type="button" class="icon-button modal-close" (click)="closeFormDialog()" aria-label="Cerrar formulario">×</button>
     </header>
 
     <form class="modal-shell" (submit)="save(); $event.preventDefault()">
       <div class="modal-body">
-        <label class="field">
-          <span>Nombre del producto *</span>
-          <input
-            type="text"
-            class="input"
-            [(ngModel)]="draft.title"
-            name="title"
-            placeholder="Ejemplo: Cobertor polar"
-            required
-          />
-        </label>
-
-        <label class="field category-field">
-          <span>Categoria *</span>
-          <div class="category-input-row">
-            <input
-              type="text"
-              class="input"
-              [ngModel]="categoryQuery()"
-              (ngModelChange)="onCategoryInputChange($event)"
-              (focus)="onCategoryInputFocus()"
-              (blur)="onCategoryInputBlur()"
-              name="category_query"
-              autocomplete="off"
-              placeholder="Escribe para buscar"
-            />
-            <button type="button" class="btn btn-ghost" (click)="openCategoryTree()">Explorar</button>
-          </div>
-
-          @if (categoryConfirmed()) {
-            <small class="category-confirmed">Categoria seleccionada: {{ draft.category_hint }}</small>
-          }
-
-          <div class="category-status">
-            @if (categoryConfirmed() && selectedCategoryId()) {
-              <span class="status-chip chip-ok">
-                <svg class="chip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                  <path d="m5 13 4 4L19 7"></path>
-                </svg>
-                <span>Nivel final seleccionado</span>
+        @if (!editingId()) {
+          <section class="existing-product-picker" aria-labelledby="existing-product-title">
+            <div class="existing-product-heading">
+              <span aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 6h16v14H4z"></path><path d="M8 6V4h8v2"></path><path d="M8 11h8"></path><path d="M8 15h5"></path></svg>
               </span>
+              <div>
+                <h3 id="existing-product-title">¿El artículo ya existe?</h3>
+                <p>Búscalo en Productos BM o en el historial manual para precargar sus datos.</p>
+              </div>
+            </div>
+
+            @if (selectedProductSource(); as selectedSource) {
+              <article class="selected-source-card">
+                @if (selectedSource.imageUrl) {
+                  <img [src]="selectedSource.imageUrl" [alt]="selectedSource.title" />
+                } @else {
+                  <span class="source-image-empty" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 5h16v14H4z"></path><path d="m4 16 5-5 4 4 2-2 5 5"></path></svg>
+                  </span>
+                }
+                <div>
+                  <span class="source-kind" [class.source-kind-manual]="selectedSource.kind === 'manual'">{{ selectedSource.sourceLabel }}</span>
+                  <strong>{{ selectedSource.title }}</strong>
+                  <small>
+                    {{ selectedSource.variantName || "Sin variante" }}
+                    @if (selectedSource.colorName) { · {{ selectedSource.colorName }} }
+                    @if (selectedSource.sku) { · SKU {{ selectedSource.sku }} }
+                  </small>
+                  @if (!categoryConfirmed()) {
+                    <small class="source-completion-warning">Selecciona una categoría final para poder guardar.</small>
+                  }
+                </div>
+                <button type="button" class="btn btn-outline" (click)="clearSelectedProductSource()">Cambiar</button>
+              </article>
             } @else {
-              <span class="status-chip chip-pending">
-                <svg class="chip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                  <path d="M12 9v4"></path>
-                  <path d="M12 17h.01"></path>
-                  <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-                </svg>
-                <span>Selecciona una categoria final</span>
-              </span>
-            }
-          </div>
+              <label class="source-search-control" for="inventory-source-search">
+                <span class="visually-hidden">Buscar producto existente</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg>
+                <input
+                  id="inventory-source-search"
+                  type="search"
+                  name="inventory_source_search"
+                  [ngModel]="productSourceQuery()"
+                  (ngModelChange)="productSourceQuery.set($event)"
+                  placeholder="Buscar por nombre, SKU, variante o color"
+                  autocomplete="off"
+                />
+              </label>
 
-          @if (categoryDropdownOpen()) {
-            <div class="category-dropdown" role="listbox">
-              @if (filteredCategoryOptions().length === 0) {
-                <p class="category-empty">Sin coincidencias (prueba con mas texto).</p>
-              } @else {
-                @for (category of filteredCategoryOptions(); track category.id) {
-                  <button
-                    type="button"
-                    class="category-option"
-                    [class.category-option-parent]="hasCategoryChildren(category.id)"
-                    (mousedown)="$event.preventDefault()"
-                    (click)="selectCategory(category)"
-                  >
-                    {{ category.fullPath }}
-                    @if (hasCategoryChildren(category.id)) {
-                      <small> (categoria padre, selecciona una final)</small>
+              @if (productSourcesLoading()) {
+                <p class="source-search-state" role="status"><span class="spinner" aria-hidden="true"></span>Cargando productos existentes...</p>
+              } @else if (productSourcesError()) {
+                <p class="source-search-message">{{ productSourcesError() }}</p>
+              }
+
+              @if (productSourceQuery().trim().length > 0 && productSourceQuery().trim().length < 2) {
+                <p class="source-search-message">Escribe al menos 2 caracteres.</p>
+              } @else if (productSourceQuery().trim().length >= 2) {
+                @if (productSourceSuggestions().length > 0) {
+                  <div class="source-results" role="listbox" aria-label="Productos existentes">
+                    @for (source of productSourceSuggestions(); track source.id) {
+                      <button type="button" class="source-result" (click)="applyProductSource(source)">
+                        @if (source.imageUrl) {
+                          <img [src]="source.imageUrl" alt="" />
+                        } @else {
+                          <span class="source-image-empty" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 5h16v14H4z"></path><path d="m4 16 5-5 4 4 2-2 5 5"></path></svg>
+                          </span>
+                        }
+                        <span class="source-result-copy">
+                          <span class="source-kind" [class.source-kind-manual]="source.kind === 'manual'">{{ source.sourceLabel }}</span>
+                          <strong>{{ source.title }}</strong>
+                          <small>
+                            {{ source.variantName || "Sin variante" }}
+                            @if (source.colorName) { · {{ source.colorName }} }
+                            @if (source.sku) { · SKU {{ source.sku }} }
+                          </small>
+                          <small>{{ source.categoryHint || "Sin categoría" }} · {{ source.supplierId ? supplierName(source.supplierId) : "Sin proveedor" }}</small>
+                        </span>
+                        <span class="source-result-price">{{ source.priceCost !== null ? formatMoney(source.priceCost) : "Sin costo" }}</span>
+                      </button>
                     }
-                  </button>
+                  </div>
+                } @else if (!productSourcesLoading()) {
+                  <p class="source-search-message">No encontramos coincidencias. Puedes completar el artículo manualmente.</p>
                 }
               }
-            </div>
-          }
-        </label>
-
-        <div class="form-columns">
-          <label class="field">
-            <span>Proveedor</span>
-            <select class="input" [(ngModel)]="draft.supplier_id" name="supplier_id">
-              <option value="">Sin proveedor</option>
-              @for (supplier of supplierOptions(); track supplier.supplier_id) {
-                <option [value]="supplier.supplier_id">{{ supplier.display_name }}</option>
-              }
-            </select>
-          </label>
-
-          <label class="field">
-            <span>Cantidad on hand *</span>
-            <input
-              type="number"
-              min="0"
-              class="input"
-              [(ngModel)]="draft.quantity_on_hand"
-              name="quantity_on_hand"
-              required
-            />
-            @if (editingReservedQty() > 0) {
-              <small>Mantener al menos {{ editingReservedQty() }} pza(s) porque estan reservadas activas.</small>
             }
+          </section>
+        }
+
+        <p class="required-hint">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 11v5"></path><path d="M12 8h.01"></path></svg>
+          Los campos marcados con <strong>*</strong> son obligatorios.
+        </p>
+
+        @if (error()) { <div class="alert alert-error modal-alert" role="alert">{{ error() }}</div> }
+
+        <section class="form-section principal-section" aria-labelledby="principal-section-title">
+          <h3 id="principal-section-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><path d="M6 3h9l3 3v15H6z"></path><path d="M14 3v4h4"></path><path d="M9 12h6"></path><path d="M9 16h6"></path></svg>
+            Información principal
+          </h3>
+
+          <label class="field field-full">
+            <span>Nombre del artículo <em>*</em></span>
+            <input type="text" class="input" [(ngModel)]="draft.title" name="title" placeholder="Ejemplo: Cobertor polar" required />
           </label>
-        </div>
 
-        <details class="details-block">
-          <summary>Mas detalles</summary>
-
-          <div class="form-columns details-columns">
-            <label class="field">
-              <span>Variante o modelo</span>
-              <input
-                type="text"
-                class="input"
-                [(ngModel)]="draft.variant_name"
-                name="variant_name"
-                placeholder="Ejemplo: Matrimonial"
-              />
-            </label>
-
-            <label class="field">
-              <span>Talla</span>
-              <input
-                type="text"
-                class="input"
-                [(ngModel)]="draft.size_label"
-                name="size_label"
-                placeholder="Ejemplo: Unitalla"
-              />
-            </label>
-          </div>
-
-          <div class="form-columns details-columns">
-            <label class="field">
-              <span>SKU</span>
-              <input type="text" class="input" [(ngModel)]="draft.sku" name="sku" placeholder="Se genera si lo dejas vacío" />
-            </label>
-
-            <label class="field">
-              <span>ID del producto</span>
-              <input type="text" class="input" [(ngModel)]="draft.product_id" name="product_id" placeholder="Enlace estable con Productos" />
-            </label>
-          </div>
-
-          <div class="form-columns details-columns">
-            <label class="field">
-              <span>ID de variante</span>
-              <input type="text" class="input" [(ngModel)]="draft.variant_id" name="variant_id" />
-            </label>
-
-            <label class="field">
-              <span>Tiempo de entrega (días)</span>
-              <input type="number" min="0" class="input" [(ngModel)]="draft.supplier_lead_days" name="supplier_lead_days" />
-            </label>
-          </div>
-
-          <div class="form-columns details-columns">
-            <label class="field">
-              <span>Stock mínimo</span>
-              <input type="number" min="0" class="input" [(ngModel)]="draft.min_stock" name="min_stock" />
-            </label>
-
-            <label class="field">
-              <span>Stock máximo</span>
-              <input type="number" min="0" class="input" [(ngModel)]="draft.max_stock" name="max_stock" />
-            </label>
-          </div>
-
-          <div class="form-columns details-columns">
-            <label class="field">
-              <span>Color</span>
-              <input
-                type="text"
-                class="input"
-                [(ngModel)]="draft.color_name"
-                name="color_name"
-                placeholder="Ejemplo: Negro"
-              />
-            </label>
-
-            <label class="field">
-              <span>Precio costo</span>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                class="input"
-                [(ngModel)]="draft.unit_price"
-                name="unit_price"
-                placeholder="Ejemplo: 399"
-              />
-            </label>
-          </div>
-
-          <label class="field">
-            <span>Imagenes del item</span>
-            <div class="upload-actions">
-              <button
-                type="button"
-                class="camera-btn"
-                (click)="openPicker(cameraInput)"
-                [disabled]="uploadingImages() || remainingImageSlots() === 0"
-              >
-                <svg class="camera-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                  <path d="M4 7h4l2-2h4l2 2h4v12H4z"></path>
-                  <circle cx="12" cy="13" r="3"></circle>
-                </svg>
-                <span>{{ uploadingImages() ? "Subiendo..." : "Agregar imagenes" }}</span>
+          <label class="field field-full category-field">
+            <span>Categoría <em>*</em></span>
+            <div class="category-input-row">
+              <span class="input-with-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg>
+                <input type="text" class="input" [ngModel]="categoryQuery()" (ngModelChange)="onCategoryInputChange($event)" (focus)="onCategoryInputFocus()" (blur)="onCategoryInputBlur()" name="category_query" autocomplete="off" placeholder="Buscar categoría final" />
+              </span>
+              <button type="button" class="btn btn-outline explore-categories" (click)="openCategoryTree()">
+                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6h7l2 2h9v10H3z"></path></svg>
+                Explorar categorías
               </button>
             </div>
-
-            <input
-              #cameraInput
-              type="file"
-              class="visually-hidden"
-              accept="image/*"
-              multiple
-              (change)="onImageFilesSelected($event)"
-            />
-            <small>Maximo 5MB por imagen. Puedes subir hasta 8 por item ({{ remainingImageSlots() }} restantes).</small>
+            @if (categoryConfirmed()) {
+              <small class="category-confirmed">Categoría seleccionada: {{ draft.category_hint }}</small>
+            } @else {
+              <small>Selecciona una categoría sin subcategorías pendientes.</small>
+            }
+            @if (categoryDropdownOpen()) {
+              <div class="category-dropdown" role="listbox">
+                @if (filteredCategoryOptions().length === 0) {
+                  <p class="category-empty">Sin coincidencias. Prueba con más texto.</p>
+                } @else {
+                  @for (category of filteredCategoryOptions(); track category.id) {
+                    <button type="button" class="category-option" [class.category-option-parent]="hasCategoryChildren(category.id)" (mousedown)="$event.preventDefault()" (click)="selectCategory(category)">
+                      {{ category.fullPath }}
+                      @if (hasCategoryChildren(category.id)) { <small>Categoría padre</small> }
+                    </button>
+                  }
+                }
+              </div>
+            }
           </label>
 
+          <div class="form-columns field-full">
+            <label class="field">
+              <span>Proveedor</span>
+              <select class="input" [(ngModel)]="draft.supplier_id" name="supplier_id">
+                <option value="">Sin proveedor</option>
+                @for (supplier of supplierOptions(); track supplier.supplier_id) { <option [value]="supplier.supplier_id">{{ supplier.display_name }}</option> }
+              </select>
+            </label>
+            <label class="field">
+              <span>{{ editingId() ? "Existencia física" : "Existencia inicial" }} <em>*</em></span>
+              <input type="number" min="0" class="input" [(ngModel)]="draft.quantity_on_hand" name="quantity_on_hand" required />
+              @if (editingReservedQty() > 0) {
+                <small>Debe conservar al menos {{ editingReservedQty() }} pza(s) por las reservas activas.</small>
+              } @else {
+                <small>Cantidad física que tienes actualmente.</small>
+              }
+            </label>
+          </div>
+
+          <label class="field price-field">
+            <span>Precio costo</span>
+            <span class="price-input">
+              <i aria-hidden="true">$</i>
+              <input type="number" min="0" step="0.01" class="input" [(ngModel)]="draft.unit_price" name="unit_price" placeholder="0.00" />
+            </span>
+            <small>Opcional. Costo por unidad.</small>
+          </label>
+        </section>
+
+        <section class="form-section images-section" aria-labelledby="images-section-title">
+          <h3 id="images-section-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><circle cx="9" cy="10" r="2"></circle><path d="m4 18 5-5 4 4 3-3 4 4"></path></svg>
+            Imágenes del artículo
+          </h3>
+          <button type="button" class="upload-dropzone" (click)="openPicker(cameraInput)" [disabled]="uploadingImages() || remainingImageSlots() === 0">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M7 18H5a4 4 0 0 1 0-8 7 7 0 0 1 13.5-2A5 5 0 0 1 19 18h-2"></path><path d="m9 13 3-3 3 3"></path><path d="M12 10v10"></path></svg>
+            <strong>{{ uploadingImages() ? "Subiendo imágenes..." : "Selecciona imágenes desde tu dispositivo" }}</strong>
+            <small>JPG, PNG o WEBP · Máx. 5 MB por imagen · Hasta 8 imágenes ({{ remainingImageSlots() }} restantes)</small>
+          </button>
+          <input #cameraInput type="file" class="visually-hidden" accept="image/*" multiple (change)="onImageFilesSelected($event)" />
           @if (draft.image_urls.length > 0) {
             <div class="image-grid">
               @for (url of draft.image_urls; track url; let imageIndex = $index) {
                 <article class="image-card">
-                  <img [src]="url" alt="Imagen de inventario" />
-                  <button type="button" class="image-remove" (click)="removeDraftImage(imageIndex)">Quitar</button>
+                  <img [src]="url" alt="Vista previa de imagen de inventario" />
+                  <button type="button" class="image-remove" (click)="removeDraftImage(imageIndex)" [attr.aria-label]="'Quitar imagen ' + (imageIndex + 1)">×</button>
                 </article>
               }
             </div>
           }
+        </section>
 
+        <section class="form-section notes-section" aria-labelledby="notes-section-title">
+          <h3 id="notes-section-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"></rect><path d="M9 8h6"></path><path d="M9 12h6"></path><path d="M9 16h4"></path></svg>
+            Notas internas
+          </h3>
           <label class="field">
-            <span>Notas</span>
-            <textarea
-              class="input textarea"
-              [(ngModel)]="draft.notes"
-              name="notes"
-              rows="3"
-              placeholder="Motivo, condicion de la pieza, detalle de devolucion"
-            ></textarea>
+            <span class="visually-hidden">Notas internas</span>
+            <textarea class="input textarea" [(ngModel)]="draft.notes" name="notes" rows="3" placeholder="Motivo del alta, condición del producto o detalles relevantes."></textarea>
           </label>
+          <small class="private-note">Solo visible para administración.</small>
+        </section>
+
+        <details class="details-block">
+          <summary>
+            <span class="details-icon" aria-hidden="true">⚙</span>
+            <span><strong>Detalles avanzados</strong><small>SKU, variante, stock mínimo y más</small></span>
+            <span class="details-chevron" aria-hidden="true">⌄</span>
+          </summary>
+          <div class="advanced-fields">
+            <div class="form-columns">
+              <label class="field"><span>Variante o modelo</span><input type="text" class="input" [(ngModel)]="draft.variant_name" name="variant_name" placeholder="Ejemplo: Matrimonial" /></label>
+              <label class="field"><span>Talla</span><input type="text" class="input" [(ngModel)]="draft.size_label" name="size_label" placeholder="Ejemplo: Unitalla" /></label>
+            </div>
+            <div class="form-columns">
+              <label class="field"><span>SKU</span><input type="text" class="input" [(ngModel)]="draft.sku" name="sku" placeholder="Se genera si lo dejas vacío" /></label>
+              <label class="field"><span>ID del producto</span><input type="text" class="input" [(ngModel)]="draft.product_id" name="product_id" placeholder="Enlace estable con Productos" /></label>
+            </div>
+            <div class="form-columns">
+              <label class="field"><span>ID de variante</span><input type="text" class="input" [(ngModel)]="draft.variant_id" name="variant_id" /></label>
+              <label class="field"><span>Tiempo de entrega (días)</span><input type="number" min="0" class="input" [(ngModel)]="draft.supplier_lead_days" name="supplier_lead_days" /></label>
+            </div>
+            <div class="form-columns">
+              <label class="field"><span>Stock mínimo</span><input type="number" min="0" class="input" [(ngModel)]="draft.min_stock" name="min_stock" /></label>
+              <label class="field"><span>Stock máximo</span><input type="number" min="0" class="input" [(ngModel)]="draft.max_stock" name="max_stock" /></label>
+            </div>
+            <label class="field"><span>Color</span><input type="text" class="input" [(ngModel)]="draft.color_name" name="color_name" placeholder="Ejemplo: Negro" /></label>
+          </div>
         </details>
       </div>
 
       <footer class="modal-footer">
         <button type="button" class="btn btn-outline" (click)="closeFormDialog()">Cancelar</button>
         <button type="submit" class="btn btn-primary" [disabled]="saving() || uploadingImages()">
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 3h12l2 2v16H5z"></path><path d="M8 3v6h8V3"></path><path d="M8 14h8v7H8z"></path></svg>
           {{ saving() ? "Guardando..." : editingId() ? "Guardar cambios" : "Agregar a inventario" }}
         </button>
       </footer>
@@ -818,44 +775,29 @@
 }
 
 @if (categoryTreeOpen()) {
-  <div class="tree-overlay" (click)="closeCategoryTree()"></div>
-  <aside class="category-tree-sheet" role="dialog" aria-modal="true" aria-label="Selector de categoria">
+  <div class="overlay category-overlay" (click)="closeCategoryTree()"></div>
+  <aside class="category-tree-sheet" role="dialog" aria-modal="true" aria-labelledby="category-tree-title">
     <header class="sheet-header">
-      <h3>Seleccionar categoria final</h3>
-      <button type="button" class="btn btn-ghost" (click)="closeCategoryTree()">Cerrar</button>
+      <h3 id="category-tree-title">Seleccionar categoría final</h3>
+      <button type="button" class="icon-button" (click)="closeCategoryTree()" aria-label="Cerrar categorías">×</button>
     </header>
-
     <div class="sheet-path">
-      <button type="button" class="btn btn-outline" (click)="goBackCategoryTree()" [disabled]="!categoryTreeParentId()">
-        Subir nivel
-      </button>
-
+      <button type="button" class="btn btn-outline" (click)="goBackCategoryTree()" [disabled]="!categoryTreeParentId()">Subir nivel</button>
       @if (categoryTreeBreadcrumb().length === 0) {
-        <p>Raiz</p>
+        <p>Raíz</p>
       } @else {
-        <p>
-          @for (crumb of categoryTreeBreadcrumb(); track crumb.id; let isLast = $last) {
-            <span>{{ crumb.name }}</span>@if (!isLast) { <span> > </span> }
-          }
-        </p>
+        <p>@for (crumb of categoryTreeBreadcrumb(); track crumb.id; let isLast = $last) { <span>{{ crumb.name }}</span>@if (!isLast) { <span> › </span> } }</p>
       }
     </div>
-
     @if (categoryTreeRows().length === 0) {
-      <p class="empty">No hay subcategorias en este nivel.</p>
+      <p class="sheet-empty">No hay subcategorías en este nivel.</p>
     } @else {
       <div class="sheet-list">
         @for (category of categoryTreeRows(); track category.id) {
-          <article class="sheet-row">
-            <button type="button" class="sheet-main" (click)="openCategoryBranch(category)">
-              <span>{{ category.name }}</span>
-              @if (hasCategoryChildren(category.id)) {
-                <small>Abrir</small>
-              } @else {
-                <small>Seleccionar</small>
-              }
-            </button>
-          </article>
+          <button type="button" class="sheet-main" (click)="openCategoryBranch(category)">
+            <span>{{ category.name }}</span>
+            <small>{{ hasCategoryChildren(category.id) ? "Abrir" : "Seleccionar" }}</small>
+          </button>
         }
       </div>
     }
@@ -863,17 +805,14 @@
 }
 
 @if (deleteDialogItem(); as itemToDelete) {
-  <div class="tree-overlay" (click)="cancelRemove()"></div>
-  <aside class="confirm-sheet" role="dialog" aria-modal="true" aria-label="Confirmar eliminacion">
-    <h3>Eliminar item</h3>
-    <p>
-      Vas a eliminar <strong>{{ itemToDelete.title }}</strong>. Esta accion no se puede deshacer.
-    </p>
+  <div class="overlay confirm-overlay" (click)="cancelRemove()"></div>
+  <aside class="confirm-sheet" role="dialog" aria-modal="true" aria-labelledby="delete-inventory-title">
+    <span class="confirm-icon" aria-hidden="true">!</span>
+    <h3 id="delete-inventory-title">Eliminar artículo</h3>
+    <p>Vas a eliminar <strong>{{ itemToDelete.title }}</strong>. Esta acción no se puede deshacer.</p>
     <div class="confirm-actions">
       <button type="button" class="btn btn-outline" (click)="cancelRemove()">Cancelar</button>
-      <button type="button" class="btn btn-danger" (click)="confirmRemove()" [disabled]="isBusy(itemToDelete.inventory_id)">
-        {{ isBusy(itemToDelete.inventory_id) ? "Procesando..." : "Eliminar item" }}
-      </button>
+      <button type="button" class="btn btn-danger" (click)="confirmRemove()" [disabled]="isBusy(itemToDelete.inventory_id)">{{ isBusy(itemToDelete.inventory_id) ? "Procesando..." : "Eliminar artículo" }}</button>
     </div>
   </aside>
 }

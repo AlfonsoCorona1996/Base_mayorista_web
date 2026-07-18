@@ -19,6 +19,7 @@ import { STORAGE } from "../../core/firebase.providers";
 import { calculateOrderFinancials, netItemQty } from "../../core/order-financials";
 import { CustomerFollowupsService } from "../../core/customer-followups.service";
 import { Shipment, ShipmentBusinessSummary, ShipmentItem, ShipmentsService } from "../../core/shipments.service";
+import { AuthzService } from "../../core/authz.service";
 
 type IntentFilter =
   | "hoy"
@@ -52,7 +53,7 @@ type TableRangePreset = "today" | "last7" | "last30";
 type TableSortColumn = "updated_at" | "created_at" | "status" | "customer" | "route" | "items" | "total";
 type TableMenuColumn = "route" | "status";
 type TableMenuOption = { value: string; label: string; count: number };
-type TableBulkAction = "create_bitacora" | "create_nota" | "create_embarque" | "mark_pagado" | "mark_recibido" | "mark_listo_ruta";
+type TableBulkAction = "create_bitacora" | "create_nota" | "create_embarque" | "mark_pagado" | "mark_entregado" | "mark_recibido" | "mark_listo_ruta";
 type TableStatusPill = { label: string; className: string };
 type BitacoraConfig = {
   includeProductCount: boolean;
@@ -90,6 +91,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   private salesNoteRender = inject(SalesNoteRenderService);
   private followups = inject(CustomerFollowupsService);
   private shipments = inject(ShipmentsService);
+  private authz = inject(AuthzService);
   businessScope = inject(BusinessScopeService);
   private router = inject(Router);
   private activatedRoute = inject(ActivatedRoute);
@@ -157,6 +159,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   tableBulkProgressTotal = signal(0);
   tableBulkResultVisible = signal(false);
   tableBulkResultText = signal("");
+  bulkDeliveryConfirmOpen = signal(false);
   bitacoraConfigOpen = signal(false);
   bitacoraIncludeProductCount = signal(true);
   bitacoraIncludeProductDetail = signal(false);
@@ -428,6 +431,10 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     this.tableSelectedRows().filter((order) => order.status === "ready_for_route")
   );
 
+  tableMarkDeliveredEligibleRows = computed(() =>
+    this.tableSelectedRows().filter((order) => this.canMarkDeliveredFromBulk(order))
+  );
+
   tableMarkReceivedEligibleRows = computed(() =>
     this.tableSelectedRows().filter((order) => this.canMarkAsReceivedFromBulk(order.status))
   );
@@ -555,6 +562,10 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
 
   @HostListener("document:keydown.escape")
   onTableMenuEscape(): void {
+    if (this.bulkDeliveryConfirmOpen()) {
+      this.closeBulkDeliveryConfirm();
+      return;
+    }
     if (this.bulkShipmentOpen()) {
       this.closeBulkShipmentConfig();
       return;
@@ -880,13 +891,16 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     if (action === "mark_pagado") {
       return this.tableMarkPaidEligibleRows().length > 0;
     }
+    if (action === "mark_entregado") {
+      return this.tableMarkDeliveredEligibleRows().length > 0;
+    }
     if (action === "mark_listo_ruta") {
       return this.tableMarkReadyForRouteEligibleRows().length > 0;
     }
     return this.tableMarkReceivedEligibleRows().length > 0;
   }
 
-  async applyTableBulkAction(action: TableBulkAction, event?: Event): Promise<void> {
+  async applyTableBulkAction(action: TableBulkAction, event?: Event, deliveryConfirmed = false): Promise<void> {
     event?.stopPropagation();
     if (!this.canApplyTableBulkAction(action)) return;
     if (action === "create_bitacora") {
@@ -895,6 +909,10 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     }
     if (action === "create_embarque") {
       this.openBulkShipmentConfig(event);
+      return;
+    }
+    if (action === "mark_entregado" && !deliveryConfirmed) {
+      this.openBulkDeliveryConfirm(event);
       return;
     }
 
@@ -952,6 +970,19 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
           }
         }
         await this.downloadSalesNotesBundle(generatedNoteFiles, "notas-tabla");
+      } else if (action === "mark_entregado") {
+        for (const order of selectedRows) {
+          if (!this.canMarkDeliveredFromBulk(order)) {
+            skipped += 1;
+            continue;
+          }
+          try {
+            await this.orders.markOrderDelivered(order.order_id);
+            updated += 1;
+          } catch {
+            failed += 1;
+          }
+        }
       } else if (action === "mark_pagado") {
         for (const order of selectedRows) {
           if (order.status !== "ready_for_route") {
@@ -1150,6 +1181,12 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     return ["borrador", "en_transito", "inbound_in_transit"].includes(status);
   }
 
+  private canMarkDeliveredFromBulk(order: Order): boolean {
+    if (!this.authz.canCap("cap.delivery.mark_delivered")) return false;
+    if (order.delivery_status === "delivered" || order.custody_status === "customer") return false;
+    return ["ready_for_route", "assigned_to_run", "in_transit", "en_ruta"].includes(order.status);
+  }
+
   private canMarkAsReadyForRouteFromBulk(order: Order): boolean {
     return this.isBulkDispatchStage(order.status) && this.canFinishPackingFromBulk(order);
   }
@@ -1235,6 +1272,8 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
         return "Crear embarque";
       case "mark_pagado":
         return "Marcar como pagados";
+      case "mark_entregado":
+        return "Marcar como entregados";
       case "mark_recibido":
         return "Marcar como recibidos";
       case "mark_listo_ruta":
@@ -1316,6 +1355,26 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
       assigned_to_run: "trow-status--ready",
     };
     return map[status] ?? "trow-status--default";
+  }
+
+  openBulkDeliveryConfirm(event?: Event): void {
+    event?.stopPropagation();
+    this.tableBulkMenuOpen.set(false);
+    this.tableBulkMenuPosition.set(null);
+    this.bulkDeliveryConfirmOpen.set(true);
+  }
+
+  closeBulkDeliveryConfirm(event?: Event): void {
+    event?.stopPropagation();
+    if (this.tableBulkActionLoading()) return;
+    this.bulkDeliveryConfirmOpen.set(false);
+  }
+
+  async confirmBulkDelivery(event?: Event): Promise<void> {
+    event?.stopPropagation();
+    if (this.tableBulkActionLoading() || this.tableMarkDeliveredEligibleRows().length === 0) return;
+    this.bulkDeliveryConfirmOpen.set(false);
+    await this.applyTableBulkAction("mark_entregado", undefined, true);
   }
 
   tableOrderStatusPills(order: Order): TableStatusPill[] {
