@@ -19,6 +19,7 @@ import { BusinessId } from "../../core/rbac.constants";
 type StockFilter = "all" | "available" | "reserved" | "low" | "sold_out" | "without_price";
 type SortFilter = "updated_desc" | "name_asc" | "stock_low" | "stock_high" | "price_low" | "price_high";
 type ReservationEntry = { orderId: string; qty: number; orderNumber: string; status: string };
+type ShareImageStatus = "loading" | "ready" | "unavailable";
 
 interface InventorySourceCandidate {
   id: string;
@@ -80,6 +81,11 @@ export default class InventarioPage {
   editingId = signal<string | null>(null);
   formDialogOpen = signal(false);
   deleteDialogItem = signal<InventoryItem | null>(null);
+  openActionsMenuId = signal<string | null>(null);
+  actionsMenuOpensUp = signal(false);
+  actionsMenuMaxHeight = signal(420);
+  shareImageStatusById = signal<Record<string, ShareImageStatus>>({});
+  sharingItemId = signal<string | null>(null);
   imageViewerOpen = signal(false);
   imageViewerUrls = signal<string[]>([]);
   imageViewerIndex = signal(0);
@@ -112,6 +118,8 @@ export default class InventarioPage {
   selectedProductSource = signal<InventorySourceCandidate | null>(null);
   private catalogSourceDocs = signal<NormalizedListingDoc[]>([]);
   private productSourcesScope: BusinessId | null = null;
+  private actionMenuPositionFrame: number | null = null;
+  private shareImageFiles = new Map<string, File>();
 
   draft: InventoryDraft = this.emptyDraft();
 
@@ -367,6 +375,8 @@ export default class InventarioPage {
   async reload() {
     this.loading.set(true);
     this.error.set(null);
+    this.shareImageFiles.clear();
+    this.shareImageStatusById.set({});
 
     try {
       await Promise.all([
@@ -427,6 +437,7 @@ export default class InventarioPage {
   }
 
   startCreate() {
+    this.closeActionsMenu();
     this.editingId.set(null);
     this.draft = this.emptyDraft();
     this.categoryQuery.set("");
@@ -442,6 +453,8 @@ export default class InventarioPage {
   }
 
   startEdit(item: InventoryItem) {
+    this.closeActionsMenu();
+    this.clearPreparedShareImage(item.inventory_id);
     this.editingId.set(item.inventory_id);
     this.draft = {
       inventory_id: item.inventory_id,
@@ -822,7 +835,189 @@ export default class InventarioPage {
   }
 
   askRemove(item: InventoryItem) {
+    this.closeActionsMenu();
     this.deleteDialogItem.set(item);
+  }
+
+  toggleActionsMenu(itemId: string, event: MouseEvent): void {
+    event.preventDefault();
+    if (this.openActionsMenuId() === itemId) {
+      this.closeActionsMenu();
+      return;
+    }
+
+    this.closeActionsMenu();
+    this.openActionsMenuId.set(itemId);
+    void this.prepareShareImage(itemId);
+
+    const summary = event.currentTarget;
+    if (!(summary instanceof HTMLElement)) return;
+    this.actionMenuPositionFrame = requestAnimationFrame(() => {
+      this.actionMenuPositionFrame = null;
+      this.updateActionsMenuDirection(itemId, summary);
+    });
+  }
+
+  closeActionsMenu(): void {
+    if (this.actionMenuPositionFrame !== null) {
+      cancelAnimationFrame(this.actionMenuPositionFrame);
+      this.actionMenuPositionFrame = null;
+    }
+    this.openActionsMenuId.set(null);
+    this.actionsMenuOpensUp.set(false);
+    this.actionsMenuMaxHeight.set(420);
+  }
+
+  private updateActionsMenuDirection(itemId: string, summary: HTMLElement): void {
+    if (this.openActionsMenuId() !== itemId) return;
+    const menu = summary.closest(".item-actions-menu");
+    const popover = menu?.querySelector<HTMLElement>(".item-actions-popover");
+    if (!popover) return;
+
+    const summaryRect = summary.getBoundingClientRect();
+    const measuredHeight = popover.getBoundingClientRect().height || popover.scrollHeight || 260;
+    const viewportHeight = window.visualViewport?.height || window.innerHeight;
+    const safetyGap = 12;
+    const spaceBelow = Math.max(0, viewportHeight - summaryRect.bottom - safetyGap);
+    const spaceAbove = Math.max(0, summaryRect.top - safetyGap);
+
+    const opensUp = measuredHeight > spaceBelow && spaceAbove >= 160;
+    const availableHeight = opensUp ? spaceAbove : spaceBelow;
+    this.actionsMenuOpensUp.set(opensUp);
+    this.actionsMenuMaxHeight.set(Math.max(120, Math.min(420, Math.floor(availableHeight))));
+  }
+
+  async shareInventoryItem(item: InventoryItem): Promise<void> {
+    if (this.sharingItemId()) return;
+
+    this.closeActionsMenu();
+    this.sharingItemId.set(item.inventory_id);
+    this.error.set(null);
+    this.success.set(null);
+
+    const text = this.inventoryShareText(item);
+    const imageUrl = this.primaryImage(item);
+    const fallbackText = imageUrl ? `${text}\n\nFoto: ${imageUrl}` : text;
+
+    try {
+      if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+        const shareData: ShareData = { title: item.title, text };
+        const imageFile = this.shareImageFiles.get(item.inventory_id);
+        if (
+          imageFile &&
+          typeof navigator.canShare === "function" &&
+          navigator.canShare({ files: [imageFile] })
+        ) {
+          shareData.files = [imageFile];
+        } else if (imageUrl) {
+          shareData.text = fallbackText;
+        }
+
+        await navigator.share(shareData);
+        this.success.set("Artículo compartido");
+        return;
+      }
+
+      this.openWhatsAppShare(fallbackText);
+      this.success.set("Se abrió WhatsApp para compartir el artículo");
+    } catch (error: unknown) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      this.openWhatsAppShare(fallbackText);
+      this.success.set("Se abrió WhatsApp como alternativa para compartir");
+    } finally {
+      this.sharingItemId.set(null);
+    }
+  }
+
+  private async prepareShareImage(itemId: string): Promise<void> {
+    const currentStatus = this.shareImageStatusById()[itemId];
+    if (currentStatus === "loading" || currentStatus === "ready" || currentStatus === "unavailable") return;
+
+    const item = this.rows().find((row) => row.inventory_id === itemId);
+    const imageUrl = item ? this.primaryImage(item) : null;
+    const supportsFileSharing =
+      typeof navigator !== "undefined" &&
+      typeof navigator.share === "function" &&
+      typeof navigator.canShare === "function";
+    if (!item || !imageUrl || !supportsFileSharing) {
+      this.setShareImageStatus(itemId, "unavailable");
+      return;
+    }
+
+    this.setShareImageStatus(itemId, "loading");
+    try {
+      const response = await fetch(imageUrl, { mode: "cors" });
+      if (!response.ok) throw new Error(`No se pudo descargar la imagen (${response.status})`);
+      const blob = await response.blob();
+      if (!blob.type.startsWith("image/")) throw new Error("El archivo recibido no es una imagen");
+
+      const extension = this.shareImageExtension(blob.type);
+      const safeTitle = item.title
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 60) || "articulo";
+      const file = new File([blob], `${safeTitle}.${extension}`, {
+        type: blob.type,
+        lastModified: Date.now(),
+      });
+
+      if (!navigator.canShare({ files: [file] })) {
+        this.setShareImageStatus(itemId, "unavailable");
+        return;
+      }
+
+      this.shareImageFiles.set(itemId, file);
+      this.setShareImageStatus(itemId, "ready");
+    } catch {
+      this.setShareImageStatus(itemId, "unavailable");
+    }
+  }
+
+  private inventoryShareText(item: InventoryItem): string {
+    const color = String(item.color_name || "").trim() || "Sin especificar";
+    const sizeValues = [item.variant_name, item.size_label]
+      .map((value) => String(value || "").trim())
+      .filter(Boolean);
+    const uniqueSizes = sizeValues.filter((value, index) =>
+      sizeValues.findIndex((candidate) => candidate.toLowerCase() === value.toLowerCase()) === index
+    );
+    const size = uniqueSizes.join(" · ") || "Sin especificar";
+
+    return [
+      item.title,
+      `Color: ${color}`,
+      `Talla / variante: ${size}`,
+      `Piezas disponibles: ${this.formatCount(this.availableQty(item))}`,
+    ].join("\n");
+  }
+
+  private openWhatsAppShare(text: string): void {
+    const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    const popup = window.open(url, "_blank", "noopener,noreferrer");
+    if (!popup) window.location.assign(url);
+  }
+
+  private shareImageExtension(mimeType: string): string {
+    if (mimeType.includes("png")) return "png";
+    if (mimeType.includes("webp")) return "webp";
+    if (mimeType.includes("gif")) return "gif";
+    return "jpg";
+  }
+
+  private setShareImageStatus(itemId: string, status: ShareImageStatus): void {
+    this.shareImageStatusById.update((current) => ({ ...current, [itemId]: status }));
+  }
+
+  private clearPreparedShareImage(itemId: string): void {
+    this.shareImageFiles.delete(itemId);
+    this.shareImageStatusById.update((current) => {
+      const next = { ...current };
+      delete next[itemId];
+      return next;
+    });
   }
 
   cancelRemove() {
@@ -1085,6 +1280,11 @@ export default class InventarioPage {
     return uniqueAttributes.length > 0 ? uniqueAttributes.join(" · ") : null;
   }
 
+  tableNote(item: InventoryItem): string | null {
+    const note = String(item.notes || "").trim();
+    return note && !/^[\-–—]+$/.test(note) ? note : null;
+  }
+
   canDecreaseStock(item: InventoryItem): boolean {
     return this.onHandQty(item) > this.reservedQty(item);
   }
@@ -1201,6 +1401,10 @@ export default class InventarioPage {
 
   @HostListener("document:keydown.escape")
   onEscapePressed() {
+    if (this.openActionsMenuId()) {
+      this.closeActionsMenu();
+      return;
+    }
     if (this.imageViewerOpen()) {
       this.closeImageViewer();
       return;
@@ -1216,6 +1420,14 @@ export default class InventarioPage {
     if (this.formDialogOpen()) {
       this.closeFormDialog();
     }
+  }
+
+  @HostListener("document:click", ["$event"])
+  onDocumentClick(event: MouseEvent): void {
+    if (!this.openActionsMenuId()) return;
+    const target = event.target;
+    if (target instanceof Element && target.closest(".item-actions-menu")) return;
+    this.closeActionsMenu();
   }
 
   @HostListener("document:keydown.arrowleft")

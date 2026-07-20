@@ -52,12 +52,14 @@ export default class CatalogPage {
   rows = signal<NormalizedListingDocV3[]>([]);
   loading = signal(false);
   loadingMore = signal(false);
+  searchingAll = signal(false);
   catalogLoadedOnce = signal(false);
   error = signal<string | null>(null);
   hasMore = signal(true);
   busyById = signal<Record<string, boolean>>({});
 
   private cursor: QueryDocumentSnapshot<DocumentData> | null | undefined;
+  private searchLoadFailedTerm = "";
 
   private svc       = inject(NormalizedListingsService);
   private suppliers = inject(SuppliersService);
@@ -120,6 +122,19 @@ export default class CatalogPage {
       const active = this.activeTab();
       if (active === "catalog" && !this.catalogLoadedOnce() && !this.loading()) {
         this.reload();
+      }
+      const currentSearch = this.searchTerm().trim().toLowerCase();
+      const shouldCompleteSearch =
+        active === "catalog" &&
+        currentSearch.length > 0 &&
+        currentSearch !== this.searchLoadFailedTerm &&
+        this.catalogLoadedOnce() &&
+        this.hasMore() &&
+        !this.loading() &&
+        !this.loadingMore() &&
+        !this.searchingAll();
+      if (shouldCompleteSearch) {
+        void this.loadRemainingForSearch();
       }
       if (active === "manuales_bm" || active === "manuales_catalogo") {
         this.manualSvc.load(this.manualBusinessForActiveTab()).catch(() => null);
@@ -225,9 +240,11 @@ export default class CatalogPage {
   );
 
   async reload() {
+    if (this.searchingAll()) return;
     this.error.set(null);
     this.loading.set(true);
     this.cursor = undefined;
+    this.searchLoadFailedTerm = "";
     this.hasMore.set(true);
 
     try {
@@ -253,6 +270,7 @@ export default class CatalogPage {
   }
 
   async loadMore() {
+    if (this.loadingMore() || this.searchingAll()) return;
     if (!this.cursor) {
       this.hasMore.set(false);
       return;
@@ -268,6 +286,7 @@ export default class CatalogPage {
       this.rows.set([...this.rows(), ...v3Docs]);
       this.cursor = nextCursor;
       this.hasMore.set(Boolean(nextCursor));
+      this.searchLoadFailedTerm = "";
 
       if (skipped > 0) {
         this.error.set(
@@ -278,6 +297,49 @@ export default class CatalogPage {
       this.error.set(e?.message || "Error cargando mas");
     } finally {
       this.loadingMore.set(false);
+    }
+  }
+
+  private async loadRemainingForSearch(): Promise<void> {
+    if (this.searchingAll() || this.loading() || this.loadingMore() || !this.cursor) return;
+
+    this.searchingAll.set(true);
+    this.error.set(null);
+    let skipped = 0;
+
+    try {
+      while (
+        this.cursor &&
+        this.searchTerm().trim().length > 0 &&
+        this.activeTab() === "catalog"
+      ) {
+        const currentCursor = this.cursor;
+        const { docs, nextCursor } = await this.svc.listValidated(100, currentCursor);
+        const v3Docs = docs.filter((doc) => this.isRequiredSchema(doc));
+        skipped += docs.length - v3Docs.length;
+
+        const existingIds = new Set(this.rows().map((doc) => doc.normalized_id));
+        const newDocs = v3Docs.filter((doc) => !existingIds.has(doc.normalized_id));
+        if (newDocs.length > 0) {
+          this.rows.update((rows) => [...rows, ...newDocs]);
+        }
+
+        this.cursor = nextCursor;
+        this.hasMore.set(Boolean(nextCursor));
+      }
+
+      if (skipped > 0) {
+        this.error.set(
+          `Se omitieron ${skipped} registro(s) con esquema incompatible. Solo se admite ${this.requiredSchemaVersion}.`
+        );
+      }
+    } catch (error: unknown) {
+      this.searchLoadFailedTerm = this.searchTerm().trim().toLowerCase();
+      this.error.set(error instanceof Error && error.message
+        ? error.message
+        : "No se pudo completar la búsqueda en todo el catálogo");
+    } finally {
+      this.searchingAll.set(false);
     }
   }
 

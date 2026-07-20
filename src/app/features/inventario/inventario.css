@@ -823,6 +823,7 @@ a {
 
 .item-actions-popover {
   width: min(276px, calc(100vw - 48px));
+  max-height: min(var(--actions-menu-max-height, 420px), calc(100dvh - 24px));
   border: 1px solid var(--inventory-border);
   border-radius: var(--ui-radius-md);
   padding: var(--ui-space-8);
@@ -834,6 +835,13 @@ a {
   color: var(--inventory-navy);
   background: #fff;
   box-shadow: 0 16px 36px rgba(17, 36, 66, 0.18);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.item-actions-menu.menu-opens-up .item-actions-popover {
+  top: auto;
+  bottom: calc(100% + 6px);
 }
 
 .item-actions-popover > strong {
@@ -864,6 +872,12 @@ a {
 .item-actions-popover > button:hover,
 .item-actions-popover > a:hover {
   background: #f3f7fc;
+}
+
+.item-actions-popover > button:disabled {
+  color: #8b99ac;
+  background: #f7f9fc;
+  cursor: wait;
 }
 
 .item-actions-popover > .danger-action {
@@ -1558,6 +1572,37 @@ a {
   gap: var(--ui-space-16);
 }
 
+.presentation-fields {
+  min-width: 0;
+  margin: 0;
+  border: 1px solid #d9e5f5;
+  border-radius: var(--ui-radius-md);
+  padding: var(--ui-space-12);
+  display: grid;
+  gap: var(--ui-space-12);
+  background: #f8fbff;
+}
+
+.presentation-fields legend {
+  padding: 0 var(--ui-space-4);
+  color: var(--inventory-navy);
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.presentation-fields > p {
+  margin: 0;
+  color: var(--inventory-muted);
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.presentation-source-hint {
+  color: #315f9d;
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
 .category-field {
   position: relative;
   z-index: 3;
@@ -2211,6 +2256,10 @@ a {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .presentation-fields {
+    padding: var(--ui-space-16);
+  }
+
   .price-field {
     max-width: 100%;
   }
@@ -2346,11 +2395,16 @@ a {
   .inventory-table tr.business-bm td:first-child { box-shadow: inset 3px 0 #2563eb; }
   .inventory-table tr.business-catalogo td:first-child { box-shadow: inset 3px 0 #10b981; }
 
+  .product-table-cell,
+  .category-attributes-cell {
+    vertical-align: top;
+  }
+
   .product-cell {
     min-width: 0;
     display: grid;
     grid-template-columns: 46px minmax(0, 1fr);
-    align-items: center;
+    align-items: start;
     gap: var(--ui-space-12);
   }
 
@@ -2395,7 +2449,6 @@ a {
     margin: 4px 0 0;
   }
 
-  .category-attributes-cell,
   .category-copy,
   .attribute-copy,
   .cell-secondary,

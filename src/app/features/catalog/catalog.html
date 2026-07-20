@@ -18,9 +18,9 @@
     </div>
 
     @if (activeTab() === 'catalog') {
-      <button type="button" class="btn btn-ghost" (click)="reload()" [disabled]="loading()">
+      <button type="button" class="btn btn-ghost" (click)="reload()" [disabled]="loading() || searchingAll()">
         <span class="material-symbols-rounded" aria-hidden="true">refresh</span>
-        {{ loading() ? "Actualizando..." : "Actualizar" }}
+        {{ loading() ? "Actualizando..." : searchingAll() ? "Buscando..." : "Actualizar" }}
       </button>
     } @else if (activeTab() === 'manuales_bm' || activeTab() === 'manuales_catalogo') {
       <button type="button" class="btn btn-ghost" (click)="manualSvc.load(manualBusinessForActiveTab())">
@@ -142,13 +142,22 @@
         </button>
       </div>
 
-      <p class="results-info">
+      <p class="results-info" role="status" aria-live="polite">
         <span class="material-symbols-rounded" aria-hidden="true">list_alt</span>
-        Mostrando {{ filteredRows().length }} de {{ rows().length }} producto{{ rows().length !== 1 ? 's' : '' }}
+        @if (searchingAll()) {
+          Buscando en todo el catálogo… {{ rows().length }} productos revisados
+        } @else {
+          Mostrando {{ filteredRows().length }} de {{ rows().length }} producto{{ rows().length !== 1 ? 's' : '' }}
+        }
       </p>
     </section>
 
-    @if (filteredRows().length === 0) {
+    @if (filteredRows().length === 0 && searchingAll()) {
+      <section class="loading-state surface-card" aria-live="polite">
+        <div class="spinner" aria-hidden="true"></div>
+        <p>Buscando coincidencias en todo el catálogo...</p>
+      </section>
+    } @else if (filteredRows().length === 0) {
       <section class="empty-state surface-card">
         <span class="material-symbols-rounded empty-icon" aria-hidden="true">inventory_2</span>
         <h2>No hay productos para mostrar</h2>
@@ -236,9 +245,9 @@
 
       @if (hasMore()) {
         <div class="more-wrapper">
-          <button class="btn btn-ghost" (click)="loadMore()" [disabled]="loadingMore()">
+          <button class="btn btn-ghost" (click)="loadMore()" [disabled]="loadingMore() || searchingAll()">
             <span class="material-symbols-rounded" aria-hidden="true">expand_more</span>
-            {{ loadingMore() ? "Cargando..." : "Cargar mas" }}
+            {{ searchingAll() ? "Buscando..." : loadingMore() ? "Cargando..." : "Cargar mas" }}
           </button>
         </div>
       }

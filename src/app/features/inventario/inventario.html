@@ -283,7 +283,7 @@
             <tbody>
               @for (item of filteredRows(); track item.inventory_id) {
                 <tr [ngClass]="businessScope.isBothMode() ? itemBusinessClass(item) : ''">
-                  <td>
+                  <td class="product-table-cell">
                     <div class="product-cell">
                       @if (primaryImage(item); as imageUrl) {
                         <button type="button" class="product-thumb" (click)="openImageViewer(item, 0)" [attr.aria-label]="'Abrir imagen de ' + item.title">
@@ -307,7 +307,7 @@
                   <td class="category-attributes-cell">
                     <span class="category-copy">{{ tableCategoryPath(item) }}</span>
                     @if (tableAttributeDescriptor(item); as descriptor) { <small class="attribute-copy">{{ descriptor }}</small> }
-                    @if (item.notes) { <small class="cell-note" [title]="item.notes">{{ item.notes }}</small> }
+                    @if (tableNote(item); as note) { <small class="cell-note" [title]="note">{{ note }}</small> }
                   </td>
                   <td class="stock-cell">
                     <div class="stock-metrics" [attr.aria-label]="'Existencias de ' + item.title">
@@ -351,8 +351,17 @@
                   <td>
                     <div class="table-actions">
                       <a [routerLink]="['/main/inventario', item.inventory_id]">Ver detalle</a>
-                      <details class="item-actions-menu">
-                        <summary [attr.aria-label]="'Acciones de ' + item.title"><span aria-hidden="true">⋮</span></summary>
+                      <details
+                        class="item-actions-menu"
+                        [open]="openActionsMenuId() === item.inventory_id"
+                        [class.menu-opens-up]="openActionsMenuId() === item.inventory_id && actionsMenuOpensUp()"
+                        [style.--actions-menu-max-height]="actionsMenuMaxHeight() + 'px'"
+                      >
+                        <summary
+                          [attr.aria-label]="'Acciones de ' + item.title"
+                          [attr.aria-expanded]="openActionsMenuId() === item.inventory_id"
+                          (click)="toggleActionsMenu(item.inventory_id, $event)"
+                        ><span aria-hidden="true">⋮</span></summary>
                         <div class="item-actions-popover">
                           <strong>Ajustar existencia</strong>
                           <div class="qty-control">
@@ -360,8 +369,15 @@
                             <span class="qty-value">{{ onHandQty(item) }}</span>
                             <button type="button" class="qty-btn" (click)="adjustQty(item, 1)" [disabled]="isBusy(item.inventory_id)" [attr.aria-label]="'Aumentar cantidad de ' + item.title">+</button>
                           </div>
+                          <button
+                            type="button"
+                            (click)="shareInventoryItem(item)"
+                            [disabled]="shareImageStatusById()[item.inventory_id] === 'loading' || sharingItemId() === item.inventory_id"
+                          >
+                            {{ shareImageStatusById()[item.inventory_id] === 'loading' ? "Preparando imagen..." : sharingItemId() === item.inventory_id ? "Abriendo opciones..." : "Compartir artículo" }}
+                          </button>
                           <button type="button" (click)="startEdit(item)">Editar artículo</button>
-                          <a [routerLink]="['/main/inventario', item.inventory_id]">Movimientos y detalle</a>
+                          <a [routerLink]="['/main/inventario', item.inventory_id]" (click)="closeActionsMenu()">Movimientos y detalle</a>
                           <button type="button" class="danger-action" (click)="askRemove(item)" [disabled]="isBusy(item.inventory_id)">Eliminar artículo</button>
                         </div>
                       </details>
@@ -397,8 +413,17 @@
                   }
                 </div>
 
-                <details class="item-actions-menu mobile-actions-menu">
-                  <summary [attr.aria-label]="'Acciones de ' + item.title"><span aria-hidden="true">⋮</span></summary>
+                <details
+                  class="item-actions-menu mobile-actions-menu"
+                  [open]="openActionsMenuId() === item.inventory_id"
+                  [class.menu-opens-up]="openActionsMenuId() === item.inventory_id && actionsMenuOpensUp()"
+                  [style.--actions-menu-max-height]="actionsMenuMaxHeight() + 'px'"
+                >
+                  <summary
+                    [attr.aria-label]="'Acciones de ' + item.title"
+                    [attr.aria-expanded]="openActionsMenuId() === item.inventory_id"
+                    (click)="toggleActionsMenu(item.inventory_id, $event)"
+                  ><span aria-hidden="true">⋮</span></summary>
                   <div class="item-actions-popover">
                     <strong>Ajustar existencia</strong>
                     <div class="qty-control">
@@ -406,8 +431,15 @@
                       <span class="qty-value">{{ onHandQty(item) }}</span>
                       <button type="button" class="qty-btn" (click)="adjustQty(item, 1)" [disabled]="isBusy(item.inventory_id)" [attr.aria-label]="'Aumentar cantidad de ' + item.title">+</button>
                     </div>
+                    <button
+                      type="button"
+                      (click)="shareInventoryItem(item)"
+                      [disabled]="shareImageStatusById()[item.inventory_id] === 'loading' || sharingItemId() === item.inventory_id"
+                    >
+                      {{ shareImageStatusById()[item.inventory_id] === 'loading' ? "Preparando imagen..." : sharingItemId() === item.inventory_id ? "Abriendo opciones..." : "Compartir artículo" }}
+                    </button>
                     <button type="button" (click)="startEdit(item)">Editar artículo</button>
-                    <a [routerLink]="['/main/inventario', item.inventory_id]">Movimientos y detalle</a>
+                    <a [routerLink]="['/main/inventario', item.inventory_id]" (click)="closeActionsMenu()">Movimientos y detalle</a>
                     <button type="button" class="danger-action" (click)="askRemove(item)" [disabled]="isBusy(item.inventory_id)">Eliminar artículo</button>
                   </div>
                 </details>
@@ -685,6 +717,24 @@
             }
           </label>
 
+          <fieldset class="presentation-fields field-full">
+            <legend>Presentación del artículo</legend>
+            <p>Confirma o ajusta la talla / variante y el color antes de guardar.</p>
+            <div class="form-columns">
+              <label class="field">
+                <span>Talla / variante</span>
+                <input type="text" class="input" [(ngModel)]="draft.variant_name" name="variant_name" placeholder="Ejemplo: 22, Unitalla o Matrimonial" />
+              </label>
+              <label class="field">
+                <span>Color</span>
+                <input type="text" class="input" [(ngModel)]="draft.color_name" name="color_name" placeholder="Ejemplo: Negro" />
+              </label>
+            </div>
+            @if (selectedProductSource()) {
+              <small class="presentation-source-hint">Estos valores se precargaron del producto seleccionado y puedes modificarlos.</small>
+            }
+          </fieldset>
+
           <div class="form-columns field-full">
             <label class="field">
               <span>Proveedor</span>
@@ -752,14 +802,10 @@
         <details class="details-block">
           <summary>
             <span class="details-icon" aria-hidden="true">⚙</span>
-            <span><strong>Detalles avanzados</strong><small>SKU, variante, stock mínimo y más</small></span>
+            <span><strong>Detalles avanzados</strong><small>SKU, stock mínimo y más</small></span>
             <span class="details-chevron" aria-hidden="true">⌄</span>
           </summary>
           <div class="advanced-fields">
-            <div class="form-columns">
-              <label class="field"><span>Variante o modelo</span><input type="text" class="input" [(ngModel)]="draft.variant_name" name="variant_name" placeholder="Ejemplo: Matrimonial" /></label>
-              <label class="field"><span>Talla</span><input type="text" class="input" [(ngModel)]="draft.size_label" name="size_label" placeholder="Ejemplo: Unitalla" /></label>
-            </div>
             <div class="form-columns">
               <label class="field"><span>SKU</span><input type="text" class="input" [(ngModel)]="draft.sku" name="sku" placeholder="Se genera si lo dejas vacío" /></label>
               <label class="field"><span>ID del producto</span><input type="text" class="input" [(ngModel)]="draft.product_id" name="product_id" placeholder="Enlace estable con Productos" /></label>
@@ -772,7 +818,9 @@
               <label class="field"><span>Stock mínimo</span><input type="number" min="0" class="input" [(ngModel)]="draft.min_stock" name="min_stock" /></label>
               <label class="field"><span>Stock máximo</span><input type="number" min="0" class="input" [(ngModel)]="draft.max_stock" name="max_stock" /></label>
             </div>
-            <label class="field"><span>Color</span><input type="text" class="input" [(ngModel)]="draft.color_name" name="color_name" placeholder="Ejemplo: Negro" /></label>
+            @if (editingId()) {
+              <label class="field"><span>Talla heredada (compatibilidad)</span><input type="text" class="input" [(ngModel)]="draft.size_label" name="size_label" placeholder="Dato opcional de artículos antiguos" /></label>
+            }
           </div>
         </details>
       </div>
