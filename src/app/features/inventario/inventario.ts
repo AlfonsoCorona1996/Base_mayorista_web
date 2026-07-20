@@ -891,39 +891,40 @@ export default class InventarioPage {
     if (this.sharingItemId()) return;
 
     this.closeActionsMenu();
-    this.sharingItemId.set(item.inventory_id);
     this.error.set(null);
     this.success.set(null);
 
     const text = this.inventoryShareText(item);
     const imageUrl = this.primaryImage(item);
-    const fallbackText = imageUrl ? `${text}\n\nFoto: ${imageUrl}` : text;
+    const imageFile = this.shareImageFiles.get(item.inventory_id);
 
+    if (!imageUrl) {
+      this.error.set("Este artículo no tiene una foto para compartir.");
+      return;
+    }
+
+    if (
+      !imageFile ||
+      typeof navigator === "undefined" ||
+      typeof navigator.share !== "function" ||
+      typeof navigator.canShare !== "function" ||
+      !navigator.canShare({ files: [imageFile] })
+    ) {
+      this.error.set("No se pudo preparar la foto para compartir. Inténtalo desde Chrome o Safari actualizado en tu celular.");
+      return;
+    }
+
+    this.sharingItemId.set(item.inventory_id);
     try {
-      if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
-        const shareData: ShareData = { title: item.title, text };
-        const imageFile = this.shareImageFiles.get(item.inventory_id);
-        if (
-          imageFile &&
-          typeof navigator.canShare === "function" &&
-          navigator.canShare({ files: [imageFile] })
-        ) {
-          shareData.files = [imageFile];
-        } else if (imageUrl) {
-          shareData.text = fallbackText;
-        }
-
-        await navigator.share(shareData);
-        this.success.set("Artículo compartido");
-        return;
-      }
-
-      this.openWhatsAppShare(fallbackText);
-      this.success.set("Se abrió WhatsApp para compartir el artículo");
+      await navigator.share({
+        title: item.title,
+        text,
+        files: [imageFile],
+      });
+      this.success.set("Artículo compartido con foto y datos");
     } catch (error: unknown) {
       if (error instanceof DOMException && error.name === "AbortError") return;
-      this.openWhatsAppShare(fallbackText);
-      this.success.set("Se abrió WhatsApp como alternativa para compartir");
+      this.error.set("No se pudo compartir la foto. Vuelve a intentarlo desde tu celular.");
     } finally {
       this.sharingItemId.set(null);
     }
@@ -992,12 +993,6 @@ export default class InventarioPage {
       `Talla / variante: ${size}`,
       `Piezas disponibles: ${this.formatCount(this.availableQty(item))}`,
     ].join("\n");
-  }
-
-  private openWhatsAppShare(text: string): void {
-    const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
-    const popup = window.open(url, "_blank", "noopener,noreferrer");
-    if (!popup) window.location.assign(url);
   }
 
   private shareImageExtension(mimeType: string): string {
