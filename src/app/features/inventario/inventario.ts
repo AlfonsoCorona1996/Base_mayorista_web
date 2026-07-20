@@ -73,6 +73,7 @@ export default class InventarioPage {
   private static readonly RESERVATION_PREVIEW_LIMIT = 2;
   private static readonly CATALOG_SOURCE_RESULT_LIMIT = 48;
   private static readonly PRODUCT_SOURCE_RESULT_LIMIT = 60;
+  private static readonly DEFAULT_STOCK_FILTER: StockFilter = "available";
 
   loading = signal(false);
   saving = signal(false);
@@ -94,7 +95,7 @@ export default class InventarioPage {
   success = signal<string | null>(null);
 
   searchTerm = signal("");
-  stockFilter = signal<StockFilter>("all");
+  stockFilter = signal<StockFilter>(InventarioPage.DEFAULT_STOCK_FILTER);
   hideSoldOut = signal(true);
   sortFilter = signal<SortFilter>("stock_low");
   filterCategoryPath = signal("all");
@@ -228,7 +229,9 @@ export default class InventarioPage {
   });
 
   totalUnits = computed(() => this.rows().reduce((sum, row) => sum + this.onHandQty(row), 0));
-  totalAvailableUnits = computed(() => this.rows().reduce((sum, row) => sum + this.availableQty(row), 0));
+  totalAvailableUnits = computed(() => this.rows()
+    .filter((row) => this.availableQty(row) > 0 && this.reservedQty(row) === 0)
+    .reduce((sum, row) => sum + this.availableQty(row), 0));
   reviewUnits = computed(() => this.rows().reduce((sum, row) => sum + this.reviewQty(row), 0));
   damagedUnits = computed(() => this.rows().reduce((sum, row) => sum + this.damagedQty(row), 0));
 
@@ -240,10 +243,6 @@ export default class InventarioPage {
   soldOutCount = computed(() => this.rows().filter((row) => this.onHandQty(row) === 0).length);
   reservedCount = computed(() => this.rows().filter((row) => this.reservedQty(row) > 0).length);
   withoutPriceCount = computed(() => this.rows().filter((row) => !row.unit_price || row.unit_price <= 0).length);
-  totalInvestment = computed(() =>
-    this.rows().reduce((sum, row) => sum + (row.unit_price || 0) * (this.availableQty(row) + this.reservedQty(row) + this.reviewQty(row)), 0),
-  );
-
   categoryOptions = computed(() => this.categories.getAll());
   categoryFilterOptions = computed(() =>
     [...new Set(this.categoryOptions().map((category) => category.fullPath).filter((path) => Boolean(path)))]
@@ -310,7 +309,7 @@ export default class InventarioPage {
   activeFilterCount = computed(() => {
     let count = 0;
     if (this.searchTerm().trim()) count += 1;
-    if (this.stockFilter() !== "all") count += 1;
+    if (this.stockFilter() !== InventarioPage.DEFAULT_STOCK_FILTER) count += 1;
     if (this.filterCategoryPath() !== "all") count += 1;
     if (this.filterSupplierId() !== "all") count += 1;
     if (this.minStockFilter() !== null || this.maxStockFilter() !== null) count += 1;
@@ -341,7 +340,7 @@ export default class InventarioPage {
 
         if (this.hideSoldOut() && stockFilter !== "sold_out" && onHand === 0) return false;
 
-        if (stockFilter === "available" && available <= 0) return false;
+        if (stockFilter === "available" && (available <= 0 || reserved > 0)) return false;
         if (stockFilter === "reserved" && reserved <= 0) return false;
         if (stockFilter === "low" && (available === 0 || available > 3)) return false;
         if (stockFilter === "sold_out" && onHand > 0) return false;
@@ -370,6 +369,24 @@ export default class InventarioPage {
         return blob.includes(term);
       })
       .sort((a, b) => this.compareRows(a, b, sortBy));
+  });
+
+  totalInvestment = computed(() => {
+    const stockFilter = this.stockFilter();
+    return this.filteredRows().reduce(
+      (sum, row) => sum + (row.unit_price || 0) * this.investmentQuantity(row, stockFilter),
+      0,
+    );
+  });
+
+  investmentScopeLabel = computed(() => {
+    const filter = this.stockFilter();
+    if (filter === "available") return "Valor disponible filtrado, sin apartados";
+    if (filter === "reserved") return "Valor de las piezas apartadas filtradas";
+    if (filter === "low") return "Valor disponible de las pocas piezas";
+    if (filter === "sold_out") return "Sin piezas disponibles para valorar";
+    if (filter === "without_price") return "Artículos filtrados pendientes de costo";
+    return "Valor de las existencias filtradas";
   });
 
   async reload() {
@@ -676,7 +693,7 @@ export default class InventarioPage {
 
   clearFilters() {
     this.searchTerm.set("");
-    this.stockFilter.set("all");
+    this.stockFilter.set(InventarioPage.DEFAULT_STOCK_FILTER);
     this.hideSoldOut.set(true);
     this.sortFilter.set("stock_low");
     this.filterCategoryPath.set("all");
@@ -699,7 +716,7 @@ export default class InventarioPage {
       this.stockFilter.set(next);
       return;
     }
-    this.stockFilter.set("all");
+    this.stockFilter.set(InventarioPage.DEFAULT_STOCK_FILTER);
   }
 
   onSortFilterChange(next: string) {
@@ -739,6 +756,15 @@ export default class InventarioPage {
 
   applyQuickFilter(next: StockFilter) {
     this.stockFilter.set(next);
+  }
+
+  stockFilterLabel(filter: StockFilter): string {
+    if (filter === "available") return "Sólo disponibles";
+    if (filter === "reserved") return "Con reserva";
+    if (filter === "low") return "Pocas piezas";
+    if (filter === "sold_out") return "Agotados";
+    if (filter === "without_price") return "Sin precio";
+    return "Todos";
   }
 
   async save() {
@@ -932,7 +958,7 @@ export default class InventarioPage {
 
   private async prepareShareImage(itemId: string): Promise<void> {
     const currentStatus = this.shareImageStatusById()[itemId];
-    if (currentStatus === "loading" || currentStatus === "ready" || currentStatus === "unavailable") return;
+    if (currentStatus === "loading" || currentStatus === "ready") return;
 
     const item = this.rows().find((row) => row.inventory_id === itemId);
     const imageUrl = item ? this.primaryImage(item) : null;
@@ -947,7 +973,7 @@ export default class InventarioPage {
 
     this.setShareImageStatus(itemId, "loading");
     try {
-      const response = await fetch(imageUrl, { mode: "cors" });
+      const response = await fetch(imageUrl, { mode: "cors", cache: "no-store" });
       if (!response.ok) throw new Error(`No se pudo descargar la imagen (${response.status})`);
       const blob = await response.blob();
       if (!blob.type.startsWith("image/")) throw new Error("El archivo recibido no es una imagen");
@@ -1211,6 +1237,13 @@ export default class InventarioPage {
 
   damagedQty(item: InventoryItem): number {
     return Math.max(0, Math.trunc(Number(item.damaged_qty || 0)));
+  }
+
+  private investmentQuantity(item: InventoryItem, filter: StockFilter): number {
+    if (filter === "available" || filter === "low") return this.availableQty(item);
+    if (filter === "reserved") return this.reservedQty(item);
+    if (filter === "sold_out") return 0;
+    return this.availableQty(item) + this.reservedQty(item) + this.reviewQty(item);
   }
 
   reorderQty(item: InventoryItem): number {

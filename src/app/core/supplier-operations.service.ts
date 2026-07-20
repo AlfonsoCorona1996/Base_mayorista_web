@@ -36,6 +36,7 @@ export interface SupplierOperationRow {
   color: string | null;
   image_url: string | null;
   quantity: number;
+  price_cost: number | null;
   product_id: string | null;
   variant_id: string | null;
   status: SupplierOperationStatus;
@@ -104,6 +105,7 @@ export class SupplierOperationsService {
         color: item.color || null,
         image_url: existing?.image_url || item.image_url || null,
         quantity: this.safeQty(item.confirmed_qty ?? item.quantity),
+        price_cost: item.price_cost ?? existing?.price_cost ?? null,
         product_id: item.product_id || null,
         variant_id: item.variant_id || null,
         status: existing?.status || "por_levantar",
@@ -209,6 +211,7 @@ export class SupplierOperationsService {
       variant_id: row.variant_id,
       business_id: row.business_id,
       qty,
+      unit_price: row.price_cost,
       supplierOperationId: row.op_id,
       lineId: row.order_item_id,
       idempotencyKey: `inbound_${safeRoot}`,
@@ -358,6 +361,13 @@ export class SupplierOperationsService {
     const qty = Number(value || 0);
     if (!Number.isFinite(qty)) return 0;
     return Math.max(0, Math.round(qty));
+  }
+
+  private safePrice(value: unknown): number | null {
+    if (value === null || value === undefined || value === "") return null;
+    const price = typeof value === "number" ? value : Number(value);
+    if (!Number.isFinite(price)) return null;
+    return Math.max(0, Number(price.toFixed(2)));
   }
 
   private async getByOpId(opId: string): Promise<SupplierOperationRow | null> {
@@ -537,6 +547,7 @@ export class SupplierOperationsService {
       color: data["color"] || null,
       image_url: data["image_url"] || null,
       quantity: this.safeQty(data["quantity"]),
+      price_cost: this.safePrice(data["price_cost"]),
       product_id: data["product_id"] || null,
       variant_id: data["variant_id"] || null,
       status: (data["status"] as SupplierOperationStatus) || "por_levantar",

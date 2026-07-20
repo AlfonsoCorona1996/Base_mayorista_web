@@ -87,6 +87,7 @@ export interface ReceiveInboundInput {
   variant_id?: string | null;
   business_id?: BusinessId;
   qty: number;
+  unit_price?: number | null;
   supplierOperationId: string;
   lineId: string;
   idempotencyKey: string;
@@ -449,6 +450,7 @@ export class InventoryService {
     const inventoryId = (input.sku || "").trim();
     if (!inventoryId) throw new Error("sku requerido para recepción");
     const qty = this.toSafeQty(input.qty);
+    const incomingUnitPrice = this.toSafePrice(input.unit_price);
     const idKey = this.safeIdempotencyKey(input.idempotencyKey);
     const ref = doc(this.colRef, inventoryId);
 
@@ -476,7 +478,7 @@ export class InventoryService {
           on_hand_qty: onHand,
           reserved_qty: reserved,
           available_qty: available,
-          unit_price: null,
+          unit_price: incomingUnitPrice,
           notes: `Alta automática desde proveedor (${input.supplierOperationId}).`,
           image_urls: input.image_url ? [input.image_url] : [],
           source_reason: "ajuste_manual",
@@ -503,6 +505,7 @@ export class InventoryService {
       tx.update(ref, {
         product_id: row.product_id || input.product_id || null,
         variant_id: row.variant_id || input.variant_id || null,
+        unit_price: row.unit_price ?? incomingUnitPrice,
         on_hand_qty: nextOnHand,
         reserved_qty: reserved,
         available_qty: nextAvailable,

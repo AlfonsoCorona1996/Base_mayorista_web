@@ -57,8 +57,8 @@
         </span>
         <span class="stat-copy">
           <span>Inversión total</span>
-          <strong>{{ formatMoney(totalInvestment()) }}</strong>
-          <small>Valor de las existencias</small>
+          <strong aria-live="polite">{{ formatMoney(totalInvestment()) }}</strong>
+          <small>{{ investmentScopeLabel() }}</small>
         </span>
       </button>
 
@@ -71,7 +71,7 @@
         <span class="stat-copy">
           <span>Disponibles</span>
           <strong>{{ formatCount(totalAvailableUnits()) }}</strong>
-          <small>Listas para salir</small>
+          <small>Listas para salir, sin apartados</small>
         </span>
       </button>
 
@@ -141,7 +141,7 @@
           <span>Estado</span>
           <select [ngModel]="stockFilter()" (ngModelChange)="onStockFilterChange($event)">
             <option value="all">Todos</option>
-            <option value="available">Disponible</option>
+            <option value="available">Sólo disponibles</option>
             <option value="reserved">Con reserva</option>
             <option value="low">Pocas piezas</option>
             <option value="sold_out">Agotado</option>
@@ -217,8 +217,8 @@
 
       @if (hasActiveFilters()) {
         <div class="active-filter-row" aria-label="Filtros activos">
-          @if (stockFilter() !== 'all') {
-            <button type="button" (click)="stockFilter.set('all')">Estado: {{ stockFilter() }} <span aria-hidden="true">×</span></button>
+          @if (stockFilter() !== 'available') {
+            <button type="button" (click)="stockFilter.set('available')">Estado: {{ stockFilterLabel(stockFilter()) }} <span aria-hidden="true">×</span></button>
           }
           @if (filterCategoryPath() !== 'all') {
             <button type="button" (click)="filterCategoryPath.set('all')">{{ filterCategoryPath() }} <span aria-hidden="true">×</span></button>
@@ -255,7 +255,7 @@
               <path d="m4 8 8-4 8 4-8 4-8-4Z"></path><path d="m4 8 8 4 8-4v8l-8 4-8-4V8Z"></path>
             </svg>
           </span>
-          @if (hasActiveFilters()) {
+          @if (hasActiveFilters() || rows().length > 0) {
             <h2>No hay resultados</h2>
             <p>No encontramos artículos que coincidan con los filtros seleccionados.</p>
             <button type="button" class="btn btn-outline" (click)="clearFilters()">Restablecer filtros</button>

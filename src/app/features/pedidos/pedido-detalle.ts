@@ -8307,6 +8307,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     await this.inventory.receiveInbound({
       sku: inventoryId,
       qty,
+      unit_price: item.price_cost ?? null,
       supplierOperationId: `late-${order.order_id}-${item.item_id}`,
       lineId: item.item_id,
       idempotencyKey: inboundKey,
