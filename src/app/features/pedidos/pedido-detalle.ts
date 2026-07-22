@@ -2572,10 +2572,21 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       return;
     }
     this.confirmQtyDraft.update((current) => ({ ...current, [item.item_id]: qty }));
-    await this.orders.updateItemConfirmation(order.order_id, item.item_id, {
-      confirmation_state: "confirmed",
-      confirmed_qty: qty,
-    });
+    if (item.source === "manual") {
+      const inventoryId = await this.ensureManualItemReservedInInventory(order, item, qty);
+      const current = this.orders.getById(order.order_id) || order;
+      const nextItems = (current.items || []).map((row) =>
+        row.item_id === item.item_id
+          ? this.linkManualItemToInventory(row, inventoryId, qty)
+          : row,
+      );
+      await this.orders.updateItems(order.order_id, nextItems);
+    } else {
+      await this.orders.updateItemConfirmation(order.order_id, item.item_id, {
+        confirmation_state: "confirmed",
+        confirmed_qty: qty,
+      });
+    }
     await this.logItemConfirmationEvent(order, item, "confirmed", qty);
   }
 
@@ -2612,14 +2623,29 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       for (const item of pending) next[item.item_id] = this.normalizeConfirmedQty(item.quantity, item.quantity);
       return next;
     });
-    await Promise.all(
-      pending.map((item) =>
-        this.orders.updateItemConfirmation(order.order_id, item.item_id, {
-          confirmation_state: "confirmed",
-          confirmed_qty: this.normalizeConfirmedQty(item.quantity, item.quantity),
-        }),
-      ),
-    );
+    const manualInventoryIds = new Map<string, string>();
+    for (const item of pending) {
+      if (item.source !== "manual") continue;
+      const qty = this.normalizeConfirmedQty(item.quantity, item.quantity);
+      if (qty <= 0) continue;
+      const inventoryId = await this.ensureManualItemReservedInInventory(order, item, qty);
+      manualInventoryIds.set(item.item_id, inventoryId);
+    }
+
+    const pendingIds = new Set(pending.map((item) => item.item_id));
+    const current = this.orders.getById(order.order_id) || order;
+    const nextItems = (current.items || []).map((item) => {
+      if (!pendingIds.has(item.item_id)) return item;
+      const qty = this.normalizeConfirmedQty(item.quantity, item.quantity);
+      const inventoryId = manualInventoryIds.get(item.item_id);
+      if (inventoryId) return this.linkManualItemToInventory(item, inventoryId, qty);
+      return {
+        ...item,
+        confirmation_state: "confirmed" as const,
+        confirmed_qty: qty,
+      };
+    });
+    await this.orders.updateItems(order.order_id, nextItems);
     await this.orders.logEvent(order.order_id, "existence_confirmed", "Confirmación masiva de existencias", {
       items: pending.map((item) => item.item_id),
       qty: pending.length,
@@ -8279,6 +8305,65 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       row.item_id === item.item_id ? { ...row, late_addition_status: status } : row,
     );
     await this.orders.updateItems(order.order_id, nextItems);
+  }
+
+  private async ensureManualItemReservedInInventory(order: Order, item: OrderItem, qty: number): Promise<string> {
+    const inventoryId = (item.inventory_id || "").trim() || this.buildManualOrderInventoryId(item);
+    const inboundKey = `manual_inbound_${order.order_id}_${item.item_id}_${inventoryId}_${qty}`;
+    await this.inventory.receiveInbound({
+      sku: inventoryId,
+      qty,
+      unit_price: item.price_cost ?? null,
+      supplierOperationId: `manual-${order.order_id}-${item.item_id}`,
+      lineId: item.item_id,
+      idempotencyKey: inboundKey,
+      title: item.title,
+      supplier_id: null,
+      variant_name: item.variant || null,
+      color_name: item.color || null,
+      image_url: item.image_url || null,
+      notes: `Alta automática desde artículo manual del pedido ${order.order_id}.`,
+      receipt_reason: `Alta desde pedido manual ${order.order_id}`,
+    });
+
+    const reserveKey = this.buildInventoryMutationKey("reserve", order.order_id, item.item_id, inventoryId, qty);
+    await this.inventory.reserveStock({
+      sku: inventoryId,
+      qty,
+      orderId: order.order_id,
+      orderItemId: item.item_id,
+      idempotencyKey: reserveKey,
+    });
+    await this.orders.logEvent(order.order_id, "INVENTORY_RESERVED", `Artículo manual registrado y reservado: ${item.title}`, {
+      itemId: item.item_id,
+      inventoryId,
+      qty,
+      idempotencyKey: reserveKey,
+    });
+    return inventoryId;
+  }
+
+  private linkManualItemToInventory(item: OrderItem, inventoryId: string, qty: number): OrderItem {
+    return {
+      ...item,
+      source: "inventario",
+      product_ref_type: "inventory_item",
+      inventory_id: inventoryId,
+      sku: item.sku || inventoryId,
+      state: "reservado_inventario",
+      confirmation_state: "confirmed",
+      confirmed_qty: qty,
+    };
+  }
+
+  private buildManualOrderInventoryId(item: OrderItem): string {
+    const seed = [
+      item.title || "producto",
+      item.variant || "",
+      item.color || "",
+    ].join("-");
+    const slug = this.slugifyForInventory(seed || item.item_id).slice(0, 54) || "producto";
+    return `inv-manual-${slug}`;
   }
 
   private async ensureLateArrivalReservedInInventory(order: Order, item: OrderItem, qty: number): Promise<string | null> {

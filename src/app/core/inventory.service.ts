@@ -96,6 +96,8 @@ export interface ReceiveInboundInput {
   variant_name?: string | null;
   color_name?: string | null;
   image_url?: string | null;
+  notes?: string | null;
+  receipt_reason?: string | null;
 }
 
 export type InventoryMovementType =
@@ -451,6 +453,8 @@ export class InventoryService {
     if (!inventoryId) throw new Error("sku requerido para recepción");
     const qty = this.toSafeQty(input.qty);
     const incomingUnitPrice = this.toSafePrice(input.unit_price);
+    const receiptReason = String(input.receipt_reason || "").trim() || `Recepción proveedor ${input.supplierOperationId}`;
+    const receiptNotes = String(input.notes || "").trim() || `Alta automática desde proveedor (${input.supplierOperationId}).`;
     const idKey = this.safeIdempotencyKey(input.idempotencyKey);
     const ref = doc(this.colRef, inventoryId);
 
@@ -479,7 +483,7 @@ export class InventoryService {
           reserved_qty: reserved,
           available_qty: available,
           unit_price: incomingUnitPrice,
-          notes: `Alta automática desde proveedor (${input.supplierOperationId}).`,
+          notes: receiptNotes,
           image_urls: input.image_url ? [input.image_url] : [],
           source_reason: "ajuste_manual",
           reservations: {},
@@ -491,7 +495,7 @@ export class InventoryService {
         this.writeMovement(tx, idKey, created.business_id, inventoryId, "receipt", {
           onHand: qty,
           available: qty,
-        }, { reason: `Recepción proveedor ${input.supplierOperationId}` });
+        }, { reason: receiptReason });
         return;
       }
 
@@ -516,7 +520,7 @@ export class InventoryService {
       this.writeMovement(tx, idKey, row.business_id, inventoryId, "receipt", {
         onHand: qty,
         available: qty,
-      }, { reason: `Recepción proveedor ${input.supplierOperationId}` });
+      }, { reason: receiptReason });
     });
 
     await this.loadFromFirestore();
