@@ -25,6 +25,10 @@ import { BusinessScopeService } from "./business-scope.service";
 import { BusinessId, normalizeBusinessId } from "./rbac.constants";
 import { calculateOrderFinancials, toPersistedOrderTotals } from "./order-financials";
 import { InventoryService } from "./inventory.service";
+import {
+  isSupplierReceiptComplete,
+  supplierOperationReservedForOrderId,
+} from "./supplier-operation-state";
 
 export type OrderStatus =
   | "borrador"
@@ -1201,11 +1205,16 @@ export class OrdersService {
     const supplierOpsSnap = await getDocs(query(collection(FIRESTORE, "supplier_operations"), where("order_id", "==", orderId)));
     const supplierOps = supplierOpsSnap.docs
       .map((entry) => {
-        const data = entry.data() as any;
-        const reservedFor = String(data["reserved_for_order_id"] || data["order_id"] || "");
+        const data = entry.data() as Record<string, unknown>;
+        const reservedFor = supplierOperationReservedForOrderId(data);
         if (reservedFor !== orderId) return null;
         const raw = data["status"];
-        const status: SupplierOpStatusLite = raw === "recibido" || raw === "en_camino" || raw === "levantado" ? raw : "por_levantar";
+        const normalizedStatus: SupplierOpStatusLite = raw === "recibido" || raw === "en_camino" || raw === "levantado"
+          ? raw
+          : "por_levantar";
+        const status: SupplierOpStatusLite = normalizedStatus === "recibido" && !isSupplierReceiptComplete(data)
+          ? "en_camino"
+          : normalizedStatus;
         return { status };
       })
       .filter((row): row is { status: SupplierOpStatusLite } => !!row);

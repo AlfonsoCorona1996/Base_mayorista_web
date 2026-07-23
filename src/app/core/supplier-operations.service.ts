@@ -18,6 +18,11 @@ import {
 } from "firebase/firestore";
 import { BusinessScopeService } from "./business-scope.service";
 import { BusinessId, normalizeBusinessId } from "./rbac.constants";
+import {
+  canAdvanceSupplierOperationStatus,
+  isSupplierReceiptComplete,
+  supplierOperationReservedForOrderId,
+} from "./supplier-operation-state";
 
 export type SupplierOperationStatus = "por_levantar" | "levantado" | "en_camino" | "recibido";
 
@@ -57,6 +62,7 @@ export class SupplierOperationsService {
   private businessScope = inject(BusinessScopeService);
 
   private rowsSignal = signal<SupplierOperationRow[]>([]);
+  private loadRequestId = 0;
 
   rows = computed(() => {
     const active = this.businessScope.activeBusinessIds();
@@ -64,11 +70,13 @@ export class SupplierOperationsService {
   });
 
   async loadFromFirestore(): Promise<void> {
+    const requestId = ++this.loadRequestId;
     const q = query(this.colRef, where("business_id", "in", this.businessScope.availableBusinessIds()));
     const snap = await getDocs(q);
     const rows = snap.docs
       .map((entry) => this.normalize(entry.id, entry.data() as Record<string, any>))
       .sort((a, b) => (a.updated_at > b.updated_at ? -1 : 1));
+    if (requestId !== this.loadRequestId) return;
     this.rowsSignal.set(rows);
   }
 
@@ -76,7 +84,6 @@ export class SupplierOperationsService {
     const toCreate = this.confirmedSupplierItems(order);
     if (toCreate.length === 0) return 0;
 
-    const nowIso = new Date().toISOString();
     let createdOrUpdated = 0;
 
     for (const item of toCreate) {
@@ -85,48 +92,45 @@ export class SupplierOperationsService {
 
       const opId = this.buildOpId(order.order_id, item.item_id);
       const ref = doc(this.colRef, opId);
-      const existingSnap = await getDoc(ref);
-      const existing = existingSnap.exists()
-        ? this.normalize(existingSnap.id, existingSnap.data() as Record<string, any>)
-        : null;
-
-      const payload: Partial<SupplierOperationRow> = {
-        op_id: opId,
-        business_id: normalizeBusinessId(order.business_id),
-        order_id: order.order_id,
-        reserved_for_order_id: order.order_id,
-        order_item_id: item.item_id,
-        supplier_id: supplierId,
-        supplier_name: null,
-        customer_id: order.customer_id,
-        customer_name: (customerName || "").trim() || "Clienta",
-        title: item.title || "Producto sin nombre",
-        variant: item.variant || null,
-        color: item.color || null,
-        image_url: existing?.image_url || item.image_url || null,
-        quantity: this.safeQty(item.confirmed_qty ?? item.quantity),
-        price_cost: item.price_cost ?? existing?.price_cost ?? null,
-        product_id: item.product_id || null,
-        variant_id: item.variant_id || null,
-        status: existing?.status || "por_levantar",
-        inventory_item_id: existing?.inventory_item_id || null,
-        received_to_inventory: existing?.received_to_inventory || false,
-        reservation_applied: existing?.reservation_applied || false,
-        received_qty: existing?.received_qty ?? 0,
-        reserved_qty_for_order: existing?.reserved_qty_for_order ?? 0,
-        created_at: existing ? existing.created_at : nowIso,
-        updated_at: nowIso,
-      };
-
-      await setDoc(
-        ref,
-        {
-          ...payload,
-          created_at: existing ? existing.created_at : serverTimestamp(),
+      await runTransaction(FIRESTORE, async (tx) => {
+        const existingSnap = await tx.get(ref);
+        const existing = existingSnap.exists()
+          ? this.normalize(existingSnap.id, existingSnap.data() as Record<string, any>)
+          : null;
+        const payload = {
+          op_id: opId,
+          business_id: normalizeBusinessId(order.business_id),
+          order_id: order.order_id,
+          reserved_for_order_id: order.order_id,
+          order_item_id: item.item_id,
+          supplier_id: supplierId,
+          supplier_name: existing?.supplier_name || null,
+          customer_id: order.customer_id,
+          customer_name: (customerName || "").trim() || "Clienta",
+          title: item.title || "Producto sin nombre",
+          variant: item.variant || null,
+          color: item.color || null,
+          image_url: existing?.image_url || item.image_url || null,
+          quantity: this.safeQty(item.confirmed_qty ?? item.quantity),
+          price_cost: item.price_cost ?? existing?.price_cost ?? null,
+          product_id: item.product_id || null,
+          variant_id: item.variant_id || null,
           updated_at: serverTimestamp(),
-        },
-        { merge: true },
-      );
+          ...(existing
+            ? {}
+            : {
+                status: "por_levantar" as const,
+                inventory_item_id: null,
+                received_to_inventory: false,
+                reservation_applied: false,
+                received_qty: 0,
+                reserved_qty_for_order: 0,
+                idempotency_keys: {},
+                created_at: serverTimestamp(),
+              }),
+        };
+        tx.set(ref, payload, { merge: true });
+      });
       createdOrUpdated += 1;
     }
 
@@ -145,33 +149,44 @@ export class SupplierOperationsService {
     options?: { reload?: boolean },
   ): Promise<void> {
     const reload = options?.reload !== false;
-
-    let current = this.rowsSignal().find((row) => row.op_id === lineId) || null;
-    if (!current) {
-      const snap = await getDoc(doc(this.colRef, lineId));
-      if (snap.exists()) {
-        current = this.normalize(snap.id, snap.data() as Record<string, any>);
-      }
+    const lineRef = doc(this.colRef, lineId);
+    const currentSnap = await getDoc(lineRef);
+    if (!currentSnap.exists()) {
+      throw new Error("Operacion de proveedor no encontrada");
     }
-    if (!current) return;
-    if (current.status === newState) return;
+    const current = this.normalize(currentSnap.id, currentSnap.data() as Record<string, any>);
 
     if (newState === "recibido") {
+      if (isSupplierReceiptComplete(current)) {
+        if (reload) await this.loadFromFirestore();
+        return;
+      }
       await this.receiveLineAndAllocate(lineId, idempotencyKey || `${lineId}:${newState}`);
-      if (!reload) return;
       return;
     }
 
-    await updateDoc(doc(this.colRef, lineId), {
-      status: newState,
-      updated_at: serverTimestamp(),
+    const transition = await runTransaction(FIRESTORE, async (tx) => {
+      const snap = await tx.get(lineRef);
+      if (!snap.exists()) throw new Error("Operacion de proveedor no encontrada");
+      const fresh = this.normalize(snap.id, snap.data() as Record<string, any>);
+      if (fresh.status === newState) return { updated: false, row: fresh };
+      if (!canAdvanceSupplierOperationStatus(fresh.status, newState)) {
+        return { updated: false, row: fresh };
+      }
+      tx.update(lineRef, {
+        status: newState,
+        updated_at: serverTimestamp(),
+      });
+      return { updated: true, row: fresh };
     });
 
-    await this.syncOrderStatus(current.order_id);
-    await this.logOrderEvent(current.order_id, "SUPPLIER_OP_STATUS_CHANGED", `Proveedor: ${lineId} -> ${newState}`, {
-      opId: lineId,
-      nextStatus: newState,
-    });
+    if (transition.updated) {
+      await this.syncOrderStatus(transition.row.order_id);
+      await this.logOrderEvent(transition.row.order_id, "SUPPLIER_OP_STATUS_CHANGED", `Proveedor: ${lineId} -> ${newState}`, {
+        opId: lineId,
+        nextStatus: newState,
+      });
+    }
 
     if (reload) {
       await this.loadFromFirestore();
@@ -253,7 +268,7 @@ export class SupplierOperationsService {
       if (!snap.exists()) return;
       const current = this.normalize(snap.id, snap.data() as Record<string, any>);
       const idMap = current.idempotency_keys || {};
-      if (idMap[finalizeKey]) return;
+      if (idMap[finalizeKey] && isSupplierReceiptComplete(current)) return;
       const nowIso = new Date().toISOString();
       tx.update(opRef, {
         status: "recibido",
@@ -269,6 +284,16 @@ export class SupplierOperationsService {
         },
       });
     });
+
+    const completedSnap = await getDoc(opRef);
+    if (
+      !completedSnap.exists()
+      || !isSupplierReceiptComplete(
+        this.normalize(completedSnap.id, completedSnap.data() as Record<string, any>),
+      )
+    ) {
+      throw new Error("La recepcion de proveedor no completo inventario y reserva");
+    }
 
     await this.logOrderEvent(row.order_id, "SUPPLIER_LINE_RECEIVED", `Linea de proveedor recibida: ${row.title}`, {
       opId: row.op_id,
@@ -372,9 +397,6 @@ export class SupplierOperationsService {
 
   private async getByOpId(opId: string): Promise<SupplierOperationRow | null> {
     if (!opId) return null;
-    const cached = this.rowsSignal().find((row) => row.op_id === opId) || null;
-    if (cached) return cached;
-
     const snap = await getDoc(doc(this.colRef, opId));
     if (!snap.exists()) return null;
     return this.normalize(snap.id, snap.data() as Record<string, any>);
@@ -382,7 +404,7 @@ export class SupplierOperationsService {
 
   private async releaseReservationIfNeeded(row: SupplierOperationRow, reason: string): Promise<void> {
     const inventoryId = (row.inventory_item_id || "").trim();
-    const orderId = (row.reserved_for_order_id || row.order_id || "").trim();
+    const orderId = (row.reserved_for_order_id || "").trim();
     const qty = this.safeQty(row.reserved_qty_for_order || (row.reservation_applied ? row.quantity : 0));
     if (!inventoryId || !orderId || qty <= 0) return;
 
@@ -471,10 +493,13 @@ export class SupplierOperationsService {
     const snap = await getDocs(query(this.colRef, where("order_id", "==", orderId)));
     const statuses = snap.docs
       .map((entry) => {
-        const data = entry.data() as any;
-        const reservedFor = String(data["reserved_for_order_id"] || data["order_id"] || "");
+        const data = entry.data() as Record<string, unknown>;
+        const reservedFor = supplierOperationReservedForOrderId(data);
         if (reservedFor !== orderId) return null;
-        return (data["status"] || "por_levantar") as SupplierOperationStatus;
+        const status = (data["status"] || "por_levantar") as SupplierOperationStatus;
+        return status === "recibido" && !isSupplierReceiptComplete(data)
+          ? "en_camino"
+          : status;
       })
       .filter((status): status is SupplierOperationStatus => !!status);
     if (statuses.length === 0) return;
@@ -536,7 +561,7 @@ export class SupplierOperationsService {
       op_id: data["op_id"] || id,
       business_id: normalizeBusinessId(data["business_id"]),
       order_id: data["order_id"] || "",
-      reserved_for_order_id: data["reserved_for_order_id"] || data["order_id"] || "",
+      reserved_for_order_id: supplierOperationReservedForOrderId(data),
       order_item_id: data["order_item_id"] || "",
       supplier_id: data["supplier_id"] || "",
       supplier_name: data["supplier_name"] || null,

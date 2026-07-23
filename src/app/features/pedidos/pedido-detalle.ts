@@ -17,6 +17,7 @@ import { LocalitiesService } from "../../core/localities.service";
 import { InventoryService, InventoryItem } from "../../core/inventory.service";
 import { NormalizedListingsService, NormalizedListingDoc } from "../../core/normalized-listings.service";
 import { SupplierOperationsService } from "../../core/supplier-operations.service";
+import { isSupplierReceiptComplete } from "../../core/supplier-operation-state";
 import { ManualProductHistoryService, ManualProductEntry } from "../../core/manual-product-history.service";
 import { CatalogProduct, CatalogProductsService } from "../../core/catalog-products.service";
 import { CatalogImportJobsService } from "../../core/catalog-import-jobs.service";
@@ -2823,7 +2824,14 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   supplierOperationForItem(order: Order, item: OrderItem) {
-    return this.supplierOperations.rows().find((row) => row.order_id === order.order_id && row.order_item_id === item.item_id) || null;
+    return this.supplierOperations
+      .rows()
+      .find(
+        (row) =>
+          row.order_id === order.order_id
+          && row.reserved_for_order_id === order.order_id
+          && row.order_item_id === item.item_id,
+      ) || null;
   }
 
   isSupplierItemReceived(order: Order, item: OrderItem): boolean {
@@ -2831,7 +2839,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     if (this.isLateAddedItem(item) && this.isLateArrivalConfirmed(item)) return true;
     const op = this.supplierOperationForItem(order, item);
     if (!op) return false;
-    return op.status === "recibido" || op.received_to_inventory === true;
+    return isSupplierReceiptComplete(op);
   }
 
   isItemReadyForPack(order: Order, item: OrderItem): boolean {
@@ -6920,7 +6928,12 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       await this.supplierOperations.upsertFromConfirmedOrder(order, this.customerName(order));
       const pendingOps = this.supplierOperations
         .rows()
-        .filter((row) => row.order_id === order.order_id && (row.status === "por_levantar" || row.status === "levantado"));
+        .filter(
+          (row) =>
+            row.order_id === order.order_id
+            && row.reserved_for_order_id === order.order_id
+            && (row.status === "por_levantar" || row.status === "levantado"),
+        );
 
       if (pendingOps.length === 0) {
         this.actionError.set("No hay lineas pendientes para marcar en transito.");
@@ -6933,7 +6946,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         ),
       );
       await this.supplierOperations.loadFromFirestore();
-      await this.orders.updateStatus(order.order_id, "inbound_in_transit");
+      await this.orders.syncDerivedStatus(order.order_id);
       await this.orders.logEvent(order.order_id, "MARKED_INBOUND", "Pedido marcado en tránsito", {
         eta,
         updatedSupplierOps: pendingOps.length,
