@@ -82,6 +82,9 @@
               "zone.js",
               "zone.js/testing"
             ],
+            "exclude": [
+              "**/*.emulator.spec.ts"
+            ],
             "tsConfig": "tsconfig.spec.json",
             "assets": [
               {

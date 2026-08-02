@@ -308,6 +308,10 @@ export class SupplierOperationsService {
   async removeByOrder(orderId: string): Promise<void> {
     const q = query(this.colRef, where("order_id", "==", orderId));
     const snap = await getDocs(q);
+    const rows = snap.docs.map((entry) => this.normalize(entry.id, entry.data() as Record<string, any>));
+    for (const row of rows) {
+      await this.releaseReservationIfNeeded(row, "order_delete").catch(() => null);
+    }
     const writes = snap.docs.map((entry) => deleteDoc(entry.ref));
     await Promise.all(writes);
     await this.loadFromFirestore();

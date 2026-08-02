@@ -1000,8 +1000,10 @@ export class OrdersService {
     if (!targetOrderId) return;
 
     const previousRows = this.rows();
+    const orderSnapshot = this.getById(targetOrderId);
     this.rows.update((current) => current.filter((order) => order.order_id !== targetOrderId));
     try {
+      await this.releaseInventoryForOrder(targetOrderId, orderSnapshot).catch(() => null);
       await this.supplierOperations.removeByOrder(targetOrderId).catch(() => null);
       const nestedCollections = ["incidents", "events", "supplierOrders"];
       for (const nested of nestedCollections) {
@@ -1157,8 +1159,8 @@ export class OrdersService {
     }
   }
 
-  async releaseInventoryForOrder(orderId: string): Promise<void> {
-    const order = this.getById(orderId);
+  async releaseInventoryForOrder(orderId: string, orderOverride?: Order | null): Promise<void> {
+    const order = orderOverride ?? this.getById(orderId);
     if (!order) return;
     for (const item of order.items || []) {
       const inventoryId = String(item.inventory_id || "").trim();

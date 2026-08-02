@@ -1,0 +1,15 @@
+// SOLO PARA PRUEBAS LOCALES CONTRA EL EMULADOR. NO ES LA VERSION DE PRODUCCION.
+// El firestore.rules real (raiz del repo) es el unico que se despliega a Firebase.
+// Este archivo permisivo existe porque el emulador local de Firestore (v1.21.0)
+// no soporta `.exists()` como metodo sobre el resultado de get(), sintaxis que si
+// usa firestore.rules en produccion (userDoc().exists()). Sirve para poder correr
+// specs de integracion que ejercitan la logica real de los servicios sin pelear
+// con esa limitacion del emulador.
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
