@@ -436,7 +436,7 @@
             </h4>
 
             <div class="price-fields-grid">
-              @for (field of priceFields; track field.key) {
+              @for (field of priceFields(); track field.key) {
                 <div class="price-field-card">
                   <label class="label" [attr.for]="'price-' + field.key + '-' + i">
                     <span class="material-symbols-rounded" aria-hidden="true">{{ field.icon }}</span>

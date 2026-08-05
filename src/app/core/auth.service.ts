@@ -28,6 +28,7 @@ export class AuthService {
       this.user.set(u);
       this.accessCheckCache = null;
       this.accessCheckPromise = null;
+      this.userAdminApi.invalidateSessionBootstrap();
     });
   }
 
@@ -110,6 +111,7 @@ export class AuthService {
   invalidateAccessCache() {
     this.accessCheckCache = null;
     this.accessCheckPromise = null;
+    this.userAdminApi.invalidateSessionBootstrap();
   }
 
   private normalizeIdentifier(value: string): string {

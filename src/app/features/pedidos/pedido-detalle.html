@@ -64,90 +64,41 @@
   @if (orderViewVm(); as vm) {
   <section class="page" (scroll)="onPageScroll($event)">
     <header class="page-head" #pageHead>
-      <div class="page-head-main">
-        <div class="page-head-topline">
-          <button class="link-back link-back--icon" type="button" (click)="backToList()" aria-label="Volver">
-            <span class="material-symbols-rounded" aria-hidden="true">arrow_back</span>
-          </button>
-          <div class="order-id-wrap">
-            <p class="eyebrow order-id-line">Pedido {{ current.order_id }}</p>
-            <button
-              type="button"
-              class="order-id-copy"
-              aria-label="Copiar ID del pedido"
-              (click)="copyOrderId(current.order_id)"
-            >
-              <span class="material-symbols-rounded" aria-hidden="true">content_copy</span>
+      <div class="page-head-top">
+        <div class="page-head-main">
+          <div class="page-head-topline">
+            <button class="link-back link-back--icon" type="button" (click)="backToList()" aria-label="Volver">
+              <span class="material-symbols-rounded" aria-hidden="true">arrow_back</span>
             </button>
-            @if (copiedOrderId()) {
-              <span class="copy-toast">!Copiado!</span>
-            }
+            <div class="order-id-wrap">
+              <p class="eyebrow order-id-line">Pedido {{ current.order_id }}</p>
+              <button
+                type="button"
+                class="order-id-copy"
+                aria-label="Copiar ID del pedido"
+                (click)="copyOrderId(current.order_id)"
+              >
+                <span class="material-symbols-rounded" aria-hidden="true">content_copy</span>
+              </button>
+              @if (copiedOrderId()) {
+                <span class="copy-toast">!Copiado!</span>
+              }
+            </div>
+          </div>
+          <h1>{{ vm.customerName }}</h1>
+          <p class="muted page-updated">Actualizado {{ current.updated_at | date: "short" }}</p>
+          <div class="title-row title-row--meta">
+            <span class="meta-dot-pill">
+              <span class="material-symbols-rounded" aria-hidden="true">{{ statusIcon(current.status) }}</span>
+              {{ vm.statusLabel }}
+            </span>
+            <span class="meta-dot-pill meta-dot-pill--location">
+              <span class="material-symbols-rounded" aria-hidden="true">location_on</span>
+              {{ vm.routeName }}
+            </span>
           </div>
         </div>
-        <h1>{{ vm.customerName }}</h1>
-        <p class="muted page-updated">Actualizado {{ current.updated_at | date: "short" }}</p>
-        <div class="title-row title-row--meta">
-          <span class="meta-dot-pill">
-            <span class="material-symbols-rounded" aria-hidden="true">monitoring</span>
-            {{ vm.statusLabel }}
-          </span>
-          <span class="meta-dot-pill meta-dot-pill--location">
-            <span class="material-symbols-rounded" aria-hidden="true">location_on</span>
-            {{ vm.routeName }}
-          </span>
-        </div>
-      </div>
-      <div class="status-actions">
-        @if (vm.phase; as phase) {
-          <button
-            type="button"
-            class="btn confirm-intelligent-btn"
-            [class.primary]="phase.actionId !== 'confirm_items' || vm.allItemsResolved"
-            [class.ghost]="phase.actionId === 'confirm_items' && !vm.allItemsResolved"
-            [disabled]="phase.actionId === 'confirm_items' && current.items.length === 0"
-            (click)="openActionModal(current)"
-          >
-            {{ phase.actionId === "confirm_items" ? vm.confirmExistencesActionLabel : phase.label }}
-          </button>
-        }
-        @if (canGenerateSalesNote(current)) {
-          <button
-            type="button"
-            class="btn ghost with-icon"
-            [disabled]="generatingSalesNote()"
-            (click)="generateSalesNote(current)"
-          >
-            <span class="material-symbols-rounded btn-icon" aria-hidden="true">receipt_long</span>
-            {{ generatingSalesNote() ? "Generando..." : "Generar nota" }}
-          </button>
-          <button
-            type="button"
-            class="btn ghost with-icon"
-            [disabled]="sendingWaNote()"
-            (click)="sendSalesNoteWa(current)"
-            title="Enviar nota de venta por WhatsApp"
-          >
-            <span class="material-symbols-rounded btn-icon">chat</span>
-            {{ sendingWaNote() ? "Enviando..." : "Nota por WA" }}
-          </button>
-          @if (!waProgressVisible() && waNoteSent(); as r) {
-            <span class="wa-note-result" [class.ok]="r.ok" [class.err]="!r.ok">
-              <span class="material-symbols-rounded">{{ r.ok ? 'check_circle' : 'error' }}</span>
-              {{ r.ok ? (r.msg || 'Enviada') : r.msg }}
-            </span>
-          }
-        }
-        @if (canCloseOrder(current)) {
-          <button
-            type="button"
-            class="btn payment-close-btn with-icon"
-            (click)="openPaymentModal()"
-          >
-            <span class="material-symbols-rounded btn-icon" aria-hidden="true">payments</span>
-            Registrar cobro
-          </button>
-        }
-        <div class="order-head-menu" (click)="$event.stopPropagation()">
+        <div class="order-head-menu head-action-desktop" (click)="$event.stopPropagation()">
           <button
             type="button"
             class="order-head-menu-btn"
@@ -178,6 +129,62 @@
             </div>
           }
         </div>
+      </div>
+      <div class="status-actions">
+        @if (vm.phase; as phase) {
+          <button
+            type="button"
+            class="btn confirm-intelligent-btn"
+            [class.primary]="phase.actionId !== 'confirm_items' || vm.allItemsResolved"
+            [class.ghost]="phase.actionId === 'confirm_items' && !vm.allItemsResolved"
+            [disabled]="phase.actionId === 'confirm_items' && current.items.length === 0"
+            (click)="openActionModal(current)"
+          >
+            {{ phase.actionId === "confirm_items" ? vm.confirmExistencesActionLabel : phase.label }}
+          </button>
+        }
+        @if (canCloseOrder(current)) {
+          <button
+            type="button"
+            class="btn payment-close-btn with-icon head-action-desktop"
+            (click)="openPaymentModal()"
+          >
+            <span class="material-symbols-rounded btn-icon" aria-hidden="true">payments</span>
+            Registrar cobro
+          </button>
+        }
+        @if (canGenerateSalesNote(current)) {
+          <button
+            type="button"
+            class="btn ghost icon-only head-action-desktop"
+            [disabled]="generatingSalesNote()"
+            (click)="generateSalesNote(current)"
+            title="Generar nota"
+            aria-label="Generar nota"
+          >
+            <span class="material-symbols-rounded btn-icon" aria-hidden="true">receipt_long</span>
+          </button>
+          <button
+            type="button"
+            class="btn ghost icon-only head-action-desktop"
+            [disabled]="sendingWaNote()"
+            (click)="sendSalesNoteWa(current)"
+            title="Nota por WhatsApp"
+            aria-label="Nota por WhatsApp"
+          >
+            <span class="material-symbols-rounded btn-icon">chat</span>
+          </button>
+          @if (!waProgressVisible() && waNoteSent(); as r) {
+            <span class="wa-note-result" [class.ok]="r.ok" [class.err]="!r.ok">
+              <span class="material-symbols-rounded">{{ r.ok ? 'check_circle' : 'error' }}</span>
+              {{ r.ok ? (r.msg || 'Enviada') : r.msg }}
+            </span>
+          }
+        }
+        <button type="button" class="btn ghost with-icon head-action-mobile-more" (click)="openMoreActionsSheet()">
+          <span class="material-symbols-rounded btn-icon" aria-hidden="true">more_horiz</span>
+          Más acciones
+        </button>
       </div>
       @if (waProgressVisible()) {
         <div class="wa-progress-row">
@@ -212,15 +219,64 @@
       }
     </header>
 
+    @if (moreActionsSheetOpen()) {
+      <div class="sheet-backdrop" (click)="closeMoreActionsSheet()">
+        <div class="sheet more-actions-sheet" role="dialog" aria-modal="true" aria-labelledby="more-actions-title" (click)="$event.stopPropagation()">
+          <div class="sheet-handle" aria-hidden="true"></div>
+          <h2 id="more-actions-title" class="sheet-title-compact">Más acciones</h2>
+          @if (canCloseOrder(current)) {
+            <button type="button" class="menuItem" (click)="closeMoreActionsSheet(); openPaymentModal()">
+              <span class="material-symbols-rounded" aria-hidden="true">payments</span>
+              Registrar cobro
+            </button>
+          }
+          @if (canGenerateSalesNote(current)) {
+            <button type="button" class="menuItem" [disabled]="generatingSalesNote()" (click)="generateSalesNote(current)">
+              <span class="material-symbols-rounded" aria-hidden="true">receipt_long</span>
+              {{ generatingSalesNote() ? "Generando..." : "Generar nota" }}
+            </button>
+            <button type="button" class="menuItem" [disabled]="sendingWaNote()" (click)="sendSalesNoteWa(current)">
+              <span class="material-symbols-rounded" aria-hidden="true">chat</span>
+              {{ sendingWaNote() ? "Enviando..." : "Nota por WA" }}
+            </button>
+          }
+          <button type="button" class="menuItem" (click)="closeMoreActionsSheet(); openOrderOperationsSheet(current)">
+            <span class="material-symbols-rounded" aria-hidden="true">route</span>
+            Gestionar entrega/embarque
+          </button>
+          <button type="button" class="menuItem" [disabled]="!canMarkDelivered(current) || savingOperationalAction()" (click)="closeMoreActionsSheet(); markDeliveredFromHeader(current)">
+            <span class="material-symbols-rounded" aria-hidden="true">task_alt</span>
+            Marcar entregado
+          </button>
+          <button type="button" class="menuItem" [disabled]="!canChangeCustomer(current)" (click)="closeMoreActionsSheet(); openChangeCustomerModal(current)">
+            <span class="material-symbols-rounded" aria-hidden="true">person_search</span>
+            Cambiar clienta
+          </button>
+          <button type="button" class="menuItem danger" [disabled]="deletingOrder() || !canDeleteOrder(current)" (click)="closeMoreActionsSheet(); requestDeleteOrder(current)">
+            <span class="material-symbols-rounded" aria-hidden="true">delete</span>
+            {{ deletingOrder() ? "Eliminando..." : "Eliminar pedido" }}
+          </button>
+          <div class="sheet-actions">
+            <button type="button" class="btn ghost" (click)="closeMoreActionsSheet()">Cerrar</button>
+          </div>
+        </div>
+      </div>
+    }
+
     <section class="final-flow-strip" aria-label="Flujo final del pedido">
-      @for (pill of finalStatePills(current); track pill.title) {
+      @for (pill of finalStatePills(current); track pill.title; let last = $last) {
         <article class="final-flow-pill" [class]="'tone-' + pill.tone">
-          <span class="material-symbols-rounded" aria-hidden="true">{{ pill.icon }}</span>
+          <span class="final-flow-pill-dot">
+            <span class="material-symbols-rounded" aria-hidden="true">{{ pill.icon }}</span>
+          </span>
           <div>
             <small>{{ pill.title }}</small>
             <strong>{{ pill.label }}</strong>
           </div>
         </article>
+        @if (!last) {
+          <span class="final-flow-connector" [class.tone-ok]="pill.tone === 'ok'"></span>
+        }
       }
     </section>
 
@@ -488,90 +544,75 @@
       </div>
     }
 
-    <section class="summary" [class.summary--five]="vm.isPackingWorkflowPhase" aria-label="Resumen del pedido">
-      <article class="summary-card summary-card--pieces">
-        <span
-          class="summary-progress-ring"
-          aria-hidden="true"
-          [style.--progress]="vm.confirmedPiecesPercent"
-        >
-          <span class="summary-progress-ring__value">
-            {{ vm.confirmedPiecesPercent }}%
-          </span>
-        </span>
-        <div>
-          <p class="eyebrow">Piezas</p>
-          <p class="summary-ratio">
-            <strong class="summary-value">{{ vm.confirmedPieces }}</strong>
-            <span>/ {{ vm.totalPieces }}</span>
+    <section class="summary" aria-label="Resumen del pedido">
+      <div class="summary-primary">
+        <article class="summary-card summary-card--cobro">
+          <p class="eyebrow">
+            <span class="material-symbols-rounded" aria-hidden="true">account_balance_wallet</span>
+            Cobro cliente
           </p>
-          <p class="summary-note" [class.summary-note--warning]="vm.pendingPieces > 0">
-            {{ vm.pendingPieces }} pieza{{ vm.pendingPieces === 1 ? "" : "s" }} pendientes
-          </p>
-        </div>
-      </article>
-
-      @if (vm.isPackingWorkflowPhase) {
-        <article class="summary-card">
-          <p class="eyebrow">Paquetes</p>
-          <p class="summary-ratio">
-            <strong class="summary-value">{{ vm.closedPackagesCount }}</strong>
-            <span>/ {{ vm.packingBoxesCount }}</span>
-          </p>
+          <p class="summary-value">{{ formatCurrency(vm.orderBalanceDue) }}</p>
         </article>
-      }
 
-      <article class="summary-card summary-card--money">
-        <p class="eyebrow">Total venta</p>
-        <p class="summary-money">
-          <span>MXN</span>
-          <strong class="summary-value">{{ formatCurrency(vm.totals.totalVenta) }}</strong>
-        </p>
-      </article>
+        <article class="summary-card">
+          <p class="eyebrow">
+            <span class="material-symbols-rounded" aria-hidden="true">sell</span>
+            Total venta
+          </p>
+          <p class="summary-value">{{ formatCurrency(vm.totals.totalVenta) }}</p>
+        </article>
 
-      <article class="summary-card summary-card--money">
-        <p class="eyebrow">Total clienta</p>
-        <p class="summary-money">
-          <span>MXN</span>
-          <strong class="summary-value">{{ formatCurrency(vm.totals.totalClienta) }}</strong>
-        </p>
-        @if (totals().devoluciones > 0) {
-          <p class="summary-note summary-note--return">Devuelto: -{{ formatCurrency(totals().devoluciones) }}</p>
+        <article class="summary-card summary-card--profit">
+          <p class="eyebrow">
+            <span class="material-symbols-rounded" aria-hidden="true">trending_up</span>
+            Ganancia
+          </p>
+          <p class="summary-value summary-value--profit">{{ formatCurrency(vm.totals.ganancia) }}</p>
+        </article>
+      </div>
+
+      <div class="summary-secondary">
+        <span class="summary-chip">
+          <span class="material-symbols-rounded" aria-hidden="true">inventory</span>
+          Piezas <strong>{{ vm.confirmedPieces }}/{{ vm.totalPieces }}</strong>
+        </span>
+        @if (vm.isPackingWorkflowPhase) {
+          <span class="summary-chip">
+            <span class="material-symbols-rounded" aria-hidden="true">deployed_code</span>
+            Paquetes <strong>{{ vm.closedPackagesCount }}/{{ vm.packingBoxesCount }}</strong>
+          </span>
         }
-      </article>
-
-      <article class="summary-card summary-card--profit">
-        <p class="eyebrow">Ganancia</p>
-        <p class="summary-money summary-money--profit">
-          <span>MXN</span>
-          <strong class="summary-value summary-value--profit">{{ formatCurrency(vm.totals.ganancia) }}</strong>
-        </p>
-      </article>
+      </div>
     </section>
 
-    <nav class="section-nav" aria-label="Navegacion de secciones">
-      <button type="button" (click)="scrollToSection('incidencias')">
+    <nav class="section-nav" aria-label="Navegacion de secciones" role="tablist">
+      <button type="button" role="tab" [attr.aria-selected]="activeTab() === 'productos'" [class.is-active]="activeTab() === 'productos'" (click)="setActiveTab('productos')">
+        <span class="material-symbols-rounded" aria-hidden="true">shopping_bag</span>
+        Productos
+        @if (current.items.length) {
+          <span class="section-nav-count">{{ current.items.length }}</span>
+        }
+      </button>
+      <button type="button" role="tab" [attr.aria-selected]="activeTab() === 'paquetes'" [class.is-active]="activeTab() === 'paquetes'" (click)="setActiveTab('paquetes')">
+        <span class="material-symbols-rounded" aria-hidden="true">deployed_code</span>
+        Paquetes
+        @if (current.packages.length) {
+          <span class="section-nav-count">{{ current.packages.length }}</span>
+        }
+      </button>
+      <button type="button" role="tab" [attr.aria-selected]="activeTab() === 'incidencias'" [class.is-active]="activeTab() === 'incidencias'" (click)="setActiveTab('incidencias')">
         <span class="material-symbols-rounded" aria-hidden="true">warning</span>
         Incidencias
       </button>
-      <button type="button" (click)="scrollToSection('productos')">
-        <span class="material-symbols-rounded" aria-hidden="true">inventory_2</span>
-        Productos
-      </button>
-      <button type="button" (click)="scrollToSection('paquetes')">
-        <span class="material-symbols-rounded" aria-hidden="true">deployed_code</span>
-        Paquetes
-      </button>
-      <button type="button" (click)="scrollToSection('bitacora')">
+      <button type="button" role="tab" [attr.aria-selected]="activeTab() === 'bitacora'" [class.is-active]="activeTab() === 'bitacora'" (click)="setActiveTab('bitacora')">
         <span class="material-symbols-rounded" aria-hidden="true">history</span>
         Bitacora
       </button>
     </nav>
 
     @if (resolvedIncidents(); as resolvedIncidentsList) {
-    <section class="panel" id="incidencias" #incidentsSection>
+    <section class="panel" id="incidencias" #incidentsSection [class.tab-hidden]="activeTab() !== 'incidencias'">
       <div class="panel-head">
-        <h2>Incidencias</h2>
         <div class="panel-actions">
           <button type="button" class="btn ghost with-icon" (click)="openIncidentModal()">
             <span class="material-symbols-rounded btn-icon" aria-hidden="true">add</span>
@@ -656,41 +697,36 @@
     </section>
     }
 
-    <section class="panel" id="productos" (click)="closeProductMenus()">
+    <section class="panel" id="productos" [class.tab-hidden]="activeTab() !== 'productos'" (click)="closeProductMenus()">
       <div class="panel-head">
-        <h2>Productos</h2>
         <div class="panel-actions">
           @if (vm.canAddProducts) {
             <button type="button" class="btn primary with-icon" (click)="openAddItemModal()">
               <span class="material-symbols-rounded btn-icon" aria-hidden="true">add</span>
               Agregar producto
             </button>
-            <button type="button" class="btn ghost icon-only barcode-btn" aria-label="Escanear codigo de producto" (click)="openBarcodeScanner('add')">
+            <button type="button" class="btn ghost icon-only barcode-btn" aria-label="Escanear codigo de producto" title="Escanear" (click)="openBarcodeScanner('add')">
               <span class="material-symbols-rounded btn-icon" aria-hidden="true">photo_camera</span>
             </button>
             <button
               type="button"
-              class="btn ghost with-icon physical-scan-btn"
+              class="btn ghost icon-only physical-scan-btn"
               [class.active]="physicalScannerMode() === 'add'"
               (click)="togglePhysicalBarcodeScanner('add')"
+              [title]="physicalScannerMode() === 'add' ? 'PC activo' : 'Scanner PC'"
+              [attr.aria-label]="physicalScannerMode() === 'add' ? 'PC activo' : 'Scanner PC'"
             >
               <span class="material-symbols-rounded btn-icon" aria-hidden="true">barcode_scanner</span>
-              {{ physicalScannerMode() === "add" ? "PC activo" : "Scanner PC" }}
             </button>
           }
           @if (!isOrderClosed(current)) {
-            <button type="button" class="discount-card-btn" (click)="openDiscountModal()">
-              <span class="material-symbols-rounded discount-card-btn__icon" aria-hidden="true">remove_circle</span>
-              <span class="discount-card-btn__body">
-                <span class="discount-card-btn__title">
-                  {{ orderDiscountAmount(current) > 0 ? "Editar descuento" : "Agregar descuento" }}
-                </span>
-                @if (orderDiscountAmount(current) > 0) {
-                  <span class="discount-card-btn__meta">-${{ orderDiscountAmount(current) | number:'1.2-2' }}</span>
-                } @else {
-                  <span class="discount-card-btn__meta">Sin descuento</span>
-                }
-              </span>
+            <button type="button" class="discount-card-btn" [class.has-discount]="orderDiscountAmount(current) > 0" (click)="openDiscountModal()">
+              <span class="material-symbols-rounded discount-card-btn__icon" aria-hidden="true">local_offer</span>
+              @if (orderDiscountAmount(current) > 0) {
+                -{{ formatCurrency(orderDiscountAmount(current)) }} descuento global
+              } @else {
+                Sin descuento global
+              }
             </button>
           }
           @if (productBulkActionType(current); as bulkAction) {
@@ -704,7 +740,6 @@
               {{ bulkAction === "mark_received" ? "Marcar todo recibido" : "Marcar todo disponible" }}
             </button>
           }
-          <p class="muted">Escanea o cambia el estado por producto.</p>
         </div>
       </div>
       @if (unregisteredItemsCount(current) > 0) {
@@ -726,15 +761,6 @@
           <button
             type="button"
             class="products-filter-btn"
-            [class.active]="productStockFilter() === 'out_of_stock'"
-            [disabled]="vm.outOfStockItems === 0"
-            (click)="setProductStockFilter('out_of_stock')"
-          >
-            Sin stock ({{ vm.outOfStockItems }})
-          </button>
-          <button
-            type="button"
-            class="products-filter-btn"
             [class.active]="productStockFilter() === 'confirmed'"
             [disabled]="vm.confirmedItems === 0"
             (click)="setProductStockFilter('confirmed')"
@@ -749,6 +775,15 @@
             (click)="setProductStockFilter('pending')"
           >
             Pendientes ({{ vm.pendingConfirmationItems }})
+          </button>
+          <button
+            type="button"
+            class="products-filter-btn"
+            [class.active]="productStockFilter() === 'out_of_stock'"
+            [disabled]="vm.outOfStockItems === 0"
+            (click)="setProductStockFilter('out_of_stock')"
+          >
+            Sin stock ({{ vm.outOfStockItems }})
           </button>
         </div>
       }
@@ -939,8 +974,93 @@
 
               <div class="footer-row">
                 <div class="price-stack">
-                  <span class="price-label">Precio Clienta</span>
+                  <div class="price-stack-head">
+                    <span class="price-label">Precio Clienta</span>
+                    @if (vm.canEditItems) {
+                      <button
+                        type="button"
+                        class="price-edit-btn"
+                        aria-label="Definir descuento para precio clienta"
+                        (click)="openQuickDiscount(item, $any($event.currentTarget)); $event.stopPropagation()"
+                      >
+                        <span class="material-symbols-rounded" aria-hidden="true">more_horiz</span>
+                      </button>
+                    }
+                  </div>
                   <span class="price-value">{{ formatCurrency(item.price_clienta ?? item.price_public ?? 0) }}</span>
+                  @if (itemDiscountBadge(item); as badge) {
+                    <span class="price-discount-badge">
+                      <span class="material-symbols-rounded" aria-hidden="true">local_offer</span>
+                      {{ badge }}
+                    </span>
+                  }
+                  @if (quickDiscountItemId() === item.item_id) {
+                    <div
+                      class="clienta-discount-popover"
+                      [class.clienta-discount-popover--up]="quickDiscountUpward()"
+                      [class.clienta-discount-popover--left]="quickDiscountLeftAlign()"
+                      (click)="$event.stopPropagation()"
+                    >
+                      <p class="clienta-discount-popover-title">
+                        <span class="material-symbols-rounded" aria-hidden="true">sell</span>
+                        Definir descuento
+                      </p>
+                      <div class="clienta-discount-seg">
+                        <button type="button" [class.is-active]="quickDiscountMode() === 'pct'" (click)="setQuickDiscountMode('pct')">
+                          % Descuento
+                        </button>
+                        <button type="button" [class.is-active]="quickDiscountMode() === 'fixed'" (click)="setQuickDiscountMode('fixed')">
+                          $ Fijo
+                        </button>
+                      </div>
+                      @if (quickDiscountMode() === "pct") {
+                        <div class="clienta-discount-chips">
+                          @for (pct of [10, 15, 20, 25, 30]; track pct) {
+                            <button type="button" [class.is-active]="quickDiscountPct() === pct" (click)="setQuickDiscountPct(pct)">
+                              {{ pct }}%
+                            </button>
+                          }
+                        </div>
+                        <label class="clienta-discount-custom">
+                          <span>Personalizado</span>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            [value]="quickDiscountPct()"
+                            (input)="setQuickDiscountPct($any($event.target).valueAsNumber)"
+                          />
+                          <span>%</span>
+                        </label>
+                      } @else {
+                        <label class="clienta-discount-custom">
+                          <span>Descuento fijo</span>
+                          <span>MXN</span>
+                          <input
+                            type="number"
+                            min="0"
+                            [value]="quickDiscountFixed()"
+                            (input)="setQuickDiscountFixed($any($event.target).valueAsNumber)"
+                          />
+                        </label>
+                      }
+                      <div class="clienta-discount-preview">
+                        <span>Precio clienta</span>
+                        <strong>{{ previewQuickDiscount(item) === null ? "—" : formatCurrency(previewQuickDiscount(item)!) }}</strong>
+                      </div>
+                      <div class="clienta-discount-actions">
+                        <button type="button" class="btn ghost" (click)="closeQuickDiscount()">Cancelar</button>
+                        <button
+                          type="button"
+                          class="btn primary"
+                          [disabled]="previewQuickDiscount(item) === null || quickDiscountSaving()"
+                          (click)="applyQuickDiscount(item)"
+                        >
+                          Aplicar
+                        </button>
+                      </div>
+                    </div>
+                  }
                 </div>
 
                 <div class="action-stack">
@@ -1014,7 +1134,7 @@
 
     @if (vm.canCreatePackages) {
       @if (packingVm(); as packing) {
-      <section class="panel package-shell packing-mode" id="paquetes" #packagesSection>
+      <section class="panel package-shell packing-mode" id="paquetes" #packagesSection [class.tab-hidden]="activeTab() !== 'paquetes'">
         <header class="packHeader">
           <h2>Empacando Pedido</h2>
           <p>{{ packing.unpackedCount }} pendientes por empacar</p>
@@ -1269,10 +1389,7 @@
       }
     } @else if (hasPackingStarted(current)) {
       @if (packingVm(); as packing) {
-        <section class="panel package-shell" id="paquetes" #packagesSection>
-          <div class="panel-head">
-            <h2>Paquetes</h2>
-          </div>
+        <section class="panel package-shell" id="paquetes" #packagesSection [class.tab-hidden]="activeTab() !== 'paquetes'">
           @if (packing.closedBoxes.length > 0) {
             <div class="closedList">
               @for (pkg of packing.closedBoxes; track pkg.pkg.package_id) {
@@ -1327,15 +1444,12 @@
         </section>
       }
     } @else {
-      <section class="panel locked package-shell" id="paquetes" #packagesSection>
-        <div class="panel-head">
-          <h2>Paquetes</h2>
-        </div>
+      <section class="panel locked package-shell" id="paquetes" #packagesSection [class.tab-hidden]="activeTab() !== 'paquetes'">
         <p class="muted package-empty-note">Los paquetes se habilitan al recibir/QA o empaque.</p>
       </section>
     }
 
-    <section class="panel" id="bitacora" #timelineSection>
+    <section class="panel" id="bitacora" #timelineSection [class.tab-hidden]="activeTab() !== 'bitacora'">
       <app-activity-log
         [events]="events()"
         [hasMore]="eventsHasMore()"
@@ -2053,7 +2167,7 @@
         } @else if (barcodeScannerMessage()) {
           <p class="scanner-parent-status">{{ barcodeScannerMessage() }}</p>
         }
-        @if (barcodeMatches().length > 1) {
+        @if (barcodeSelectionRequired()) {
           <div class="barcode-match-list">
             <p>Elige el producto correcto</p>
             @for (match of barcodeMatches(); track barcodeMatchMeta(match)) {
@@ -2099,7 +2213,7 @@
         } @else if (barcodeScannerMessage()) {
           <p class="physical-scanner-panel__status">{{ barcodeScannerMessage() }}</p>
         }
-        @if (barcodeMatches().length > 1) {
+        @if (barcodeSelectionRequired()) {
           <div class="barcode-match-list barcode-match-list--physical">
             <p>Elige el producto correcto</p>
             @for (match of barcodeMatches(); track barcodeMatchMeta(match)) {
@@ -2170,9 +2284,8 @@
               {{ isConvertMode() ? "Convertir item manual" : (isEditMode() ? "Editar producto" : "Agregar producto") }}
             </h2>
           </div>
-          <button type="button" class="btn ghost" (click)="closeAddItemModal()">
+          <button type="button" class="btn ghost" aria-label="Cerrar" (click)="closeAddItemModal()">
             <span class="material-symbols-rounded" aria-hidden="true">close</span>
-            Cerrar
           </button>
         </div>
         <div class="sheet-body" (scroll)="onAddItemSheetScroll()">
@@ -2242,7 +2355,7 @@
                     #productSearchInput
                     class="input"
                     type="text"
-                    [placeholder]="isCatalogoOrder() ? 'Buscar SKU de Catálogo' : 'Nombre, variante o color'"
+                    [placeholder]="isCatalogoOrder() ? 'Código de barras, internet, genérico, modelo o estilo' : 'Nombre, variante o color'"
                     [ngModel]="newItemSearch()"
                     (ngModelChange)="onNewItemSearchChange($event)"
                   (focus)="showProductList.set(true)"
@@ -2251,12 +2364,12 @@
                   />
                 </div>
               </div>
-              @if (showProductList() && (inventorySuggestions().length > 0 || catalogSuggestions().length > 0 || catalogProductSuggestions().length > 0 || catalogProductSearching())) {
+              @if (showProductList() && (inventorySuggestions().length > 0 || catalogSuggestions().length > 0 || catalogProductSuggestions().length > 0 || catalogProductSearching() || catalogProductSearchAttempted() || catalogProductSearchError())) {
                 <div class="listbox" role="listbox" aria-label="Resultados de productos">
                   @if (catalogProductSearching()) {
-                    <div class="listbox-option listbox-option--loading">
+                    <div class="listbox-option listbox-option--loading" role="status" aria-live="polite">
                       <span class="material-symbols-rounded" aria-hidden="true">progress_activity</span>
-                      Buscando SKU...
+                      Buscando identificadores y variantes...
                     </div>
                   }
                   @for (s of inventorySuggestions(); track s.inventory_id) {
@@ -2309,30 +2422,84 @@
                       </span>
                     </button>
                   }
-                  @for (p of catalogProductSuggestions(); track p.product_id) {
-                    <button type="button" role="option" class="listbox-option" [attr.aria-label]="'Catálogo SKU: ' + p.sku" (mousedown)="$event.preventDefault(); beginProductPick(); pickCatalogProduct(p)" (touchstart)="$event.preventDefault(); beginProductPick(); pickCatalogProduct(p)" (click)="beginProductPick(); pickCatalogProduct(p)">
-                      @if (p.image_url) {
-                        <img class="listbox-thumb" [src]="p.image_url" alt="" />
-                      } @else {
-                        <div class="photo-placeholder photo-placeholder-sm" aria-hidden="true">
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M4 7h4l2-2h4l2 2h4v12H4z"></path>
-                            <circle cx="12" cy="13" r="3"></circle>
-                          </svg>
+                  @for (result of catalogProductSuggestions(); track result.result_id) {
+                    <div
+                      class="catalog-search-result"
+                      [class.catalog-search-result--group]="result.requires_selection"
+                      role="group"
+                      [attr.aria-label]="catalogSearchResultTitle(result)"
+                    >
+                      @if (result.bundle; as bundle) {
+                        <div class="catalog-search-result__head">
+                          <span class="material-symbols-rounded" aria-hidden="true">inventory_2</span>
+                          <span>
+                            <strong>{{ bundle.name }}</strong>
+                            <small>{{ catalogSearchResultMeta(result) }} · {{ bundle.components.length }} componente(s)</small>
+                          </span>
+                        </div>
+                        <p class="catalog-search-empty">
+                          Combo registrado. Selecciona sus componentes y tallas por separado; el sistema no empareja tallas automáticamente.
+                        </p>
+                      } @else if (result.requires_selection) {
+                        <div class="catalog-search-result__head">
+                          <span class="material-symbols-rounded" aria-hidden="true">account_tree</span>
+                          <span>
+                            <strong>{{ catalogSearchResultTitle(result) }}</strong>
+                            <small>{{ catalogSearchResultMeta(result) }} · Elige la variante correcta</small>
+                          </span>
                         </div>
                       }
-                      <div class="listbox-main">
-                        <div class="card-title">{{ p.name }}</div>
-                        <div class="card-meta">
-                          <span class="material-symbols-rounded" aria-hidden="true">tag</span>
-                          {{ p.sku }} · {{ p.category || "Sin categoría" }}
-                        </div>
-                      </div>
-                      <span class="card-tag cat">
-                        <span class="material-symbols-rounded" aria-hidden="true">storefront</span>
-                        Catálogo
-                      </span>
-                    </button>
+                      @for (p of result.bundle ? [] : result.variants; track p.product_id) {
+                        <button
+                          type="button"
+                          role="option"
+                          class="listbox-option"
+                          [attr.aria-label]="p.name + ', ' + catalogProductDisplayCode(p) + ', ' + (p.color || 'sin color') + ', ' + (p.size || 'sin talla')"
+                          (mousedown)="$event.preventDefault(); beginProductPick(); pickCatalogProduct(p)"
+                          (touchstart)="$event.preventDefault(); beginProductPick(); pickCatalogProduct(p)"
+                          (click)="beginProductPick(); pickCatalogProduct(p)"
+                        >
+                          @if (p.image_url) {
+                            <img class="listbox-thumb" [src]="p.image_url" alt="" />
+                          } @else {
+                            <div class="photo-placeholder photo-placeholder-sm" aria-hidden="true">
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M4 7h4l2-2h4l2 2h4v12H4z"></path>
+                                <circle cx="12" cy="13" r="3"></circle>
+                              </svg>
+                            </div>
+                          }
+                          <div class="listbox-main">
+                            <div class="card-title">{{ p.name }}</div>
+                            <div class="card-meta">
+                              <span class="material-symbols-rounded" aria-hidden="true">tag</span>
+                              {{ catalogProductDisplayCode(p) }} · {{ p.color || "Sin color" }} · {{ p.size || "Sin talla" }}
+                            </div>
+                            @if (!result.requires_selection) {
+                              <div class="catalog-search-match">{{ catalogSearchResultMeta(result) }}</div>
+                            }
+                          </div>
+                          <span class="card-tag cat">
+                            <span class="material-symbols-rounded" aria-hidden="true">storefront</span>
+                            Variante
+                          </span>
+                        </button>
+                      } @empty {
+                        @if (!result.bundle) {
+                        <p class="catalog-search-empty">Este grupo todavía no tiene variantes vendibles.</p>
+                        }
+                      }
+                    </div>
+                  }
+                  @if (!catalogProductSearching() && catalogProductSearchAttempted() && catalogProductSuggestions().length === 0 && inventorySuggestions().length === 0 && catalogSuggestions().length === 0) {
+                    <div class="catalog-search-empty" role="status" aria-live="polite">
+                      No encontramos productos con ese código. Revisa el proveedor o intenta con otro identificador.
+                    </div>
+                  }
+                  @if (catalogProductSearchError()) {
+                    <div class="catalog-search-empty catalog-search-empty--error" role="alert">
+                      {{ catalogProductSearchError() }}
+                    </div>
                   }
                 </div>
               }
@@ -2464,7 +2631,7 @@
               />
             </div>
           }
-          <div class="field">
+          <div class="field price-row-field">
             <label>
               <span class="material-symbols-rounded" aria-hidden="true">tag</span>
               Cantidad
@@ -2477,29 +2644,44 @@
               [disabled]="!canSubmitNewItem() || !vm.canEditItems"
             />
           </div>
-          <div class="field">
-            <label>
-              <span class="material-symbols-rounded" aria-hidden="true">payments</span>
-              Precio final
-            </label>
-            <div class="money" [class.money-invalid]="priceRuleInvalid()">
-              <span>MXN</span>
-              <input
-                class="input"
-                type="text"
-                [value]="priceDisplayValue('final')"
-                (focus)="onPriceInputFocus('final')"
-                (input)="onPriceInputChange('final', $any($event.target).value)"
-                (blur)="onPriceInputBlur('final')"
-                [disabled]="!canSubmitNewItem() || !vm.canEditItems"
-              />
+          @if (!selectedCatalogProduct()) {
+            <div class="field price-row-field">
+              <label>
+                <span class="material-symbols-rounded" aria-hidden="true">payments</span>
+                Precio final
+              </label>
+              <div class="money" [class.money-invalid]="priceRuleInvalid()">
+                <span>MXN</span>
+                <input
+                  class="input"
+                  type="text"
+                  [value]="priceDisplayValue('final')"
+                  (focus)="onPriceInputFocus('final')"
+                  (input)="onPriceInputChange('final', $any($event.target).value)"
+                  (blur)="onPriceInputBlur('final')"
+                  [disabled]="!canSubmitNewItem() || !vm.canEditItems"
+                />
+              </div>
             </div>
-          </div>
-          <div class="field">
-            <label>
-              <span class="material-symbols-rounded" aria-hidden="true">person</span>
-              Precio clienta
-            </label>
+          }
+          <div class="field field-clienta-price price-row-field">
+            <div class="field-label-row">
+              <label>
+                <span class="material-symbols-rounded" aria-hidden="true">person</span>
+                {{ selectedCatalogProduct() ? "Precio de venta" : "Precio clienta" }}
+              </label>
+              @if (showClientaDiscountButton()) {
+                <button
+                  type="button"
+                  class="clienta-discount-btn"
+                  aria-label="Definir descuento para precio clienta"
+                  [attr.aria-expanded]="clientaDiscountOpen()"
+                  (click)="toggleClientaDiscount($any($event.currentTarget)); $event.stopPropagation()"
+                >
+                  <span class="material-symbols-rounded" aria-hidden="true">more_horiz</span>
+                </button>
+              }
+            </div>
             <div class="money" [class.money-readonly]="!canEditClientaPrice(current)" [class.money-invalid]="priceRuleInvalid()">
               <span>MXN</span>
               <input
@@ -2513,8 +2695,65 @@
                 [disabled]="!canSubmitNewItem() || !canEditClientaPrice(current)"
               />
             </div>
+            @if (clientaDiscountOpen()) {
+              <div class="clienta-discount-popover" [class.clienta-discount-popover--up]="clientaDiscountOpenUpward()" (click)="$event.stopPropagation()">
+                <p class="clienta-discount-popover-title">
+                  <span class="material-symbols-rounded" aria-hidden="true">sell</span>
+                  Definir precio clienta
+                </p>
+                <div class="clienta-discount-seg">
+                  <button type="button" [class.is-active]="clientaDiscountMode() === 'pct'" (click)="setClientaDiscountMode('pct')">
+                    % Descuento
+                  </button>
+                  <button type="button" [class.is-active]="clientaDiscountMode() === 'fixed'" (click)="setClientaDiscountMode('fixed')">
+                    $ Fijo
+                  </button>
+                </div>
+                @if (clientaDiscountMode() === "pct") {
+                  <div class="clienta-discount-chips">
+                    @for (pct of [10, 15, 20, 25, 30]; track pct) {
+                      <button type="button" [class.is-active]="clientaDiscountPct() === pct" (click)="setClientaDiscountPct(pct)">
+                        {{ pct }}%
+                      </button>
+                    }
+                  </div>
+                  <label class="clienta-discount-custom">
+                    <span>Personalizado</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      [value]="clientaDiscountPct()"
+                      (input)="setClientaDiscountPct($any($event.target).valueAsNumber)"
+                    />
+                    <span>%</span>
+                  </label>
+                } @else {
+                  <label class="clienta-discount-custom">
+                    <span>Descuento fijo</span>
+                    <span>MXN</span>
+                    <input
+                      type="number"
+                      min="0"
+                      [value]="clientaDiscountFixed()"
+                      (input)="setClientaDiscountFixed($any($event.target).valueAsNumber)"
+                    />
+                  </label>
+                }
+                <div class="clienta-discount-preview">
+                  <span>Precio clienta</span>
+                  <strong>{{ previewClientaDiscount() === null ? "—" : formatCurrency(previewClientaDiscount()!) }}</strong>
+                </div>
+                <div class="clienta-discount-actions">
+                  <button type="button" class="btn ghost" (click)="closeClientaDiscount()">Cancelar</button>
+                  <button type="button" class="btn primary" [disabled]="previewClientaDiscount() === null" (click)="applyClientaDiscount()">
+                    Aplicar
+                  </button>
+                </div>
+              </div>
+            }
           </div>
-          <div class="field">
+          <div class="field price-row-field">
             <label>
               <span class="material-symbols-rounded" aria-hidden="true">receipt_long</span>
               Precio costo
@@ -2533,13 +2772,52 @@
               />
             </div>
           </div>
+          @if (clientaDiscountSummary(); as discountSummary) {
+            <p class="clienta-discount-caption">
+              <span class="material-symbols-rounded" aria-hidden="true">sell</span>
+              {{ discountSummary }}
+            </p>
+          }
+          @if (selectedCatalogProduct()) {
+            <div class="catalog-price-summary" [class.catalog-price-summary--negative]="priceRuleInvalid()" role="status" aria-live="polite">
+              <span class="material-symbols-rounded" aria-hidden="true">{{ priceRuleInvalid() ? "warning" : "trending_up" }}</span>
+              <strong>{{ catalogPriceMarginLabel() }}</strong>
+            </div>
+            @if (priceOverrideError() && !priceOverrideNeedsReason()) {
+              <p class="field-error catalog-price-error" role="alert">{{ priceOverrideError() }}</p>
+            }
+            @if (priceOverrideNeedsReason()) {
+              <div class="field catalog-price-reason">
+                <label for="catalog-price-override-reason">
+                  <span class="material-symbols-rounded" aria-hidden="true">edit_note</span>
+                  Motivo del ajuste
+                </label>
+                <textarea
+                  id="catalog-price-override-reason"
+                  class="input"
+                  rows="3"
+                  maxlength="280"
+                  [ngModel]="priceOverrideReason()"
+                  (ngModelChange)="priceOverrideReason.set($event); priceOverrideError.set(null)"
+                  [attr.aria-describedby]="priceOverrideError() ? 'catalog-price-override-error' : null"
+                  placeholder="Explica por qué se usará este precio (mínimo 8 caracteres)."
+                ></textarea>
+                @if (priceOverrideError()) {
+                  <p id="catalog-price-override-error" class="field-error" role="alert">{{ priceOverrideError() }}</p>
+                }
+                @if (priceRuleInvalid() && !canAuthorizeBelowCost()) {
+                  <p class="field-error" role="alert">Tu usuario no puede autorizar ventas por debajo del costo.</p>
+                }
+              </div>
+            }
+          }
         </div>
         </div>
         <div class="sheet-footer">
+          <button type="button" class="btn ghost" (click)="closeAddItemModal()">Cancelar</button>
           <button type="button" class="btn primary" (click)="submitItemForm(current)" [disabled]="!canSubmitNewItem() || !vm.canEditItems">
             {{ isConvertMode() ? "Convertir item" : (isEditMode() ? "Guardar cambios" : "Anadir al pedido") }}
           </button>
-          <button type="button" class="btn danger" (click)="closeAddItemModal()">Cancelar</button>
         </div>
       </div>
       @if (isManualSource() && manualSuggestionsOpen() && manualSuggestions().length > 0) {
@@ -2874,6 +3152,4 @@
     <button type="button" class="btn" routerLink="/main/pedidos">Volver a la lista</button>
   </section>
 }
-
-
 

@@ -28,12 +28,13 @@ describe("TrackingPortalService", () => {
     request.flush({});
   });
 
-  it("pagina el historial en bloques de diez con cursor opaco", () => {
-    service.loadHistory("token", "cursor+opaco=").subscribe();
+  it("pagina el historial en bloques de diez con cursor opaco y el modo (bm/catalogo)", () => {
+    service.loadHistory("token", "cursor+opaco=", "catalogo").subscribe();
 
     const request = http.expectOne((candidate) => candidate.url.endsWith("/api/track/token/history"));
     expect(request.request.params.get("cursor")).toBe("cursor+opaco=");
     expect(request.request.params.get("limit")).toBe("10");
+    expect(request.request.params.get("mode")).toBe("catalogo");
     request.flush({ items: [], next_cursor: null });
   });
 

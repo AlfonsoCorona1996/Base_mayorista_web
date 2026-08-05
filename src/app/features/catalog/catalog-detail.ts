@@ -30,11 +30,18 @@ export default class CatalogDetailPage {
     { value: "unknown_qty", label: "Sin confirmar" },
   ];
 
-  readonly priceFields: Array<{ key: PriceFieldKey; label: string; icon: string }> = [
+  private readonly basePriceFields: Array<{ key: PriceFieldKey; label: string; icon: string }> = [
     { key: "precio_costo", label: "Costo", icon: "payments" },
     { key: "precio_clienta", label: "Precio clienta", icon: "badge" },
     { key: "precio_final", label: "Precio final", icon: "sell" },
   ];
+
+  /** "Manuales Catálogo" ya no maneja precio final/público, solo costo y clienta. "Manuales BM" conserva los 3. */
+  priceFields = computed<Array<{ key: PriceFieldKey; label: string; icon: string }>>(() =>
+    this.doc()?.business_id === "catalogo"
+      ? this.basePriceFields.filter((field) => field.key !== "precio_final")
+      : this.basePriceFields,
+  );
 
   id = inject(ActivatedRoute).snapshot.paramMap.get("id") || "";
 
@@ -154,7 +161,7 @@ export default class CatalogDetailPage {
     if (!d) return [];
 
     const currency = this.preferredCurrency();
-    return this.priceFields.map((field) => {
+    return this.priceFields().map((field) => {
       const values = d.listing.items
         .map((item) => this.toValidPrice(item.prices?.[field.key]))
         .filter((value): value is number => value !== null);
@@ -252,11 +259,12 @@ export default class CatalogDetailPage {
   }
 
   priceIssue(item: NormalizedItemV3): string | null {
+    const isCatalogo = this.doc()?.business_id === "catalogo";
     const cost = this.toValidPrice(item.prices?.precio_costo);
     const client = this.toValidPrice(item.prices?.precio_clienta);
-    const final = this.toValidPrice(item.prices?.precio_final);
+    const final = isCatalogo ? null : this.toValidPrice(item.prices?.precio_final);
 
-    if (cost === null || client === null || final === null) {
+    if (cost === null || client === null || (!isCatalogo && final === null)) {
       return "Faltan precios por capturar en esta variante.";
     }
 
@@ -264,7 +272,7 @@ export default class CatalogDetailPage {
       return "Precio clienta menor que costo. Revisa margen.";
     }
 
-    if (final < client) {
+    if (!isCatalogo && final !== null && final < client) {
       return "Precio final menor que precio clienta.";
     }
 

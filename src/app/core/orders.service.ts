@@ -25,6 +25,9 @@ import { BusinessScopeService } from "./business-scope.service";
 import { BusinessId, normalizeBusinessId } from "./rbac.constants";
 import { calculateOrderFinancials, toPersistedOrderTotals } from "./order-financials";
 import { InventoryService } from "./inventory.service";
+import { lastValueFrom } from "rxjs";
+import { UserAdminApiService } from "../services/user-admin-api.service";
+import { buildOrderItemsUpdateRequest, mergeAuthoritativeOrderItems } from "./order-items-api";
 import {
   isSupplierReceiptComplete,
   supplierOperationReservedForOrderId,
@@ -93,6 +96,13 @@ export interface OrderItem {
   price_source_imported_at?: unknown;
   price_warning_ack_at?: string | null;
   price_warning_reason?: string | null;
+  price_selected_tier?: "clienta" | "final" | "manual" | null;
+  price_override_reason?: string | null;
+  price_override_by?: string | null;
+  price_override_at?: string | null;
+  price_override_from?: number | null;
+  price_override_to?: number | null;
+  price_override_below_cost?: boolean | null;
   discount_pct?: number | null;
   inventory_id?: string | null;
   image_url?: string | null;
@@ -304,6 +314,7 @@ export class OrdersService {
   private supplierOperations = inject(SupplierOperationsService);
   private inventory = inject(InventoryService);
   private businessScope = inject(BusinessScopeService);
+  private adminApi = inject(UserAdminApiService);
   loading = signal(false);
   private unsubscribeOrders?: Unsubscribe;
 
@@ -1494,86 +1505,30 @@ export class OrdersService {
   }
 
   async updateItemState(orderId: string, itemId: string, state: OrderItemState) {
-    const now = new Date().toISOString();
-    this.rows.update((current) =>
-      current.map((order) => {
-        if (order.order_id !== orderId) return order;
-        return {
-          ...order,
-          items: order.items.map((item) => (item.item_id === itemId ? { ...item, state } : item)),
-          updated_at: now,
-        };
-      }),
-    );
     const order = this.getById(orderId);
-    if (order) {
-      await updateDoc(doc(this.colRef, orderId), {
-        items: order.items,
-        updated_at: serverTimestamp(),
-      });
-    }
+    if (!order) throw new Error("Pedido no encontrado.");
+    const items = order.items.map((item) => (item.item_id === itemId ? { ...item, state } : item));
+    await this.persistItemsAuthoritatively(orderId, items);
   }
 
   async addItem(orderId: string, item: OrderItem) {
     const nextItem = { ...item, item_id: item.item_id || `item-${Date.now()}` };
-    const now = new Date().toISOString();
-    this.rows.update((current) =>
-      current.map((order) => {
-        if (order.order_id !== orderId) return order;
-        return {
-          ...order,
-          items: [...order.items, nextItem],
-          updated_at: now,
-        };
-      }),
-    );
     const order = this.getById(orderId);
-    if (order) {
-      await updateDoc(doc(this.colRef, orderId), {
-        items: order.items,
-        updated_at: serverTimestamp(),
-      });
-    }
+    if (!order) throw new Error("Pedido no encontrado.");
+    await this.persistItemsAuthoritatively(orderId, [...order.items, nextItem]);
   }
 
   async updateItems(orderId: string, items: OrderItem[]) {
-    const now = new Date().toISOString();
-    let persistedTotals: Record<string, number> | null = null;
-    this.rows.update((current) =>
-      current.map((order) => {
-        if (order.order_id !== orderId) return order;
-        persistedTotals = toPersistedOrderTotals({ ...order, items });
-        return { ...order, items, totals: persistedTotals as unknown as OrderTotals, updated_at: now };
-      }),
-    );
-    await updateDoc(doc(this.colRef, orderId), {
-      items,
-      ...(persistedTotals ? { totals: persistedTotals } : {}),
-      updated_at: serverTimestamp(),
-    });
+    await this.persistItemsAuthoritatively(orderId, items);
   }
 
   async updateItemConfirmationState(orderId: string, itemId: string, confirmation_state: OrderItem["confirmation_state"]) {
-    const now = new Date().toISOString();
-    this.rows.update((current) =>
-      current.map((order) => {
-        if (order.order_id !== orderId) return order;
-        return {
-          ...order,
-          items: order.items.map((item) =>
-            item.item_id === itemId ? { ...item, confirmation_state } : item
-          ),
-          updated_at: now,
-        };
-      }),
-    );
     const order = this.getById(orderId);
-    if (order) {
-      await updateDoc(doc(this.colRef, orderId), {
-        items: order.items,
-        updated_at: serverTimestamp(),
-      });
-    }
+    if (!order) throw new Error("Pedido no encontrado.");
+    const items = order.items.map((item) =>
+      item.item_id === itemId ? { ...item, confirmation_state } : item
+    );
+    await this.persistItemsAuthoritatively(orderId, items);
   }
 
   async updateItemConfirmation(
@@ -1581,32 +1536,34 @@ export class OrdersService {
     itemId: string,
     payload: { confirmation_state: OrderItem["confirmation_state"]; confirmed_qty?: number | null },
   ) {
-    const now = new Date().toISOString();
-    this.rows.update((current) =>
-      current.map((order) => {
-        if (order.order_id !== orderId) return order;
-        return {
-          ...order,
-          items: order.items.map((item) =>
-            item.item_id === itemId
-              ? {
-                  ...item,
-                  confirmation_state: payload.confirmation_state,
-                  confirmed_qty: payload.confirmed_qty ?? null,
-                }
-              : item,
-          ),
-          updated_at: now,
-        };
-      }),
-    );
     const order = this.getById(orderId);
-    if (order) {
-      await updateDoc(doc(this.colRef, orderId), {
-        items: order.items,
-        updated_at: serverTimestamp(),
-      });
-    }
+    if (!order) throw new Error("Pedido no encontrado.");
+    const items = order.items.map((item) =>
+      item.item_id === itemId
+        ? {
+            ...item,
+            confirmation_state: payload.confirmation_state,
+            confirmed_qty: payload.confirmed_qty ?? null,
+          }
+        : item
+    );
+    await this.persistItemsAuthoritatively(orderId, items);
+  }
+
+  private async persistItemsAuthoritatively(orderId: string, items: OrderItem[]): Promise<void> {
+    const result = await lastValueFrom(this.adminApi.put<{
+      ok: true;
+      order: {
+        order_id: string;
+        items: OrderItem[];
+        totals: OrderTotals;
+        updated_at: string;
+      };
+    }>(`/api/admin/orders/${encodeURIComponent(orderId)}/items`, {
+      ...buildOrderItemsUpdateRequest(items),
+    }));
+    const authoritative = result.order;
+    this.rows.update((current) => mergeAuthoritativeOrderItems(current, orderId, authoritative));
   }
 
   async createSupplierOrders(

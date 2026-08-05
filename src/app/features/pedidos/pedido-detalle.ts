@@ -19,9 +19,13 @@ import { NormalizedListingsService, NormalizedListingDoc } from "../../core/norm
 import { SupplierOperationsService } from "../../core/supplier-operations.service";
 import { isSupplierReceiptComplete } from "../../core/supplier-operation-state";
 import { ManualProductHistoryService, ManualProductEntry } from "../../core/manual-product-history.service";
-import { CatalogProduct, CatalogProductsService } from "../../core/catalog-products.service";
+import {
+  CatalogProduct,
+  CatalogProductSearchResult,
+  CatalogProductsService,
+  catalogProductIdentifierLabel,
+} from "../../core/catalog-products.service";
 import { CatalogImportJobsService } from "../../core/catalog-import-jobs.service";
-import { CatalogBarcodeAliasService } from "../../core/catalog-barcode-alias.service";
 import { ReturnsService, ReturnDisposition, ReturnPaymentResolution, ReturnRecord } from "../../core/returns.service";
 import { availableReturnQty, calculateOrderFinancials, netItemQty, returnedItemQty } from "../../core/order-financials";
 import { FinanceService } from "../../core/finance.service";
@@ -42,6 +46,17 @@ import { ShipmentBusinessSummary, ShipmentItem, ShipmentsService } from "../../c
 import { OperationalExpenseReport, OperationalExpenseReportsService } from "../../core/operational-expense-reports.service";
 
 type EstadoConfirmacion = "pendiente" | "confirmado" | "sin_stock";
+type CatalogPriceTier = "clienta" | "manual";
+type OrderItemPriceAudit = Pick<
+  OrderItem,
+  | "price_selected_tier"
+  | "price_override_reason"
+  | "price_override_by"
+  | "price_override_at"
+  | "price_override_from"
+  | "price_override_to"
+  | "price_override_below_cost"
+>;
 
 type ProductCountsVm = {
   total: number;
@@ -223,7 +238,6 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   private catalogProducts = inject(CatalogProductsService);
   private catalogImportJobs = inject(CatalogImportJobsService);
   private barcodeLookup = inject(BarcodeProductLookupService);
-  private catalogBarcodeAliases = inject(CatalogBarcodeAliasService);
   private physicalBarcodeScanner = inject(PhysicalBarcodeScannerService);
   private supplierOperations = inject(SupplierOperationsService);
   readonly manualHistory = inject(ManualProductHistoryService);
@@ -286,6 +300,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   userRole = signal("admin");
   copiedOrderId = signal(false);
   orderHeadMenuOpen = signal(false);
+  moreActionsSheetOpen = signal(false);
+  activeTab = signal<"incidencias" | "productos" | "paquetes" | "bitacora">("productos");
   actionToast = signal<string | null>(null);
   operationsSheetOpen = signal(false);
   operationalDestination = signal<"durango" | "gdl" | "otro">("durango");
@@ -477,17 +493,39 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   priceWarningLatestImportLabel = signal<string | null>(null);
   priceWarningAckReason = signal<string | null>(null);
   private priceWarningResolver: ((decision: "review" | "use" | "cancel") => void) | null = null;
-  catalogProductSuggestions = signal<CatalogProduct[]>([]);
+  catalogProductSuggestions = signal<CatalogProductSearchResult[]>([]);
   catalogProductSearching = signal(false);
+  catalogProductSearchAttempted = signal(false);
+  catalogProductSearchError = signal<string | null>(null);
   barcodeScannerOpen = signal(false);
   barcodeScannerMode = signal<"add" | "packing">("add");
   barcodeScannerBusy = signal(false);
   barcodeScannerMessage = signal<string | null>(null);
   barcodeMatches = signal<BarcodeProductMatch[]>([]);
+  readonly barcodeSelectionRequired = computed(() => {
+    const matches = this.barcodeMatches();
+    return matches.length > 1 || matches.some((match) => match.selection_required);
+  });
   barcodePendingCode = signal("");
   barcodeOcrFallbackAvailable = signal(false);
   private barcodeAliasSourceCode = signal("");
   private catalogProductSearchTimer: ReturnType<typeof setTimeout> | null = null;
+  private catalogProductSearchRequest = 0;
+  catalogPriceTier = signal<CatalogPriceTier>("clienta");
+  priceOverrideReason = signal("");
+  priceOverrideError = signal<string | null>(null);
+  clientaDiscountOpen = signal(false);
+  clientaDiscountOpenUpward = signal(false);
+  clientaDiscountMode = signal<"pct" | "fixed">("pct");
+  clientaDiscountPct = signal(25);
+  clientaDiscountFixed = signal(0);
+  quickDiscountItemId = signal<string | null>(null);
+  quickDiscountUpward = signal(false);
+  quickDiscountLeftAlign = signal(true);
+  quickDiscountMode = signal<"pct" | "fixed">("pct");
+  quickDiscountPct = signal(25);
+  quickDiscountFixed = signal(0);
+  quickDiscountSaving = signal(false);
   readonly isManualSource = computed(() => this.newItemSource() === "manual");
   readonly isConvertMode = computed(() => this.addItemMode() === "convert");
   readonly isEditMode = computed(() => this.addItemMode() === "edit");
@@ -1298,6 +1336,35 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       devuelto: "Devuelto",
     };
     return map[status];
+  }
+
+  statusIcon(status: OrderStatus): string {
+    const map: Record<OrderStatus, string> = {
+      borrador: "edit_note",
+      confirmando_proveedor: "hourglass_top",
+      reservado_inventario: "inventory_2",
+      solicitado_proveedor: "send",
+      supplier_processing: "storefront",
+      inbound_in_transit: "local_shipping",
+      en_transito: "local_shipping",
+      recibido_qa: "local_shipping",
+      packing: "inventory_2",
+      empaque: "inventory_2",
+      ready_for_route: "local_shipping",
+      assigned_to_run: "route",
+      in_transit: "local_shipping",
+      en_ruta: "local_shipping",
+      delivered: "task_alt",
+      delivered_partial: "task_alt",
+      entregado: "task_alt",
+      closed: "check_circle",
+      pago_pendiente: "schedule",
+      pagado_parcial: "payments",
+      pagado: "payments",
+      cancelado: "cancel",
+      devuelto: "assignment_return",
+    };
+    return map[status] || "monitoring";
   }
 
   statusClass(status: OrderStatus): string {
@@ -2532,7 +2599,16 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   canEditClientaPrice(order: Order | null = this.order()): boolean {
     if (!order || !this.canEditItems(order)) return false;
     if (this.isManualSource()) return true;
+    if (this.selectedCatalogProduct()) return true;
     return this.isEditMode() && this.orderBusinessId(order) === "bm";
+  }
+
+  /** Selector rapido de descuento para "Precio clienta" — solo aplica a items sin
+   * el picker de tarifas de catalogo (ver selectedCatalogProduct), que ya resuelve
+   * su propio precio via catalogBasePrice()/catalogPriceTier() y ya no tiene precio
+   * publico del cual descontar. */
+  showClientaDiscountButton(): boolean {
+    return this.canSubmitNewItem() && !this.selectedCatalogProduct();
   }
 
   nextStatus(order: Order | null): OrderStatus | null {
@@ -3988,9 +4064,13 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         this.showActionToast(`No encontramos producto con numero ${cleanCode}.`);
         return;
       }
-      if (matches.length > 1) {
+      if (this.barcodeMatchesNeedSelection(matches)) {
         this.barcodeMatches.set(matches);
-        this.barcodeScannerMessage.set(`Encontramos ${matches.length} coincidencias. Elige una.`);
+        this.barcodeScannerMessage.set(
+          matches.length === 1
+            ? "Este código identifica un grupo. Elige la variante correcta."
+            : `Encontramos ${matches.length} coincidencias. Elige la variante correcta.`,
+        );
         return;
       }
 
@@ -4040,7 +4120,11 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       return `${match.item.sku || match.item.inventory_id} · Inventario`;
     }
     if (match.kind === "catalog_product") {
-      return `${match.product.sku} · Catálogo`;
+      const code = match.product.primary_barcode || match.product.supplier_sku || match.product.sku;
+      const identifier = match.matched_identifier;
+      const matchedBy = identifier ? `Coincidió por ${catalogProductIdentifierLabel(identifier.type)}: ${identifier.value}` : "Catálogo";
+      const variant = [match.product.color, match.product.size].filter(Boolean).join(" · ");
+      return [code, variant, matchedBy].filter(Boolean).join(" · ");
     }
     return `${String(match.variant["sku"] || match.code)} · ${String(match.variant["variant_name"] || "Variante")}`;
   }
@@ -4058,9 +4142,13 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       return;
     }
     this.barcodeOcrFallbackAvailable.set(false);
-    if (matches.length > 1) {
+    if (this.barcodeMatchesNeedSelection(matches)) {
       this.barcodeMatches.set(matches);
-      this.barcodeScannerMessage.set(`Encontramos ${matches.length} coincidencias. Elige una.`);
+      this.barcodeScannerMessage.set(
+        matches.length === 1
+          ? "Este código identifica un grupo. Elige la variante correcta."
+          : `Encontramos ${matches.length} coincidencias. Elige la variante correcta.`,
+      );
       return;
     }
     await this.addBarcodeMatchToOrder(order, matches[0], code);
@@ -4094,7 +4182,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     }
     if (match.kind === "catalog_product") {
       this.pickCatalogProduct(match.product);
-      this.newItemSku.set(match.product.sku || code);
+      this.newItemSku.set(match.product.primary_barcode || match.product.sku || match.product.supplier_sku || code);
       return;
     }
     this.pickCatalog(match.doc, match.variant, match.color);
@@ -4147,17 +4235,22 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   private async saveOcrAliasForMatch(match: BarcodeProductMatch, aliasSourceCode: string): Promise<void> {
     const cleanAlias = this.barcodeLookup.cleanCode(aliasSourceCode);
     if (!cleanAlias || match.kind !== "catalog_product") return;
-    if (this.barcodeLookup.normalizeCode(cleanAlias) === this.barcodeLookup.normalizeCode(match.product.sku)) return;
+    const primaryCode = match.product.primary_barcode || match.product.sku;
+    if (this.barcodeLookup.normalizeCode(cleanAlias) === this.barcodeLookup.normalizeCode(primaryCode)) return;
 
     try {
-      const saved = await this.catalogBarcodeAliases.saveOcrAlias(cleanAlias, match.product);
-      if (!saved) return;
-      const aliasMessage = `Guardamos ${cleanAlias} como alias de ${match.product.sku}.`;
+      await this.catalogProducts.saveOcrAlias(match.product.product_id, cleanAlias, "catalogo");
+      const aliasMessage = `Guardamos ${cleanAlias} como alias de ${primaryCode}.`;
       const currentMessage = this.barcodeScannerMessage();
       this.barcodeScannerMessage.set(currentMessage ? `${currentMessage} ${aliasMessage}` : aliasMessage);
       this.showActionToast(aliasMessage);
-    } catch (error) {
-      this.showActionToast("No se pudo guardar el alias del codigo.");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "";
+      this.showActionToast(
+        message.includes("IDENTIFIER_CONFLICT")
+          ? "Ese alias ya pertenece a otro producto; no se guardó."
+          : "No se pudo guardar el alias del código.",
+      );
     }
   }
 
@@ -4190,11 +4283,16 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       return item.inventory_id === match.item.inventory_id || this.barcodeLookup.normalizeCode(item.sku) === this.barcodeLookup.normalizeCode(match.item.sku || match.item.inventory_id);
     }
     if (match.kind === "catalog_product") {
-      return item.product_id === match.product.product_id || this.barcodeLookup.normalizeCode(item.sku) === this.barcodeLookup.normalizeCode(match.product.sku);
+      const primaryCode = match.product.primary_barcode || match.product.sku;
+      return item.product_id === match.product.product_id || this.barcodeLookup.normalizeCode(item.sku) === this.barcodeLookup.normalizeCode(primaryCode);
     }
     return item.product_id === match.doc.normalized_id
       && this.isCompatibleVariant(item.variant, String(match.variant["variant_name"] || ""))
       && this.isCompatibleVariant(item.sku, String(match.variant["sku"] || match.code));
+  }
+
+  private barcodeMatchesNeedSelection(matches: BarcodeProductMatch[]): boolean {
+    return matches.length > 1 || matches.some((match) => match.selection_required);
   }
 
   private async ensureItemReadyForPackingScan(order: Order, item: OrderItem): Promise<void> {
@@ -4319,6 +4417,9 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.newItemProductId.set(item.product_id || null);
     this.newItemSku.set(item.sku || item.inventory_id || null);
     this.newItemVariantId.set(item.variant_id || null);
+    this.catalogPriceTier.set(item.price_selected_tier === "manual" ? "manual" : "clienta");
+    this.priceOverrideReason.set(item.price_override_reason || "");
+    this.priceOverrideError.set(null);
     this.updatePriceDraftFromSignals();
     this.selectedPreviewHasColorImage.set(Boolean(item.image_url));
     this.selectedPreview.set({
@@ -4329,6 +4430,15 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       source: item.source === "inventario" ? "Inventario" : item.source === "catalogo" ? "Catalogo" : "Manual",
     });
     this.addItemModalOpen.set(true);
+    if (item.product_ref_type === "catalog_product" && item.product_id) {
+      const requestedItemId = item.item_id;
+      void this.catalogProducts.getById(item.product_id, this.orderBusinessId(currentOrder))
+        .then((product) => {
+          if (!product || this.editTargetItemId() !== requestedItemId || !this.addItemModalOpen()) return;
+          this.selectedCatalogProduct.set(product);
+        })
+        .catch(() => undefined);
+    }
     void this.refreshAddItemSources({ force: true });
   }
 
@@ -4338,6 +4448,10 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   private resetAddItemForm() {
+    if (this.catalogProductSearchTimer) {
+      clearTimeout(this.catalogProductSearchTimer);
+      this.catalogProductSearchTimer = null;
+    }
     this.addItemMode.set("add");
     this.convertTargetItemId.set(null);
     this.editTargetItemId.set(null);
@@ -4372,6 +4486,12 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.priceWarningAckReason.set(null);
     this.catalogProductSuggestions.set([]);
     this.catalogProductSearching.set(false);
+    this.catalogProductSearchAttempted.set(false);
+    this.catalogProductSearchError.set(null);
+    this.catalogProductSearchRequest += 1;
+    this.catalogPriceTier.set("clienta");
+    this.priceOverrideReason.set("");
+    this.priceOverrideError.set(null);
     this.selectedPreviewHasColorImage.set(true);
     this.showProductList.set(false);
     this.manualSuggestionsOpen.set(false);
@@ -4395,20 +4515,60 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     if (this.catalogProductSearchTimer) clearTimeout(this.catalogProductSearchTimer);
     const term = value.trim();
     if (term.length < 2) {
+      this.catalogProductSearchRequest += 1;
       this.catalogProductSuggestions.set([]);
       this.catalogProductSearching.set(false);
+      this.catalogProductSearchAttempted.set(false);
+      this.catalogProductSearchError.set(null);
       return;
     }
+    const requestId = ++this.catalogProductSearchRequest;
+    this.catalogProductSuggestions.set([]);
     this.catalogProductSearching.set(true);
+    this.catalogProductSearchAttempted.set(false);
+    this.catalogProductSearchError.set(null);
     this.catalogProductSearchTimer = setTimeout(() => {
-      this.catalogProducts.searchBySkuPrefix(term, "catalogo", 8)
-        .then((rows) => this.catalogProductSuggestions.set(rows))
-        .catch(() => this.catalogProductSuggestions.set([]))
-        .finally(() => this.catalogProductSearching.set(false));
+      this.catalogProducts.searchCatalog(term, { businessId: "catalogo", limit: 20, sellableOnly: true })
+        .then((rows) => {
+          if (requestId !== this.catalogProductSearchRequest) return;
+          this.catalogProductSuggestions.set(rows);
+          this.catalogProductSearchAttempted.set(true);
+        })
+        .catch((error: unknown) => {
+          if (requestId !== this.catalogProductSearchRequest) return;
+          this.catalogProductSuggestions.set([]);
+          this.catalogProductSearchAttempted.set(true);
+          this.catalogProductSearchError.set(
+            error instanceof Error ? error.message : "No se pudo buscar en el catálogo.",
+          );
+        })
+        .finally(() => {
+          if (requestId === this.catalogProductSearchRequest) this.catalogProductSearching.set(false);
+        });
     }, 180);
   }
 
+  catalogSearchResultTitle(result: CatalogProductSearchResult): string {
+    return result.bundle?.name || result.group?.name || result.product?.name || result.variants[0]?.name || "Producto de catálogo";
+  }
+
+  catalogSearchResultMeta(result: CatalogProductSearchResult): string {
+    const identifier = result.matched_identifier;
+    if (result.bundle && !identifier) return `Combo ${result.bundle.code}`;
+    if (!identifier) return result.requires_selection ? "Elige color y talla" : "Coincidencia de catálogo";
+    const matchedBy = catalogProductIdentifierLabel(identifier.type);
+    return `Coincidió por ${matchedBy}: ${identifier.value}`;
+  }
+
+  catalogProductDisplayCode(product: CatalogProduct): string {
+    return product.primary_barcode || product.supplier_sku || product.sku || "Sin código";
+  }
+
   private clearAddItemDraftForSourceChange() {
+    if (this.catalogProductSearchTimer) {
+      clearTimeout(this.catalogProductSearchTimer);
+      this.catalogProductSearchTimer = null;
+    }
     this.newItemTitle.set("");
     this.newItemVariant.set("");
     this.newItemColor.set("");
@@ -4435,6 +4595,12 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.selectedCatalogProduct.set(null);
     this.catalogProductSuggestions.set([]);
     this.catalogProductSearching.set(false);
+    this.catalogProductSearchAttempted.set(false);
+    this.catalogProductSearchError.set(null);
+    this.catalogProductSearchRequest += 1;
+    this.catalogPriceTier.set("clienta");
+    this.priceOverrideReason.set("");
+    this.priceOverrideError.set(null);
     this.selectedPreviewHasColorImage.set(true);
     this.manualSuggestionsOpen.set(false);
   }
@@ -7203,10 +7369,16 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
   @HostListener("document:click", ["$event"])
   onDocumentClick(event: Event) {
-    if (!this.orderHeadMenuOpen()) return;
     const target = event.target as HTMLElement | null;
-    if (target?.closest(".order-head-menu")) return;
-    this.orderHeadMenuOpen.set(false);
+    if (this.orderHeadMenuOpen() && !target?.closest(".order-head-menu")) {
+      this.orderHeadMenuOpen.set(false);
+    }
+    if (this.clientaDiscountOpen() && !target?.closest(".field-clienta-price")) {
+      this.clientaDiscountOpen.set(false);
+    }
+    if (this.quickDiscountItemId() && !target?.closest(".price-stack")) {
+      this.quickDiscountItemId.set(null);
+    }
   }
 
   onPageScroll(event: Event) {
@@ -7239,6 +7411,17 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
   closeOrderHeadMenu() {
     this.orderHeadMenuOpen.set(false);
+  }
+
+  /** En movil, "Mas acciones" concentra todo lo que en desktop ya tiene boton
+   * propio (Registrar cobro, Generar nota, Nota por WA) mas el menu kebab, para
+   * no tener dos entradas distintas al mismo menu (ver order-head-menu). */
+  openMoreActionsSheet() {
+    this.moreActionsSheetOpen.set(true);
+  }
+
+  closeMoreActionsSheet() {
+    this.moreActionsSheetOpen.set(false);
   }
 
   canChangeCustomer(order: Order | null): boolean {
@@ -7738,16 +7921,108 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.openEditItemModal(item);
   }
 
+  /** Atajo desde la tarjeta de la lista (boton "..." junto al precio):
+   * abre un popover ligero anclado a la tarjeta, sin entrar al modal
+   * completo de edicion, prellenado con el % de descuento real del item
+   * actual. Aplicar guarda directo el price_clienta del item. */
+  openQuickDiscount(item: OrderItem, anchor?: HTMLElement) {
+    if (this.quickDiscountItemId() === item.item_id) {
+      this.closeQuickDiscount();
+      return;
+    }
+    if (anchor) {
+      const rect = anchor.getBoundingClientRect();
+      const estimatedPopoverHeight = 300;
+      this.quickDiscountUpward.set(window.innerHeight - rect.bottom < estimatedPopoverHeight);
+      // El popover (280px) suele ser mas ancho que la tarjeta angosta del
+      // listado: si no cabe abriendo hacia la derecha del boton, se alinea
+      // hacia la izquierda en su lugar, para nunca desbordar bajo el sidebar.
+      const estimatedPopoverWidth = 296;
+      this.quickDiscountLeftAlign.set(window.innerWidth - rect.left >= estimatedPopoverWidth);
+    }
+    const pub = item.price_public;
+    const clienta = item.price_clienta;
+    if (pub && pub > 0 && clienta !== null && clienta !== undefined && clienta < pub) {
+      const pct = Math.round(((pub - clienta) / pub) * 100);
+      this.quickDiscountMode.set("pct");
+      this.quickDiscountPct.set(Math.max(0, Math.min(100, pct)));
+    } else {
+      this.quickDiscountMode.set("pct");
+      this.quickDiscountPct.set(25);
+    }
+    this.quickDiscountFixed.set(0);
+    this.quickDiscountItemId.set(item.item_id);
+  }
+
+  closeQuickDiscount() {
+    this.quickDiscountItemId.set(null);
+  }
+
+  setQuickDiscountMode(mode: "pct" | "fixed") {
+    this.quickDiscountMode.set(mode);
+  }
+
+  setQuickDiscountPct(value: number) {
+    this.quickDiscountPct.set(Math.max(0, Math.min(100, Number(value) || 0)));
+  }
+
+  setQuickDiscountFixed(value: number) {
+    this.quickDiscountFixed.set(Math.max(0, Number(value) || 0));
+  }
+
+  previewQuickDiscount(item: OrderItem): number | null {
+    const final = item.price_public;
+    if (final === null || final === undefined) return null;
+    const result =
+      this.quickDiscountMode() === "pct"
+        ? final * (1 - this.quickDiscountPct() / 100)
+        : final - this.quickDiscountFixed();
+    return Number(Math.max(0, result).toFixed(2));
+  }
+
+  async applyQuickDiscount(item: OrderItem) {
+    const order = this.order();
+    if (!order || !this.canEditItems(order)) return;
+    const value = this.previewQuickDiscount(item);
+    if (value === null) return;
+    this.quickDiscountSaving.set(true);
+    try {
+      const live = this.orders.getById(order.order_id) || order;
+      const target = (live.items || []).find((row) => row.item_id === item.item_id);
+      if (!target) return;
+      const previousClienta = target.price_clienta ?? null;
+      const nextItems = (live.items || []).map((row) =>
+        row.item_id === item.item_id ? { ...row, price_clienta: value } : row,
+      );
+      await this.orders.updateItems(order.order_id, nextItems);
+      await this.orders.logEvent(order.order_id, "ITEM_UPDATED", `Descuento actualizado: ${target.title}`, {
+        itemId: target.item_id,
+        previousClientaPrice: previousClienta,
+        nextClientaPrice: value,
+      });
+      this.showActionToast("Descuento aplicado.");
+      this.closeQuickDiscount();
+    } catch (error: any) {
+      this.showActionToast(error?.message || "No se pudo aplicar el descuento.");
+    } finally {
+      this.quickDiscountSaving.set(false);
+    }
+  }
+
   scrollToSection(sectionId: "incidencias" | "productos" | "paquetes" | "bitacora") {
-    document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    this.setActiveTab(sectionId);
+  }
+
+  setActiveTab(tab: "incidencias" | "productos" | "paquetes" | "bitacora") {
+    this.activeTab.set(tab);
   }
 
   applyFocus(focus: string) {
     if (focus === "incidents" || focus === "incidents:new") {
-      this.incidentsSection?.nativeElement.scrollIntoView({ behavior: "smooth", block: "start" });
+      this.setActiveTab("incidencias");
       if (focus === "incidents:new") this.openIncidentModal();
     } else if (focus === "packages") {
-      this.packagesSection?.nativeElement.scrollIntoView({ behavior: "smooth", block: "start" });
+      this.setActiveTab("paquetes");
     }
   }
 
@@ -7849,10 +8124,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         return;
       }
     }
-    if (this.isClientaBelowCosto()) {
-      await this.showClientaBelowCostoPopup();
-      return;
-    }
+    if (!(await this.confirmPriceOverrideIfNeeded())) return;
     const needsLateNote = this.requiresLateAdditionNote(order);
     const lateNote = needsLateNote ? await this.requestLateAdditionNote(order) : null;
     if (needsLateNote && !lateNote) return;
@@ -7891,6 +8163,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       await this.orders.logEvent(order.order_id, "ITEM_MERGED_QTY", `Cantidad actualizada: ${item.title}`, {
         itemId: existingMatch.item_id,
         addedQty: qty,
+        ...this.orderItemPriceAuditMeta(item),
       });
       if (item.source === "inventario" && item.inventory_id) {
         const reserveKey = this.buildInventoryMutationKey("reserve", order.order_id, existingMatch.item_id, item.inventory_id, qty);
@@ -7920,6 +8193,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         await this.orders.logEvent(order.order_id, "ITEM_ADDED", `Item agregado: ${item.title}`, {
           itemId: item.item_id,
           source: item.source,
+          ...this.orderItemPriceAuditMeta(item),
         });
       }
       if (item.source === "inventario" && item.inventory_id) {
@@ -7995,10 +8269,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         return;
       }
     }
-    if (this.isClientaBelowCosto()) {
-      await this.showClientaBelowCostoPopup();
-      return;
-    }
+    if (!(await this.confirmPriceOverrideIfNeeded())) return;
     const state: OrderItemState = source === "inventario" ? "reservado_inventario" : "confirmando_proveedor";
     if (source === "catalogo" && this.selectedCatalogProduct()) {
       const ok = await this.confirmCatalogPriceWarningIfNeeded();
@@ -8030,6 +8301,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       from: "manual",
       to: converted.source,
       title: converted.title,
+      ...this.orderItemPriceAuditMeta(converted),
     });
     this.resetAddItemForm();
     this.addItemModalOpen.set(false);
@@ -8054,10 +8326,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       this.error.set("Escribe el nombre del producto.");
       return;
     }
-    if (this.isClientaBelowCosto()) {
-      await this.showClientaBelowCostoPopup();
-      return;
-    }
+    if (!(await this.confirmPriceOverrideIfNeeded())) return;
     if (this.newItemSource() === "catalogo" && this.selectedCatalogProduct()) {
       const ok = await this.confirmCatalogPriceWarningIfNeeded();
       if (!ok) return;
@@ -8080,6 +8349,17 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         : nextState === "out_of_stock"
           ? 0
           : null;
+    const priceAudit: OrderItemPriceAudit = this.selectedCatalogProduct()
+      ? this.catalogPriceAudit()
+      : {
+          price_selected_tier: target.price_selected_tier || null,
+          price_override_reason: target.price_override_reason || null,
+          price_override_by: target.price_override_by || null,
+          price_override_at: target.price_override_at || null,
+          price_override_from: target.price_override_from ?? null,
+          price_override_to: target.price_override_to ?? null,
+          price_override_below_cost: target.price_override_below_cost ?? null,
+        };
 
     const updated: OrderItem = {
       ...target,
@@ -8094,6 +8374,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       price_source_imported_at: this.selectedCatalogProduct()?.last_price_imported_at || this.selectedCatalogProduct()?.last_imported_at || target.price_source_imported_at || null,
       price_warning_ack_at: this.priceWarningAckReason() ? new Date().toISOString() : target.price_warning_ack_at || null,
       price_warning_reason: this.priceWarningAckReason() || target.price_warning_reason || null,
+      ...priceAudit,
       discount_pct: this.newItemDiscount(),
       confirmed_qty: nextConfirmedQty,
       image_url: this.selectedPreview()?.image || target.image_url || null,
@@ -8140,6 +8421,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       itemId: target.item_id,
       prevQty: this.itemQuantity(target),
       nextQty,
+      previousClientaPrice: target.price_clienta ?? null,
+      ...this.orderItemPriceAuditMeta(updated),
     });
 
     if (updated.source === "manual") {
@@ -8169,6 +8452,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     const businessId = this.orderBusinessId();
     const selectedImportedProduct = source === "catalogo" ? this.selectedCatalogProduct() : null;
     const warningReason = selectedImportedProduct ? this.priceWarningAckReason() : null;
+    const priceAudit = selectedImportedProduct ? this.catalogPriceAudit() : null;
     const productRefType =
       source === "manual"
         ? "manual"
@@ -8200,11 +8484,25 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       price_source_imported_at: selectedImportedProduct?.last_price_imported_at || selectedImportedProduct?.last_imported_at || null,
       price_warning_ack_at: warningReason ? new Date().toISOString() : null,
       price_warning_reason: warningReason,
+      ...(priceAudit || {}),
       discount_pct: this.newItemDiscount(),
       inventory_id: source === "inventario" ? this.newItemInventoryId() : null,
       image_url: this.selectedPreview()?.image || null,
     };
     return { ...base, ...(extra || {}) };
+  }
+
+  private orderItemPriceAuditMeta(item: OrderItem): Record<string, unknown> {
+    if (!item.price_selected_tier) return {};
+    return {
+      priceSelectedTier: item.price_selected_tier,
+      priceOverrideReason: item.price_override_reason || null,
+      priceOverrideBy: item.price_override_by || null,
+      priceOverrideAt: item.price_override_at || null,
+      priceOverrideFrom: item.price_override_from ?? null,
+      priceOverrideTo: item.price_override_to ?? item.price_clienta ?? null,
+      priceOverrideBelowCost: Boolean(item.price_override_below_cost),
+    };
   }
 
   private async ensureSelectedCatalogProductImage(): Promise<string | null> {
@@ -8283,14 +8581,24 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
     const sameVariant = this.isCompatibleVariant(existing.variant, incoming.variant);
     const sameColor = this.isCompatibleVariant(existing.color, incoming.color);
+    const samePrice = this.sameOrderItemPrice(existing, incoming);
 
     if (existing.product_id && incoming.product_id && existing.product_id === incoming.product_id) {
-      return sameVariant && sameColor;
+      return sameVariant && sameColor && samePrice;
     }
 
     return this.normalizeText(existing.title) === this.normalizeText(incoming.title)
       && sameVariant
-      && sameColor;
+      && sameColor
+      && samePrice;
+  }
+
+  private sameOrderItemPrice(left: OrderItem, right: OrderItem): boolean {
+    const cents = (value: number | null | undefined) => Math.round(Number(value || 0) * 100);
+    return cents(left.price_clienta) === cents(right.price_clienta)
+      && cents(left.price_public) === cents(right.price_public)
+      && cents(left.price_cost) === cents(right.price_cost)
+      && (left.price_selected_tier || null) === (right.price_selected_tier || null);
   }
 
   private normalizeText(value: string | null | undefined): string {
@@ -8683,19 +8991,27 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   pickCatalogProduct(product: CatalogProduct) {
-    this.newItemTitle.set(product.name || product.sku || "Producto sin nombre");
+    const clientaPrice = product.prices.clienta ?? product.price_clienta;
+    const costPrice = product.prices.cost ?? product.price_cost;
+    const defaultTier: CatalogPriceTier = clientaPrice !== null && clientaPrice !== undefined
+      ? "clienta"
+      : "manual";
+    this.newItemTitle.set(product.name || product.primary_barcode || product.sku || "Producto sin nombre");
     this.newItemVariant.set(product.size || "");
     this.newItemColor.set(product.color || "");
-    this.newItemPricePublic.set(product.price_clienta);
-    this.newItemPriceClienta.set(product.price_clienta);
-    this.newItemPriceCost.set(product.price_cost);
+    this.newItemPricePublic.set(null);
+    this.newItemPriceClienta.set(clientaPrice);
+    this.newItemPriceCost.set(costPrice);
+    this.catalogPriceTier.set(defaultTier);
+    this.priceOverrideReason.set("");
+    this.priceOverrideError.set(null);
     this.updatePriceDraftFromSignals();
     this.newItemSource.set("catalogo");
     this.newItemSearch.set("");
     this.newItemInventoryId.set(null);
     this.newItemSupplierId.set(product.supplier_id || null);
     this.newItemProductId.set(product.product_id);
-    this.newItemSku.set(product.sku || null);
+    this.newItemSku.set(product.primary_barcode || product.sku || product.supplier_sku || null);
     this.newItemVariantId.set(null);
     this.showProductList.set(false);
     this.lockItemFields.set(true);
@@ -8723,9 +9039,11 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   private catalogProductPriceWarningReason(product: CatalogProduct | null): string | null {
     if (!product) return null;
     if (product.reverted_from_import_id) return "Este producto viene de una importacion revertida.";
-    if (product.price_clienta === null || product.price_clienta === undefined) return "Este producto no tiene precio clienta.";
-    if (product.price_cost === null || product.price_cost === undefined) return "Este producto no tiene precio costo.";
-    if (product.price_health_flags?.includes("large_price_change") || product.last_import_status === "price_review") {
+    const cost = product.prices.cost ?? product.price_cost;
+    if (cost === null || cost <= 0) return "Este producto no tiene un costo válido.";
+    const clienta = product.prices.clienta ?? product.price_clienta;
+    if (clienta === null) return "Este producto no tiene precio clienta.";
+    if (product.needs_price_review || product.price_health_flags?.includes("large_price_change") || product.last_import_status === "price_review") {
       return "Este producto tuvo un cambio fuerte de precio en su ultima importacion.";
     }
     const latest = this.latestCompletedFullImportForSupplier(product.supplier_id);
@@ -8885,6 +9203,123 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     return { final: null, clienta: null, costo: null };
   }
 
+  catalogBasePrice(tier: "clienta"): number | null {
+    const product = this.selectedCatalogProduct();
+    if (!product) return null;
+    return product.prices.clienta ?? product.price_clienta;
+  }
+
+  catalogPriceMarginLabel(): string {
+    const price = this.newItemPriceClienta();
+    const cost = this.newItemPriceCost();
+    if (price === null || cost === null || cost <= 0) return "Margen no disponible";
+    const amount = Number((price - cost).toFixed(2));
+    const percent = Number(((amount / cost) * 100).toFixed(1));
+    const sign = percent > 0 ? "+" : "";
+    return `Margen: ${sign}${percent}% (${this.formatCurrency(amount)})`;
+  }
+
+  priceOverrideNeedsReason(): boolean {
+    return !!this.selectedCatalogProduct() && (this.catalogPriceTier() === "manual" || this.isClientaBelowCosto());
+  }
+
+  canAuthorizeBelowCost(): boolean {
+    return this.authz.canCap("cap.orders.price_below_cost");
+  }
+
+  private async confirmPriceOverrideIfNeeded(): Promise<boolean> {
+    this.priceOverrideError.set(null);
+    this.error.set(null);
+    const selectedProduct = this.selectedCatalogProduct();
+    const cost = this.newItemPriceCost();
+    if (selectedProduct && (!selectedProduct.sellable || cost === null || cost <= 0)) {
+      const message = !selectedProduct.sellable
+        ? "Esta variante es provisional y todavía no está disponible para venta."
+        : "Esta variante no tiene un costo válido y no puede agregarse al pedido.";
+      this.priceOverrideError.set(message);
+      this.error.set(message);
+      return false;
+    }
+    if (selectedProduct && (this.newItemPriceClienta() === null || Number(this.newItemPriceClienta()) <= 0)) {
+      const message = "Define un precio de venta válido antes de agregar la variante.";
+      this.priceOverrideError.set(message);
+      this.error.set(message);
+      return false;
+    }
+    if (!this.isClientaBelowCosto() && !this.selectedCatalogProduct()) return true;
+    if (!this.selectedCatalogProduct()) {
+      await this.showClientaBelowCostoPopup();
+      return false;
+    }
+
+    const reason = this.priceOverrideReason().trim();
+    if (this.catalogPriceTier() === "manual" && reason.length < 8) {
+      const message = "Explica el ajuste manual (mínimo 8 caracteres).";
+      this.priceOverrideError.set(message);
+      this.error.set(message);
+      return false;
+    }
+    if (!this.isClientaBelowCosto()) return true;
+    if (!this.canAuthorizeBelowCost()) {
+      const message = "No tienes permiso para autorizar una venta por debajo del costo.";
+      this.priceOverrideError.set(message);
+      this.error.set(message);
+      return false;
+    }
+    if (reason.length < 8) {
+      const message = "La venta por debajo del costo requiere un motivo de al menos 8 caracteres.";
+      this.priceOverrideError.set(message);
+      this.error.set(message);
+      return false;
+    }
+
+    return this.showPopupConfirm(
+      `${this.catalogPriceMarginLabel()}. Motivo: ${reason}`,
+      {
+        title: "Confirmar venta por debajo del costo",
+        confirmLabel: "Autorizar precio",
+        cancelLabel: "Revisar",
+        danger: true,
+      },
+    );
+  }
+
+  private catalogPriceAudit(): OrderItemPriceAudit {
+    const product = this.selectedCatalogProduct();
+    if (!product) {
+      return {
+        price_selected_tier: null,
+        price_override_reason: null,
+        price_override_by: null,
+        price_override_at: null,
+        price_override_from: null,
+        price_override_to: null,
+        price_override_below_cost: null,
+      };
+    }
+
+    const selectedTier = this.catalogPriceTier();
+    const baseClienta = this.catalogBasePrice("clienta");
+    const selectedPrice = this.newItemPriceClienta();
+    const belowCost = this.isClientaBelowCosto();
+    const changed = selectedTier !== "clienta" || baseClienta !== selectedPrice || belowCost;
+    const user = this.authz.currentUserSig();
+    const reason = belowCost
+      ? this.priceOverrideReason().trim() || null
+      : selectedTier === "manual"
+        ? this.priceOverrideReason().trim() || null
+        : null;
+    return {
+      price_selected_tier: selectedTier,
+      price_override_reason: changed ? reason : null,
+      price_override_by: changed ? user?.uid || null : null,
+      price_override_at: changed ? new Date().toISOString() : null,
+      price_override_from: changed ? baseClienta : null,
+      price_override_to: changed ? selectedPrice : null,
+      price_override_below_cost: changed ? belowCost : false,
+    };
+  }
+
   priceDisplayValue(field: "final" | "clienta" | "costo"): string {
     if (this.priceInputFocused() === field) {
       return this.priceInputDraft()[field];
@@ -8942,7 +9377,9 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       return;
     }
     if (field === "clienta") {
+      if (this.selectedCatalogProduct()) this.catalogPriceTier.set("manual");
       this.newItemPriceClienta.set(value);
+      this.priceOverrideError.set(null);
       return;
     }
     this.newItemPriceCost.set(value);
@@ -8969,6 +9406,83 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     return Number((finalPrice * 0.75).toFixed(2));
   }
 
+  /** Abre el popover hacia abajo por defecto, pero si no cabe dentro del
+   * area visible del modal (estimando su alto real, ~360px) lo abre hacia
+   * arriba en su lugar, igual que hace el prototipo. Asi nunca requiere
+   * scroll para verse completo. */
+  toggleClientaDiscount(anchor?: HTMLElement) {
+    const willOpen = !this.clientaDiscountOpen();
+    if (willOpen && anchor) {
+      const estimatedPopoverHeight = 360;
+      const spaceBelow = window.innerHeight - anchor.getBoundingClientRect().bottom;
+      this.clientaDiscountOpenUpward.set(spaceBelow < estimatedPopoverHeight);
+    }
+    this.clientaDiscountOpen.update((open) => !open);
+  }
+
+  closeClientaDiscount() {
+    this.clientaDiscountOpen.set(false);
+  }
+
+  setClientaDiscountMode(mode: "pct" | "fixed") {
+    this.clientaDiscountMode.set(mode);
+  }
+
+  setClientaDiscountPct(value: number) {
+    const safe = Math.max(0, Math.min(100, Number(value) || 0));
+    this.clientaDiscountPct.set(safe);
+  }
+
+  setClientaDiscountFixed(value: number) {
+    this.clientaDiscountFixed.set(Math.max(0, Number(value) || 0));
+  }
+
+  previewClientaDiscount(): number | null {
+    const final = this.newItemPricePublic();
+    if (final === null || final === undefined) return null;
+    const result =
+      this.clientaDiscountMode() === "pct"
+        ? final * (1 - this.clientaDiscountPct() / 100)
+        : final - this.clientaDiscountFixed();
+    return Number(Math.max(0, result).toFixed(2));
+  }
+
+  applyClientaDiscount() {
+    const value = this.previewClientaDiscount();
+    if (value === null) return;
+    this.setPriceValue("clienta", value);
+    this.updatePriceDraftFromSignals();
+    this.clientaDiscountOpen.set(false);
+  }
+
+  /** Leyenda siempre en vivo con el descuento efectivo actual, sin importar si
+   * se fijo escribiendo directo, con el picker de tarifas o con este popover. */
+  clientaDiscountSummary(): string | null {
+    const final = this.newItemPricePublic();
+    const clienta = this.newItemPriceClienta();
+    if (final === null || final === undefined || final <= 0) return null;
+    if (clienta === null || clienta === undefined) return null;
+    const diff = Number((final - clienta).toFixed(2));
+    if (Math.abs(diff) < 0.01) return null;
+    if (diff > 0) {
+      const pct = (diff / final) * 100;
+      const pctLabel = Number.isInteger(pct) ? pct.toFixed(0) : pct.toFixed(1);
+      return `${pctLabel}% de descuento sobre precio final (${this.formatCurrency(diff)})`;
+    }
+    return `${this.formatCurrency(Math.abs(diff))} por encima del precio final`;
+  }
+
+  itemDiscountBadge(item: OrderItem): string | null {
+    const pub = item.price_public;
+    const clienta = item.price_clienta;
+    if (!pub || pub <= 0 || clienta === null || clienta === undefined) return null;
+    const diff = Number((pub - clienta).toFixed(2));
+    if (diff <= 0.009) return null;
+    const pct = (diff / pub) * 100;
+    const pctLabel = Number.isInteger(pct) ? pct.toFixed(0) : pct.toFixed(1);
+    return `${pctLabel}% dto. aplicado`;
+  }
+
   private isClientaBelowCosto(): boolean {
     const clienta = this.newItemPriceClienta();
     const costo = this.newItemPriceCost();
@@ -8977,8 +9491,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   private warnIfClientaBelowCosto() {
-    if (!this.isClientaBelowCosto()) return;
-    void this.showClientaBelowCostoPopup();
+    this.priceOverrideError.set(null);
   }
 
   formatCurrency(value: number | null): string {

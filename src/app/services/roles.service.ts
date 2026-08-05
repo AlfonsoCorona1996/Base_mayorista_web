@@ -45,7 +45,6 @@ export class RolesService {
     const cached = this.roleCache.get(roleId);
     if (cached) return cached;
 
-    await this.ensureDefaultsSeeded();
     const ref = doc(FIRESTORE, "roles", roleId);
     const snap = await getDoc(ref);
     if (!snap.exists()) {

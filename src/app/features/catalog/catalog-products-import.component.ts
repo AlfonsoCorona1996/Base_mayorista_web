@@ -4,6 +4,7 @@ import { FormsModule } from "@angular/forms";
 import {
   CatalogProduct,
   CatalogProductImportRow,
+  CatalogProductMetrics,
   CatalogProductsService,
 } from "../../core/catalog-products.service";
 import {
@@ -11,14 +12,33 @@ import {
   CatalogImportJob,
   CatalogImportJobsService,
   CatalogImportMode,
+  CatalogImportProfileV2,
 } from "../../core/catalog-import-jobs.service";
 import { Supplier, SuppliersService } from "../../core/suppliers.service";
+import {
+  CatalogImportMappingV2,
+  CatalogImportV2RowFields,
+  CatalogPriceRule,
+  PriceRounding,
+  buildIdentifiers,
+  emptyPriceRule,
+  evaluatePriceRule,
+  normalizeIdentifierKey,
+} from "./catalog-import-v2.types";
 
 type ConsoleTab = "products" | "imports" | "quality";
 type WizardStep = "file" | "headers" | "columns" | "prices" | "review" | "result";
 
 type MappingKey =
   | "skuColumn"
+  | "primaryBarcodeColumn"
+  | "supplierSkuColumn"
+  | "supplierVariantColumn"
+  | "genericColumn"
+  | "internetColumn"
+  | "modelColumn"
+  | "styleColumn"
+  | "bundleColumn"
   | "brandColumn"
   | "categoryColumn"
   | "colorColumn"
@@ -26,20 +46,10 @@ type MappingKey =
   | "priceCostColumn"
   | "impulsProductIdColumn";
 
-type PercentMappingKey = "priceCostDiscountPct" | "priceClientaMarkupPct";
-
-interface ImportMapping {
-  skuColumn: string;
-  nameColumns: string[];
-  brandColumn: string;
-  categoryColumn: string;
-  colorColumn: string;
-  sizeColumn: string;
-  priceCostColumn: string;
-  impulsProductIdColumn: string;
-  priceCostDiscountPct: number;
-  priceClientaMarkupPct: number;
-}
+type MultiColumnMappingKey = "alternateBarcodeColumns" | "ocrAliasColumns" | "customIdentifierColumns";
+type PriceRuleKey = "costRule" | "clientaRule";
+type PriceRuleField = keyof CatalogPriceRule;
+type ImportMapping = CatalogImportMappingV2;
 
 interface HeaderCandidate {
   rowIndex: number;
@@ -61,17 +71,23 @@ interface PreviewRow extends CatalogProductImportRow {
   rowNumber: number;
   valid: boolean;
   issue: string | null;
+  warnings: string[];
+  primary_barcode: string | null;
+  supplier_sku: string | null;
+  identifiers: CatalogImportV2RowFields["identifiers"];
+  prices: CatalogImportV2RowFields["prices"];
 }
 
 interface PreviewSummary {
   rows: PreviewRow[];
   sample: PreviewRow[];
-  validRows: PreviewRow[];
   total: number;
   valid: number;
   missingSku: number;
   duplicateSku: number;
   invalidValues: number;
+  missingCost: number;
+  identifierConflicts: number;
 }
 
 interface ProductHealthPill {
@@ -88,6 +104,8 @@ interface SupplierConsoleOption {
   importCount: number;
   issueCount: number;
 }
+
+type CatalogMetricsState = CatalogProductMetrics & { exact: boolean };
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -128,14 +146,15 @@ export class CatalogProductsImportComponent implements OnDestroy {
   selectedJobRows = signal<CatalogImportAuditRow[]>([]);
   selectedJobRowsLoading = signal(false);
   rollbackBusyId = signal<string | null>(null);
+  catalogMetricsBySupplier = signal<Record<string, CatalogMetricsState>>({});
   private previewState = signal<PreviewSummary>(this.emptyPreview());
   private previewTimer: ReturnType<typeof setTimeout> | null = null;
   private validationRun = 0;
   private destroyed = false;
+  private selectedSourceFile: File | null = null;
 
   products = computed(() => this.catalogProducts.catalogoPageProducts().filter((product) => this.supplierKey(product.supplier_id) === this.activeCatalogSupplierKey()));
 
-  allCatalogProducts = computed(() => this.catalogProducts.catalogoProducts());
   supplierOptions = computed<SupplierConsoleOption[]>(() => {
     const map = new Map<string, SupplierConsoleOption>();
     const ensure = (supplierId: string | null | undefined, label?: string | null) => {
@@ -159,19 +178,12 @@ export class CatalogProductsImportComponent implements OnDestroy {
     };
 
     for (const supplier of this.catalogSuppliers()) ensure(supplier.supplier_id, supplier.display_name);
-    for (const product of this.allCatalogProducts()) {
-      const option = ensure(product.supplier_id, product.supplier_name);
-      option.productCount += 1;
-    }
+    for (const [supplierId, metrics] of Object.entries(this.catalogMetricsBySupplier())) ensure(supplierId).productCount = metrics.total;
     for (const job of this.importJobs.jobs()) {
       const option = ensure(job.supplier_id, job.supplier_name);
       option.importCount += 1;
     }
-    for (const product of this.allCatalogProducts()) {
-      if (this.productHealth(product).some((pill) => pill.tone !== "ok")) {
-        ensure(product.supplier_id, product.supplier_name).issueCount += 1;
-      }
-    }
+    for (const [supplierId, metrics] of Object.entries(this.catalogMetricsBySupplier())) ensure(supplierId).issueCount = metrics.quality_issues;
 
     return Array.from(map.values())
       .filter((option) => option.productCount > 0 || option.importCount > 0 || Boolean(option.supplier_id))
@@ -184,13 +196,16 @@ export class CatalogProductsImportComponent implements OnDestroy {
     return options[0]?.key || "";
   });
   activeCatalogSupplier = computed(() => this.supplierOptions().find((option) => option.key === this.activeCatalogSupplierKey()) || null);
-  scopedCatalogProducts = computed(() => this.allCatalogProducts().filter((product) => this.supplierKey(product.supplier_id) === this.activeCatalogSupplierKey()));
+  scopedCatalogProducts = computed(() => this.products());
   scopedImportJobs = computed(() => this.importJobs.jobs().filter((job) => this.supplierKey(job.supplier_id) === this.activeCatalogSupplierKey()));
   activeSupplierJob = computed(() => this.importJobs.activeJobs().find((job) => this.supplierKey(job.supplier_id) === this.activeCatalogSupplierKey()) || null);
 
   pageState = computed(() => this.catalogProducts.pageState());
 
   preview = computed(() => this.previewState());
+  priceRuleEntries = computed<Array<{ key: "clientaRule"; label: string; rule: CatalogPriceRule }>>(() => [
+    { key: "clientaRule", label: "Clienta", rule: this.mapping().clientaRule },
+  ]);
 
   catalogSuppliers = computed(() => this.suppliers.getActiveByBusiness("catalogo"));
   selectedSupplier = computed<Supplier | null>(() =>
@@ -211,13 +226,22 @@ export class CatalogProductsImportComponent implements OnDestroy {
   });
   productKpis = computed(() => {
     const rows = this.scopedCatalogProducts();
+    const supplierId = this.activeCatalogSupplier()?.supplier_id || "";
+    const metrics = supplierId ? this.catalogMetricsBySupplier()[supplierId] : null;
+    if (metrics) {
+      return { total: metrics.total, updated: metrics.updated, stale: metrics.stale, missingPrice: metrics.missing_price, review: metrics.review };
+    }
     return {
       total: rows.length,
       updated: rows.filter((row) => this.productHealth(row).some((pill) => pill.label === "Actualizado")).length,
       stale: rows.filter((row) => this.productHealth(row).some((pill) => pill.label === "Precio viejo" || pill.label === "No vino en ultimo Excel")).length,
-      missingPrice: rows.filter((row) => row.price_cost === null || row.price_clienta === null).length,
+      missingPrice: rows.filter((row) => row.price_cost === null || row.price_cost <= 0).length,
       review: rows.filter((row) => row.price_health_flags?.includes("large_price_change") || row.last_import_status === "price_review").length,
     };
+  });
+  metricsAreExact = computed(() => {
+    const supplierId = this.activeCatalogSupplier()?.supplier_id || "";
+    return Boolean(supplierId && this.catalogMetricsBySupplier()[supplierId]?.exact);
   });
   qualityProducts = computed(() => this.scopedCatalogProducts().filter((product) => this.productHealth(product).some((pill) => pill.tone !== "ok")));
   criticalImportIssues = computed(() => {
@@ -226,9 +250,11 @@ export class CatalogProductsImportComponent implements OnDestroy {
     const preview = this.preview();
     if (!this.selectedSupplier()) issues.push("Selecciona proveedor.");
     if (!this.fileName()) issues.push("Carga un archivo Excel.");
-    if (!mapping.skuColumn) issues.push("Mapea la columna SKU/codigo.");
-    if (!mapping.priceCostColumn) issues.push("Mapea la columna de precio costo.");
-    if (preview.total > 0 && preview.duplicateSku / Math.max(1, preview.total) > 0.2) issues.push("Hay demasiados SKU duplicados.");
+    if (!mapping.primaryBarcodeColumn && !mapping.supplierSkuColumn && !mapping.supplierVariantColumn) {
+      issues.push("Mapea al menos un barcode, SKU de proveedor o variante.");
+    }
+    if (mapping.costRule.base === "column" && !mapping.costRule.sourceColumn) issues.push("Configura la fuente obligatoria del costo.");
+    if (preview.identifierConflicts > 0) issues.push(`${preview.identifierConflicts} fila(s) tienen códigos que apuntan a identidades diferentes.`);
     if (preview.invalidValues > 0 && preview.valid === 0) issues.push("No hay filas validas por precios invalidos.");
     return issues;
   });
@@ -236,7 +262,8 @@ export class CatalogProductsImportComponent implements OnDestroy {
     const warnings: string[] = [];
     const preview = this.preview();
     if (this.rejectedRows().length > 0) warnings.push(`${this.rejectedRows().length} fila(s) no se importaran.`);
-    if (preview.total > 0 && !this.mapping().nameColumns.length) warnings.push("El nombre se armara con SKU porque no elegiste columnas de nombre.");
+    if (preview.total > 0 && !this.mapping().nameColumns.length) warnings.push("El nombre se armara con el identificador disponible porque no elegiste columnas de nombre.");
+    if (preview.duplicateSku > 0) warnings.push(`${preview.duplicateSku} fila(s) repetidas se consolidarán y conservarán como apariciones del catálogo.`);
     if (this.importMode() === "full") warnings.push("Catálogo completo marcara como precio viejo lo que no venga en este Excel.");
     return warnings;
   });
@@ -245,10 +272,8 @@ export class CatalogProductsImportComponent implements OnDestroy {
 
   constructor() {
     this.importJobs.watch();
-    Promise.all([
-      this.suppliers.loadFromFirestore().catch(() => null),
-      this.catalogProducts.loadFromFirestore().catch(() => null),
-    ]).finally(() => {
+    this.suppliers.loadFromFirestore().catch(() => null).finally(() => {
+      for (const supplier of this.catalogSuppliers()) void this.loadSupplierMetrics(supplier.supplier_id);
       this.ensureSupplierSelection();
       this.watchSelectedSupplierPage();
     });
@@ -262,7 +287,6 @@ export class CatalogProductsImportComponent implements OnDestroy {
 
   async reload(): Promise<void> {
     this.error.set(null);
-    await this.catalogProducts.loadFromFirestore().catch(() => null);
     this.ensureSupplierSelection();
     this.watchSelectedSupplierPage();
   }
@@ -273,6 +297,12 @@ export class CatalogProductsImportComponent implements OnDestroy {
     this.supplierPickerError.set(null);
     this.wizardStep.set("file");
     this.importMode.set("full");
+    this.fileName.set("");
+    this.selectedSourceFile = null;
+    this.headers.set([]);
+    this.rawRows.set([]);
+    this.parsedMatrix.set([]);
+    this.previewState.set(this.emptyPreview());
     const active = this.activeCatalogSupplier();
     if (active?.supplier_id) {
       this.selectedSupplierId.set(active.supplier_id);
@@ -334,8 +364,8 @@ export class CatalogProductsImportComponent implements OnDestroy {
     if (!this.fileName() || this.headers().length === 0) return false;
     if (step === "headers") return true;
     if (step === "columns") return true;
-    if (step === "prices") return Boolean(this.mapping().skuColumn);
-    if (step === "review") return Boolean(this.mapping().skuColumn && this.mapping().priceCostColumn);
+    if (step === "prices") return Boolean(this.mapping().primaryBarcodeColumn || this.mapping().supplierSkuColumn || this.mapping().supplierVariantColumn);
+    if (step === "review") return Boolean((this.mapping().primaryBarcodeColumn || this.mapping().supplierSkuColumn || this.mapping().supplierVariantColumn) && this.mapping().costRule.sourceColumn);
     if (step === "result") return Boolean(this.success());
     return true;
   }
@@ -354,6 +384,7 @@ export class CatalogProductsImportComponent implements OnDestroy {
     this.success.set(null);
     this.supplierPickerError.set(null);
     this.fileName.set(file.name);
+    this.selectedSourceFile = file;
 
     this.parsing.set(true);
     try {
@@ -385,13 +416,59 @@ export class CatalogProductsImportComponent implements OnDestroy {
   }
 
   setMappingField(field: MappingKey, value: string): void {
-    this.mapping.update((current) => ({ ...current, [field]: value }));
+    this.mapping.update((current) => {
+      const next = { ...current, [field]: value };
+      if (field === "primaryBarcodeColumn") next.skuColumn = value || next.supplierSkuColumn || next.supplierVariantColumn;
+      if (field === "supplierSkuColumn" && !next.primaryBarcodeColumn) next.skuColumn = value || next.supplierVariantColumn;
+      if (field === "supplierVariantColumn" && !next.primaryBarcodeColumn && !next.supplierSkuColumn) next.skuColumn = value;
+      return next;
+    });
     this.schedulePreviewValidation();
   }
 
-  setPercentField(field: PercentMappingKey, value: number | string): void {
-    this.mapping.update((current) => ({ ...current, [field]: this.clampPercent(value) }));
+  setPriceRuleField(ruleKey: PriceRuleKey, field: PriceRuleField, value: string | number): void {
+    this.mapping.update((current) => ({
+      ...current,
+      [ruleKey]: {
+        ...current[ruleKey],
+        [field]: field === "percentValue" ? this.clampPercent(value) : value,
+      },
+      ...(ruleKey === "costRule" && field === "sourceColumn" ? { priceCostColumn: String(value || "") } : {}),
+    }));
     this.schedulePreviewValidation();
+  }
+
+  toggleMultiColumn(field: MultiColumnMappingKey, column: string, checked: boolean): void {
+    this.mapping.update((current) => {
+      const selected = new Set(current[field]);
+      if (checked) selected.add(column);
+      else selected.delete(column);
+      return { ...current, [field]: [...selected] };
+    });
+    this.schedulePreviewValidation();
+  }
+
+  isMultiColumnSelected(field: MultiColumnMappingKey, column: string): boolean {
+    return this.mapping()[field].includes(column);
+  }
+
+  togglePriceFallback(ruleKey: PriceRuleKey, column: string, checked: boolean): void {
+    this.mapping.update((current) => {
+      const selected = new Set(current[ruleKey].fallbackColumns);
+      if (checked) selected.add(column);
+      else selected.delete(column);
+      return { ...current, [ruleKey]: { ...current[ruleKey], fallbackColumns: this.headers().filter((header) => selected.has(header)) } };
+    });
+    this.schedulePreviewValidation();
+  }
+
+  isPriceFallbackSelected(ruleKey: PriceRuleKey, column: string): boolean {
+    return this.mapping()[ruleKey].fallbackColumns.includes(column);
+  }
+
+  priceRuleLabel(rule: CatalogPriceRule): string {
+    if (rule.base === "cost") return "Costo calculado";
+    return rule.sourceColumn || "Columna pendiente";
   }
 
   toggleNameColumn(column: string, checked: boolean): void {
@@ -425,7 +502,10 @@ export class CatalogProductsImportComponent implements OnDestroy {
   mappedColumnPreview(): Array<{ label: string; column: string; values: string[]; required?: boolean }> {
     const mapping = this.mapping();
     return [
-      { label: "SKU / código", column: mapping.skuColumn, values: this.columnSamples(mapping.skuColumn), required: true },
+      { label: "Barcode principal", column: mapping.primaryBarcodeColumn, values: this.columnSamples(mapping.primaryBarcodeColumn) },
+      { label: "SKU proveedor", column: mapping.supplierSkuColumn, values: this.columnSamples(mapping.supplierSkuColumn) },
+      { label: "Variante proveedor", column: mapping.supplierVariantColumn, values: this.columnSamples(mapping.supplierVariantColumn) },
+      { label: "Modelo / grupo", column: mapping.modelColumn || mapping.genericColumn, values: this.columnSamples(mapping.modelColumn || mapping.genericColumn) },
       { label: "Nombre", column: mapping.nameColumns.join(" + "), values: this.nameSamples(), required: true },
       { label: "Marca", column: mapping.brandColumn, values: this.columnSamples(mapping.brandColumn) },
       { label: "Categoría", column: mapping.categoryColumn, values: this.columnSamples(mapping.categoryColumn) },
@@ -479,7 +559,7 @@ export class CatalogProductsImportComponent implements OnDestroy {
     this.success.set(null);
     try {
       const mapping = this.mapping();
-      const validRows = this.preview().validRows.map((row) => this.toImportRow(row));
+      const validRowCount = this.preview().valid;
       const job = await this.importJobs.createJob({
         business_id: "catalogo",
         file_name: this.fileName() || "catalogo.xlsx",
@@ -488,31 +568,36 @@ export class CatalogProductsImportComponent implements OnDestroy {
         header_row_index: this.headerRowIndex(),
         mapping_snapshot: {
           ...mapping,
+          profileVersion: 2,
           headerRowIndex: this.headerRowIndex(),
           sourceSheetName: this.sourceSheetName(),
         },
         total_rows: this.preview().total,
-        valid_rows: validRows.length,
+        valid_rows: validRowCount,
         rejected_rows: this.rejectedRows().length,
         supplier_id: supplier.supplier_id,
         supplier_name: supplier.display_name,
-        price_cost_discount_pct: mapping.priceCostDiscountPct,
-        price_clienta_markup_pct: mapping.priceClientaMarkupPct,
+        price_cost_discount_pct: mapping.costRule.mode === "formula" && mapping.costRule.percentOperation === "discount" && mapping.costRule.percentSource === "fixed" ? mapping.costRule.percentValue : 0,
+        price_clienta_markup_pct: mapping.clientaRule.mode === "formula" && mapping.clientaRule.percentOperation === "markup" && mapping.clientaRule.percentSource === "fixed" ? mapping.clientaRule.percentValue : 0,
       });
-      const chunkSize = 400;
-      for (let start = 0, chunkIndex = 0; start < validRows.length; start += chunkSize, chunkIndex += 1) {
-        const chunk = validRows.slice(start, start + chunkSize);
-        const finalChunk = start + chunkSize >= validRows.length;
-        await this.importJobs.uploadChunk(job.job_id, chunk, chunkIndex, finalChunk);
-        await this.yieldToBrowser();
+      if (!this.selectedSourceFile) throw new Error("Vuelve a seleccionar el Excel original para crear el staging.");
+      await this.importJobs.uploadSourceFile(job.job_id, this.selectedSourceFile);
+      await this.importJobs.saveJobProfile(job.job_id, this.toV2Profile(mapping, supplier.supplier_id));
+      const validation = await this.importJobs.validate(job.job_id);
+      if (validation.summary && validation.summary.valid_rows <= 0) {
+        throw new Error("El backend no encontró filas válidas para confirmar.");
       }
+      const queuedJob = await this.importJobs.commit(job.job_id);
       this.saveTemplate(supplier.supplier_id, mapping);
-      this.success.set(`Importacion lista: ${validRows.length} producto(s).`);
+      this.success.set(
+        queuedJob.status === "completed"
+          ? `Importación completada: ${validation.summary?.valid_rows ?? validRowCount} fila(s) válidas.`
+          : `Importación validada y en cola: ${validation.summary?.valid_rows ?? validRowCount} fila(s) válidas. Puedes cerrar esta pantalla; el worker continuará.`,
+      );
       this.selectedJobId.set(job.job_id);
       this.selectedCatalogSupplierKey.set(this.supplierKey(supplier.supplier_id));
       this.consoleTab.set("imports");
       this.wizardStep.set("result");
-      await this.catalogProducts.loadFromFirestore().catch(() => null);
       this.watchSelectedSupplierPage();
     } catch (error: any) {
       this.error.set(error?.message || "No se pudo importar el archivo.");
@@ -545,7 +630,7 @@ export class CatalogProductsImportComponent implements OnDestroy {
     this.selectedJobRows.set([]);
     this.selectedJobRowsLoading.set(true);
     try {
-      this.selectedJobRows.set(await this.importJobs.loadRows(job.job_id, 600));
+      this.selectedJobRows.set(await this.importJobs.loadRows(job.job_id));
     } catch (error: any) {
       this.error.set(error?.message || "No se pudo cargar el detalle de importacion.");
     } finally {
@@ -563,7 +648,6 @@ export class CatalogProductsImportComponent implements OnDestroy {
     try {
       await this.importJobs.rollback(job.job_id);
       this.success.set("Importacion revertida correctamente.");
-      await this.catalogProducts.loadFromFirestore().catch(() => null);
       this.watchSelectedSupplierPage();
       await this.selectJob(job);
     } catch (error: any) {
@@ -583,7 +667,8 @@ export class CatalogProductsImportComponent implements OnDestroy {
       const mapping = job.mapping_snapshot as Partial<ImportMapping>;
       this.mapping.set({ ...this.emptyMapping(), ...mapping });
     }
-    this.fileName.set("");
+      this.fileName.set("");
+      this.selectedSourceFile = null;
     this.headers.set([]);
     this.rawRows.set([]);
     this.parsedMatrix.set([]);
@@ -596,18 +681,28 @@ export class CatalogProductsImportComponent implements OnDestroy {
     const pills: ProductHealthPill[] = [];
     const latest = product.supplier_id ? this.latestFullImportBySupplier().get(product.supplier_id) : null;
     const lastImportId = product.last_price_import_id || product.last_import_id || null;
+    if (product.catalog_status === "provisional") {
+      pills.push({ label: "Provisional no vendible", tone: "warn", icon: "hourglass_top" });
+    } else if (product.catalog_status === "outdated") {
+      pills.push({ label: "No vino en ultimo Excel", tone: "warn", icon: "event_busy" });
+      pills.push({ label: "Precio viejo", tone: "warn", icon: "schedule" });
+    } else if (product.catalog_status === "archived") {
+      pills.push({ label: "Archivado", tone: "muted", icon: "archive" });
+    }
     if (product.reverted_from_import_id) {
       pills.push({ label: "Importacion revertida", tone: "danger", icon: "undo" });
     }
-    if (product.price_cost === null || product.price_clienta === null) {
-      pills.push({ label: "Sin precio", tone: "danger", icon: "error" });
+    if (product.price_cost === null || product.price_cost <= 0) {
+      pills.push({ label: "Sin costo", tone: "danger", icon: "error" });
+    } else if (product.price_clienta === null) {
+      pills.push({ label: "Sin precio de venta", tone: "warn", icon: "sell" });
     }
     if (product.price_health_flags?.includes("large_price_change") || product.last_import_status === "price_review") {
       pills.push({ label: "Cambio fuerte", tone: "warn", icon: "warning" });
     }
     if (!lastImportId) {
       pills.push({ label: "Sin historial", tone: "muted", icon: "history" });
-    } else if (latest && latest.job_id !== lastImportId) {
+    } else if (latest && latest.job_id !== lastImportId && product.catalog_status !== "outdated") {
       pills.push({ label: "No vino en ultimo Excel", tone: "warn", icon: "event_busy" });
       pills.push({ label: "Precio viejo", tone: "warn", icon: "schedule" });
     }
@@ -637,7 +732,9 @@ export class CatalogProductsImportComponent implements OnDestroy {
     if (job.rollback_status === "completed") return "Revertida";
     if (job.rollback_status === "running") return "Revirtiendo";
     if (job.status === "completed") return "Completada";
-    if (job.status === "running" || job.status === "queued") return "En proceso";
+    if (job.status === "needs_mapping") return "Requiere mapeo";
+    if (job.status === "validated") return "Validada";
+    if (job.status !== "failed") return "En proceso";
     return "Fallida";
   }
 
@@ -720,11 +817,39 @@ export class CatalogProductsImportComponent implements OnDestroy {
 
   private watchSelectedSupplierPage(): void {
     this.ensureSupplierSelection();
+    const supplierId = this.activeCatalogSupplier()?.supplier_id || null;
     this.catalogProducts.watchCatalogPage({
       businessId: "catalogo",
       searchSku: this.search(),
-      supplierId: this.activeCatalogSupplier()?.supplier_id || null,
+      supplierId,
     });
+    if (supplierId) void this.loadSupplierMetrics(supplierId);
+  }
+
+  private async loadSupplierMetrics(supplierId: string): Promise<void> {
+    try {
+      const metrics = await this.catalogProducts.getMetrics({ businessId: "catalogo", supplierId });
+      this.catalogMetricsBySupplier.update((current) => ({ ...current, [supplierId]: { ...metrics, exact: true } }));
+    } catch {
+      const rows = this.catalogProducts.catalogoPageProducts()
+        .filter((row) => row.supplier_id === supplierId);
+      this.catalogMetricsBySupplier.update((current) => ({
+        ...current,
+        [supplierId]: {
+          total: rows.length,
+          active: rows.filter((row) => row.active !== false).length,
+          updated: rows.filter((row) => this.productHealth(row).some((pill) => pill.label === "Actualizado")).length,
+          stale: rows.filter((row) => this.productHealth(row).some((pill) => pill.label === "Precio viejo" || pill.label === "No vino en ultimo Excel")).length,
+          missing_price: rows.filter((row) => row.price_cost === null || row.price_cost <= 0).length,
+          review: rows.filter((row) => row.price_health_flags?.includes("large_price_change") || row.last_import_status === "price_review").length,
+          provisional: 0,
+          groups: 0,
+          variants: rows.length,
+          quality_issues: rows.filter((row) => this.productHealth(row).some((pill) => pill.tone !== "ok")).length,
+          exact: false,
+        },
+      }));
+    }
   }
 
   private templateKey(supplierId: string): string {
@@ -762,6 +887,17 @@ export class CatalogProductsImportComponent implements OnDestroy {
       return {
         ...base,
         skuColumn: safeColumn(saved.skuColumn) || base.skuColumn,
+        primaryBarcodeColumn: safeColumn(saved.primaryBarcodeColumn) || base.primaryBarcodeColumn,
+        alternateBarcodeColumns: safeColumns(saved.alternateBarcodeColumns),
+        supplierSkuColumn: safeColumn(saved.supplierSkuColumn) || base.supplierSkuColumn,
+        supplierVariantColumn: safeColumn(saved.supplierVariantColumn) || base.supplierVariantColumn,
+        genericColumn: safeColumn(saved.genericColumn) || base.genericColumn,
+        internetColumn: safeColumn(saved.internetColumn) || base.internetColumn,
+        modelColumn: safeColumn(saved.modelColumn) || base.modelColumn,
+        styleColumn: safeColumn(saved.styleColumn) || base.styleColumn,
+        bundleColumn: safeColumn(saved.bundleColumn) || base.bundleColumn,
+        ocrAliasColumns: safeColumns(saved.ocrAliasColumns),
+        customIdentifierColumns: safeColumns(saved.customIdentifierColumns),
         nameColumns: safeColumns(saved.nameColumns).length ? safeColumns(saved.nameColumns) : base.nameColumns,
         brandColumn: safeColumn(saved.brandColumn) || base.brandColumn,
         categoryColumn: safeColumn(saved.categoryColumn) || base.categoryColumn,
@@ -771,14 +907,52 @@ export class CatalogProductsImportComponent implements OnDestroy {
         impulsProductIdColumn: safeColumn(saved.impulsProductIdColumn) || base.impulsProductIdColumn,
         priceCostDiscountPct: this.clampPercent(saved.priceCostDiscountPct ?? base.priceCostDiscountPct),
         priceClientaMarkupPct: this.clampPercent(saved.priceClientaMarkupPct ?? base.priceClientaMarkupPct),
+        costRule: this.safePriceRule(saved.costRule, base.costRule, headers),
+        clientaRule: this.safePriceRule(saved.clientaRule, base.clientaRule, headers),
       };
     } catch {
       return base;
     }
   }
 
-  private yieldToBrowser(): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, 0));
+  private safePriceRule(saved: CatalogPriceRule | undefined, fallback: CatalogPriceRule, headers: Set<string>): CatalogPriceRule {
+    if (!saved || typeof saved !== "object") return fallback;
+    const safeColumn = (value: unknown) => headers.has(String(value || "")) ? String(value) : "";
+    const safeRounding: PriceRounding = ["none", "integer", "0.05", "0.10", "0.50"].includes(saved.rounding) ? saved.rounding : "none";
+    return {
+      mode: saved.mode === "formula" ? "formula" : "direct",
+      base: saved.base === "cost" ? "cost" : "column",
+      sourceColumn: safeColumn(saved.sourceColumn) || fallback.sourceColumn,
+      fallbackColumns: Array.isArray(saved.fallbackColumns) ? saved.fallbackColumns.map(safeColumn).filter(Boolean) : [],
+      percentOperation: saved.percentOperation === "discount" || saved.percentOperation === "markup" ? saved.percentOperation : "none",
+      percentSource: saved.percentSource === "column" ? "column" : "fixed",
+      percentValue: this.clampPercent(saved.percentValue),
+      percentColumn: safeColumn(saved.percentColumn),
+      amountOperation: saved.amountOperation === "add" || saved.amountOperation === "subtract" ? saved.amountOperation : "none",
+      amountSource: saved.amountSource === "column" ? "column" : "fixed",
+      amountValue: this.safeNonNegativeNumber(saved.amountValue),
+      amountColumn: safeColumn(saved.amountColumn),
+      rounding: safeRounding,
+    };
+  }
+
+  private toV2Profile(mapping: ImportMapping, supplierId: string): CatalogImportProfileV2 {
+    return {
+      version: 2,
+      supplier_id: supplierId,
+      mapping: { ...mapping },
+      identity_rules: {
+        primary_barcode_column: mapping.primaryBarcodeColumn || null,
+        exact_variant_columns: [mapping.supplierSkuColumn, mapping.supplierVariantColumn].filter(Boolean),
+        group_columns: [mapping.genericColumn, mapping.internetColumn, mapping.modelColumn, mapping.styleColumn].filter(Boolean),
+        preserve_non_indexable_evidence: true,
+      },
+      price_rules: {
+        cost: mapping.costRule,
+        clienta: mapping.clientaRule,
+        cost_required: true,
+      },
+    };
   }
 
   private schedulePreviewValidation(delay = 100): void {
@@ -844,32 +1018,63 @@ export class CatalogProductsImportComponent implements OnDestroy {
 
   private buildPreview(rows: Record<string, unknown>[], mapping: ImportMapping): PreviewSummary {
     const skuCounts = new Map<string, number>();
+    const barcodeIdentities = new Map<string, Set<string>>();
     for (const raw of rows) {
       if (raw["__row_empty"] === true || this.nonEmptyRecordCount(raw) === 0) continue;
-      const sku = this.textFromColumn(raw, mapping.skuColumn);
+      const sku = this.textFromColumn(raw, mapping.primaryBarcodeColumn) || this.textFromColumn(raw, mapping.supplierSkuColumn) || this.textFromColumn(raw, mapping.supplierVariantColumn);
       if (!sku) continue;
-      const key = sku.toLowerCase();
+      const key = normalizeIdentifierKey(sku);
       skuCounts.set(key, (skuCounts.get(key) || 0) + 1);
+      const barcodes = [mapping.primaryBarcodeColumn, ...mapping.alternateBarcodeColumns]
+        .map((column) => normalizeIdentifierKey(this.textFromColumn(raw, column)))
+        .filter(Boolean);
+      for (const barcode of barcodes) {
+        const identity = normalizeIdentifierKey(
+          this.textFromColumn(raw, mapping.supplierVariantColumn)
+          || [this.textFromColumn(raw, mapping.modelColumn), this.textFromColumn(raw, mapping.colorColumn), this.textFromColumn(raw, mapping.sizeColumn)].filter(Boolean).join("|")
+          || this.textFromColumn(raw, mapping.supplierSkuColumn)
+          || barcode,
+        );
+        const identities = barcodeIdentities.get(barcode) || new Set<string>();
+        identities.add(identity);
+        barcodeIdentities.set(barcode, identities);
+      }
     }
 
     const normalized = rows.map((raw, idx): PreviewRow => {
       const rowNumber = Number(raw["__row_number"] || idx + 2);
       const rowEmpty = raw["__row_empty"] === true || this.nonEmptyRecordCount(raw) === 0;
-      const sku = this.textFromColumn(raw, mapping.skuColumn);
+      const identifiers = buildIdentifiers(raw, mapping);
+      const primaryBarcode = identifiers.find((identifier) => identifier.type === "barcode" && identifier.primary)?.value || null;
+      const supplierSku = identifiers.find((identifier) => identifier.type === "supplier_sku")?.value || null;
+      const supplierVariant = identifiers.find((identifier) => identifier.type === "supplier_variant")?.value || null;
+      const sku = primaryBarcode || supplierSku || supplierVariant || "";
       const cklassFields = this.extractCklassFields(raw);
-      const duplicate = sku ? (skuCounts.get(sku.toLowerCase()) || 0) > 1 : false;
-      const priceCostExcel = this.numberFromColumn(raw, mapping.priceCostColumn);
-      const priceCost = this.applyDiscount(priceCostExcel.value, mapping.priceCostDiscountPct);
-      const priceClienta = this.applyMarkup(priceCostExcel.value, mapping.priceClientaMarkupPct);
+      const duplicate = sku ? (skuCounts.get(normalizeIdentifierKey(sku)) || 0) > 1 : false;
+      const barcodeConflict = identifiers
+        .filter((identifier) => identifier.type === "barcode" && identifier.indexable)
+        .some((identifier) => (barcodeIdentities.get(identifier.normalized_value)?.size || 0) > 1);
+      const cost = evaluatePriceRule(raw, mapping.costRule, null, "Costo");
+      const clienta = evaluatePriceRule(raw, mapping.clientaRule, cost.value, "Precio clienta");
+      const indexableIdentity = identifiers.some((identifier) => identifier.indexable && identifier.scope === "variant");
+      const warnings = [
+        ...identifiers.filter((identifier) => identifier.validation_issue).map((identifier) => `${identifier.value}: ${identifier.validation_issue}`),
+        ...(duplicate ? ["Identidad repetida: se consolidará y se conservará esta ubicación"] : []),
+        ...cost.warnings,
+        ...clienta.warnings,
+        ...(clienta.issue ? [clienta.issue] : []),
+      ];
       const issue = rowEmpty
         ? "Fila sin datos"
-        : !sku
-          ? "SKU vacio"
-          : duplicate
-            ? "SKU duplicado"
-            : priceCostExcel.invalid
-              ? "Precio costo invalido"
-              : null;
+        : !indexableIdentity
+          ? "No hay un identificador exacto utilizable"
+          : barcodeConflict
+            ? "El barcode coincide con identidades diferentes"
+            : cost.issue
+              ? cost.issue
+              : cost.value === null || cost.value <= 0
+                ? "El costo obligatorio debe ser mayor a cero"
+                : null;
       const name = mapping.nameColumns.map((column) => this.textFromColumn(raw, column)).filter(Boolean).join(" ").trim();
       return {
         rowNumber,
@@ -883,63 +1088,50 @@ export class CatalogProductsImportComponent implements OnDestroy {
         size: this.textFromColumn(raw, mapping.sizeColumn) || null,
         impuls_product_id: this.textFromColumn(raw, mapping.impulsProductIdColumn) || null,
         ...cklassFields,
-        price_cost_excel: priceCostExcel.value,
-        price_cost_discount_pct: mapping.priceCostDiscountPct,
-        price_cost: priceCost,
-        price_clienta_markup_pct: mapping.priceClientaMarkupPct,
-        price_clienta: priceClienta,
+        price_cost_excel: cost.sourceValue,
+        price_cost_discount_pct: mapping.costRule.mode === "formula" && mapping.costRule.percentOperation === "discount" && mapping.costRule.percentSource === "fixed" ? mapping.costRule.percentValue : null,
+        price_cost: cost.value,
+        price_clienta_markup_pct: mapping.clientaRule.mode === "formula" && mapping.clientaRule.percentOperation === "markup" && mapping.clientaRule.percentSource === "fixed" ? mapping.clientaRule.percentValue : null,
+        price_clienta: clienta.value,
+        primary_barcode: primaryBarcode,
+        supplier_sku: supplierSku,
+        identifiers,
+        prices: { cost: cost.value ?? 0, clienta: clienta.value },
         original_row: this.originalRow(raw),
         valid: !issue,
         issue,
+        warnings,
       };
     });
 
-    const validRows = normalized.filter((row) => row.valid);
+    const validCount = normalized.filter((row) => row.valid).length;
     return {
       rows: normalized,
       sample: normalized.slice(0, 20),
-      validRows,
       total: normalized.length,
-      valid: validRows.length,
-      missingSku: normalized.filter((row) => row.issue === "SKU vacio").length,
-      duplicateSku: normalized.filter((row) => row.issue === "SKU duplicado").length,
-      invalidValues: normalized.filter((row) => row.issue?.includes("invalido")).length,
-    };
-  }
-
-  private toImportRow(row: PreviewRow): CatalogProductImportRow {
-    const supplier = this.selectedSupplier();
-    return {
-      sku: row.sku,
-      name: row.name,
-      row_number: row.rowNumber,
-      brand_name: row.brand_name,
-      supplier_id: supplier?.supplier_id || row.supplier_id || null,
-      supplier_name: supplier?.display_name || row.supplier_name || null,
-      category: row.category,
-      color: row.color,
-      size: row.size,
-      impuls_product_id: row.impuls_product_id,
-      cklass_model: row.cklass_model,
-      cklass_color: row.cklass_color,
-      cklass_size: row.cklass_size,
-      cklass_barcode: row.cklass_barcode,
-      cklass_catalog: row.cklass_catalog,
-      cklass_model_display: row.cklass_model_display,
-      cklass_product_code: row.cklass_product_code,
-      image_key: row.image_key,
-      price_cost_excel: row.price_cost_excel,
-      price_cost_discount_pct: row.price_cost_discount_pct,
-      price_cost: row.price_cost,
-      price_clienta_markup_pct: row.price_clienta_markup_pct,
-      price_clienta: row.price_clienta,
-      original_row: row.original_row,
+      valid: validCount,
+      missingSku: normalized.filter((row) => row.issue === "No hay un identificador exacto utilizable").length,
+      duplicateSku: normalized.filter((row) => row.warnings.some((warning) => warning.startsWith("Identidad repetida"))).length,
+      invalidValues: normalized.filter((row) => !row.valid).length,
+      missingCost: normalized.filter((row) => row.issue?.startsWith("Costo:") || row.issue === "El costo obligatorio debe ser mayor a cero").length,
+      identifierConflicts: normalized.filter((row) => row.issue === "El barcode coincide con identidades diferentes").length,
     };
   }
 
   private emptyMapping(): ImportMapping {
     return {
       skuColumn: "",
+      primaryBarcodeColumn: "",
+      alternateBarcodeColumns: [],
+      supplierSkuColumn: "",
+      supplierVariantColumn: "",
+      genericColumn: "",
+      internetColumn: "",
+      modelColumn: "",
+      styleColumn: "",
+      bundleColumn: "",
+      ocrAliasColumns: [],
+      customIdentifierColumns: [],
       nameColumns: [],
       brandColumn: "",
       categoryColumn: "",
@@ -949,23 +1141,45 @@ export class CatalogProductsImportComponent implements OnDestroy {
       impulsProductIdColumn: "",
       priceCostDiscountPct: 0,
       priceClientaMarkupPct: 0,
+      costRule: emptyPriceRule("column"),
+      clientaRule: emptyPriceRule("cost"),
     };
   }
 
   private autodetectMapping(headers: string[]): ImportMapping {
-    const sku = this.guessHeader(headers, ["sku", "codigo", "clave", "cod", "id"]);
+    const primaryBarcode = this.guessHeader(headers, ["sku etiqueta", "codigo_barra", "codigo barra", "codigo de barra", "barcode", "ean", "gtin"]);
+    const supplierSku = this.guessHeader(headers, ["sku nazan", "sku proveedor", "supplier sku"]);
+    const supplierVariant = this.guessHeader(headers, ["variante", "variant"]);
+    const sku = primaryBarcode || supplierSku || supplierVariant || this.guessHeader(headers, ["sku", "codigo", "clave", "cod", "id"]);
     const name = this.guessHeader(headers, ["nombre", "producto", "descripcion", "articulo", "modelo"]);
+    const costColumn = this.guessHeader(headers, ["costo", "precio costo", "cost"]);
+    const costRule = emptyPriceRule("column");
+    costRule.sourceColumn = costColumn;
+    const clientaRule = emptyPriceRule("cost");
     return {
       skuColumn: sku,
+      primaryBarcodeColumn: primaryBarcode,
+      alternateBarcodeColumns: headers.filter((header) => ["sku opc 2", "sku opc 3"].includes(this.normalizeText(header))),
+      supplierSkuColumn: supplierSku || (!primaryBarcode ? sku : ""),
+      supplierVariantColumn: supplierVariant,
+      genericColumn: this.guessHeader(headers, ["generico", "genérico"]),
+      internetColumn: this.guessHeader(headers, ["cod internet", "cód. internet", "codigo internet"]),
+      modelColumn: this.guessHeader(headers, ["modelo"]),
+      styleColumn: this.guessHeader(headers, ["estilo"]),
+      bundleColumn: this.guessHeader(headers, ["comboid", "combo", "duo", "six"]),
+      ocrAliasColumns: [],
+      customIdentifierColumns: [],
       nameColumns: name ? [name] : headers.filter((header) => header !== sku).slice(0, 1),
       brandColumn: this.guessHeader(headers, ["marca", "brand", "fabricante"]),
       categoryColumn: this.guessHeader(headers, ["categoria", "departamento", "linea", "familia"]),
       colorColumn: this.guessHeader(headers, ["color", "tono"]),
       sizeColumn: this.guessHeader(headers, ["talla", "medida", "size"]),
-      priceCostColumn: this.guessHeader(headers, ["costo", "precio costo", "cost"]),
+      priceCostColumn: costColumn,
       impulsProductIdColumn: this.guessHeader(headers, ["generico", "genérico", "id generico", "id genérico", "productid", "product id"]),
       priceCostDiscountPct: 0,
       priceClientaMarkupPct: 0,
+      costRule,
+      clientaRule,
     };
   }
 
@@ -1081,34 +1295,15 @@ export class CatalogProductsImportComponent implements OnDestroy {
     };
   }
 
-  private numberFromColumn(row: Record<string, unknown>, column: string): { value: number | null; invalid: boolean } {
-    const value = this.textFromColumn(row, column).replace(/[$,\s]/g, "");
-    if (!value) return { value: null, invalid: false };
-    const number = Number(value);
-    if (!Number.isFinite(number) || number < 0) return { value: null, invalid: true };
-    return { value: Number(number.toFixed(2)), invalid: false };
-  }
-
   private clampPercent(value: unknown): number {
     const number = Number(value ?? 0);
     if (!Number.isFinite(number)) return 0;
     return Math.max(0, Math.min(100, Number(number.toFixed(2))));
   }
 
-  private applyDiscount(value: number | null, percent: number): number | null {
-    if (value === null) return null;
-    return Number(Math.max(0, value * (1 - this.clampPercent(percent) / 100)).toFixed(2));
-  }
-
-  private applyMarkup(value: number | null, percent: number): number | null {
-    if (value === null) return null;
-    return Number(Math.max(0, value * (1 + this.clampPercent(percent) / 100)).toFixed(2));
-  }
-
-  private integerFromColumn(row: Record<string, unknown>, column: string): { value: number | null; invalid: boolean } {
-    const parsed = this.numberFromColumn(row, column);
-    if (parsed.invalid || parsed.value === null) return parsed;
-    return { value: Math.trunc(parsed.value), invalid: false };
+  private safeNonNegativeNumber(value: unknown): number {
+    const number = Number(value ?? 0);
+    return Number.isFinite(number) ? Math.max(0, Number(number.toFixed(2))) : 0;
   }
 
   private originalRow(row: Record<string, unknown>): Record<string, unknown> {
@@ -1119,12 +1314,13 @@ export class CatalogProductsImportComponent implements OnDestroy {
     return {
       rows: [],
       sample: [],
-      validRows: [],
       total: 0,
       valid: 0,
       missingSku: 0,
       duplicateSku: 0,
       invalidValues: 0,
+      missingCost: 0,
+      identifierConflicts: 0,
     };
   }
 

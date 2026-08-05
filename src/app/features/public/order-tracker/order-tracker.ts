@@ -5,6 +5,8 @@ import { ActivatedRoute, RouterLink } from "@angular/router";
 import { lastValueFrom } from "rxjs";
 import {
   TrackDashboard,
+  TrackDashboardSection,
+  TrackMode,
   TrackOrderSummary,
   TrackReturn,
   TrackingPortalService,
@@ -29,12 +31,25 @@ export default class OrderTrackerPage {
   readonly error = signal<"invalid" | "unavailable" | null>(null);
   readonly data = signal<TrackDashboard | null>(null);
   readonly activeTab = signal<PortalTab>("active");
-  readonly history = signal<TrackOrderSummary[]>([]);
-  readonly returns = signal<TrackReturn[]>([]);
-  readonly historyCursor = signal<string | null>(null);
-  readonly returnsCursor = signal<string | null>(null);
+  readonly section = signal<TrackMode>("bm");
+  private readonly historyItems = signal<Record<TrackMode, TrackOrderSummary[]>>({ bm: [], catalogo: [] });
+  private readonly historyCursorByMode = signal<Record<TrackMode, string | null>>({ bm: null, catalogo: null });
+  private readonly returnItems = signal<Record<TrackMode, TrackReturn[]>>({ bm: [], catalogo: [] });
+  private readonly returnsCursorByMode = signal<Record<TrackMode, string | null>>({ bm: null, catalogo: null });
   readonly loadingMore = signal(false);
   readonly paginationError = signal<PortalTab | null>(null);
+
+  readonly history = computed(() => this.historyItems()[this.section()]);
+  readonly returns = computed(() => this.returnItems()[this.section()]);
+  readonly historyCursor = computed(() => this.historyCursorByMode()[this.section()]);
+  readonly returnsCursor = computed(() => this.returnsCursorByMode()[this.section()]);
+
+  /** Cada modo (BM/Catalogo) se muestra por separado, nunca combinado. Si la
+   * clienta solo tiene pedidos de un modo, la otra seccion queda oculta. */
+  readonly currentSection = computed<TrackDashboardSection | null>(() => this.data()?.[this.section()] ?? null);
+  readonly hasBmData = computed(() => this.sectionHasData(this.data()?.bm));
+  readonly hasCatalogoData = computed(() => this.sectionHasData(this.data()?.catalogo));
+  readonly showSectionToggle = computed(() => this.hasBmData() && this.hasCatalogoData());
 
   readonly whatsappHref = computed(() => {
     const number = this.data()?.support.whatsapp_number || "523310167906";
@@ -49,19 +64,24 @@ export default class OrderTrackerPage {
     this.activeTab.set(tab);
   }
 
+  selectSection(mode: TrackMode): void {
+    this.section.set(mode);
+  }
+
   async retry(): Promise<void> {
     await this.load();
   }
 
   async loadMoreHistory(): Promise<void> {
-    const cursor = this.historyCursor();
+    const mode = this.section();
+    const cursor = this.historyCursorByMode()[mode];
     if (!cursor || this.loadingMore()) return;
     this.loadingMore.set(true);
     this.paginationError.set(null);
     try {
-      const page = await lastValueFrom(this.portal.loadHistory(this.token(), cursor));
-      this.history.update((rows) => [...rows, ...page.items]);
-      this.historyCursor.set(page.next_cursor);
+      const page = await lastValueFrom(this.portal.loadHistory(this.token(), cursor, mode));
+      this.historyItems.update((state) => ({ ...state, [mode]: [...state[mode], ...page.items] }));
+      this.historyCursorByMode.update((state) => ({ ...state, [mode]: page.next_cursor }));
     } catch {
       this.paginationError.set("history");
     } finally {
@@ -70,14 +90,15 @@ export default class OrderTrackerPage {
   }
 
   async loadMoreReturns(): Promise<void> {
-    const cursor = this.returnsCursor();
+    const mode = this.section();
+    const cursor = this.returnsCursorByMode()[mode];
     if (!cursor || this.loadingMore()) return;
     this.loadingMore.set(true);
     this.paginationError.set(null);
     try {
-      const page = await lastValueFrom(this.portal.loadReturns(this.token(), cursor));
-      this.returns.update((rows) => [...rows, ...page.items]);
-      this.returnsCursor.set(page.next_cursor);
+      const page = await lastValueFrom(this.portal.loadReturns(this.token(), cursor, mode));
+      this.returnItems.update((state) => ({ ...state, [mode]: [...state[mode], ...page.items] }));
+      this.returnsCursorByMode.update((state) => ({ ...state, [mode]: page.next_cursor }));
     } catch {
       this.paginationError.set("returns");
     } finally {
@@ -98,6 +119,18 @@ export default class OrderTrackerPage {
     return "schedule";
   }
 
+  private sectionHasData(section: TrackDashboardSection | undefined): boolean {
+    if (!section) return false;
+    const s = section.summary;
+    return s.active_orders + s.completed_orders + s.returns_count > 0;
+  }
+
+  private pickDefaultSection(data: TrackDashboard): TrackMode {
+    if (this.sectionHasData(data.bm)) return "bm";
+    if (this.sectionHasData(data.catalogo)) return "catalogo";
+    return "bm";
+  }
+
   private async load(): Promise<void> {
     const token = this.token();
     this.loading.set(true);
@@ -110,10 +143,11 @@ export default class OrderTrackerPage {
     try {
       const result = await lastValueFrom(this.portal.loadDashboard(token));
       this.data.set(result);
-      this.history.set(result.history.items);
-      this.historyCursor.set(result.history.next_cursor);
-      this.returns.set(result.returns.items);
-      this.returnsCursor.set(result.returns.next_cursor);
+      this.historyItems.set({ bm: result.bm.history.items, catalogo: result.catalogo.history.items });
+      this.historyCursorByMode.set({ bm: result.bm.history.next_cursor, catalogo: result.catalogo.history.next_cursor });
+      this.returnItems.set({ bm: result.bm.returns.items, catalogo: result.catalogo.returns.items });
+      this.returnsCursorByMode.set({ bm: result.bm.returns.next_cursor, catalogo: result.catalogo.returns.next_cursor });
+      this.section.set(this.pickDefaultSection(result));
     } catch (error: unknown) {
       this.error.set(error instanceof HttpErrorResponse && error.status === 404 ? "invalid" : "unavailable");
     } finally {

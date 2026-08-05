@@ -1,6 +1,10 @@
 import { Injectable, inject } from "@angular/core";
-import { CatalogProduct, CatalogProductsService } from "./catalog-products.service";
-import { CatalogBarcodeAliasService } from "./catalog-barcode-alias.service";
+import {
+  CatalogProduct,
+  CatalogProductGroup,
+  CatalogProductIdentifier,
+  CatalogProductsService,
+} from "./catalog-products.service";
 import { InventoryItem, InventoryService } from "./inventory.service";
 import { NormalizedListingDoc, NormalizedListingsService } from "./normalized-listings.service";
 import { BusinessId, normalizeBusinessId } from "./rbac.constants";
@@ -12,6 +16,9 @@ export type BarcodeProductMatch =
       label: string;
       business_id: BusinessId;
       product: CatalogProduct;
+      group: CatalogProductGroup | null;
+      matched_identifier: CatalogProductIdentifier | null;
+      selection_required: boolean;
     }
   | {
       kind: "inventory";
@@ -19,6 +26,7 @@ export type BarcodeProductMatch =
       label: string;
       business_id: BusinessId;
       item: InventoryItem;
+      selection_required: false;
     }
   | {
       kind: "normalized_listing";
@@ -28,12 +36,12 @@ export type BarcodeProductMatch =
       doc: NormalizedListingDoc;
       variant: Record<string, unknown>;
       color: string;
+      selection_required: false;
     };
 
 @Injectable({ providedIn: "root" })
 export class BarcodeProductLookupService {
   private catalogProducts = inject(CatalogProductsService);
-  private catalogBarcodeAliases = inject(CatalogBarcodeAliasService);
   private inventory = inject(InventoryService);
   private normalizedListings = inject(NormalizedListingsService);
 
@@ -43,43 +51,41 @@ export class BarcodeProductLookupService {
     const resolvedBusinessId = normalizeBusinessId(businessId);
     const matches: BarcodeProductMatch[] = [];
 
-    const inventoryMatch = await this.inventory.getBySku(cleanCode, resolvedBusinessId).catch(() => null);
-    if (inventoryMatch) {
-      matches.push({
-        kind: "inventory",
-        code: cleanCode,
-        label: `${inventoryMatch.title} · Inventario`,
-        business_id: resolvedBusinessId,
-        item: inventoryMatch,
-      });
-    }
-
     if (resolvedBusinessId === "catalogo") {
-      const product = await this.catalogProducts.getBySku(cleanCode, "catalogo").catch(() => null);
-      if (product) {
-        matches.push({
-          kind: "catalog_product",
-          code: cleanCode,
-          label: `${product.name} · ${product.sku}`,
-          business_id: "catalogo",
-          product,
-        });
-      } else {
-        const alias = await this.catalogBarcodeAliases.getByBarcode(cleanCode, "catalogo").catch(() => null);
-        const aliasedProduct = alias?.sku
-          ? await this.catalogProducts.getBySku(alias.sku, "catalogo").catch(() => null)
-          : null;
-        if (aliasedProduct) {
+      const searchResults = await this.catalogProducts.searchCatalog(cleanCode, {
+        businessId: "catalogo",
+        types: ["barcode", "ocr_alias"],
+        limit: 25,
+        exact: true,
+      }).catch(() => []);
+      const requiresSelection = searchResults.length > 1 || searchResults.some((result) => result.requires_selection);
+      for (const result of searchResults) {
+        for (const product of result.variants) {
+          const codeLabel = product.primary_barcode || product.sku || product.supplier_sku || cleanCode;
           matches.push({
             kind: "catalog_product",
             code: cleanCode,
-            label: `${aliasedProduct.name} · ${aliasedProduct.sku}`,
+            label: `${product.name} · ${codeLabel}`,
             business_id: "catalogo",
-            product: aliasedProduct,
+            product,
+            group: result.group,
+            matched_identifier: result.matched_identifier,
+            selection_required: requiresSelection || result.requires_selection,
           });
         }
       }
     } else {
+      const inventoryMatch = await this.inventory.getBySku(cleanCode, resolvedBusinessId).catch(() => null);
+      if (inventoryMatch) {
+        matches.push({
+          kind: "inventory",
+          code: cleanCode,
+          label: `${inventoryMatch.title} · Inventario`,
+          business_id: resolvedBusinessId,
+          item: inventoryMatch,
+          selection_required: false,
+        });
+      }
       const docs = await this.normalizedListings.findValidatedByVariantSku(cleanCode, "bm", 8).catch(() => []);
       for (const doc of docs) {
         for (const variant of this.matchingVariants(doc, cleanCode)) {
@@ -91,6 +97,7 @@ export class BarcodeProductLookupService {
             doc,
             variant,
             color: this.firstVariantColor(variant),
+            selection_required: false,
           });
         }
       }

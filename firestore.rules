@@ -198,7 +198,26 @@ service cloud.firestore {
 
       // Operativo can request dispatch and mark packing done.
       // Admin/Super admin can also accept/reject request and assign to route_run.
-      allow update: if (isAdmin() && canUpdateBusinessResource())
+      allow update: if (
+          isAdmin()
+          && canUpdateBusinessResource()
+          // Los cambios normales a items pasan por el backend autoritativo.
+          && !changedKeys().hasAny(["items"])
+        )
+        // Excepcion temporal y acotada: ReturnsService actualiza items dentro de
+        // la misma transaccion que inventario/devolucion. Rules no puede probar
+        // diffs arbitrarios dentro de arreglos; por eso se limita por capability
+        // y por el conjunto exacto de campos que usa ese flujo.
+        || (
+          canUpdateBusinessResource()
+          && (
+            hasCapability("cap.returns.create")
+            || hasCapability("cap.returns.approve")
+            || hasCapability("cap.returns.restock")
+          )
+          && changedKeys().hasAny(["items"])
+          && onlyChanges(["items", "packages", "totals", "has_returns", "status", "timeline", "updated_at"])
+        )
         || (
           canUpdateBusinessResource()
           && hasCapability("cap.payments.register")
@@ -378,21 +397,55 @@ service cloud.firestore {
 
     match /catalog_products/{productId} {
       allow read: if canReadBusinessResource() && hasSection("sections.catalogo");
-      allow create: if canCreateBusinessResource() && hasSection("sections.catalogo");
-      allow update: if canUpdateBusinessResource() && hasSection("sections.catalogo");
-      allow delete: if canReadBusinessResource() && isSuperAdmin();
+      // El catálogo v2 se escribe exclusivamente desde el backend con Admin SDK.
+      // Esto evita que una importación parcial desde el navegador rompa identidades,
+      // revisiones o índices de identificadores.
+      allow create, update, delete: if false;
+    }
+
+    match /catalog_product_groups/{groupId} {
+      allow read: if canReadBusinessResource() && hasSection("sections.catalogo");
+      allow create, update, delete: if false;
+    }
+
+    match /catalog_product_identifiers/{identifierId} {
+      allow read: if canReadBusinessResource() && hasSection("sections.catalogo");
+      allow create, update, delete: if false;
+    }
+
+    match /catalog_product_listings/{listingId} {
+      allow read: if canReadBusinessResource() && hasSection("sections.catalogo");
+      allow create, update, delete: if false;
+    }
+
+    match /catalog_import_profiles/{profileId} {
+      allow read: if canReadBusinessResource() && hasSection("sections.catalogo");
+      allow create, update, delete: if false;
+    }
+
+    match /catalog_bundle_components/{componentId} {
+      allow read: if canReadBusinessResource() && hasSection("sections.catalogo");
+      allow create, update, delete: if false;
+    }
+
+    match /catalog_product_bundles/{bundleId} {
+      allow read: if canReadBusinessResource() && hasSection("sections.catalogo");
+      allow create, update, delete: if false;
+    }
+
+    match /catalog_generations/{generationId} {
+      allow read: if canReadBusinessResource() && hasSection("sections.catalogo");
+      allow create, update, delete: if false;
+    }
+
+    match /catalog_import_generation_changes/{changeId} {
+      allow read, create, update, delete: if false;
     }
 
     match /catalog_barcode_aliases/{aliasId} {
       allow read: if canReadBusinessResource() && hasSection("sections.catalogo");
-      allow create: if canCreateBusinessResource()
-        && incomingBusinessId() == "catalogo"
-        && hasSection("sections.catalogo");
-      allow update: if canUpdateBusinessResource()
-        && resourceBusinessId() == "catalogo"
-        && incomingBusinessId() == "catalogo"
-        && hasSection("sections.catalogo");
-      allow delete: if canReadBusinessResource() && isSuperAdmin();
+      // Compatibilidad de lectura hasta completar el backfill a ocr_alias.
+      allow create, update, delete: if false;
     }
 
     match /manual_product_suggestions/{entryId} {
@@ -443,16 +496,12 @@ service cloud.firestore {
 
     match /catalog_import_jobs/{jobId} {
       allow read: if canReadBusinessResource() && hasSection("sections.catalogo");
-      allow create: if canCreateBusinessResource() && hasSection("sections.catalogo");
-      allow update: if canUpdateBusinessResource() && hasSection("sections.catalogo");
-      allow delete: if canReadBusinessResource() && isSuperAdmin();
+      allow create, update, delete: if false;
     }
 
     match /catalog_import_rows/{rowId} {
       allow read: if canReadBusinessResource() && hasSection("sections.catalogo");
-      allow create: if canCreateBusinessResource() && hasSection("sections.catalogo") && isAdmin();
-      allow update: if canUpdateBusinessResource() && hasSection("sections.catalogo") && isAdmin();
-      allow delete: if canReadBusinessResource() && isSuperAdmin();
+      allow create, update, delete: if false;
     }
 
     // TODO: migrate these checks to full capabilities-based rules using custom claims

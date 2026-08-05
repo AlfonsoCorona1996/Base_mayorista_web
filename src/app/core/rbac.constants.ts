@@ -33,6 +33,7 @@ export const CAPABILITY_KEYS = [
   "cap.orders.items.edit",
   "cap.orders.items.remove",
   "cap.orders.override_stage_lock",
+  "cap.orders.price_below_cost",
   "cap.validation.view",
   "cap.validation.confirm_stock",
   "cap.validation.override_stock",
@@ -348,6 +349,8 @@ export function buildRolePreset(roleId: RoleId): RoleDoc {
     capabilities["cap.roles.edit"] = false;
     capabilities["cap.payments.override"] = false;
     capabilities["cap.inventory.override"] = false;
+    // Una venta por debajo del costo siempre requiere una concesión explícita.
+    capabilities["cap.orders.price_below_cost"] = false;
   } else if (roleId === "administrativo") {
     applySectionKeys(sections, [
       "sections.pedidos",
@@ -543,6 +546,7 @@ export const CAPABILITY_LABELS: Record<CapabilityKey, string> = {
   "cap.orders.items.edit": "Editar artículos del pedido",
   "cap.orders.items.remove": "Quitar artículos del pedido",
   "cap.orders.override_stage_lock": "Forzar cambio de etapa",
+  "cap.orders.price_below_cost": "Autorizar venta por debajo del costo",
   // Validación
   "cap.validation.view": "Ver validaciones pendientes",
   "cap.validation.confirm_stock": "Confirmar stock disponible",

@@ -831,6 +831,71 @@ p {
   background: #f8fafc;
 }
 
+.identifier-lists,
+.price-rule-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: var(--ui-space-12, 12px);
+}
+
+.multi-column-field,
+.price-rule-card {
+  min-width: 0;
+  margin: 0;
+  border: 1px solid #d8e3ef;
+  border-radius: var(--ui-radius-md, 12px);
+  background: #f8fafc;
+  padding: var(--ui-space-12, 12px);
+}
+
+.multi-column-field legend,
+.price-rule-card legend {
+  color: #102033;
+  font-size: 0.88rem;
+  font-weight: 850;
+  padding: 0 4px;
+}
+
+.multi-column-field > p {
+  margin: 0 0 var(--ui-space-8, 8px);
+  color: #64748b;
+  font-size: 0.76rem;
+}
+
+.price-rule-card {
+  display: grid;
+  align-content: start;
+  gap: var(--ui-space-12, 12px);
+}
+
+.price-rule-card .input {
+  min-height: var(--ui-control-height, 44px);
+}
+
+.metrics-note {
+  margin: calc(var(--ui-space-8, 8px) * -1) 0 var(--ui-space-12, 12px);
+  color: #64748b;
+  font-size: 0.76rem;
+}
+
+.fallback-picker {
+  min-width: 0;
+  border-radius: var(--ui-radius-sm, 8px);
+  background: #ffffff;
+  border: 1px solid #d8e3ef;
+  padding: var(--ui-space-8, 8px);
+}
+
+.fallback-picker summary {
+  min-height: var(--ui-touch-target-min, 44px);
+  display: flex;
+  align-items: center;
+  color: #334155;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
 .name-columns {
   max-height: 170px;
   overflow: auto;

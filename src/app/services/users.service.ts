@@ -50,8 +50,15 @@ export class UsersService {
   async ensureFromAuth(user: User): Promise<UserDoc> {
     const bootstrap = await this.userAdminApi.getSessionBootstrap();
     const uid = bootstrap.uid || user.uid;
-    const storedUserSnap = await getDoc(doc(FIRESTORE, "users", uid)).catch(() => null);
-    const storedUser = storedUserSnap?.exists() ? (storedUserSnap.data() as Record<string, unknown>) : {};
+    // El bootstrap ya trae businessMemberships para cuentas actuales; el
+    // getDoc a Firestore solo es respaldo para sesiones viejas donde el
+    // backend aun no devolvia ese campo, asi que se evita en el caso comun.
+    let legacyBusinessMemberships: unknown = null;
+    if (!bootstrap.businessMemberships) {
+      const storedUserSnap = await getDoc(doc(FIRESTORE, "users", uid)).catch(() => null);
+      const storedUser = storedUserSnap?.exists() ? (storedUserSnap.data() as Record<string, unknown>) : {};
+      legacyBusinessMemberships = storedUser["businessMemberships"] ?? null;
+    }
     const roleId = normalizeRoleId(bootstrap.roleId || "operativo");
     const username =
       normalizeUsername(bootstrap.username) || normalizeUsername(user.displayName || bootstrap.email?.split("@")[0] || uid.slice(0, 10));
@@ -60,7 +67,7 @@ export class UsersService {
     const sections = this.resolveSectionsMap({}, roleId, {}, bootstrap.sections || null);
     const capabilities = this.resolveCapabilitiesMap({}, roleId, {}, bootstrap.capabilities || null);
     const businessMemberships = normalizeBusinessMembershipsMap(
-      bootstrap.businessMemberships || storedUser["businessMemberships"] || null,
+      bootstrap.businessMemberships || legacyBusinessMemberships || null,
       roleId,
       sections,
       capabilities,

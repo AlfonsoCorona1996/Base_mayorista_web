@@ -82,6 +82,9 @@
       <strong>{{ productKpis().review }}</strong>
     </article>
   </section>
+  @if (!metricsAreExact()) {
+    <p class="metrics-note" role="status">Métricas parciales de la página visible; vuelve a intentar para consultar el total del backend.</p>
+  }
 
   @if (activeSupplierJob(); as job) {
     <section class="job-panel">
@@ -448,9 +451,9 @@
             <div class="wizard-section">
               <div class="mapping-grid">
                 <label class="field">
-                  <span>SKU / código *</span>
-                  <select class="input" [ngModel]="mapping().skuColumn" (ngModelChange)="setMappingField('skuColumn', $event)">
-                    <option value="">Selecciona columna</option>
+                  <span>Barcode principal</span>
+                  <select class="input" [ngModel]="mapping().primaryBarcodeColumn" (ngModelChange)="setMappingField('primaryBarcodeColumn', $event)">
+                    <option value="">Producto sin barcode</option>
                     @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
                   </select>
                 </label>
@@ -483,12 +486,92 @@
                   </select>
                 </label>
                 <label class="field">
-                  <span>ID proveedor</span>
-                  <select class="input" [ngModel]="mapping().impulsProductIdColumn" (ngModelChange)="setMappingField('impulsProductIdColumn', $event)">
+                  <span>SKU de proveedor</span>
+                  <select class="input" [ngModel]="mapping().supplierSkuColumn" (ngModelChange)="setMappingField('supplierSkuColumn', $event)">
                     <option value="">Sin mapear</option>
                     @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
                   </select>
                 </label>
+                <label class="field">
+                  <span>Variante exacta</span>
+                  <select class="input" [ngModel]="mapping().supplierVariantColumn" (ngModelChange)="setMappingField('supplierVariantColumn', $event)">
+                    <option value="">Sin mapear</option>
+                    @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Genérico / colorway</span>
+                  <select class="input" [ngModel]="mapping().genericColumn" (ngModelChange)="setMappingField('genericColumn', $event)">
+                    <option value="">Sin mapear</option>
+                    @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Código de internet</span>
+                  <select class="input" [ngModel]="mapping().internetColumn" (ngModelChange)="setMappingField('internetColumn', $event)">
+                    <option value="">Sin mapear</option>
+                    @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Modelo / grupo</span>
+                  <select class="input" [ngModel]="mapping().modelColumn" (ngModelChange)="setMappingField('modelColumn', $event)">
+                    <option value="">Sin mapear</option>
+                    @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Estilo / familia</span>
+                  <select class="input" [ngModel]="mapping().styleColumn" (ngModelChange)="setMappingField('styleColumn', $event)">
+                    <option value="">Sin mapear</option>
+                    @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Bundle / combo</span>
+                  <select class="input" [ngModel]="mapping().bundleColumn" (ngModelChange)="setMappingField('bundleColumn', $event)">
+                    <option value="">Sin mapear</option>
+                    @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
+                  </select>
+                </label>
+              </div>
+              <div class="identifier-lists">
+                <fieldset class="field multi-column-field">
+                  <legend>Barcodes alternos</legend>
+                  <p>También resolverán la misma variante al escanearlos.</p>
+                  <div class="name-columns">
+                    @for (header of headers(); track header) {
+                      <label>
+                        <input type="checkbox" [checked]="isMultiColumnSelected('alternateBarcodeColumns', header)" (change)="toggleMultiColumn('alternateBarcodeColumns', header, $any($event.target).checked)" />
+                        <span>{{ header }}</span>
+                      </label>
+                    }
+                  </div>
+                </fieldset>
+                <fieldset class="field multi-column-field">
+                  <legend>Alias OCR</legend>
+                  <p>Códigos reconocidos previamente por imagen.</p>
+                  <div class="name-columns">
+                    @for (header of headers(); track header) {
+                      <label>
+                        <input type="checkbox" [checked]="isMultiColumnSelected('ocrAliasColumns', header)" (change)="toggleMultiColumn('ocrAliasColumns', header, $any($event.target).checked)" />
+                        <span>{{ header }}</span>
+                      </label>
+                    }
+                  </div>
+                </fieldset>
+                <fieldset class="field multi-column-field">
+                  <legend>Identificadores personalizados</legend>
+                  <p>Códigos exactos adicionales que no son barcodes.</p>
+                  <div class="name-columns">
+                    @for (header of headers(); track header) {
+                      <label>
+                        <input type="checkbox" [checked]="isMultiColumnSelected('customIdentifierColumns', header)" (change)="toggleMultiColumn('customIdentifierColumns', header, $any($event.target).checked)" />
+                        <span>{{ header }}</span>
+                      </label>
+                    }
+                  </div>
+                </fieldset>
               </div>
               <div class="field name-field">
                 <span>Nombre (puede combinar columnas)</span>
@@ -558,7 +641,7 @@
                             <td>{{ row.name }}</td>
                             <td>{{ row.color || "-" }}</td>
                             <td>{{ row.size || "-" }}</td>
-                            <td>{{ row.valid ? "OK" : row.issue }}</td>
+                            <td>{{ row.valid ? (row.warnings[0] || "OK") : row.issue }}</td>
                           </tr>
                         }
                       </tbody>
@@ -571,22 +654,78 @@
 
           @if (wizardStep() === 'prices') {
             <div class="wizard-section">
-              <div class="mapping-grid">
-                <label class="field">
-                  <span>Precio costo del Excel *</span>
-                  <select class="input" [ngModel]="mapping().priceCostColumn" (ngModelChange)="setMappingField('priceCostColumn', $event)">
-                    <option value="">Selecciona columna</option>
-                    @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
-                  </select>
-                </label>
-                <label class="field">
-                  <span>Descuento costo %</span>
-                  <input class="input" type="number" min="0" max="100" step="1" [ngModel]="mapping().priceCostDiscountPct" (ngModelChange)="setPercentField('priceCostDiscountPct', $event)" />
-                </label>
-                <label class="field">
-                  <span>Aumento precio clienta %</span>
-                  <input class="input" type="number" min="0" max="100" step="1" [ngModel]="mapping().priceClientaMarkupPct" (ngModelChange)="setPercentField('priceClientaMarkupPct', $event)" />
-                </label>
+              <div class="section-copy">
+                <h4>Precios operativos</h4>
+                <p>El costo es obligatorio. Clienta puede venir de una columna o calcularse desde el costo.</p>
+              </div>
+              <div class="price-rule-grid">
+                <fieldset class="price-rule-card">
+                  <legend>Costo *</legend>
+                  <label class="field">
+                    <span>Base</span>
+                    <select class="input" [ngModel]="mapping().costRule.sourceColumn" (ngModelChange)="setPriceRuleField('costRule', 'sourceColumn', $event)">
+                      <option value="">Selecciona columna</option>
+                      @for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }
+                    </select>
+                  </label>
+                  <details class="fallback-picker">
+                    <summary>Columnas de respaldo (en orden)</summary>
+                    <div class="name-columns">
+                      @for (header of headers(); track header) { <label><input type="checkbox" [checked]="isPriceFallbackSelected('costRule', header)" (change)="togglePriceFallback('costRule', header, $any($event.target).checked)" /><span>{{ header }}</span></label> }
+                    </div>
+                  </details>
+                  <label class="field"><span>Regla</span><select class="input" [ngModel]="mapping().costRule.mode" (ngModelChange)="setPriceRuleField('costRule', 'mode', $event)"><option value="direct">Valor directo</option><option value="formula">Aplicar porcentaje</option></select></label>
+                  @if (mapping().costRule.mode === 'formula') {
+                    <label class="field"><span>Operación</span><select class="input" [ngModel]="mapping().costRule.percentOperation" (ngModelChange)="setPriceRuleField('costRule', 'percentOperation', $event)"><option value="discount">Restar porcentaje</option><option value="markup">Sumar porcentaje</option></select></label>
+                    <label class="field"><span>Origen del porcentaje</span><select class="input" [ngModel]="mapping().costRule.percentSource" (ngModelChange)="setPriceRuleField('costRule', 'percentSource', $event)"><option value="fixed">Porcentaje fijo</option><option value="column">Columna del Excel</option></select></label>
+                    @if (mapping().costRule.percentSource === 'fixed') {
+                      <label class="field"><span>Porcentaje</span><input class="input" type="number" min="0" step="0.01" [ngModel]="mapping().costRule.percentValue" (ngModelChange)="setPriceRuleField('costRule', 'percentValue', $event)" /></label>
+                    } @else {
+                      <label class="field"><span>Columna del porcentaje</span><select class="input" [ngModel]="mapping().costRule.percentColumn" (ngModelChange)="setPriceRuleField('costRule', 'percentColumn', $event)"><option value="">Selecciona columna</option>@for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }</select></label>
+                    }
+                    <label class="field"><span>Ajuste de importe</span><select class="input" [ngModel]="mapping().costRule.amountOperation" (ngModelChange)="setPriceRuleField('costRule', 'amountOperation', $event)"><option value="none">Sin ajuste</option><option value="add">Sumar importe</option><option value="subtract">Restar importe</option></select></label>
+                    @if (mapping().costRule.amountOperation !== 'none') {
+                      <label class="field"><span>Origen del importe</span><select class="input" [ngModel]="mapping().costRule.amountSource" (ngModelChange)="setPriceRuleField('costRule', 'amountSource', $event)"><option value="fixed">Importe fijo</option><option value="column">Columna del Excel</option></select></label>
+                      @if (mapping().costRule.amountSource === 'fixed') {
+                        <label class="field"><span>Importe</span><input class="input" type="number" min="0" step="0.01" [ngModel]="mapping().costRule.amountValue" (ngModelChange)="setPriceRuleField('costRule', 'amountValue', $event)" /></label>
+                      } @else {
+                        <label class="field"><span>Columna del importe</span><select class="input" [ngModel]="mapping().costRule.amountColumn" (ngModelChange)="setPriceRuleField('costRule', 'amountColumn', $event)"><option value="">Selecciona columna</option>@for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }</select></label>
+                      }
+                    }
+                  }
+                  <label class="field"><span>Redondeo</span><select class="input" [ngModel]="mapping().costRule.rounding" (ngModelChange)="setPriceRuleField('costRule', 'rounding', $event)"><option value="none">Centavos</option><option value="integer">Peso entero</option><option value="0.05">A $0.05</option><option value="0.10">A $0.10</option><option value="0.50">A $0.50</option></select></label>
+                </fieldset>
+
+                @for (entry of priceRuleEntries(); track entry.key) {
+                  <fieldset class="price-rule-card">
+                    <legend>{{ entry.label }}</legend>
+                    <label class="field"><span>Base</span><select class="input" [ngModel]="entry.rule.base" (ngModelChange)="setPriceRuleField(entry.key, 'base', $event)"><option value="cost">Costo calculado</option><option value="column">Columna del Excel</option></select></label>
+                    @if (entry.rule.base === 'column') {
+                      <label class="field"><span>Columna</span><select class="input" [ngModel]="entry.rule.sourceColumn" (ngModelChange)="setPriceRuleField(entry.key, 'sourceColumn', $event)"><option value="">Sin precio base</option>@for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }</select></label>
+                      <details class="fallback-picker"><summary>Columnas de respaldo (en orden)</summary><div class="name-columns">@for (header of headers(); track header) { <label><input type="checkbox" [checked]="isPriceFallbackSelected(entry.key, header)" (change)="togglePriceFallback(entry.key, header, $any($event.target).checked)" /><span>{{ header }}</span></label> }</div></details>
+                    }
+                    <label class="field"><span>Regla</span><select class="input" [ngModel]="entry.rule.mode" (ngModelChange)="setPriceRuleField(entry.key, 'mode', $event)"><option value="direct">Valor directo</option><option value="formula">Aplicar porcentaje</option></select></label>
+                    @if (entry.rule.mode === 'formula') {
+                      <label class="field"><span>Operación</span><select class="input" [ngModel]="entry.rule.percentOperation" (ngModelChange)="setPriceRuleField(entry.key, 'percentOperation', $event)"><option value="markup">Sumar porcentaje</option><option value="discount">Restar porcentaje</option></select></label>
+                      <label class="field"><span>Origen del porcentaje</span><select class="input" [ngModel]="entry.rule.percentSource" (ngModelChange)="setPriceRuleField(entry.key, 'percentSource', $event)"><option value="fixed">Porcentaje fijo</option><option value="column">Columna del Excel</option></select></label>
+                      @if (entry.rule.percentSource === 'fixed') {
+                        <label class="field"><span>Porcentaje</span><input class="input" type="number" min="0" step="0.01" [ngModel]="entry.rule.percentValue" (ngModelChange)="setPriceRuleField(entry.key, 'percentValue', $event)" /></label>
+                      } @else {
+                        <label class="field"><span>Columna del porcentaje</span><select class="input" [ngModel]="entry.rule.percentColumn" (ngModelChange)="setPriceRuleField(entry.key, 'percentColumn', $event)"><option value="">Selecciona columna</option>@for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }</select></label>
+                      }
+                      <label class="field"><span>Ajuste de importe</span><select class="input" [ngModel]="entry.rule.amountOperation" (ngModelChange)="setPriceRuleField(entry.key, 'amountOperation', $event)"><option value="none">Sin ajuste</option><option value="add">Sumar importe</option><option value="subtract">Restar importe</option></select></label>
+                      @if (entry.rule.amountOperation !== 'none') {
+                        <label class="field"><span>Origen del importe</span><select class="input" [ngModel]="entry.rule.amountSource" (ngModelChange)="setPriceRuleField(entry.key, 'amountSource', $event)"><option value="fixed">Importe fijo</option><option value="column">Columna del Excel</option></select></label>
+                        @if (entry.rule.amountSource === 'fixed') {
+                          <label class="field"><span>Importe</span><input class="input" type="number" min="0" step="0.01" [ngModel]="entry.rule.amountValue" (ngModelChange)="setPriceRuleField(entry.key, 'amountValue', $event)" /></label>
+                        } @else {
+                          <label class="field"><span>Columna del importe</span><select class="input" [ngModel]="entry.rule.amountColumn" (ngModelChange)="setPriceRuleField(entry.key, 'amountColumn', $event)"><option value="">Selecciona columna</option>@for (header of headers(); track header) { <option [value]="header">{{ header }}</option> }</select></label>
+                        }
+                      }
+                    }
+                    <label class="field"><span>Redondeo</span><select class="input" [ngModel]="entry.rule.rounding" (ngModelChange)="setPriceRuleField(entry.key, 'rounding', $event)"><option value="none">Centavos</option><option value="integer">Peso entero</option><option value="0.05">A $0.05</option><option value="0.10">A $0.10</option><option value="0.50">A $0.50</option></select></label>
+                  </fieldset>
+                }
               </div>
               <div class="price-examples">
                 @for (row of preview().sample.slice(0, 3); track row.rowNumber) {
@@ -605,8 +744,10 @@
               <div class="stats-grid">
                 <article><span>Total</span><strong>{{ preview().total }}</strong></article>
                 <article><span>Válidas</span><strong>{{ preview().valid }}</strong></article>
-                <article><span>Sin SKU</span><strong>{{ preview().missingSku }}</strong></article>
-                <article><span>Duplicadas</span><strong>{{ preview().duplicateSku }}</strong></article>
+                <article><span>Sin identidad</span><strong>{{ preview().missingSku }}</strong></article>
+                <article><span>Repetidas</span><strong>{{ preview().duplicateSku }}</strong></article>
+                <article><span>Sin costo</span><strong>{{ preview().missingCost }}</strong></article>
+                <article><span>Conflictos</span><strong>{{ preview().identifierConflicts }}</strong></article>
                 <article><span>Inválidas</span><strong>{{ preview().invalidValues }}</strong></article>
               </div>
               @if (criticalImportIssues().length > 0) {
@@ -635,7 +776,7 @@
                     @for (row of preview().sample; track row.rowNumber) {
                       <tr [class.invalid]="!row.valid">
                         <td>{{ row.rowNumber }}</td>
-                        <td>{{ row.valid ? "OK" : row.issue }}</td>
+                        <td>{{ row.valid ? (row.warnings[0] || "OK") : row.issue }}</td>
                         <td>{{ row.sku || "-" }}</td>
                         <td>{{ row.name }}</td>
                         <td>{{ row.price_cost | currency:'MXN':'symbol-narrow':'1.0-0' }}</td>

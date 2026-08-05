@@ -140,7 +140,6 @@ export class AuthzService {
     this.loadingSig.set(true);
     try {
       await this.authStateReadyPromise;
-      await this.roles.ensureDefaultsSeeded();
       const current = FIREBASE_AUTH.currentUser;
       if (!current) {
         this.currentUserSig.set(null);
@@ -166,11 +165,18 @@ export class AuthzService {
         });
       }
 
-      const roleId = (userDoc.roleId || "operativo") as RoleId;
-      const roleDoc = await this.roles.getRole(roleId).catch(() => buildRolePreset(roleId));
-      this.roleSig.set(roleDoc);
+      // canSection()/canCap() ya resuelven todo desde userDoc.sections/capabilities
+      // (recien poblado arriba); roleSig no tiene consumidores fuera de este
+      // archivo, asi que no hay razon de seguridad ni funcional para retrasar
+      // el guard de rutas por el getDoc de "roles". Se resuelve en segundo plano.
       this.readySig.set(true);
       this.lastRefreshAt = Date.now();
+
+      const roleId = (userDoc.roleId || "operativo") as RoleId;
+      this.roles
+        .getRole(roleId)
+        .then((roleDoc) => this.roleSig.set(roleDoc))
+        .catch(() => this.roleSig.set(buildRolePreset(roleId)));
     } finally {
       this.loadingSig.set(false);
     }

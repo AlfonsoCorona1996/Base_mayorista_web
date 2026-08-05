@@ -11,13 +11,15 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
   if (!currentUser) return next(req);
 
   const forceRefresh = req.method !== "GET";
+  const isMultipart = typeof FormData !== "undefined" && req.body instanceof FormData;
 
   return from(currentUser.getIdToken(forceRefresh)).pipe(
     switchMap((token) =>
       next(
         req.clone({
           setHeaders: {
-            "Content-Type": "application/json",
+            // El navegador debe generar el boundary de multipart/form-data.
+            ...(!isMultipart ? { "Content-Type": "application/json" } : {}),
             Authorization: `Bearer ${token}`,
           },
         }),

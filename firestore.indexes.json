@@ -1,0 +1,339 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "catalog_products",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "business_id", "order": "ASCENDING" },
+        { "fieldPath": "sku_normalized", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "catalog_products",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "business_id", "order": "ASCENDING" },
+        { "fieldPath": "supplier_id", "order": "ASCENDING" },
+        { "fieldPath": "sku_normalized", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "catalog_products",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "business_id", "order": "ASCENDING" },
+        { "fieldPath": "supplier_id", "order": "ASCENDING" },
+        { "fieldPath": "active", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "catalog_products",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "business_id", "order": "ASCENDING" },
+        { "fieldPath": "group_id", "order": "ASCENDING" },
+        { "fieldPath": "active", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "catalog_product_identifiers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "business_id", "order": "ASCENDING" },
+        { "fieldPath": "normalized_value", "order": "ASCENDING" },
+        { "fieldPath": "active", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "catalog_product_identifiers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "business_id", "order": "ASCENDING" },
+        { "fieldPath": "supplier_id", "order": "ASCENDING" },
+        { "fieldPath": "normalized_value", "order": "ASCENDING" },
+        { "fieldPath": "active", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "catalog_product_listings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "business_id", "order": "ASCENDING" },
+        { "fieldPath": "product_id", "order": "ASCENDING" },
+        { "fieldPath": "active", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "catalog_import_profiles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "business_id", "order": "ASCENDING" },
+        { "fieldPath": "supplier_id", "order": "ASCENDING" },
+        { "fieldPath": "version", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "catalog_import_rows",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "job_id", "order": "ASCENDING" },
+        { "fieldPath": "row_number", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "catalog_bundle_components",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "business_id", "order": "ASCENDING" },
+        { "fieldPath": "bundle_id", "order": "ASCENDING" },
+        { "fieldPath": "position", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "catalog_generations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "business_id", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "catalog_generations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "business_id", "order": "ASCENDING" },
+        { "fieldPath": "supplier_id", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "catalog_generations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "business_id", "order": "ASCENDING" },
+        { "fieldPath": "supplier_id", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "catalog_product_identifiers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "business_id", "order": "ASCENDING" },
+        { "fieldPath": "is_active", "order": "ASCENDING" },
+        { "fieldPath": "indexable", "order": "ASCENDING" },
+        { "fieldPath": "normalized_value", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "catalog_product_identifiers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "business_id", "order": "ASCENDING" },
+        { "fieldPath": "supplier_id", "order": "ASCENDING" },
+        { "fieldPath": "is_active", "order": "ASCENDING" },
+        { "fieldPath": "indexable", "order": "ASCENDING" },
+        { "fieldPath": "normalized_value", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "catalog_product_identifiers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "business_id", "order": "ASCENDING" },
+        { "fieldPath": "is_active", "order": "ASCENDING" },
+        { "fieldPath": "indexable", "order": "ASCENDING" },
+        { "fieldPath": "type", "order": "ASCENDING" },
+        { "fieldPath": "normalized_value", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "catalog_product_identifiers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "business_id", "order": "ASCENDING" },
+        { "fieldPath": "supplier_id", "order": "ASCENDING" },
+        { "fieldPath": "is_active", "order": "ASCENDING" },
+        { "fieldPath": "indexable", "order": "ASCENDING" },
+        { "fieldPath": "type", "order": "ASCENDING" },
+        { "fieldPath": "normalized_value", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "catalog_product_versions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "catalog_generation_id", "order": "ASCENDING" },
+        { "fieldPath": "product_id", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "catalog_product_versions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "catalog_generation_id", "order": "ASCENDING" },
+        { "fieldPath": "catalog_status", "order": "ASCENDING" },
+        { "fieldPath": "product_id", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "catalog_product_versions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "catalog_generation_id", "order": "ASCENDING" },
+        { "fieldPath": "active", "order": "ASCENDING" },
+        { "fieldPath": "product_id", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "catalog_product_versions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "catalog_generation_id", "order": "ASCENDING" },
+        { "fieldPath": "catalog_status", "order": "ASCENDING" },
+        { "fieldPath": "active", "order": "ASCENDING" },
+        { "fieldPath": "product_id", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "catalog_product_versions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "catalog_generation_id", "order": "ASCENDING" },
+        { "fieldPath": "group_id", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "catalog_bundle_component_versions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "catalog_generation_id", "order": "ASCENDING" },
+        { "fieldPath": "bundle_id", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "catalog_products",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "business_id", "order": "ASCENDING" },
+        { "fieldPath": "product_id", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "catalog_products",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "business_id", "order": "ASCENDING" },
+        { "fieldPath": "supplier_id", "order": "ASCENDING" },
+        { "fieldPath": "product_id", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "catalog_products",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "business_id", "order": "ASCENDING" },
+        { "fieldPath": "catalog_status", "order": "ASCENDING" },
+        { "fieldPath": "product_id", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "catalog_products",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "business_id", "order": "ASCENDING" },
+        { "fieldPath": "active", "order": "ASCENDING" },
+        { "fieldPath": "product_id", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "catalog_products",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "business_id", "order": "ASCENDING" },
+        { "fieldPath": "catalog_status", "order": "ASCENDING" },
+        { "fieldPath": "active", "order": "ASCENDING" },
+        { "fieldPath": "product_id", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "catalog_products",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "business_id", "order": "ASCENDING" },
+        { "fieldPath": "supplier_id", "order": "ASCENDING" },
+        { "fieldPath": "catalog_status", "order": "ASCENDING" },
+        { "fieldPath": "product_id", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "catalog_products",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "business_id", "order": "ASCENDING" },
+        { "fieldPath": "supplier_id", "order": "ASCENDING" },
+        { "fieldPath": "active", "order": "ASCENDING" },
+        { "fieldPath": "product_id", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "catalog_products",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "business_id", "order": "ASCENDING" },
+        { "fieldPath": "supplier_id", "order": "ASCENDING" },
+        { "fieldPath": "catalog_status", "order": "ASCENDING" },
+        { "fieldPath": "active", "order": "ASCENDING" },
+        { "fieldPath": "product_id", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "catalog_import_jobs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "commit_requested", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "catalog_import_jobs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "business_id", "order": "ASCENDING" },
+        { "fieldPath": "updated_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "catalog_import_rows",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "job_id", "order": "ASCENDING" },
+        { "fieldPath": "committed", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "catalog_products",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "business_id", "order": "ASCENDING" },
+        { "fieldPath": "supplier_id", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "catalog_product_groups",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "business_id", "order": "ASCENDING" },
+        { "fieldPath": "supplier_id", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "catalog_product_bundles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "business_id", "order": "ASCENDING" },
+        { "fieldPath": "supplier_id", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

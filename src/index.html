@@ -35,9 +35,156 @@
     })();
   </script>
   <link rel="manifest" href="manifest.webmanifest">
+
+  <!-- Pantalla de arranque: mientras Angular carga y el guard de auth resuelve
+       (sin esto la pantalla se queda en blanco, ver app.ts para el retiro). -->
+  <script>
+    (function () {
+      var isMain = location.pathname.indexOf("/main") === 0;
+      document.documentElement.classList.add(isMain ? "boot-shell" : "boot-center-page");
+    })();
+  </script>
+  <style>
+    #app-shell-skeleton {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: flex;
+      background: #f3f5fa;
+      opacity: 0;
+      animation: bm-boot-reveal 0s linear 220ms forwards;
+    }
+    #app-shell-skeleton.is-leaving {
+      opacity: 0;
+      transition: opacity 0.28s ease;
+      pointer-events: none;
+    }
+    @keyframes bm-boot-reveal {
+      to { opacity: 1; }
+    }
+
+    #app-shell-skeleton .boot-block {
+      position: relative;
+      overflow: hidden;
+      border-radius: 10px;
+      background: rgba(15, 23, 42, 0.07);
+    }
+    #app-shell-skeleton .boot-block::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(100deg, transparent 35%, rgba(15, 23, 42, 0.09) 50%, transparent 65%);
+      background-size: 200% 100%;
+      animation: bm-boot-shimmer 1.8s ease-in-out infinite;
+    }
+    @keyframes bm-boot-shimmer {
+      from { background-position: 150% 0; }
+      to { background-position: -50% 0; }
+    }
+
+    /* Variante con sidebar (rutas /main/*), calcada de main-layout.css */
+    .boot-sidebar {
+      display: none;
+      flex-direction: column;
+      gap: 12px;
+      width: 304px;
+      flex-shrink: 0;
+      padding: 14px;
+      background: #0b1119;
+      border-right: 1px solid rgba(148, 163, 184, 0.18);
+    }
+    .boot-sidebar .boot-block { background: rgba(255, 255, 255, 0.07); }
+    .boot-sidebar .boot-block::after {
+      background: linear-gradient(100deg, transparent 35%, rgba(255, 255, 255, 0.16) 50%, transparent 65%);
+      background-size: 200% 100%;
+    }
+    .boot-profile { display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 18px; background: #141d29; }
+    .boot-avatar { width: 42px; height: 42px; border-radius: 999px; flex-shrink: 0; }
+    .boot-lines { flex: 1; display: grid; gap: 6px; }
+    .boot-line { height: 10px; }
+    .boot-line.w60 { width: 60%; }
+    .boot-line.w40 { width: 40%; }
+    .boot-group { display: grid; gap: 4px; padding: 7px; border-radius: 18px; background: rgba(255, 255, 255, 0.03); }
+    .boot-row { height: 38px; border-radius: 12px; }
+    .boot-row.header { width: 55%; margin-bottom: 2px; }
+
+    .boot-content { flex: 1; min-width: 0; display: none; flex-direction: column; }
+    .boot-topbar { height: 58px; flex-shrink: 0; border-bottom: 1px solid rgba(15, 23, 42, 0.08); background: rgba(255, 255, 255, 0.9); display: flex; align-items: center; padding: 0 16px; }
+    .boot-topbar .boot-block { width: 160px; height: 14px; }
+    .boot-page { padding: 24px; display: grid; gap: 16px; max-width: 960px; width: 100%; margin: 0 auto; box-sizing: border-box; }
+    .boot-page .boot-block.title { height: 26px; width: 220px; }
+    .boot-page .boot-block.subtitle { height: 12px; width: 340px; }
+    .boot-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }
+    .boot-cards .boot-block { height: 92px; }
+
+    /* Variante centrada (login, portal público, /track) */
+    .boot-center { display: none; flex-direction: column; align-items: center; justify-content: center; gap: 18px; width: 100%; }
+    .boot-center img { width: 56px; height: 56px; object-fit: contain; opacity: 0.92; animation: bm-boot-pulse 1.8s ease-in-out infinite; }
+    .boot-center .boot-block { width: 220px; height: 12px; }
+    @keyframes bm-boot-pulse {
+      0%, 100% { opacity: 0.55; }
+      50% { opacity: 1; }
+    }
+
+    html.boot-shell .boot-sidebar,
+    html.boot-shell .boot-content { display: flex; }
+    html.boot-center-page #app-shell-skeleton { align-items: center; justify-content: center; }
+    html.boot-center-page .boot-center { display: flex; }
+
+    @media (max-width: 959px) {
+      .boot-sidebar { display: none !important; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      #app-shell-skeleton { animation: none; opacity: 1; }
+      #app-shell-skeleton .boot-block::after,
+      .boot-center img { animation: none; }
+    }
+  </style>
 </head>
 <body>
   <app-root></app-root>
+  <div id="app-shell-skeleton" aria-hidden="true">
+    <div class="boot-sidebar">
+      <div class="boot-profile">
+        <div class="boot-avatar boot-block"></div>
+        <div class="boot-lines">
+          <div class="boot-line w60 boot-block"></div>
+          <div class="boot-line w40 boot-block"></div>
+        </div>
+      </div>
+      <div class="boot-group">
+        <div class="boot-row header boot-block"></div>
+        <div class="boot-row boot-block"></div>
+        <div class="boot-row boot-block"></div>
+        <div class="boot-row boot-block"></div>
+        <div class="boot-row boot-block"></div>
+      </div>
+      <div class="boot-group">
+        <div class="boot-row header boot-block"></div>
+        <div class="boot-row boot-block"></div>
+        <div class="boot-row boot-block"></div>
+        <div class="boot-row boot-block"></div>
+      </div>
+    </div>
+    <div class="boot-content">
+      <div class="boot-topbar"><div class="boot-block"></div></div>
+      <div class="boot-page">
+        <div class="boot-block title"></div>
+        <div class="boot-block subtitle"></div>
+        <div class="boot-cards">
+          <div class="boot-block"></div>
+          <div class="boot-block"></div>
+          <div class="boot-block"></div>
+          <div class="boot-block"></div>
+        </div>
+      </div>
+    </div>
+    <div class="boot-center">
+      <img src="/BaseMayoristaLogo.png" alt="" />
+      <div class="boot-block"></div>
+    </div>
+  </div>
   <noscript>Activa JavaScript para continuar usando Base Mayorista.</noscript>
 </body>
 </html>

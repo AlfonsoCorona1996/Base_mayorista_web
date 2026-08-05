@@ -3,7 +3,9 @@ import { lastValueFrom } from "rxjs";
 import {
   Unsubscribe,
   collection,
+  limit,
   onSnapshot,
+  orderBy,
   query,
   where,
 } from "firebase/firestore";
@@ -13,7 +15,7 @@ import { BusinessScopeService } from "./business-scope.service";
 import { UserAdminApiService } from "../services/user-admin-api.service";
 import { CatalogProductImportRow } from "./catalog-products.service";
 
-export type CatalogImportJobStatus = "queued" | "running" | "completed" | "failed";
+export type CatalogImportJobStatus = "uploaded" | "parsing" | "needs_mapping" | "validated" | "queued" | "committing" | "running" | "completed" | "failed";
 export type CatalogImportMode = "full" | "partial";
 export type CatalogImportRollbackStatus = "none" | "running" | "completed" | "failed";
 export type CatalogImportRowStatus = "created" | "updated" | "unchanged" | "rejected" | "failed" | "skipped";
@@ -74,6 +76,38 @@ export interface CreateCatalogImportJobResult {
   job: CatalogImportJob;
 }
 
+export interface CatalogImportProfileV2 {
+  profile_id?: string;
+  version: 2;
+  business_id?: BusinessId;
+  supplier_id: string;
+  name?: string | null;
+  mapping: Record<string, unknown>;
+  identity_rules?: Record<string, unknown>;
+  price_rules: Record<string, unknown>;
+}
+
+export interface CatalogImportValidationResult {
+  ok?: boolean;
+  job: CatalogImportJob;
+  summary?: {
+    total_rows: number;
+    valid_rows: number;
+    rejected_rows: number;
+    conflict_rows?: number;
+  };
+}
+
+export interface CatalogImportCommitResult {
+  ok?: boolean;
+  job: CatalogImportJob;
+}
+
+export interface CatalogImportProfilesResult {
+  ok?: boolean;
+  profiles: CatalogImportProfileV2[];
+}
+
 export interface UploadCatalogImportChunkResult {
   ok?: boolean;
   job: CatalogImportJob;
@@ -101,6 +135,9 @@ export interface CatalogImportAuditRow {
 export interface CatalogImportRowsResult {
   ok?: boolean;
   rows: CatalogImportAuditRow[];
+  total?: number;
+  has_more?: boolean;
+  next_cursor?: string | null;
 }
 
 export interface CatalogImportRollbackResult {
@@ -120,7 +157,7 @@ export class CatalogImportJobsService {
 
   readonly jobs = signal<CatalogImportJob[]>([]);
   readonly activeJobs = computed(() =>
-    this.jobs().filter((job) => job.status === "queued" || job.status === "running"),
+    this.jobs().filter((job) => !["completed", "failed", "needs_mapping", "validated"].includes(job.status)),
   );
   readonly latestActiveJob = computed(() => this.activeJobs()[0] || null);
   readonly completedJobs = computed(() => this.jobs().filter((job) => job.status === "completed"));
@@ -132,7 +169,12 @@ export class CatalogImportJobsService {
     this.stop();
     this.watchKey = key;
     this.unsubscribe = onSnapshot(
-      query(this.colRef, where("business_id", "in", allowed)),
+      query(
+        this.colRef,
+        where("business_id", "in", allowed),
+        orderBy("updated_at", "desc"),
+        limit(100),
+      ),
       (snap) => {
         const rows = snap.docs
           .map((entry) => this.normalizeJob(entry.id, entry.data() as Record<string, unknown>))
@@ -172,11 +214,106 @@ export class CatalogImportJobsService {
     return this.normalizeJob(result.job?.job_id, result.job as unknown as Record<string, unknown>);
   }
 
-  async loadRows(jobId: string, maxRows = 500): Promise<CatalogImportAuditRow[]> {
+  async uploadSourceFile(jobId: string, file: File): Promise<CatalogImportJob> {
+    const form = new FormData();
+    form.append("file", file, file.name);
     const result = await lastValueFrom(
-      this.api.get<CatalogImportRowsResult>(`/api/admin/catalog-imports/${encodeURIComponent(jobId)}/rows?limit=${encodeURIComponent(String(maxRows))}`),
+      this.api.post<CreateCatalogImportJobResult>(`/api/admin/catalog-imports/${encodeURIComponent(jobId)}/file`, form),
     );
-    return Array.isArray(result.rows) ? result.rows.map((row) => this.normalizeAuditRow(row as unknown as Record<string, unknown>)) : [];
+    return this.normalizeJob(result.job?.job_id, result.job as unknown as Record<string, unknown>);
+  }
+
+  /** Perfil v2 del job; el wizard confirma exclusivamente el staging validado por backend. */
+  async saveJobProfile(jobId: string, profile: CatalogImportProfileV2): Promise<CatalogImportJob> {
+    const result = await lastValueFrom(
+      this.api.put<CreateCatalogImportJobResult>(`/api/admin/catalog-imports/${encodeURIComponent(jobId)}/profile`, { profile }),
+    );
+    return this.normalizeJob(result.job?.job_id, result.job as unknown as Record<string, unknown>);
+  }
+
+  async validate(jobId: string): Promise<CatalogImportValidationResult> {
+    const result = await lastValueFrom(
+      this.api.post<CatalogImportValidationResult>(`/api/admin/catalog-imports/${encodeURIComponent(jobId)}/validate`, {}),
+    );
+    return { ...result, job: this.normalizeJob(result.job?.job_id, result.job as unknown as Record<string, unknown>) };
+  }
+
+  async commit(jobId: string): Promise<CatalogImportJob> {
+    const result = await lastValueFrom(
+      this.api.post<CatalogImportCommitResult>(`/api/admin/catalog-imports/${encodeURIComponent(jobId)}/commit`, {}),
+    );
+    return this.normalizeJob(result.job?.job_id, result.job as unknown as Record<string, unknown>);
+  }
+
+  async loadProfiles(supplierId?: string): Promise<CatalogImportProfileV2[]> {
+    const query = new URLSearchParams({ business_id: "catalogo" });
+    if (supplierId) query.set("supplier_id", supplierId);
+    const result = await lastValueFrom(this.api.get<CatalogImportProfilesResult>(`/api/admin/catalog-import-profiles?${query.toString()}`));
+    return Array.isArray(result.profiles) ? result.profiles : [];
+  }
+
+  async createProfile(profile: CatalogImportProfileV2): Promise<CatalogImportProfileV2> {
+    const result = await lastValueFrom(
+      this.api.post<{ ok?: boolean; profile: CatalogImportProfileV2 }>("/api/admin/catalog-import-profiles", {
+        business_id: profile.business_id || "catalogo",
+        profile,
+      }),
+    );
+    return result.profile;
+  }
+
+  async getProfile(profileId: string): Promise<CatalogImportProfileV2> {
+    const result = await lastValueFrom(
+      this.api.get<{ ok?: boolean; profile: CatalogImportProfileV2 }>(`/api/admin/catalog-import-profiles/${encodeURIComponent(profileId)}`),
+    );
+    return result.profile;
+  }
+
+  async updateProfile(profileId: string, profile: CatalogImportProfileV2): Promise<CatalogImportProfileV2> {
+    const result = await lastValueFrom(
+      this.api.put<{ ok?: boolean; profile: CatalogImportProfileV2 }>(
+        `/api/admin/catalog-import-profiles/${encodeURIComponent(profileId)}`,
+        { profile },
+      ),
+    );
+    return result.profile;
+  }
+
+  async archiveProfile(profileId: string): Promise<void> {
+    await lastValueFrom(
+      this.api.delete<{ ok?: boolean }>(`/api/admin/catalog-import-profiles/${encodeURIComponent(profileId)}`),
+    );
+  }
+
+  async loadRows(jobId: string, maxRows: number | null = null): Promise<CatalogImportAuditRow[]> {
+    const rows: CatalogImportAuditRow[] = [];
+    const seenCursors = new Set<string>();
+    let cursor: string | null = null;
+
+    do {
+      const remaining = maxRows === null ? 1000 : Math.max(0, maxRows - rows.length);
+      if (remaining === 0) break;
+      const query = new URLSearchParams({ limit: String(Math.min(1000, remaining)) });
+      if (cursor) query.set("cursor", cursor);
+      const result = await lastValueFrom(
+        this.api.get<CatalogImportRowsResult>(
+          `/api/admin/catalog-imports/${encodeURIComponent(jobId)}/rows?${query.toString()}`,
+        ),
+      );
+      const page = Array.isArray(result.rows)
+        ? result.rows.map((row) => this.normalizeAuditRow(row as unknown as Record<string, unknown>))
+        : [];
+      rows.push(...page);
+
+      const nextCursor = typeof result.next_cursor === "string" && result.next_cursor.trim()
+        ? result.next_cursor
+        : null;
+      if (!result.has_more || !nextCursor || seenCursors.has(nextCursor) || page.length === 0) break;
+      seenCursors.add(nextCursor);
+      cursor = nextCursor;
+    } while (maxRows === null || rows.length < maxRows);
+
+    return maxRows === null ? rows : rows.slice(0, maxRows);
   }
 
   async rollback(jobId: string): Promise<CatalogImportJob> {
@@ -201,7 +338,7 @@ export class CatalogImportJobsService {
       job_id: String(data["job_id"] || fallbackId || ""),
       business_id: normalizeBusinessId(data["business_id"]),
       file_name: String(data["file_name"] || "catalogo.xlsx"),
-      status: status === "running" || status === "completed" || status === "failed" ? status : "queued",
+      status: ["uploaded", "parsing", "needs_mapping", "validated", "queued", "committing", "running", "completed", "failed"].includes(status) ? status : "queued",
       import_mode: data["import_mode"] === "partial" ? "partial" : "full",
       source_sheet_name: this.nullableText(data["source_sheet_name"]),
       header_row_index: data["header_row_index"] === null || data["header_row_index"] === undefined ? null : this.safeNumber(data["header_row_index"]),

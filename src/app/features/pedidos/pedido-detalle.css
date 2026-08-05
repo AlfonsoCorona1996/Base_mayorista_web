@@ -43,15 +43,20 @@
 
 .page-head {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
+  flex-direction: column;
   gap: 1rem;
-  flex-wrap: wrap;
   padding: 1rem 1.1rem;
   border: 1px solid #e6eaf1;
   border-radius: 12px;
   background: #ffffff;
   box-shadow: 0 1px 0 rgba(15, 23, 42, 0.02);
+}
+
+.page-head-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
 }
 
 .page-head-main {
@@ -176,9 +181,17 @@
   gap: 0.5rem;
   align-items: flex-start;
   flex-wrap: wrap;
-  justify-content: flex-end;
-  flex: 0 0 auto;
-  margin-left: auto;
+  justify-content: flex-start;
+  flex: 1 1 100%;
+  width: 100%;
+}
+
+/* En movil, "Mas acciones" concentra Registrar cobro/Generar nota/Nota por WA +
+   el menu kebab en una sola hoja, para no tener dos entradas al mismo menu.
+   !important es necesario: estos botones tambien llevan .with-icon, y
+   .btn.with-icon (2 clases) le gana en especificidad a una sola clase. */
+.head-action-mobile-more {
+  display: none !important;
 }
 
 .order-head-menu {
@@ -303,19 +316,27 @@
 }
 
 .summary {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-  background: #f5f7fb;
-  border: 1px solid #e6eaf1;
-  border-radius: 12px;
-  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
-@media (min-width: 1081px) {
-  .summary.summary--five {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+.summary-primary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+@media (min-width: 768px) {
+  .summary-primary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+}
+
+.summary-secondary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
 .summary-card {
@@ -329,86 +350,22 @@
 
 .summary-card .eyebrow {
   margin: 0;
-}
-
-.summary-card--pieces {
-  grid-template-columns: auto 1fr;
+  display: flex;
   align-items: center;
-  gap: 0.7rem;
+  gap: 0.25rem;
 }
 
-.summary-progress-ring {
-  --progress: 0;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  position: relative;
-  background: conic-gradient(#16a34a calc(var(--progress) * 1%), #dbe4ef 0);
-}
-
-.summary-progress-ring::before {
-  content: "";
-  position: absolute;
-  inset: 4px;
-  border-radius: 50%;
-  background: #ffffff;
-}
-
-.summary-progress-ring__value {
-  position: relative;
-  z-index: 1;
-  font-size: 0.62rem;
-  font-weight: 800;
-  color: #166534;
-  line-height: 1;
-}
-
-.summary-ratio {
-  margin: 0.1rem 0 0;
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.2rem;
-  color: #334155;
-}
-
-.summary-ratio span {
-  font-size: 0.9rem;
-  font-weight: 700;
+.summary-card .eyebrow .material-symbols-rounded {
+  font-size: 14px;
+  color: #94a3b8;
 }
 
 .summary-value {
-  font-size: 1.40rem;
+  font-size: 1.25rem;
+  font-weight: 800;
   line-height: 1.2;
   color: #0f172a;
-}
-
-.summary-note {
-  margin: 0.1rem 0 0;
-  font-size: 0.72rem;
-  color: #64748b;
-  font-weight: 600;
-}
-
-.summary-note--warning {
-  color: #c2410c;
-}
-
-.summary-money {
-  margin: 0.1rem 0 0;
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.3rem;
-  white-space: nowrap;
-}
-
-.summary-money span {
-  font-size: 0.68rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: #475569;
-  font-weight: 700;
+  margin: 0.2rem 0 0;
 }
 
 .summary-value--profit {
@@ -420,44 +377,45 @@
   border-color: #bbe8c8;
 }
 
-.summary-money--profit span {
-  color: #15803d;
+.summary-card--cobro {
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+
+.summary-card--cobro .summary-value {
+  color: #c2410c;
+}
+
+.summary-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.75rem;
+  color: #334155;
+  font-weight: 600;
+}
+
+.summary-chip .material-symbols-rounded {
+  font-size: 15px;
+  color: #94a3b8;
+}
+
+.summary-chip strong {
+  color: #0f172a;
+  font-weight: 800;
 }
 
 @media (max-width: 1080px) {
-  .summary {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
-  }
-
   .summary-card {
     padding: 0.65rem 0.7rem;
   }
 
   .summary-value {
-    font-size: 1.45rem;
-    line-height: 1.15;
-  }
-
-  .summary-ratio span {
-    font-size: 0.82rem;
-  }
-
-  .summary-money span {
-    font-size: 0.62rem;
-  }
-
-  .summary-note {
-    font-size: 0.68rem;
-  }
-
-  .summary-progress-ring {
-    width: 38px;
-    height: 38px;
-  }
-
-  .summary-progress-ring::before {
-    inset: 3px;
+    font-size: 1.15rem;
   }
 }
 
@@ -473,6 +431,14 @@
 
 .panel[id] {
   scroll-margin-top: 7rem;
+}
+
+/* Utilidad para las secciones controladas por tabs (section-nav). display:flex
+   ya viene definido en varias combinaciones de clases (.panel, .package-shell,
+   .packing-mode, etc.), asi que !important es necesario para garantizar que
+   esta ocultacion gane sin depender de la especificidad de cada variante. */
+.tab-hidden {
+  display: none !important;
 }
 
 .panel.locked {
@@ -589,6 +555,212 @@
 .field .money {
   width: 100%;
   box-sizing: border-box;
+}
+
+.field-clienta-price {
+  position: relative;
+}
+
+/* El boton de descuento se saca del flujo (position:absolute) a proposito:
+   si participara en el alto de esta fila (22px) siempre la haria mas alta
+   que las de sus vecinas (16px, ver ".sheet-add-item-ios .field label"),
+   y el campo de dinero de abajo quedaria desalineado sin remedio. Al
+   sacarlo del flujo, esta fila mide exactamente lo mismo que un <label>
+   plano y los 4 campos de precio quedan perfectamente alineados. */
+.field-label-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding-right: 26px;
+}
+
+.field-label-row label {
+  min-height: 0;
+}
+
+.clienta-discount-btn {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: 1px solid #cfd8ea;
+  background: #ffffff;
+  color: var(--muted);
+}
+
+.clienta-discount-btn:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.clienta-discount-btn .material-symbols-rounded {
+  font-size: 16px;
+}
+
+.clienta-discount-caption {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+  margin: 0 0 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: #166534;
+}
+
+.clienta-discount-caption .material-symbols-rounded {
+  font-size: 14px;
+}
+
+.clienta-discount-popover {
+  position: absolute;
+  z-index: var(--ui-z-overlay, 40);
+  top: calc(100% + 6px);
+  right: 0;
+  width: min(280px, 90vw);
+  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius2);
+  box-shadow: var(--shadow);
+  padding: 0.85rem;
+}
+
+/* Si no hay espacio suficiente debajo dentro del modal, se abre hacia
+   arriba (ver toggleClientaDiscount() en el componente), igual que el
+   prototipo aprobado, en vez de requerir scroll para verlo completo. */
+.clienta-discount-popover--up {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+
+/* Usado por el popover rapido de la tarjeta de la lista: la tarjeta es
+   angosta y el popover (280px) casi siempre desborda si se alinea por la
+   derecha, asi que se alinea por la izquierda cuando hay espacio. */
+.clienta-discount-popover--left {
+  left: 0;
+  right: auto;
+}
+
+.clienta-discount-popover-title {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0 0 0.6rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.clienta-discount-popover-title .material-symbols-rounded {
+  font-size: 16px;
+  color: var(--primary);
+}
+
+.clienta-discount-seg {
+  display: flex;
+  background: var(--accent-soft);
+  border-radius: 10px;
+  padding: 3px;
+  gap: 2px;
+  margin-bottom: 0.6rem;
+}
+
+.clienta-discount-seg button {
+  flex: 1;
+  border: none;
+  background: transparent;
+  padding: 7px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.clienta-discount-seg button.is-active {
+  background: #ffffff;
+  color: var(--accent);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.1);
+}
+
+.clienta-discount-chips {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.6rem;
+}
+
+.clienta-discount-chips button {
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid #cfd8ea;
+  background: #ffffff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #3a4a63;
+}
+
+.clienta-discount-chips button.is-active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #ffffff;
+}
+
+.clienta-discount-custom {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 0.6rem;
+}
+
+.clienta-discount-custom input {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  border: 1px solid #cfd8ea;
+  border-radius: 8px;
+  padding: 0 8px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.clienta-discount-preview {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--success-soft);
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 0.6rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #15803d;
+}
+
+.clienta-discount-preview strong {
+  font-size: 1rem;
+}
+
+.clienta-discount-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.clienta-discount-actions .btn {
+  flex: 1;
+  height: 36px;
+  font-size: 0.78rem;
 }
 
 .preview {
@@ -746,9 +918,11 @@
 }
 
 
-.add-item .field:nth-last-child(4),
-.add-item .field:nth-last-child(3),
-.add-item .field:nth-last-child(2) {
+/* Cantidad/Precio final/Precio clienta/Precio costo: marcados explicitamente
+   con .price-row-field (en vez de nth-last-child) para que la fila de 4
+   columnas no se rompa cuando hay elementos condicionales (leyenda de
+   descuento, resumen de margen, motivo del ajuste) despues de ellos en el DOM. */
+.add-item .price-row-field {
   grid-column: span 1;
 }
 
@@ -768,10 +942,7 @@
     grid-column: span 4;
   }
 
-  .add-item .field:nth-last-child(4),
-  .add-item .field:nth-last-child(3),
-  .add-item .field:nth-last-child(2),
-  .add-item .field:nth-last-child(1) {
+  .add-item .price-row-field {
     grid-column: span 3;
   }
 
@@ -852,18 +1023,19 @@
 .discount-card-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
   border: 1px solid #fecdd3;
-  border-radius: 14px;
-  background: linear-gradient(135deg, #fff1f2, #ffe4e6);
-  color: #9f1239;
-  padding: 0.45rem 0.7rem;
-  min-height: 42px;
+  border-radius: 999px;
+  background: #fff1f2;
+  color: #be123c;
+  padding: 0.5rem 0.8rem;
+  font-size: 0.78rem;
+  font-weight: 700;
   cursor: pointer;
 }
 
 .discount-card-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #ffe4e6, #fecdd3);
+  background: #ffe4e6;
   border-color: #fda4af;
 }
 
@@ -872,27 +1044,14 @@
   cursor: not-allowed;
 }
 
+.discount-card-btn.has-discount {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #166534;
+}
+
 .discount-card-btn__icon {
-  font-size: 20px;
-  color: #be123c;
-}
-
-.discount-card-btn__body {
-  display: grid;
-  gap: 1px;
-  text-align: left;
-}
-
-.discount-card-btn__title {
-  font-size: 0.78rem;
-  font-weight: 700;
-  line-height: 1.1;
-}
-
-.discount-card-btn__meta {
-  font-size: 0.73rem;
-  font-weight: 600;
-  color: #be123c;
+  font-size: 16px;
 }
 
 .items,
@@ -1693,6 +1852,11 @@
   cursor: wait;
 }
 
+.status-actions .confirm-intelligent-btn {
+  flex: 1 1 auto;
+  min-width: 200px;
+}
+
 .confirm-intelligent-btn.btn.ghost {
   background: transparent;
   border: 1px solid #1e293b;
@@ -1890,6 +2054,14 @@
     justify-content: flex-start;
   }
 
+  .head-action-desktop {
+    display: none !important;
+  }
+
+  .head-action-mobile-more {
+    display: inline-flex !important;
+  }
+
   .wa-progress-row {
     justify-content: flex-start;
   }
@@ -1905,27 +2077,12 @@
     gap: 10px;
   }
 
-  .summary {
-    grid-template-columns: 1fr 1fr;
-  }
-
   .summary-card .eyebrow {
     font-size: 0.6rem;
     text-transform: uppercase;
     letter-spacing: 0.05rem;
     color: #94a3b8;
     font-weight: 700;
-  }
-
-  .summary-value {
-    font-size: 1rem;
-    font-weight: 700;
-    color: #1e293b;
-  }
-
-  .summary:not(.summary--five) .summary-card--pieces,
-  .summary:not(.summary--five) .summary-card--profit {
-    grid-column: 1 / -1;
   }
 
   .link-back--icon {
@@ -2741,10 +2898,13 @@
   grid-column: auto;
   justify-self: end;
   min-height: auto;
-  padding: 7px 12px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  justify-content: center;
   border-radius: 12px;
-  border-color: #d8e3f1;
-  background: #f2f6fc;
+  border-color: transparent;
+  background: transparent;
   color: #4a637f;
 }
 
@@ -2754,7 +2914,7 @@
 
 .sheet-add-item-ios .sheet-body {
   flex: 1 1 auto;
-  min-height: 0;
+  min-height: auto;
   padding: 14px 16px;
   background: #f3f6fb;
   overflow: visible;
@@ -2773,12 +2933,13 @@
 }
 
 .sheet-add-item-ios .field label {
-  text-transform: none;
-  letter-spacing: 0.01em;
-  font-size: 0.78rem;
-  color: #556b86;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: #6b7280;
   min-height: auto;
-  gap: 6px;
+  gap: 4px;
   align-items: center;
 }
 
@@ -2790,24 +2951,26 @@
 .sheet-add-item-ios .source-toggle {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
-  border-radius: 16px;
-  padding: 6px;
-  background: #f5f8fd;
-  border: 1px solid #dbe6f3;
+  gap: 2px;
+  border-radius: 12px;
+  padding: 3px;
+  background: #f1f5f9;
+  border: none;
 }
 
 .sheet-add-item-ios .source-toggle label {
   position: relative;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   min-height: auto;
-  padding: 7px 10px;
-  border-radius: 12px;
+  padding: 9px;
+  border-radius: 9px;
   border: 1px solid transparent;
-  color: #506786;
-  font-size: 0.72rem;
+  color: #6b7280;
+  font-weight: 700;
+  font-size: 0.78rem;
   font-weight: 620;
   cursor: pointer;
   transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
@@ -2822,29 +2985,30 @@
 }
 
 .sheet-add-item-ios .source-toggle label .material-symbols-rounded {
-  font-size: 13px;
-  color: #7a91ad;
+  font-size: 15px;
+  color: #6b7280;
 }
 
 .sheet-add-item-ios .source-toggle label:hover {
-  background: #eef4fc;
+  background: rgba(255, 255, 255, 0.6);
 }
 
 .sheet-add-item-ios .source-toggle label:has(input:checked) {
-  background: #eaf3ff;
-  border-color: #afcbef;
-  color: #0f4d9e;
+  background: #ffffff;
+  border-color: transparent;
+  color: #1e293b;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.1);
 }
 
 .sheet-add-item-ios .source-toggle label:has(input:checked) .material-symbols-rounded {
-  color: #0f69d4;
+  color: #1e293b;
 }
 
 .sheet-add-item-ios .search-input-wrap {
-  border: 1px solid #d9e4f2;
-  border-radius: 14px;
-  background: #f9fbff;
-  min-height: 42px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  min-height: 40px;
   padding: 0 10px;
   display: flex;
   align-items: center;
@@ -2852,14 +3016,14 @@
 }
 
 .sheet-add-item-ios .search-input-wrap .material-symbols-rounded {
-  font-size: 18px;
-  color: #8aa1bd;
+  font-size: 16px;
+  color: #9ca3af;
 }
 
 .sheet-add-item-ios .search-input-wrap .input {
   border: 0;
   background: transparent;
-  min-height: 40px;
+  min-height: 38px;
   padding: 0;
 }
 
@@ -2868,8 +3032,8 @@
 }
 
 .sheet-add-item-ios .search-input-wrap:focus-within {
-  border-color: #afcbef;
-  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+  border-color: #bfdbfe;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 .sheet-add-item-ios .listbox {
@@ -2958,32 +3122,33 @@
 }
 
 .sheet-add-item-ios .preview {
-  grid-template-columns: 84px minmax(0, 1fr);
-  gap: 0.85rem;
-  padding: 0.85rem;
-  border-radius: 18px;
-  border: 1px solid #dbe6f4;
-  background: linear-gradient(180deg, #fbfdff 0%, #f4f8ff 100%);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7);
+  grid-template-columns: 48px minmax(0, 1fr);
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.625rem;
+  border-radius: 12px;
+  border: none;
+  background: #f1f5f9;
+  box-shadow: none;
 }
 
 .sheet-add-item-ios .preview img,
 .sheet-add-item-ios .preview .photo-placeholder-md {
-  width: 84px;
-  height: 84px;
-  border-radius: 14px;
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
 }
 
 .sheet-add-item-ios .preview-content {
   min-width: 0;
   display: grid;
-  gap: 6px;
+  gap: 3px;
 }
 
 .sheet-add-item-ios .preview-title {
   margin: 0;
-  font-size: 0.96rem;
-  font-weight: 720;
+  font-size: 0.875rem;
+  font-weight: 700;
   line-height: 1.22;
   color: #0f172a;
 }
@@ -2994,8 +3159,8 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 4px;
-  color: #5b6f87;
-  font-size: 0.78rem;
+  color: #6b7280;
+  font-size: 0.75rem;
 }
 
 .sheet-add-item-ios .preview-meta .material-symbols-rounded {
@@ -3030,7 +3195,117 @@
 
 .sheet-add-item-ios .input,
 .sheet-add-item-ios .money {
-  border-radius: 14px;
+  border-radius: 8px;
+  min-height: 40px;
+  height: 40px;
+}
+
+.sheet-add-item-ios .money {
+  border-color: #e2e8f0;
+  background: #ffffff;
+}
+
+.sheet-add-item-ios .money.money-readonly {
+  border-color: #e2e8f0;
+  background: #ffffff;
+}
+
+/* Precio clienta siempre lleva el acento azul (fiel al prototipo), sin
+   importar si el campo esta bloqueado a escritura directa: es el campo
+   que se ajusta con el boton de descuento, y debe leerse como "el
+   especial", no como "deshabilitado". */
+.sheet-add-item-ios .field-clienta-price .money,
+.sheet-add-item-ios .field-clienta-price .money.money-readonly {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+.catalog-search-result {
+  min-width: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.catalog-search-result:last-child {
+  border-bottom: 0;
+}
+
+.catalog-search-result--group {
+  padding: var(--ui-space-4);
+  background: #f8fafc;
+}
+
+.catalog-search-result--group .listbox-option {
+  min-height: var(--ui-touch-target-min);
+  margin-top: var(--ui-space-4);
+  border: 1px solid #dbe3ef;
+  border-radius: var(--ui-radius-sm);
+  background: #ffffff;
+}
+
+.catalog-search-result__head {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: var(--ui-space-8);
+  align-items: start;
+  padding: var(--ui-space-8);
+  color: #334155;
+}
+
+.catalog-search-result__head strong,
+.catalog-search-result__head small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.catalog-search-result__head small,
+.catalog-search-match {
+  margin-top: var(--ui-space-4);
+  color: #64748b;
+  font-size: 0.78rem;
+}
+
+.catalog-search-empty {
+  margin: 0;
+  padding: var(--ui-space-12);
+  color: #64748b;
+  font-size: 0.86rem;
+  overflow-wrap: anywhere;
+}
+
+.catalog-search-empty--error {
+  color: #991b1b;
+  background: #fff7f7;
+}
+
+.catalog-price-summary,
+.catalog-price-reason,
+.catalog-price-error {
+  grid-column: 1 / -1;
+}
+
+.catalog-price-error {
+  margin: 0;
+}
+
+.catalog-price-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-8);
+  min-height: var(--ui-touch-target-min);
+  padding: var(--ui-space-8) var(--ui-space-12);
+  border-radius: var(--ui-radius-sm);
+  background: #ecfdf5;
+  color: #166534;
+}
+
+.catalog-price-summary--negative {
+  background: #fff1f2;
+  color: #9f1239;
+}
+
+.catalog-price-reason textarea.input {
+  min-height: 88px;
+  resize: vertical;
 }
 
 .sheet-add-item-ios .input,
@@ -3058,7 +3333,7 @@
 .sheet-add-item-ios .sheet-footer {
   position: static;
   margin-top: auto;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: auto 1fr;
   gap: 10px;
   padding: 12px 16px 14px;
   border-top: 1px solid #dce6f2;
@@ -3066,15 +3341,22 @@
 }
 
 .sheet-add-item-ios .sheet-footer .btn.primary {
-  background: #007aff;
-  border-color: #0070ea;
+  background: #1e293b;
+  border-color: #1e293b;
   color: #ffffff;
 }
 
-.sheet-add-item-ios .sheet-footer .btn.danger {
-  background: #f6f8fc;
-  border-color: #dce6f2;
-  color: #4c647f;
+.sheet-add-item-ios .sheet-footer .btn.ghost {
+  width: 120px;
+  background: #ffffff;
+  border-color: #e2e8f0;
+  color: #334155;
+}
+
+.sheet-add-item-ios .sheet-footer .btn {
+  height: 44px;
+  font-size: 0.875rem;
+  font-weight: 700;
 }
 
 @media (max-width: 640px) {
@@ -3154,21 +3436,25 @@
   }
 
   .sheet-add-item-ios .preview {
-    grid-template-columns: 68px minmax(0, 1fr);
-    padding: 0.7rem;
+    grid-template-columns: 48px minmax(0, 1fr);
+    padding: 0.625rem;
     gap: 0.7rem;
   }
 
   .sheet-add-item-ios .preview img,
   .sheet-add-item-ios .preview .photo-placeholder-md {
-    width: 68px;
-    height: 68px;
+    width: 48px;
+    height: 48px;
   }
 
   .sheet.full.sheet-add-item-ios .sheet-footer {
     margin-top: 0;
     grid-template-columns: 1fr;
     padding: 10px 12px calc(12px + env(safe-area-inset-bottom));
+  }
+
+  .sheet-add-item-ios .sheet-footer .btn.ghost {
+    width: 100%;
   }
 
   .sheet-add-item-ios .source-toggle {
@@ -3653,6 +3939,13 @@
   padding-inline: 0;
 }
 
+.btn.icon-only {
+  width: 44px;
+  min-width: 44px;
+  padding-inline: 0;
+  justify-content: center;
+}
+
 .physical-scan-btn {
   white-space: nowrap;
 }
@@ -3708,9 +4001,7 @@
 .barcode-match-btn strong,
 .barcode-match-btn small {
   display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .barcode-match-btn small {
@@ -4119,10 +4410,10 @@ code {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.28rem 0.4rem 0.28rem 0.62rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  background: #f8fafc;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
   width: fit-content;
   max-width: 100%;
 }
@@ -4131,17 +4422,19 @@ code {
   margin: 0;
   text-transform: none;
   letter-spacing: 0.03em;
-  color: #64748b;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #6b7280;
   white-space: nowrap;
 }
 
 .order-id-copy {
   position: static;
-  width: 22px;
-  height: 22px;
-  border: 1px solid #d8dfeb;
-  border-radius: 12px;
-  background: #ffffff;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
   cursor: pointer;
   opacity: 1;
   display: inline-flex;
@@ -4187,35 +4480,64 @@ code {
   box-shadow: 0 14px 32px rgba(6, 95, 70, 0.28);
 }
 
+/* Riel compacto y conectado: usa el mismo finalStatePills() de siempre (y del
+   sheet de "Gestionar entrega/embarque"), solo cambia la presentacion visual
+   a un stepper horizontal de ancho completo con jerarquia tipografica clara. */
 .final-flow-strip {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 0.6rem;
-  margin: 0.75rem 0 0;
-}
-
-.final-flow-pill {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  display: flex;
   align-items: center;
-  gap: 0.55rem;
-  min-height: 58px;
-  padding: 0.65rem 0.75rem;
+  width: 100%;
+  gap: 0;
+  margin: 0.75rem 0 0;
+  padding: 0.65rem 0.85rem;
   border: 1px solid #d9e4f2;
   border-radius: 12px;
   background: #ffffff;
-  color: #102a4a;
 }
 
-.final-flow-pill .material-symbols-rounded {
+.final-flow-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  flex: 0 0 auto;
+  padding: 0.2rem 0;
+  color: #102a4a;
+  background: transparent;
+  border: none;
+}
+
+.final-flow-pill > div {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.final-flow-pill-dot {
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
-  font-size: 19px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  flex-shrink: 0;
   background: #edf6ff;
   color: #0b63ce;
+}
+
+.final-flow-pill-dot .material-symbols-rounded {
+  font-size: 17px;
+}
+
+.final-flow-connector {
+  flex: 1 1 16px;
+  min-width: 16px;
+  height: 2px;
+  border-radius: 0;
+  background: #e2e8f0;
+  margin: 0 2px;
+}
+
+.final-flow-connector.tone-ok {
+  background: #16a34a;
 }
 
 .final-flow-pill small,
@@ -4225,57 +4547,62 @@ code {
 }
 
 .final-flow-pill small {
-  color: #52677f;
-  font-size: 0.72rem;
-  font-weight: 800;
+  overflow: hidden;
+  color: #8a96a8;
+  font-size: 0.62rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.2;
 }
 
 .final-flow-pill strong {
   overflow: hidden;
   color: #0f2744;
   font-size: 0.86rem;
+  font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 1.25;
 }
 
-.final-flow-pill.tone-ok {
-  border-color: #bbf7d0;
-  background: #f0fdf4;
-}
-
-.final-flow-pill.tone-ok .material-symbols-rounded {
+.final-flow-pill.tone-ok .final-flow-pill-dot {
   background: #dcfce7;
   color: #047857;
 }
 
-.final-flow-pill.tone-warn {
-  border-color: #fed7aa;
-  background: #fff7ed;
+.final-flow-pill.tone-ok strong {
+  color: #047857;
 }
 
-.final-flow-pill.tone-warn .material-symbols-rounded {
+.final-flow-pill.tone-warn .final-flow-pill-dot {
   background: #ffedd5;
   color: #c2410c;
 }
 
-.final-flow-pill.tone-danger {
-  border-color: #fecdd3;
-  background: #fff1f2;
+.final-flow-pill.tone-warn strong {
+  color: #c2410c;
 }
 
-.final-flow-pill.tone-danger .material-symbols-rounded {
+.final-flow-pill.tone-danger .final-flow-pill-dot {
   background: #ffe4e6;
   color: #be123c;
 }
 
-.final-flow-pill.tone-wait {
-  border-color: #e2e8f0;
-  background: #f8fafc;
+.final-flow-pill.tone-danger strong {
+  color: #be123c;
 }
 
-.final-flow-pill.tone-work {
-  border-color: #bfdbfe;
+.final-flow-pill.tone-wait .final-flow-pill-dot {
+  background: #f8fafc;
+  color: #64748b;
+}
+
+.final-flow-pill.tone-work .final-flow-pill-dot {
   background: #eff6ff;
+  color: #1d4ed8;
 }
 
 .durango-review-panel {
@@ -4576,17 +4903,26 @@ code {
   resize: vertical;
 }
 
-@media (max-width: 900px) {
+/* Debajo de escritorio (1024px, ver docs/UI_GUIDELINES.md) 5 columnas no caben
+   sin truncar texto: se vuelve una fila con scroll horizontal en vez de forzar
+   el ajuste. */
+@media (max-width: 1023px) {
   .final-flow-strip {
-    display: flex;
     overflow-x: auto;
     padding-bottom: 0.2rem;
   }
 
   .final-flow-pill {
-    min-width: 168px;
+    flex: 0 0 auto;
+    min-width: 148px;
   }
 
+  .final-flow-connector {
+    flex: 0 0 20px;
+  }
+}
+
+@media (max-width: 900px) {
   .durango-review-panel {
     padding: 0.7rem;
   }
@@ -4792,6 +5128,13 @@ code {
   flex-direction: column;
   gap: 0.75rem;
   animation: sheetIn 160ms ease;
+}
+
+.sheet-title-compact {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
 }
 
 .package-delete-sheet {
@@ -5510,9 +5853,38 @@ code {
 }
 
 .price-stack {
+  position: relative;
   display: flex;
   flex-direction: column;
   flex: 0 0 auto;
+}
+
+.price-stack-head {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.price-edit-btn {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: 1px solid #cfd8ea;
+  background: #ffffff;
+  color: var(--muted);
+}
+
+.price-edit-btn:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.price-edit-btn .material-symbols-rounded {
+  font-size: 16px;
 }
 
 .price-label {
@@ -6000,7 +6372,6 @@ code {
 }
 
 .page-head,
-.summary,
 .panel,
 .section-nav,
 .item-card,
@@ -6022,8 +6393,7 @@ code {
   color: #64748b;
 }
 
-.link-back--icon,
-.order-id-copy {
+.link-back--icon {
   width: 34px;
   height: 34px;
   border-radius: 50%;
@@ -6035,9 +6405,24 @@ code {
   justify-content: center;
 }
 
-.link-back--icon .material-symbols-rounded,
-.order-id-copy .material-symbols-rounded {
+.order-id-copy {
+  width: 18px;
+  height: 18px;
+  border-radius: 0;
+  border: none;
+  background: transparent;
+  color: #9ca3af;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.link-back--icon .material-symbols-rounded {
   font-size: 18px;
+}
+
+.order-id-copy .material-symbols-rounded {
+  font-size: 15px;
 }
 
 .meta-dot-pill {
@@ -6072,16 +6457,19 @@ code {
 }
 
 .section-nav button {
+  flex: 1 1 0;
   border-radius: 12px;
   min-height: 36px;
   padding: 0 11px;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 5px;
   border: 1px solid #d6e0ef;
   background: #f5f8fd;
   color: #355170;
   font-size: 0.81rem;
+  white-space: nowrap;
 }
 
 .section-nav button .material-symbols-rounded {
@@ -6089,9 +6477,33 @@ code {
   color: #6a81a0;
 }
 
-.summary {
-  background: #ffffff;
-  border: 1px solid var(--ios-border);
+.section-nav button.is-active {
+  background: var(--ios-text);
+  border-color: var(--ios-text);
+  color: #ffffff;
+}
+
+.section-nav button.is-active .material-symbols-rounded {
+  color: #ffffff;
+}
+
+.section-nav-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.08);
+  color: #355170;
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.section-nav button.is-active .section-nav-count {
+  background: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
 }
 
 .summary-card {
@@ -7534,4 +7946,33 @@ code {
   .price-warning-actions {
     grid-template-columns: 1fr;
   }
+}
+
+/* Grid de productos: 1 columna en movil, 2 columnas desde tablet (fiel al prototipo).
+   Se declara al final del archivo para ganar por orden de fuente sobre las reglas
+   auto-fill previas que comparten la misma especificidad. */
+@media (min-width: 768px) {
+  .order-item-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 767px) {
+  .order-item-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.price-discount-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #166534;
+  margin-top: 2px;
+}
+
+.price-discount-badge .material-symbols-rounded {
+  font-size: 13px;
 }

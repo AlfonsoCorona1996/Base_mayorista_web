@@ -1,6 +1,13 @@
 /// <reference lib="webworker" />
 
 import * as XLSX from "xlsx";
+import {
+  CatalogImportMappingV2 as ImportMapping,
+  CatalogImportV2RowFields,
+  buildIdentifiers,
+  evaluatePriceRule,
+  normalizeIdentifierKey,
+} from "./catalog-import-v2.types";
 
 interface ParseRequest {
   type: "parse";
@@ -21,19 +28,6 @@ interface HeaderCandidate {
   rowNumber: number;
   score: number;
   labels: string[];
-}
-
-interface ImportMapping {
-  skuColumn: string;
-  nameColumns: string[];
-  brandColumn: string;
-  categoryColumn: string;
-  colorColumn: string;
-  sizeColumn: string;
-  priceCostColumn: string;
-  impulsProductIdColumn: string;
-  priceCostDiscountPct: number;
-  priceClientaMarkupPct: number;
 }
 
 interface PreviewRow {
@@ -60,9 +54,14 @@ interface PreviewRow {
   price_cost: number | null;
   price_clienta_markup_pct: number | null;
   price_clienta: number | null;
+  primary_barcode: string | null;
+  supplier_sku: string | null;
+  identifiers: CatalogImportV2RowFields["identifiers"];
+  prices: CatalogImportV2RowFields["prices"];
   original_row: Record<string, unknown>;
   valid: boolean;
   issue: string | null;
+  warnings: string[];
 }
 
 function uniqueHeaders(row: unknown[]): string[] {
@@ -184,64 +183,69 @@ function extractCklassFields(row: Record<string, unknown>) {
   };
 }
 
-function numberFromColumn(row: Record<string, unknown>, column: string): { value: number | null; invalid: boolean } {
-  const raw = textFromColumn(row, column);
-  if (!raw) return { value: null, invalid: false };
-  const number = Number(raw.replace(/[$,\s]/g, ""));
-  if (!Number.isFinite(number) || number < 0) return { value: null, invalid: true };
-  return { value: Number(number.toFixed(2)), invalid: false };
-}
-
-function clampPercent(value: unknown): number {
-  const number = Number(value ?? 0);
-  if (!Number.isFinite(number)) return 0;
-  return Math.max(0, Math.min(100, Number(number.toFixed(2))));
-}
-
-function applyDiscount(value: number | null, percent: number): number | null {
-  if (value === null) return null;
-  return Number(Math.max(0, value * (1 - clampPercent(percent) / 100)).toFixed(2));
-}
-
-function applyMarkup(value: number | null, percent: number): number | null {
-  if (value === null) return null;
-  return Number(Math.max(0, value * (1 + clampPercent(percent) / 100)).toFixed(2));
-}
-
 function originalRow(row: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(row).filter(([key]) => !key.startsWith("__")));
 }
 
 function buildPreview(rows: Record<string, unknown>[], mapping: ImportMapping) {
   const skuCounts = new Map<string, number>();
+  const barcodeIdentities = new Map<string, Set<string>>();
   for (const raw of rows) {
     if (raw["__row_empty"] === true || nonEmptyRecordCount(raw) === 0) continue;
-    const sku = textFromColumn(raw, mapping.skuColumn);
+    const sku = textFromColumn(raw, mapping.primaryBarcodeColumn) || textFromColumn(raw, mapping.supplierSkuColumn) || textFromColumn(raw, mapping.supplierVariantColumn);
     if (!sku) continue;
-    const key = sku.toLowerCase();
+    const key = normalizeIdentifierKey(sku);
     skuCounts.set(key, (skuCounts.get(key) || 0) + 1);
+    const barcodes = [mapping.primaryBarcodeColumn, ...mapping.alternateBarcodeColumns]
+      .map((column) => normalizeIdentifierKey(textFromColumn(raw, column)))
+      .filter(Boolean);
+    for (const barcode of barcodes) {
+      const identity = normalizeIdentifierKey(
+        textFromColumn(raw, mapping.supplierVariantColumn)
+        || [textFromColumn(raw, mapping.modelColumn), textFromColumn(raw, mapping.colorColumn), textFromColumn(raw, mapping.sizeColumn)].filter(Boolean).join("|")
+        || textFromColumn(raw, mapping.supplierSkuColumn)
+        || barcode,
+      );
+      const identities = barcodeIdentities.get(barcode) || new Set<string>();
+      identities.add(identity);
+      barcodeIdentities.set(barcode, identities);
+    }
   }
 
   const normalized = rows.map((raw, index): PreviewRow => {
     const rowNumber = Number(raw["__row_number"] || index + 2);
     const rowEmpty = raw["__row_empty"] === true || nonEmptyRecordCount(raw) === 0;
-    const sku = textFromColumn(raw, mapping.skuColumn);
+    const identifiers = buildIdentifiers(raw, mapping);
+    const primaryBarcode = identifiers.find((identifier) => identifier.type === "barcode" && identifier.primary)?.value || null;
+    const supplierSku = identifiers.find((identifier) => identifier.type === "supplier_sku")?.value || null;
+    const supplierVariant = identifiers.find((identifier) => identifier.type === "supplier_variant")?.value || null;
+    const sku = primaryBarcode || supplierSku || supplierVariant || "";
     const cklassFields = extractCklassFields(raw);
-    const duplicate = sku ? (skuCounts.get(sku.toLowerCase()) || 0) > 1 : false;
-    const priceCostExcel = numberFromColumn(raw, mapping.priceCostColumn);
-    const priceCostDiscountPct = clampPercent(mapping.priceCostDiscountPct);
-    const priceClientaMarkupPct = clampPercent(mapping.priceClientaMarkupPct);
-    const priceCost = applyDiscount(priceCostExcel.value, priceCostDiscountPct);
-    const priceClienta = applyMarkup(priceCostExcel.value, priceClientaMarkupPct);
+    const duplicate = sku ? (skuCounts.get(normalizeIdentifierKey(sku)) || 0) > 1 : false;
+    const barcodeConflict = identifiers
+      .filter((identifier) => identifier.type === "barcode" && identifier.indexable)
+      .some((identifier) => (barcodeIdentities.get(identifier.normalized_value)?.size || 0) > 1);
+    const cost = evaluatePriceRule(raw, mapping.costRule, null, "Costo");
+    const clienta = evaluatePriceRule(raw, mapping.clientaRule, cost.value, "Precio clienta");
+    const indexableIdentity = identifiers.some((identifier) => identifier.indexable && identifier.scope === "variant");
+    const warnings = [
+      ...identifiers.filter((identifier) => identifier.validation_issue).map((identifier) => `${identifier.value}: ${identifier.validation_issue}`),
+      ...(duplicate ? ["Identidad repetida: se consolidará y se conservará esta ubicación"] : []),
+      ...cost.warnings,
+      ...clienta.warnings,
+      ...(clienta.issue ? [clienta.issue] : []),
+    ];
     const issue = rowEmpty
       ? "Fila sin datos"
-      : !sku
-        ? "SKU vacio"
-        : duplicate
-          ? "SKU duplicado"
-          : priceCostExcel.invalid
-            ? "Precio costo invalido"
-            : null;
+      : !indexableIdentity
+        ? "No hay un identificador exacto utilizable"
+        : barcodeConflict
+          ? "El barcode coincide con identidades diferentes"
+          : cost.issue
+            ? cost.issue
+            : cost.value === null || cost.value <= 0
+              ? "El costo obligatorio debe ser mayor a cero"
+              : null;
     const name = mapping.nameColumns.map((column) => textFromColumn(raw, column)).filter(Boolean).join(" ").trim();
     return {
       rowNumber,
@@ -255,27 +259,33 @@ function buildPreview(rows: Record<string, unknown>[], mapping: ImportMapping) {
       size: textFromColumn(raw, mapping.sizeColumn) || null,
       impuls_product_id: textFromColumn(raw, mapping.impulsProductIdColumn) || null,
       ...cklassFields,
-      price_cost_excel: priceCostExcel.value,
-      price_cost_discount_pct: priceCostDiscountPct,
-      price_cost: priceCost,
-      price_clienta_markup_pct: priceClientaMarkupPct,
-      price_clienta: priceClienta,
+      price_cost_excel: cost.sourceValue,
+      price_cost_discount_pct: mapping.costRule.mode === "formula" && mapping.costRule.percentOperation === "discount" && mapping.costRule.percentSource === "fixed" ? mapping.costRule.percentValue : null,
+      price_cost: cost.value,
+      price_clienta_markup_pct: mapping.clientaRule.mode === "formula" && mapping.clientaRule.percentOperation === "markup" && mapping.clientaRule.percentSource === "fixed" ? mapping.clientaRule.percentValue : null,
+      price_clienta: clienta.value,
+      primary_barcode: primaryBarcode,
+      supplier_sku: supplierSku,
+      identifiers,
+      prices: { cost: cost.value ?? 0, clienta: clienta.value },
       original_row: originalRow(raw),
       valid: !issue,
       issue,
+      warnings,
     };
   });
 
-  const validRows = normalized.filter((row) => row.valid);
+  const validCount = normalized.filter((row) => row.valid).length;
   return {
     rows: normalized,
     sample: normalized.slice(0, 20),
-    validRows,
     total: normalized.length,
-    valid: validRows.length,
-    missingSku: normalized.filter((row) => row.issue === "SKU vacio").length,
-    duplicateSku: normalized.filter((row) => row.issue === "SKU duplicado").length,
-    invalidValues: normalized.filter((row) => row.issue?.includes("invalido")).length,
+    valid: validCount,
+    missingSku: normalized.filter((row) => row.issue === "No hay un identificador exacto utilizable").length,
+    duplicateSku: normalized.filter((row) => row.warnings.some((warning) => warning.startsWith("Identidad repetida"))).length,
+    invalidValues: normalized.filter((row) => !row.valid).length,
+    missingCost: normalized.filter((row) => row.issue?.startsWith("Costo:") || row.issue === "El costo obligatorio debe ser mayor a cero").length,
+    identifierConflicts: normalized.filter((row) => row.issue === "El barcode coincide con identidades diferentes").length,
   };
 }
 

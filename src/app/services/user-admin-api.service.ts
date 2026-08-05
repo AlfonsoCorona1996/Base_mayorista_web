@@ -153,6 +153,18 @@ export class UserAdminApiService {
   private readonly http = inject(HttpClient);
   private readonly authStateReadyPromise = FIREBASE_AUTH.authStateReady().catch(() => undefined);
 
+  /** AuthService.getAccessStatus() y UsersService.ensureFromAuth() piden esto
+   * por separado en cada arranque de sesión; sin este caché compartido se
+   * duplica la llamada de red en cada login/pestaña nueva. */
+  private static readonly SESSION_BOOTSTRAP_TTL_MS = 60_000;
+  private sessionBootstrapCache: { value: SessionBootstrapUser; at: number } | null = null;
+  private sessionBootstrapPromise: Promise<SessionBootstrapUser> | null = null;
+
+  invalidateSessionBootstrap(): void {
+    this.sessionBootstrapCache = null;
+    this.sessionBootstrapPromise = null;
+  }
+
   // ── Métodos HTTP genéricos (usan el interceptor de auth automáticamente) ──
   get<T>(path: string) {
     return this.http.get<T>(`${this.baseUrl}${path}`);
@@ -297,6 +309,20 @@ export class UserAdminApiService {
   }
 
   async getSessionBootstrap(): Promise<SessionBootstrapUser> {
+    const cached = this.sessionBootstrapCache;
+    if (cached && Date.now() - cached.at < UserAdminApiService.SESSION_BOOTSTRAP_TTL_MS) {
+      return cached.value;
+    }
+    if (this.sessionBootstrapPromise) return this.sessionBootstrapPromise;
+    this.sessionBootstrapPromise = this.fetchSessionBootstrap();
+    try {
+      return await this.sessionBootstrapPromise;
+    } finally {
+      this.sessionBootstrapPromise = null;
+    }
+  }
+
+  private async fetchSessionBootstrap(): Promise<SessionBootstrapUser> {
     const result = await this.request<{
       user: {
         uid: string;
@@ -340,6 +366,7 @@ export class UserAdminApiService {
       });
     }
 
+    this.sessionBootstrapCache = { value: bootstrap, at: Date.now() };
     return bootstrap;
   }
 
