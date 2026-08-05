@@ -33,7 +33,7 @@ import { BusinessScopeService } from "../../core/business-scope.service";
 import { BusinessId, normalizeBusinessId } from "../../core/rbac.constants";
 import { BarcodeProductLookupService, BarcodeProductMatch } from "../../core/barcode-product-lookup.service";
 import { PhysicalBarcodeMode, PhysicalBarcodeScannerService } from "../../core/physical-barcode-scanner.service";
-import { UserAdminApiService } from "../../services/user-admin-api.service";
+import { ApiError, UserAdminApiService } from "../../services/user-admin-api.service";
 import { FIRESTORE, STORAGE } from "../../core/firebase.providers";
 import { ActivityLogComponent } from "../../shared/components/activity-log/activity-log.component";
 import { BarcodeScannerComponent } from "../../shared/barcode-scanner/barcode-scanner.component";
@@ -6541,19 +6541,15 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         }
         // "sent" or unknown: seguimos esperando callback real.
       } catch (error: unknown) {
-        const http = error instanceof HttpErrorResponse ? error : null;
-        const notFoundPending =
-          http?.status === 404 &&
-          http?.error &&
-          typeof http.error === "object" &&
-          (http.error as Record<string, unknown>)["found"] === false;
+        const http = this.httpErrorInfo(error);
+        const notFoundPending = http.status === 404 && http.body?.["found"] === false;
         if (!notFoundPending) {
           this.setWaProgressStep("free", "failed", "No se pudo validar el estado del envio.");
           this.setWaProgressRunState("error");
           this.logWaSendSupport({
             customerId,
             orderId,
-            status: http?.status ?? null,
+            status: http.status,
             reason: "status_check_error",
           });
           return;
@@ -6708,16 +6704,27 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     return null;
   }
 
+  /** UserAdminApiService envuelve los errores HTTP en ApiError (status/body ya extraídos
+   * del JSON del backend); esto los normaliza junto con el HttpErrorResponse crudo, por
+   * si el error viene de una llamada que no pasa por ese servicio. */
+  private httpErrorInfo(error: unknown): { status: number | null; body: Record<string, unknown> | null } {
+    if (error instanceof ApiError) {
+      return { status: error.status, body: error.body && typeof error.body === "object" ? (error.body as Record<string, unknown>) : null };
+    }
+    if (error instanceof HttpErrorResponse) {
+      return { status: error.status, body: error.error && typeof error.error === "object" ? (error.error as Record<string, unknown>) : null };
+    }
+    return { status: null, body: null };
+  }
+
   private async mapWaSendError(
     error: unknown,
     customerId: string,
     orderId: string,
   ): Promise<{ message: string; isNetwork: boolean }> {
-    const http = error instanceof HttpErrorResponse ? error : null;
-    const status = http?.status ?? null;
-    const payload =
-      (http?.error && typeof http.error === "object" ? (http.error as Record<string, unknown>) : null) ||
-      ((error as any)?.error && typeof (error as any).error === "object" ? ((error as any).error as Record<string, unknown>) : null);
+    const http = this.httpErrorInfo(error);
+    const status = http.status;
+    const payload = http.body;
     const reason =
       (typeof payload?.["reason"] === "string" ? payload["reason"] : null) ||
       (typeof payload?.["code"] === "string" ? payload["code"] : null) ||

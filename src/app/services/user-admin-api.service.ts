@@ -1,6 +1,6 @@
 import { Injectable, inject } from "@angular/core";
 import { HttpClient, HttpErrorResponse } from "@angular/common/http";
-import { lastValueFrom } from "rxjs";
+import { catchError, lastValueFrom, throwError } from "rxjs";
 import { FIREBASE_AUTH } from "../core/firebase.providers";
 import {
   BusinessMembershipsMap,
@@ -10,6 +10,14 @@ import {
   normalizeRoleId,
 } from "../core/rbac.constants";
 import { environment } from "../../environments/environment";
+
+/** Error con el mensaje/código reales que manda el backend (no el texto genérico de Angular). */
+export class ApiError extends Error {
+  constructor(message: string, readonly code: string | null, readonly status: number, readonly body: unknown = null) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
 
 export type AdminPermissionKey =
   | "dashboard"
@@ -166,17 +174,34 @@ export class UserAdminApiService {
   }
 
   // ── Métodos HTTP genéricos (usan el interceptor de auth automáticamente) ──
+  // El backend siempre responde errores como { ok:false, error:"CODE", message:"..." };
+  // sin este catchError, los callers solo veían el texto genérico de Angular
+  // ("Http failure response... 409") y perdían el mensaje/código real del servidor.
   get<T>(path: string) {
-    return this.http.get<T>(`${this.baseUrl}${path}`);
+    return this.http.get<T>(`${this.baseUrl}${path}`).pipe(catchError((error) => this.unwrapApiError(error)));
   }
   post<T>(path: string, body: unknown) {
-    return this.http.post<T>(`${this.baseUrl}${path}`, body);
+    return this.http.post<T>(`${this.baseUrl}${path}`, body).pipe(catchError((error) => this.unwrapApiError(error)));
   }
   put<T>(path: string, body: unknown) {
-    return this.http.put<T>(`${this.baseUrl}${path}`, body);
+    return this.http.put<T>(`${this.baseUrl}${path}`, body).pipe(catchError((error) => this.unwrapApiError(error)));
   }
   delete<T>(path: string) {
-    return this.http.delete<T>(`${this.baseUrl}${path}`);
+    return this.http.delete<T>(`${this.baseUrl}${path}`).pipe(catchError((error) => this.unwrapApiError(error)));
+  }
+
+  private unwrapApiError(error: unknown) {
+    if (error instanceof HttpErrorResponse) {
+      const body = error.error as { message?: unknown; error?: unknown } | null;
+      const backendMessage = body && typeof body.message === "string" && body.message.trim() ? body.message : null;
+      const backendCode = body && typeof body.error === "string" && body.error.trim() ? body.error : null;
+      const message = backendMessage || (error.status === 0
+        ? "No se pudo conectar con el servidor. Revisa tu conexión."
+        : `No se pudo completar la solicitud (${error.status}).`);
+      const wrapped = new ApiError(message, backendCode, error.status, error.error);
+      return throwError(() => wrapped);
+    }
+    return throwError(() => error);
   }
 
   async createManagedUser(input: CreateManagedUserInput): Promise<CreateManagedUserResult> {

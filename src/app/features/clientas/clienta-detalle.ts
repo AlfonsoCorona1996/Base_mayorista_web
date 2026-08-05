@@ -8,7 +8,7 @@ import { CustomersService, Customer } from "../../core/customers.service";
 import { RoutesService } from "../../core/routes.service";
 import { Order, OrderStatus, OrdersService } from "../../core/orders.service";
 import { calculateItemFinancials, calculateOrderFinancials } from "../../core/order-financials";
-import { UserAdminApiService } from "../../services/user-admin-api.service";
+import { ApiError, UserAdminApiService } from "../../services/user-admin-api.service";
 import { CustomerFollowup, CustomerFollowupType, CustomerFollowupsService } from "../../core/customer-followups.service";
 
 // Tipos de notificación (espejo del backend)
@@ -387,9 +387,12 @@ export default class ClientaDetallePage implements OnInit {
   }
 
   private trackErrorMessage(error: unknown, fallback: string): string {
-    if (!(error instanceof HttpErrorResponse) || !error.error || typeof error.error !== "object") return fallback;
-    const payload = error.error as { message?: unknown };
-    return typeof payload.message === "string" && payload.message.trim() ? payload.message : fallback;
+    if (error instanceof ApiError) return error.message || fallback;
+    if (error instanceof HttpErrorResponse && error.error && typeof error.error === "object") {
+      const payload = error.error as { message?: unknown };
+      if (typeof payload.message === "string" && payload.message.trim()) return payload.message;
+    }
+    return fallback;
   }
 
   // ── Notificaciones WA ────────────────────────────────────────────────

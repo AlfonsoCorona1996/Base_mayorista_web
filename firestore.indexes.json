@@ -31,6 +31,15 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "business_id", "order": "ASCENDING" },
+        { "fieldPath": "supplier_id", "order": "ASCENDING" },
+        { "fieldPath": "product_id", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "catalog_products",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "business_id", "order": "ASCENDING" },
         { "fieldPath": "group_id", "order": "ASCENDING" },
         { "fieldPath": "active", "order": "ASCENDING" }
       ]
