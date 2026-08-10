@@ -26,8 +26,13 @@ import { BusinessId, normalizeBusinessId } from "./rbac.constants";
 import { calculateOrderFinancials, toPersistedOrderTotals } from "./order-financials";
 import { InventoryService } from "./inventory.service";
 import { lastValueFrom } from "rxjs";
-import { UserAdminApiService } from "../services/user-admin-api.service";
-import { buildOrderItemsUpdateRequest, mergeAuthoritativeOrderItems } from "./order-items-api";
+import { ApiError, UserAdminApiService } from "../services/user-admin-api.service";
+import {
+  buildOrderItemMutationRequest,
+  buildOrderItemPatchRequest,
+  buildOrderItemsUpdateRequest,
+  mergeAuthoritativeOrderItems,
+} from "./order-items-api";
 import {
   isSupplierReceiptComplete,
   supplierOperationReservedForOrderId,
@@ -168,6 +173,16 @@ export interface OrderTotals {
   cost_amount?: number;
   gross_profit?: number;
   overpayment_amount?: number;
+}
+
+interface OrderItemsMutationResponse {
+  ok: true;
+  order: {
+    order_id: string;
+    items: OrderItem[];
+    totals: OrderTotals;
+    updated_at: string;
+  };
 }
 
 export interface Order {
@@ -1507,15 +1522,24 @@ export class OrdersService {
   async updateItemState(orderId: string, itemId: string, state: OrderItemState) {
     const order = this.getById(orderId);
     if (!order) throw new Error("Pedido no encontrado.");
-    const items = order.items.map((item) => (item.item_id === itemId ? { ...item, state } : item));
-    await this.persistItemsAuthoritatively(orderId, items);
+    if (!order.items.some((item) => item.item_id === itemId)) throw new Error("Articulo no encontrado.");
+    await this.persistItemPatchAuthoritatively(orderId, itemId, { state });
   }
 
   async addItem(orderId: string, item: OrderItem) {
     const nextItem = { ...item, item_id: item.item_id || `item-${Date.now()}` };
     const order = this.getById(orderId);
     if (!order) throw new Error("Pedido no encontrado.");
-    await this.persistItemsAuthoritatively(orderId, [...order.items, nextItem]);
+    try {
+      const result = await lastValueFrom(this.adminApi.post<OrderItemsMutationResponse>(
+        `/api/admin/orders/${encodeURIComponent(orderId)}/items`,
+        buildOrderItemMutationRequest(nextItem),
+      ));
+      this.mergeAuthoritativeItems(orderId, result.order);
+    } catch (error) {
+      if (!this.isIncrementalItemsEndpointUnavailable(error)) throw error;
+      await this.persistItemsAuthoritatively(orderId, [...order.items, nextItem]);
+    }
   }
 
   async updateItems(orderId: string, items: OrderItem[]) {
@@ -1525,10 +1549,8 @@ export class OrdersService {
   async updateItemConfirmationState(orderId: string, itemId: string, confirmation_state: OrderItem["confirmation_state"]) {
     const order = this.getById(orderId);
     if (!order) throw new Error("Pedido no encontrado.");
-    const items = order.items.map((item) =>
-      item.item_id === itemId ? { ...item, confirmation_state } : item
-    );
-    await this.persistItemsAuthoritatively(orderId, items);
+    if (!order.items.some((item) => item.item_id === itemId)) throw new Error("Articulo no encontrado.");
+    await this.persistItemPatchAuthoritatively(orderId, itemId, { confirmation_state });
   }
 
   async updateItemConfirmation(
@@ -1538,32 +1560,47 @@ export class OrdersService {
   ) {
     const order = this.getById(orderId);
     if (!order) throw new Error("Pedido no encontrado.");
-    const items = order.items.map((item) =>
-      item.item_id === itemId
-        ? {
-            ...item,
-            confirmation_state: payload.confirmation_state,
-            confirmed_qty: payload.confirmed_qty ?? null,
-          }
-        : item
-    );
-    await this.persistItemsAuthoritatively(orderId, items);
+    if (!order.items.some((item) => item.item_id === itemId)) throw new Error("Articulo no encontrado.");
+    await this.persistItemPatchAuthoritatively(orderId, itemId, {
+      confirmation_state: payload.confirmation_state,
+      confirmed_qty: payload.confirmed_qty ?? null,
+    });
   }
 
   private async persistItemsAuthoritatively(orderId: string, items: OrderItem[]): Promise<void> {
-    const result = await lastValueFrom(this.adminApi.put<{
-      ok: true;
-      order: {
-        order_id: string;
-        items: OrderItem[];
-        totals: OrderTotals;
-        updated_at: string;
-      };
-    }>(`/api/admin/orders/${encodeURIComponent(orderId)}/items`, {
+    const result = await lastValueFrom(this.adminApi.put<OrderItemsMutationResponse>(`/api/admin/orders/${encodeURIComponent(orderId)}/items`, {
       ...buildOrderItemsUpdateRequest(items),
     }));
-    const authoritative = result.order;
+    this.mergeAuthoritativeItems(orderId, result.order);
+  }
+
+  private async persistItemPatchAuthoritatively(
+    orderId: string,
+    itemId: string,
+    patch: Partial<OrderItem>,
+  ): Promise<void> {
+    try {
+      const result = await lastValueFrom(this.adminApi.patch<OrderItemsMutationResponse>(
+        `/api/admin/orders/${encodeURIComponent(orderId)}/items/${encodeURIComponent(itemId)}`,
+        buildOrderItemPatchRequest(patch),
+      ));
+      this.mergeAuthoritativeItems(orderId, result.order);
+    } catch (error) {
+      if (!this.isIncrementalItemsEndpointUnavailable(error)) throw error;
+      const order = this.getById(orderId);
+      if (!order) throw new Error("Pedido no encontrado.");
+      const items = order.items.map((item) => item.item_id === itemId ? { ...item, ...patch, item_id: itemId } : item);
+      await this.persistItemsAuthoritatively(orderId, items);
+    }
+  }
+
+  private mergeAuthoritativeItems(orderId: string, authoritative: OrderItemsMutationResponse["order"]): void {
     this.rows.update((current) => mergeAuthoritativeOrderItems(current, orderId, authoritative));
+  }
+
+  private isIncrementalItemsEndpointUnavailable(error: unknown): boolean {
+    return error instanceof ApiError
+      && (error.status === 405 || (error.status === 404 && error.code === null));
   }
 
   async createSupplierOrders(

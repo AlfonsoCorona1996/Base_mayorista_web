@@ -10,6 +10,7 @@ import { AuthzService } from "../../core/authz.service";
 import { BusinessScopeService } from "../../core/business-scope.service";
 import { BusinessScope } from "../../core/rbac.constants";
 import { CatalogImportJobsService } from "../../core/catalog-import-jobs.service";
+import { AppVersionService } from "../../core/app-version.service";
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -30,6 +31,7 @@ export default class MainLayoutPage {
   private authz = inject(AuthzService);
   businessScope = inject(BusinessScopeService);
   importJobs = inject(CatalogImportJobsService);
+  versionInfo = inject(AppVersionService);
   private impersonation = inject(ImpersonationService);
   private destroyRef = inject(DestroyRef);
 
@@ -38,6 +40,7 @@ export default class MainLayoutPage {
 
   ngOnInit() {
     this.syncMenuForViewport();
+    this.versionInfo.load();
     this.access.refreshProfile().finally(() => this.importJobs.watch()).catch(() => null);
     this.router.events
       .pipe(

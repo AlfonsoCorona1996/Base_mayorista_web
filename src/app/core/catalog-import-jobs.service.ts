@@ -1,4 +1,4 @@
-import { Injectable, computed, inject, signal } from "@angular/core";
+import { DestroyRef, Injectable, computed, inject, signal } from "@angular/core";
 import { lastValueFrom } from "rxjs";
 import {
   Unsubscribe,
@@ -15,7 +15,7 @@ import { BusinessScopeService } from "./business-scope.service";
 import { UserAdminApiService } from "../services/user-admin-api.service";
 import { CatalogProductImportRow } from "./catalog-products.service";
 
-export type CatalogImportJobStatus = "uploaded" | "parsing" | "needs_mapping" | "validated" | "queued" | "committing" | "running" | "completed" | "failed";
+export type CatalogImportJobStatus = "uploaded" | "queued_validation" | "parsing" | "needs_mapping" | "validated" | "queued" | "committing" | "running" | "completed" | "failed";
 export type CatalogImportMode = "full" | "partial";
 export type CatalogImportRollbackStatus = "none" | "running" | "completed" | "failed";
 export type CatalogImportRowStatus = "created" | "updated" | "unchanged" | "rejected" | "failed" | "skipped";
@@ -152,15 +152,97 @@ export class CatalogImportJobsService {
   private colRef = collection(FIRESTORE, "catalog_import_jobs");
   private businessScope = inject(BusinessScopeService);
   private api = inject(UserAdminApiService);
+  private destroyRef = inject(DestroyRef);
   private unsubscribe: Unsubscribe | null = null;
   private watchKey = "";
 
   readonly jobs = signal<CatalogImportJob[]>([]);
+  /** "needs_mapping"/"failed"/"completed" no cuentan como activos: no hay nada
+   * corriendo ni un porcentaje que mostrar, requieren accion del usuario o ya
+   * terminaron. Todo lo demas (incluida "validated", en espera de confirmar
+   * el commit) sigue siendo parte de la cola visible. */
   readonly activeJobs = computed(() =>
-    this.jobs().filter((job) => !["completed", "failed", "needs_mapping", "validated"].includes(job.status)),
+    this.jobs().filter((job) => !["completed", "failed", "needs_mapping"].includes(job.status)),
   );
   readonly latestActiveJob = computed(() => this.activeJobs()[0] || null);
   readonly completedJobs = computed(() => this.jobs().filter((job) => job.status === "completed"));
+
+  /** Job que el usuario cerro manualmente en el toast global; vive aqui (no en
+   * el componente del layout) para sobrevivir si ese componente se recrea.
+   * Solo oculta el toast para ESE job puntual: en cuanto cambia a otro job
+   * activo (una importacion nueva), el toast vuelve a aparecer. */
+  private readonly dismissedJobIdSig = signal<string | null>(null);
+  readonly visibleToastJob = computed(() => {
+    const job = this.latestActiveJob();
+    if (!job || job.job_id === this.dismissedJobIdSig()) return null;
+    return job;
+  });
+
+  dismissToast(jobId: string): void {
+    this.dismissedJobIdSig.set(jobId);
+  }
+
+  /** Cuánto puede pasar sin que el backend escriba ningún avance antes de
+   * considerar que un job "parece atorado". El backend ya deja un rastro cada
+   * pocos cientos de filas/documentos en cada fase (validar, aplicar,
+   * activar el catálogo nuevo) — si no hay ni un solo cambio en varios
+   * minutos, algo se detuvo del lado del servidor (p. ej. se cayó) y hoy no
+   * hay ninguna otra señal que lo avise: la pantalla solo refleja el último
+   * dato que Firestore recibió, nunca "el servidor sigue vivo". */
+  private static readonly STALE_MS = 3 * 60_000;
+  private static readonly PROCESSING_STATUSES: CatalogImportJobStatus[] = ["queued_validation", "parsing", "queued", "committing", "running"];
+  private readonly nowSig = signal(Date.now());
+
+  constructor() {
+    const staleCheckTimer = setInterval(() => this.nowSig.set(Date.now()), 20_000);
+    this.destroyRef.onDestroy(() => clearInterval(staleCheckTimer));
+  }
+
+  /** true si el job debería estar avanzando (fase activa) pero no hay ningún
+   * cambio hace más de STALE_MS — la señal de "puede estar atorado" que le
+   * faltaba a la UI. */
+  isStale(job: CatalogImportJob): boolean {
+    if (!CatalogImportJobsService.PROCESSING_STATUSES.includes(job.status)) return false;
+    const lastChangeMs = this.toMillis(job.updated_at || job.created_at);
+    if (!lastChangeMs) return false;
+    return this.nowSig() - lastChangeMs > CatalogImportJobsService.STALE_MS;
+  }
+
+  /** Normaliza un job crudo que vino embebido en un error (p. ej. `existing_job`
+   * de un 409 DUPLICATE_ACTIVE_IMPORT), sin pasar por Firestore. */
+  jobFromRaw(data: Record<string, unknown> | null | undefined): CatalogImportJob | null {
+    if (!data || typeof data !== "object") return null;
+    return this.normalizeJob(String((data as { job_id?: unknown })["job_id"] || ""), data);
+  }
+
+  /** Etiqueta compartida entre el toast global (main-layout) y el historial
+   * del wizard de importacion, para no tener dos textos distintos por estado. */
+  /** Texto simple, sin vocabulario técnico — quien usa la app no sabe qué es
+   * un "job" ni un "lease"; solo necesita saber qué está pasando ahora mismo
+   * y si tiene que hacer algo. Único lugar que define estos textos, usado
+   * tanto por el toast global como por el card de cada importación. */
+  jobStatusLabel(job: CatalogImportJob): string {
+    if (job.rollback_status === "completed") return "Revertida";
+    if (job.rollback_status === "running") return "Revirtiendo";
+    if (job.status === "completed") return "Completada";
+    if (job.status === "needs_mapping") return "No encontramos filas válidas — revisa el archivo";
+    if (this.isStale(job)) return "Parece atorado — sin avance hace varios minutos";
+    if (job.status === "validated") return "Listo para aplicar";
+    if (job.status === "queued_validation") return "En espera de revisión";
+    if (job.status === "parsing") return "Revisando tu archivo...";
+    if (job.status === "queued") return "En espera para aplicarse";
+    if (job.status === "committing" || job.status === "running") return "Aplicando los cambios...";
+    if (job.status === "failed") return "No se pudo completar";
+    return "En proceso";
+  }
+
+  jobStatusClass(job: CatalogImportJob): string {
+    if (job.rollback_status === "completed") return "muted";
+    if (job.status === "completed") return "ok";
+    if (this.isStale(job)) return "danger";
+    if (job.status === "failed" || job.rollback_status === "failed") return "danger";
+    return "info";
+  }
 
   watch(): void {
     const allowed = this.businessScope.availableBusinessIds();
@@ -241,6 +323,13 @@ export class CatalogImportJobsService {
   async commit(jobId: string): Promise<CatalogImportJob> {
     const result = await lastValueFrom(
       this.api.post<CatalogImportCommitResult>(`/api/admin/catalog-imports/${encodeURIComponent(jobId)}/commit`, {}),
+    );
+    return this.normalizeJob(result.job?.job_id, result.job as unknown as Record<string, unknown>);
+  }
+
+  async cancel(jobId: string): Promise<CatalogImportJob> {
+    const result = await lastValueFrom(
+      this.api.post<CatalogImportCommitResult>(`/api/admin/catalog-imports/${encodeURIComponent(jobId)}/cancel`, {}),
     );
     return this.normalizeJob(result.job?.job_id, result.job as unknown as Record<string, unknown>);
   }
@@ -338,7 +427,7 @@ export class CatalogImportJobsService {
       job_id: String(data["job_id"] || fallbackId || ""),
       business_id: normalizeBusinessId(data["business_id"]),
       file_name: String(data["file_name"] || "catalogo.xlsx"),
-      status: ["uploaded", "parsing", "needs_mapping", "validated", "queued", "committing", "running", "completed", "failed"].includes(status) ? status : "queued",
+      status: ["uploaded", "queued_validation", "parsing", "needs_mapping", "validated", "queued", "committing", "running", "completed", "failed"].includes(status) ? status : "queued",
       import_mode: data["import_mode"] === "partial" ? "partial" : "full",
       source_sheet_name: this.nullableText(data["source_sheet_name"]),
       header_row_index: data["header_row_index"] === null || data["header_row_index"] === undefined ? null : this.safeNumber(data["header_row_index"]),

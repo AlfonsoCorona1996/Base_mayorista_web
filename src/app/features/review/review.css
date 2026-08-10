@@ -837,6 +837,27 @@ textarea.input {
   z-index: 25;
 }
 
+.action-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--primary-line);
+  border-bottom: 0;
+  border-radius: 12px 12px 0 0;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 0.8rem;
+  font-weight: 650;
+  text-align: center;
+}
+
+.action-status + .actions-bar {
+  border-radius: 0 0 12px 12px;
+}
+
 .actions-bar {
   display: grid;
   gap: 8px;

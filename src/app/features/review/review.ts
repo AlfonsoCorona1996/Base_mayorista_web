@@ -68,6 +68,10 @@ export default class ReviewPage {
 
   loading = signal(false);
   error = signal<string | null>(null);
+  saving = signal(false);
+  publishing = signal(false);
+  rejecting = signal(false);
+  finalActionBusy = computed(() => this.saving() || this.publishing() || this.rejecting());
 
   doc = signal<NormalizedListingDocV3 | null>(null);
   draft = signal<NormalizedListingDocV3 | null>(null);
@@ -1858,69 +1862,77 @@ export default class ReviewPage {
   // ACCIONES FINALES
   // ==========================================================================
 
+  private prepareDraftForPersistence(): NormalizedListingDocV3 | null {
+    const d = this.draft();
+    if (!d) return null;
+    if (!this.isRequiredSchema(d)) {
+      throw new Error(`Esquema no soportado. Se requiere ${this.requiredSchemaVersion}.`);
+    }
+
+    const cover = d.cover_images?.[0] ?? d.preview_image_url ?? null;
+    d.preview_image_url = cover;
+    d.cover_images = cover ? [cover] : [];
+
+    if (d.listing.items.length === 0) {
+      this.showInfoPopup("Agrega al menos una variante antes de guardar.", "Validacion", "warning");
+      return null;
+    }
+
+    d.listing.items.forEach((item) => this.recalculateVariantPrices(item));
+    const invalidPrices = d.listing.items.some(
+      (item) =>
+        typeof item.prices.precio_costo === "number" &&
+        typeof item.prices.precio_clienta === "number" &&
+        item.prices.precio_clienta < item.prices.precio_costo
+    );
+    if (invalidPrices) {
+      this.showInfoPopup("Regla de precios invalida: precio final x 0.75 no puede ser menor a precio costo.", "Validacion", "warning");
+      return null;
+    }
+
+    this.normalizeColorReferencesForSave(d);
+    this.ensureVariantSkus(d);
+    this.draft.set({ ...d });
+    return d;
+  }
+
+  private listingPatch(d: NormalizedListingDocV3) {
+    return {
+      listing: d.listing,
+      supplier_id: d.supplier_id ?? null,
+      preview_image_url: d.preview_image_url,
+      cover_images: d.cover_images,
+      product_colors: d.product_colors,
+    };
+  }
+
   async save() {
+    if (this.finalActionBusy()) return;
+    this.saving.set(true);
+    this.error.set(null);
     try {
-      const d = this.draft();
+      const d = this.prepareDraftForPersistence();
       if (!d) return;
-      if (!this.isRequiredSchema(d)) {
-        throw new Error(`Esquema no soportado. Se requiere ${this.requiredSchemaVersion}.`);
-      }
-
-      const cover = d.cover_images?.[0] ?? d.preview_image_url ?? null;
-      d.preview_image_url = cover;
-      d.cover_images = cover ? [cover] : [];
-
-      // Validar que tenga al menos una variante
-      if (d.listing.items.length === 0) {
-        this.showInfoPopup("Agrega al menos una variante antes de guardar.", "Validacion", "warning");
-        return;
-      }
-
-      d.listing.items.forEach((item) => {
-        this.recalculateVariantPrices(item);
-      });
-
-      const invalidPrices = d.listing.items.some(
-        (item) =>
-          typeof item.prices.precio_costo === "number" &&
-          typeof item.prices.precio_clienta === "number" &&
-          item.prices.precio_clienta < item.prices.precio_costo
-      );
-      if (invalidPrices) {
-        this.showInfoPopup("Regla de precios invalida: precio final x 0.75 no puede ser menor a precio costo.", "Validacion", "warning");
-        return;
-      }
-
-      // v3: mantener integridad entre product_colors y items.color_stock
-      this.normalizeColorReferencesForSave(d);
-      // SKU por variante/talla (solo si está vacío)
-      this.ensureVariantSkus(d);
-
-      await this.svc.updateListing(this.id, {
-        listing: d.listing,
-        supplier_id: d.supplier_id ?? null,
-        preview_image_url: d.preview_image_url,
-        cover_images: d.cover_images,
-        product_colors: d.product_colors,
-      });
-
-      // Actualizar review con excluded_image_urls
-      await this.svc.updateReview(this.id, {
+      await this.svc.saveReviewDecision(this.id, this.listingPatch(d), {
         excluded_image_urls: this.excludedImages(),
+        edited_by: this.auth.uid(),
       });
-
-      await this.load();
+      this.doc.set(structuredClone(d));
       this.showInfoPopup("Guardado correctamente.", "Exito", "success");
     } catch (e: any) {
       this.showInfoPopup("No se pudo guardar: " + (e?.message || String(e)), "Error al guardar", "error");
+    } finally {
+      this.saving.set(false);
     }
   }
 
   async validate() {
+    if (this.finalActionBusy()) return;
     try {
       const uid = this.auth.uid();
       if (!uid) {
         this.error.set("Usuario no autenticado");
+        this.showInfoPopup("Tu sesion ya no es valida. Vuelve a iniciar sesion.", "Sesion requerida", "error");
         return;
       }
 
@@ -1948,8 +1960,13 @@ export default class ReviewPage {
         return;
       }
 
+      this.publishing.set(true);
+      this.error.set(null);
+      const prepared = this.prepareDraftForPersistence();
+      if (!prepared) return;
+
       // Validar que cada variante tenga precio de costo y respete margen mínimo
-      const invalidVariants = d.listing.items.filter(
+      const invalidVariants = prepared.listing.items.filter(
         (item) =>
           !item.prices ||
           typeof item.prices.precio_costo !== "number" ||
@@ -1963,19 +1980,33 @@ export default class ReviewPage {
         return;
       }
 
-      // Guardar antes de validar
-      await this.save();
-
-      // Validar
-      await this.svc.validate(this.id, uid);
+      await this.svc.saveReviewDecision(
+        this.id,
+        this.listingPatch(prepared),
+        {
+          excluded_image_urls: this.excludedImages(),
+          edited_by: uid,
+        },
+        {
+          businessId: prepared.business_id,
+          validatedBy: uid,
+        },
+      );
+      this.doc.set(structuredClone(prepared));
       await this.router.navigateByUrl("/main/validacion");
     } catch (e: any) {
-      this.error.set(e?.message || String(e));
+      const message = e?.message || String(e);
+      this.error.set(message);
+      this.showInfoPopup("No se pudo publicar: " + message, "Error al publicar", "error");
+    } finally {
+      this.publishing.set(false);
     }
   }
 
   async reject() {
+    if (this.finalActionBusy()) return;
     if (!confirm("¿Rechazar este listing? (No se borrará, quedará marcado como rechazado)")) return;
+    this.rejecting.set(true);
     try {
       // ✅ FIX: Obtener UID real y usar reject() en lugar de discard()
       const uid = this.auth.uid();
@@ -1988,6 +2019,8 @@ export default class ReviewPage {
       await this.router.navigateByUrl("/main/validacion");
     } catch (e: any) {
       this.error.set(e?.message || String(e));
+    } finally {
+      this.rejecting.set(false);
     }
   }
 

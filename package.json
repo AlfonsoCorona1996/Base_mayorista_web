@@ -1,12 +1,13 @@
 {
   "name": "admin-web",
-  "version": "0.0.0",
+  "version": "2.1.0",
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
-    "build": "ng build",
+    "build": "node scripts/build.mjs",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
+    "version:check": "node scripts/check-release-version.mjs",
     "firebase:migrate-finance:dry": "tsx scripts/migrate-finance-bootstrap.ts",
     "firebase:migrate-finance:apply": "tsx scripts/migrate-finance-bootstrap.ts --apply",
     "firebase:migrate-users-canonical:dry": "tsx scripts/migrate-users-canonical-fields.ts",

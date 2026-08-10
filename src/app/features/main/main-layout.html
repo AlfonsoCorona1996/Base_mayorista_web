@@ -198,6 +198,33 @@
         <span class="menu-item-icon material-symbols-rounded" aria-hidden="true">logout</span>
         <span>Cerrar sesion</span>
       </button>
+      <details class="version-info">
+        <summary>{{ versionInfo.summary() }}</summary>
+        <dl>
+          <div>
+            <dt>Frontend</dt>
+            <dd>
+              v{{ versionInfo.frontend().version }} · {{ versionInfo.shortCommit(versionInfo.frontend().commit) }}
+              @if (versionInfo.frontend().dirty) { <span class="version-dirty">local</span> }
+            </dd>
+          </div>
+          <div>
+            <dt>Backend</dt>
+            <dd>
+              @if (versionInfo.backend(); as backend) {
+                v{{ backend.version }} · {{ versionInfo.shortCommit(backend.commit) }}
+                @if (backend.dirty) { <span class="version-dirty">local</span> }
+              } @else if (versionInfo.backendState() === 'loading') {
+                Consultando...
+              } @else if (versionInfo.backendState() === 'unversioned') {
+                Desplegado sin metadatos
+              } @else {
+                No disponible
+              }
+            </dd>
+          </div>
+        </dl>
+      </details>
     </div>
   </aside>
 
@@ -260,17 +287,29 @@
   </div>
 </div>
 
-@if (importJobs.latestActiveJob(); as job) {
+@if (importJobs.visibleToastJob(); as job) {
 <aside class="import-progress-toast" role="status" aria-live="polite">
   <div class="import-progress-toast__head">
     <span class="material-symbols-rounded" aria-hidden="true">cloud_upload</span>
-    <strong>Importando Catálogo</strong>
+    <strong>{{ importJobs.jobStatusLabel(job) }}</strong>
     <span>{{ job.percent }}%</span>
+    <button
+      type="button"
+      class="import-progress-toast__close"
+      aria-label="Cerrar aviso de importación"
+      (click)="importJobs.dismissToast(job.job_id)"
+    >
+      <span class="material-symbols-rounded" aria-hidden="true">close</span>
+    </button>
   </div>
   <div class="import-progress-toast__bar" aria-hidden="true">
     <span [style.width.%]="job.percent"></span>
   </div>
-  <p>{{ job.processed_rows }} de {{ job.valid_rows }} filas · {{ job.file_name }}</p>
+  @if (job.status === 'queued_validation' || job.status === 'parsing') {
+    <p>{{ job.processed_rows }} de {{ job.total_rows }} filas revisadas · {{ job.file_name }}</p>
+  } @else {
+    <p>{{ job.processed_rows }} de {{ job.valid_rows }} filas · {{ job.file_name }}</p>
+  }
 </aside>
 }
 

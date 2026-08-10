@@ -9,6 +9,20 @@ export function buildOrderItemsUpdateRequest<T extends PriceOverrideMarker>(item
   };
 }
 
+export function buildOrderItemMutationRequest<T extends object>(item: T) {
+  return {
+    item,
+    below_cost_confirmation: (item as PriceOverrideMarker).price_override_below_cost === true,
+  };
+}
+
+export function buildOrderItemPatchRequest<T extends object>(patch: T) {
+  return {
+    patch,
+    below_cost_confirmation: (patch as PriceOverrideMarker).price_override_below_cost === true,
+  };
+}
+
 export function mergeAuthoritativeOrderItems<
   TOrder extends { order_id: string },
   TItem,

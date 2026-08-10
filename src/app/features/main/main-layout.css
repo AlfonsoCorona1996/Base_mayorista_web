@@ -375,6 +375,8 @@
 .sidebar-footer {
   margin-top: 8px;
   flex-shrink: 0;
+  display: grid;
+  gap: 8px;
 }
 
 .menu-footer-action {
@@ -383,6 +385,73 @@
   font-family: inherit;
   background: #f9fbff;
   border: 1px solid var(--ios-border);
+}
+
+.version-info {
+  min-width: 0;
+  color: #8fa8c8;
+  font-size: 0.72rem;
+}
+
+.version-info summary {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 8px;
+  border-radius: 9px;
+  cursor: pointer;
+  text-align: center;
+  list-style: none;
+  overflow-wrap: anywhere;
+}
+
+.version-info summary::-webkit-details-marker {
+  display: none;
+}
+
+.version-info summary:hover,
+.version-info summary:focus-visible {
+  color: #d5e6fa;
+  background: rgba(77, 163, 255, 0.12);
+  outline: none;
+}
+
+.version-info summary:focus-visible {
+  box-shadow: 0 0 0 2px rgba(140, 192, 255, 0.55);
+}
+
+.version-info dl {
+  margin: 4px 0 0;
+  padding: 8px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.35);
+  display: grid;
+  gap: 6px;
+}
+
+.version-info dl div {
+  min-width: 0;
+}
+
+.version-info dt {
+  color: #d5e6fa;
+  font-weight: 650;
+}
+
+.version-info dd {
+  margin: 1px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.version-dirty {
+  display: inline-flex;
+  margin-left: 3px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: rgba(245, 158, 11, 0.18);
+  color: #fcd34d;
 }
 
 .content-wrapper {
@@ -562,6 +631,28 @@
 
 .import-progress-toast__head strong {
   flex: 1;
+}
+
+.import-progress-toast__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #064e3b;
+  cursor: pointer;
+}
+
+.import-progress-toast__close:hover {
+  background: rgba(6, 78, 59, 0.1);
+}
+
+.import-progress-toast__close .material-symbols-rounded {
+  font-size: 16px;
 }
 
 .import-progress-toast__bar {

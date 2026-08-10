@@ -194,6 +194,51 @@ export class NormalizedListingsService {
     );
   }
 
+  /**
+   * Persiste la edicion humana y, opcionalmente, publica el listing en una
+   * sola escritura. Asi el estado "validated" nunca puede quedar separado
+   * de los datos que el usuario acaba de revisar.
+   */
+  async saveReviewDecision(
+    id: string,
+    patch: PartialNormalizedUpdate,
+    reviewPatch: ReviewPatch,
+    options: {
+      businessId?: BusinessId | null;
+      validatedBy?: string | null;
+    } = {},
+  ): Promise<void> {
+    const ref = doc(this.colRef, id);
+    const skuPatch = patch.listing
+      ? { variant_skus_normalized: this.variantSkuIndexFromListing(patch.listing) }
+      : {};
+    const update: Record<string, unknown> = {
+      ...patch,
+      ...skuPatch,
+      "review.edited_at": serverTimestamp(),
+      updated_at: serverTimestamp(),
+    };
+
+    if (reviewPatch.preview_image_url !== undefined) {
+      update["review.preview_image_url"] = reviewPatch.preview_image_url;
+    }
+    if (reviewPatch.excluded_image_urls !== undefined) {
+      update["review.excluded_image_urls"] = reviewPatch.excluded_image_urls;
+    }
+    if (reviewPatch.edited_by !== undefined) {
+      update["review.edited_by"] = reviewPatch.edited_by;
+    }
+
+    if (options.validatedBy) {
+      update["business_id"] = normalizeBusinessId(options.businessId || "bm");
+      update["workflow.status"] = "validated";
+      update["workflow.validated_by"] = options.validatedBy;
+      update["workflow.validated_at"] = serverTimestamp();
+    }
+
+    await updateDoc(ref, update);
+  }
+
   async validate(id: string, uid: string): Promise<void> {
     const ref = doc(this.colRef, id);
     const snap = await getDoc(ref);

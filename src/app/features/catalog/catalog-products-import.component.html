@@ -227,12 +227,19 @@
       <div class="panel import-history">
         <div class="panel-head">
           <div>
-            <h3>Historial de importaciones</h3>
-            <p>{{ scopedImportJobs().length }} registro(s) de {{ activeCatalogSupplier()?.label || "este proveedor" }}</p>
+            <h3>{{ showAllSuppliersInImports() ? "Cola de importación" : "Historial de importaciones" }}</h3>
+            <p>
+              {{ scopedImportJobs().length }} registro(s)
+              {{ showAllSuppliersInImports() ? "de todos los proveedores" : "de " + (activeCatalogSupplier()?.label || "este proveedor") }}
+            </p>
           </div>
+          <button type="button" class="btn btn-ghost" (click)="toggleAllSuppliersInImports()">
+            <span class="material-symbols-rounded" aria-hidden="true">{{ showAllSuppliersInImports() ? "storefront" : "apps" }}</span>
+            {{ showAllSuppliersInImports() ? "Solo este proveedor" : "Ver todos los proveedores" }}
+          </button>
         </div>
         @if (scopedImportJobs().length === 0) {
-          <p class="empty">Aún no hay importaciones registradas para este proveedor.</p>
+          <p class="empty">Aún no hay importaciones registradas{{ showAllSuppliersInImports() ? "" : " para este proveedor" }}.</p>
         } @else {
           <div class="job-list">
             @for (job of scopedImportJobs(); track job.job_id) {
@@ -240,29 +247,68 @@
                 <div class="job-card-main">
                   <span class="job-icon material-symbols-rounded" aria-hidden="true">upload_file</span>
                   <div>
-                    <strong>{{ job.file_name }}</strong>
+                    <strong class="job-filename" [title]="job.file_name">{{ job.file_name }}</strong>
                     <small>{{ job.supplier_name || "Sin proveedor" }} · {{ formatDate(job.completed_at || job.updated_at || job.created_at) }}</small>
                   </div>
                 </div>
                 <div class="job-card-meta">
                   <span class="health-pill" [class]="'health-pill ' + jobStatusClass(job)">{{ jobStatusLabel(job) }}</span>
-                  <span>{{ job.import_mode === 'full' ? 'Completo' : 'Parcial' }}</span>
-                  <span>{{ job.processed_rows }}/{{ job.valid_rows }} filas</span>
+                  <span>{{ job.import_mode === 'full' ? 'Reemplaza todo el catálogo' : 'Solo actualiza estos productos' }}</span>
+                  @if (job.status === 'queued_validation' || job.status === 'parsing') {
+                    <span>{{ job.processed_rows }}/{{ job.total_rows }} filas revisadas</span>
+                  } @else {
+                    <span>{{ job.processed_rows }}/{{ job.valid_rows }} filas</span>
+                  }
+                  @if (job.status === 'parsing' || job.status === 'committing' || job.status === 'running') {
+                    <span>{{ job.percent }}%</span>
+                  }
                 </div>
+                @if (importJobs.isStale(job)) {
+                  <p class="job-card-note job-card-note-danger">No hemos visto avance en varios minutos. Puede que el servidor haya tenido un problema — si no cambia, prueba cancelar y vuelve a intentar.</p>
+                } @else if (job.status === 'validated') {
+                  <p class="job-card-note">Revisamos {{ job.valid_rows }} producto(s); todavía no se aplicó nada al catálogo.</p>
+                }
+                @if ((job.status === 'failed' || job.status === 'needs_mapping') && job.error) {
+                  <p class="job-card-note job-card-note-danger">{{ job.error }}</p>
+                }
                 <div class="job-card-actions">
+                  @if (job.status === 'validated') {
+                    <button
+                      type="button"
+                      class="btn btn-primary"
+                      (click)="confirmJob(job, $event)"
+                      [disabled]="confirmBusyId() === job.job_id"
+                    >
+                      <span class="material-symbols-rounded" aria-hidden="true">check_circle</span>
+                      {{ confirmBusyId() === job.job_id ? "Aplicando..." : "Confirmar importación" }}
+                    </button>
+                  }
                   <button type="button" class="btn btn-ghost" (click)="openCorrection(job, $event)">
                     <span class="material-symbols-rounded" aria-hidden="true">edit_note</span>
                     Corrección
                   </button>
-                  <button
-                    type="button"
-                    class="btn btn-danger"
-                    (click)="rollbackJob(job, $event)"
-                    [disabled]="job.status !== 'completed' || job.rollback_status === 'completed' || rollbackBusyId() === job.job_id"
-                  >
-                    <span class="material-symbols-rounded" aria-hidden="true">undo</span>
-                    {{ rollbackBusyId() === job.job_id ? "Revirtiendo..." : "Revertir" }}
-                  </button>
+                  @if (job.status !== 'completed' && job.status !== 'failed') {
+                    <button
+                      type="button"
+                      class="btn btn-danger"
+                      (click)="cancelJob(job, $event)"
+                      [disabled]="cancelBusyId() === job.job_id"
+                    >
+                      <span class="material-symbols-rounded" aria-hidden="true">cancel</span>
+                      {{ cancelBusyId() === job.job_id ? "Cancelando..." : "Cancelar" }}
+                    </button>
+                  }
+                  @if (job.status === 'completed') {
+                    <button
+                      type="button"
+                      class="btn btn-danger"
+                      (click)="rollbackJob(job, $event)"
+                      [disabled]="job.rollback_status === 'completed' || rollbackBusyId() === job.job_id"
+                    >
+                      <span class="material-symbols-rounded" aria-hidden="true">undo</span>
+                      {{ rollbackBusyId() === job.job_id ? "Revirtiendo..." : "Revertir" }}
+                    </button>
+                  }
                 </div>
               </article>
             }

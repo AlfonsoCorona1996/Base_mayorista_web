@@ -186,6 +186,9 @@ export class UserAdminApiService {
   put<T>(path: string, body: unknown) {
     return this.http.put<T>(`${this.baseUrl}${path}`, body).pipe(catchError((error) => this.unwrapApiError(error)));
   }
+  patch<T>(path: string, body: unknown) {
+    return this.http.patch<T>(`${this.baseUrl}${path}`, body).pipe(catchError((error) => this.unwrapApiError(error)));
+  }
   delete<T>(path: string) {
     return this.http.delete<T>(`${this.baseUrl}${path}`).pipe(catchError((error) => this.unwrapApiError(error)));
   }

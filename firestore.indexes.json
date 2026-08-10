@@ -307,6 +307,23 @@
       "collectionGroup": "catalog_import_jobs",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "validation_requested", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "catalog_import_jobs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "business_id", "order": "ASCENDING" },
+        { "fieldPath": "supplier_id", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "catalog_import_jobs",
+      "queryScope": "COLLECTION",
+      "fields": [
         { "fieldPath": "business_id", "order": "ASCENDING" },
         { "fieldPath": "updated_at", "order": "DESCENDING" }
       ]

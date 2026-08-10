@@ -1,4 +1,9 @@
-import { buildOrderItemsUpdateRequest, mergeAuthoritativeOrderItems } from "./order-items-api";
+import {
+  buildOrderItemMutationRequest,
+  buildOrderItemPatchRequest,
+  buildOrderItemsUpdateRequest,
+  mergeAuthoritativeOrderItems,
+} from "./order-items-api";
 
 describe("order items authoritative API adapter", () => {
   it("sends explicit confirmation when a below-cost line was confirmed in the UI", () => {
@@ -26,5 +31,16 @@ describe("order items authoritative API adapter", () => {
       updated_at: "2026-08-02T12:00:00.000Z",
     });
     expect(previous[0].items[0].item_id).toBe("old");
+  });
+
+  it("sends only the item being added or the fields being changed", () => {
+    expect(buildOrderItemMutationRequest({ item_id: "new", price_override_below_cost: true })).toEqual({
+      item: { item_id: "new", price_override_below_cost: true },
+      below_cost_confirmation: true,
+    });
+    expect(buildOrderItemPatchRequest({ confirmation_state: "confirmed" })).toEqual({
+      patch: { confirmation_state: "confirmed" },
+      below_cost_confirmation: false,
+    });
   });
 });

@@ -15,6 +15,7 @@ import {
   CatalogImportProfileV2,
 } from "../../core/catalog-import-jobs.service";
 import { Supplier, SuppliersService } from "../../core/suppliers.service";
+import { ApiError } from "../../services/user-admin-api.service";
 import {
   CatalogImportMappingV2,
   CatalogImportV2RowFields,
@@ -147,6 +148,10 @@ export class CatalogProductsImportComponent implements OnDestroy {
   selectedJobRowsLoading = signal(false);
   rollbackBusyId = signal<string | null>(null);
   catalogMetricsBySupplier = signal<Record<string, CatalogMetricsState>>({});
+  showAllSuppliersInImports = signal(false);
+  duplicateActiveJob = signal<CatalogImportJob | null>(null);
+  confirmBusyId = signal<string | null>(null);
+  cancelBusyId = signal<string | null>(null);
   private previewState = signal<PreviewSummary>(this.emptyPreview());
   private previewTimer: ReturnType<typeof setTimeout> | null = null;
   private validationRun = 0;
@@ -197,7 +202,11 @@ export class CatalogProductsImportComponent implements OnDestroy {
   });
   activeCatalogSupplier = computed(() => this.supplierOptions().find((option) => option.key === this.activeCatalogSupplierKey()) || null);
   scopedCatalogProducts = computed(() => this.products());
-  scopedImportJobs = computed(() => this.importJobs.jobs().filter((job) => this.supplierKey(job.supplier_id) === this.activeCatalogSupplierKey()));
+  scopedImportJobs = computed(() =>
+    this.showAllSuppliersInImports()
+      ? this.importJobs.jobs()
+      : this.importJobs.jobs().filter((job) => this.supplierKey(job.supplier_id) === this.activeCatalogSupplierKey()),
+  );
   activeSupplierJob = computed(() => this.importJobs.activeJobs().find((job) => this.supplierKey(job.supplier_id) === this.activeCatalogSupplierKey()) || null);
 
   pageState = computed(() => this.catalogProducts.pageState());
@@ -557,6 +566,7 @@ export class CatalogProductsImportComponent implements OnDestroy {
     this.importing.set(true);
     this.error.set(null);
     this.success.set(null);
+    this.duplicateActiveJob.set(null);
     try {
       const mapping = this.mapping();
       const validRowCount = this.preview().valid;
@@ -580,30 +590,78 @@ export class CatalogProductsImportComponent implements OnDestroy {
         price_cost_discount_pct: mapping.costRule.mode === "formula" && mapping.costRule.percentOperation === "discount" && mapping.costRule.percentSource === "fixed" ? mapping.costRule.percentValue : 0,
         price_clienta_markup_pct: mapping.clientaRule.mode === "formula" && mapping.clientaRule.percentOperation === "markup" && mapping.clientaRule.percentSource === "fixed" ? mapping.clientaRule.percentValue : 0,
       });
-      if (!this.selectedSourceFile) throw new Error("Vuelve a seleccionar el Excel original para crear el staging.");
+      if (!this.selectedSourceFile) throw new Error("Vuelve a seleccionar el archivo Excel para continuar.");
       await this.importJobs.uploadSourceFile(job.job_id, this.selectedSourceFile);
       await this.importJobs.saveJobProfile(job.job_id, this.toV2Profile(mapping, supplier.supplier_id));
-      const validation = await this.importJobs.validate(job.job_id);
-      if (validation.summary && validation.summary.valid_rows <= 0) {
-        throw new Error("El backend no encontró filas válidas para confirmar.");
-      }
-      const queuedJob = await this.importJobs.commit(job.job_id);
+      // validate() ahora solo encola (el worker en segundo plano hace el
+      // parseo/escritura pesada) — ya no se espera aquí a que termine, y por
+      // lo tanto tampoco se encadena el commit automáticamente: el usuario lo
+      // confirma desde la cola una vez que el job llegue a "validated".
+      await this.importJobs.validate(job.job_id);
       this.saveTemplate(supplier.supplier_id, mapping);
       this.success.set(
-        queuedJob.status === "completed"
-          ? `Importación completada: ${validation.summary?.valid_rows ?? validRowCount} fila(s) válidas.`
-          : `Importación validada y en cola: ${validation.summary?.valid_rows ?? validRowCount} fila(s) válidas. Puedes cerrar esta pantalla; el worker continuará.`,
+        `Excel en cola (${validRowCount} fila(s) detectadas). Puedes cerrar esta pantalla o irte a otra sección; ` +
+        "cuando termine de validarse, confirma la importación desde la cola.",
       );
       this.selectedJobId.set(job.job_id);
       this.selectedCatalogSupplierKey.set(this.supplierKey(supplier.supplier_id));
       this.consoleTab.set("imports");
       this.wizardStep.set("result");
       this.watchSelectedSupplierPage();
-    } catch (error: any) {
-      this.error.set(error?.message || "No se pudo importar el archivo.");
+    } catch (error: unknown) {
+      if (error instanceof ApiError && error.code === "DUPLICATE_ACTIVE_IMPORT") {
+        const existingRaw = (error.body as { existing_job?: Record<string, unknown> } | null)?.existing_job;
+        const existing = this.importJobs.jobFromRaw(existingRaw);
+        this.duplicateActiveJob.set(existing);
+        this.error.set(error.message);
+        if (existing) {
+          this.selectedJobId.set(existing.job_id);
+          this.selectedCatalogSupplierKey.set(this.supplierKey(existing.supplier_id));
+          this.consoleTab.set("imports");
+          this.importModalOpen.set(false);
+        }
+      } else {
+        this.error.set(error instanceof Error ? error.message : "No se pudo importar el archivo.");
+      }
     } finally {
       this.importing.set(false);
     }
+  }
+
+  async confirmJob(job: CatalogImportJob, event?: Event): Promise<void> {
+    event?.stopPropagation();
+    this.confirmBusyId.set(job.job_id);
+    this.error.set(null);
+    try {
+      await this.importJobs.commit(job.job_id);
+      this.success.set("Importación confirmada. Los cambios se están aplicando al catálogo.");
+    } catch (error: unknown) {
+      this.error.set(error instanceof Error ? error.message : "No se pudo confirmar la importación.");
+    } finally {
+      this.confirmBusyId.set(null);
+    }
+  }
+
+  async cancelJob(job: CatalogImportJob, event?: Event): Promise<void> {
+    event?.stopPropagation();
+    const ok = window.confirm(
+      `¿Cancelar la importación de "${job.file_name}"? Si ya se está aplicando, puede tardar unos segundos en detenerse.`,
+    );
+    if (!ok) return;
+    this.cancelBusyId.set(job.job_id);
+    this.error.set(null);
+    try {
+      await this.importJobs.cancel(job.job_id);
+      this.success.set("Importación cancelada.");
+    } catch (error: unknown) {
+      this.error.set(error instanceof Error ? error.message : "No se pudo cancelar la importación.");
+    } finally {
+      this.cancelBusyId.set(null);
+    }
+  }
+
+  toggleAllSuppliersInImports(): void {
+    this.showAllSuppliersInImports.update((value) => !value);
   }
 
   productStockLabel(product: CatalogProduct): string {
@@ -729,20 +787,11 @@ export class CatalogProductsImportComponent implements OnDestroy {
   }
 
   jobStatusLabel(job: CatalogImportJob): string {
-    if (job.rollback_status === "completed") return "Revertida";
-    if (job.rollback_status === "running") return "Revirtiendo";
-    if (job.status === "completed") return "Completada";
-    if (job.status === "needs_mapping") return "Requiere mapeo";
-    if (job.status === "validated") return "Validada";
-    if (job.status !== "failed") return "En proceso";
-    return "Fallida";
+    return this.importJobs.jobStatusLabel(job);
   }
 
   jobStatusClass(job: CatalogImportJob): string {
-    if (job.rollback_status === "completed") return "muted";
-    if (job.status === "completed") return "ok";
-    if (job.status === "failed" || job.rollback_status === "failed") return "danger";
-    return "info";
+    return this.importJobs.jobStatusClass(job);
   }
 
   formatDate(value: unknown): string {
