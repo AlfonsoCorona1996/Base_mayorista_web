@@ -1,0 +1,115 @@
+<section
+  class="discount-panel"
+  [id]="panelId()"
+  role="group"
+  [attr.aria-labelledby]="titleId()"
+  [attr.aria-describedby]="descriptionIds()"
+  [attr.aria-busy]="saving()"
+>
+  <h3 class="discount-panel__title" [id]="titleId()">
+    <span class="material-symbols-rounded" aria-hidden="true">sell</span>
+    {{ title() }}
+  </h3>
+
+  <div class="discount-panel__segments" role="group" aria-label="Tipo de descuento">
+    <button
+      type="button"
+      [attr.aria-pressed]="mode() === 'pct'"
+      [class.is-active]="mode() === 'pct'"
+      [disabled]="saving()"
+      (click)="selectMode('pct')"
+    >
+      % descuento
+    </button>
+    <button
+      type="button"
+      [attr.aria-pressed]="mode() === 'fixed'"
+      [class.is-active]="mode() === 'fixed'"
+      [disabled]="saving()"
+      (click)="selectMode('fixed')"
+    >
+      Descuento MXN
+    </button>
+  </div>
+
+  @if (mode() === "pct") {
+    <div class="discount-panel__presets" aria-label="Porcentajes sugeridos">
+      @for (preset of presets(); track preset) {
+        <button
+          type="button"
+          [attr.aria-pressed]="percent() === preset"
+          [class.is-active]="percent() === preset"
+          [disabled]="saving()"
+          (click)="selectPercent(preset)"
+        >
+          {{ preset }}%
+        </button>
+      }
+    </div>
+    <label class="discount-panel__field">
+      <span class="discount-panel__label">Porcentaje personalizado</span>
+      <span class="discount-panel__input-shell">
+        <input
+          type="number"
+          inputmode="decimal"
+          min="0"
+          max="100"
+          [value]="percent()"
+          [disabled]="saving()"
+          (input)="onPercentInput($event)"
+        />
+        <span aria-hidden="true">%</span>
+      </span>
+    </label>
+  } @else {
+    <label class="discount-panel__field">
+      <span class="discount-panel__label">Descuento fijo</span>
+      <span class="discount-panel__input-shell">
+        <span aria-hidden="true">MXN</span>
+        <input
+          type="number"
+          inputmode="decimal"
+          min="0"
+          [value]="fixedAmount()"
+          [disabled]="saving()"
+          (input)="onFixedAmountInput($event)"
+        />
+      </span>
+    </label>
+  }
+
+  <output class="discount-panel__preview" aria-live="polite">
+    <span>Precio clienta</span>
+    <strong>{{ previewText() }}</strong>
+  </output>
+
+  @if (errorText()) {
+    <p class="discount-panel__error" [id]="errorId()" role="status">
+      <span class="material-symbols-rounded" aria-hidden="true">error</span>
+      {{ errorText() }}
+    </p>
+  }
+
+  <div class="discount-panel__actions">
+    <button type="button" class="discount-panel__button" [disabled]="saving()" (click)="cancel.emit()">
+      Cancelar
+    </button>
+    <button
+      type="button"
+      class="discount-panel__button discount-panel__button--primary"
+      [disabled]="isApplyDisabled()"
+      (click)="apply.emit()"
+    >
+      @if (saving()) {
+        <span class="discount-panel__spinner" aria-hidden="true"></span>
+        Aplicando…
+      } @else {
+        {{ applyLabel() }}
+      }
+    </button>
+  </div>
+
+  @if (helpText()) {
+    <p class="discount-panel__help" [id]="helpId()">{{ helpText() }}</p>
+  }
+</section>

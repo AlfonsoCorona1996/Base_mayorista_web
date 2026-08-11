@@ -20,9 +20,9 @@ describe("AppVersionService", () => {
   it("combina la version del build web con la version reportada por la API", fakeAsync(() => {
     service.load();
 
-    http.expectOne("/version.json?v=2.1.0").flush(JSON.stringify({
+    http.expectOne("/version.json?v=2.1.1").flush(JSON.stringify({
       service: "base-mayorista-admin-web",
-      version: "2.1.0",
+      version: "2.1.1",
       commit: "abcdef123456",
       dirty: false,
       built_at: "2026-08-10T12:00:00.000Z",
@@ -36,7 +36,7 @@ describe("AppVersionService", () => {
     }));
     tick();
 
-    expect(service.summary()).toBe("Web v2.1.0 · API v2.2.0");
+    expect(service.summary()).toBe("Web v2.1.1 · API v2.2.0");
     expect(service.shortCommit(service.frontend().commit)).toBe("abcdef1");
     expect(service.shortCommit(service.backend()?.commit)).toBe("1234567");
   }));
@@ -44,11 +44,11 @@ describe("AppVersionService", () => {
   it("identifica un backend anterior que aun responde health sin version", fakeAsync(() => {
     service.load();
 
-    http.expectOne("/version.json?v=2.1.0").flush("not-found", { status: 404, statusText: "Not Found" });
+    http.expectOne("/version.json?v=2.1.1").flush("not-found", { status: 404, statusText: "Not Found" });
     http.expectOne("https://api.base-mayorista.com/health").flush("ok");
     tick();
 
     expect(service.backendState()).toBe("unversioned");
-    expect(service.summary()).toBe("Web v2.1.0 · API sin versión");
+    expect(service.summary()).toBe("Web v2.1.1 · API sin versión");
   }));
 });

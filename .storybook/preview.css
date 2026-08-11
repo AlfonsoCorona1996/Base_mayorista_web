@@ -1,0 +1,14 @@
+html {
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+  background: #f4f7fb;
+}
+
+.sb-show-main.sb-main-centered #storybook-root {
+  width: min(326px, calc(100vw - 32px));
+  box-sizing: border-box;
+  padding: 0;
+}

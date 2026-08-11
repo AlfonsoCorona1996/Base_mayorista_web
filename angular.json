@@ -19,7 +19,8 @@
             "assets": [
               {
                 "glob": "**/*",
-                "input": "public"
+                "input": "public",
+                "output": "/"
               }
             ],
             "styles": [
@@ -95,6 +96,49 @@
             "styles": [
               "src/styles.css"
             ]
+          }
+        },
+        "storybook": {
+          "builder": "@storybook/angular:start-storybook",
+          "options": {
+            "configDir": ".storybook",
+            "browserTarget": "admin-web:build:development",
+            "tsConfig": "tsconfig.storybook.json",
+            "styles": [
+              "src/styles.css",
+              ".storybook/preview.css"
+            ],
+            "assets": [
+              {
+                "glob": "**/*",
+                "input": "public",
+                "output": "/"
+              }
+            ],
+            "compodoc": false,
+            "port": 6006,
+            "open": false
+          }
+        },
+        "build-storybook": {
+          "builder": "@storybook/angular:build-storybook",
+          "options": {
+            "configDir": ".storybook",
+            "browserTarget": "admin-web:build:development",
+            "tsConfig": "tsconfig.storybook.json",
+            "styles": [
+              "src/styles.css",
+              ".storybook/preview.css"
+            ],
+            "assets": [
+              {
+                "glob": "**/*",
+                "input": "public",
+                "output": "/"
+              }
+            ],
+            "compodoc": false,
+            "outputDir": "storybook-static"
           }
         }
       }

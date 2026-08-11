@@ -36,6 +36,7 @@ import { PhysicalBarcodeMode, PhysicalBarcodeScannerService } from "../../core/p
 import { ApiError, UserAdminApiService } from "../../services/user-admin-api.service";
 import { FIRESTORE, STORAGE } from "../../core/firebase.providers";
 import { ActivityLogComponent } from "../../shared/components/activity-log/activity-log.component";
+import { ClientaDiscountPanelComponent } from "../../shared/components/clienta-discount-panel/clienta-discount-panel.component";
 import { BarcodeScannerComponent } from "../../shared/barcode-scanner/barcode-scanner.component";
 import { AuthzService } from "../../core/authz.service";
 import { AuthService } from "../../core/auth.service";
@@ -220,7 +221,17 @@ const CATALOG_QUERY_SYNONYMS: Record<string, string[]> = {
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   selector: "app-pedido-detalle",
-  imports: [FormsModule, RouterLink, DatePipe, DecimalPipe, UpperCasePipe, NgStyle, ActivityLogComponent, BarcodeScannerComponent],
+  imports: [
+    FormsModule,
+    RouterLink,
+    DatePipe,
+    DecimalPipe,
+    UpperCasePipe,
+    NgStyle,
+    ActivityLogComponent,
+    ClientaDiscountPanelComponent,
+    BarcodeScannerComponent,
+  ],
   templateUrl: "./pedido-detalle.html",
   styleUrls: ["./pedido-detalle.css"],
 })

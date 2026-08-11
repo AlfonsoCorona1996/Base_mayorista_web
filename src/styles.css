@@ -97,6 +97,7 @@ html {
   width: 100%;
   overflow-x: hidden;
   -webkit-text-size-adjust: 100%;
+  color-scheme: light;
 }
 
 body {
@@ -141,6 +142,15 @@ app-root {
   display: block;
   width: 100%;
   height: 100%;
+}
+
+/* La interfaz actual solo implementa superficies claras. Mantener el esquema
+   nativo en light evita que Safari/iOS convierta inputs aislados a controles
+   oscuros cuando el dispositivo usa modo oscuro. */
+input,
+select,
+textarea {
+  color-scheme: light;
 }
 
 /* iOS Safari: evita zoom automatico al enfocar inputs en mobile */

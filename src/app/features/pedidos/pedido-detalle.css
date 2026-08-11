@@ -593,6 +593,14 @@
   border: 1px solid #cfd8ea;
   background: #ffffff;
   color: var(--muted);
+  cursor: pointer;
+}
+
+/* Amplia el area tactil sin alterar la alineacion compacta de las etiquetas. */
+.clienta-discount-btn::before {
+  content: "";
+  position: absolute;
+  inset: -11px;
 }
 
 .clienta-discount-btn:hover {
@@ -624,12 +632,7 @@
   z-index: var(--ui-z-overlay, 40);
   top: calc(100% + 6px);
   right: 0;
-  width: min(280px, 90vw);
-  background: #ffffff;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius2);
-  box-shadow: var(--shadow);
-  padding: 0.85rem;
+  width: min(326px, 90vw);
 }
 
 /* Si no hay espacio suficiente debajo dentro del modal, se abre hacia
@@ -646,121 +649,6 @@
 .clienta-discount-popover--left {
   left: 0;
   right: auto;
-}
-
-.clienta-discount-popover-title {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  margin: 0 0 0.6rem;
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: var(--text);
-}
-
-.clienta-discount-popover-title .material-symbols-rounded {
-  font-size: 16px;
-  color: var(--primary);
-}
-
-.clienta-discount-seg {
-  display: flex;
-  background: var(--accent-soft);
-  border-radius: 10px;
-  padding: 3px;
-  gap: 2px;
-  margin-bottom: 0.6rem;
-}
-
-.clienta-discount-seg button {
-  flex: 1;
-  border: none;
-  background: transparent;
-  padding: 7px;
-  border-radius: 8px;
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--muted);
-}
-
-.clienta-discount-seg button.is-active {
-  background: #ffffff;
-  color: var(--accent);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.1);
-}
-
-.clienta-discount-chips {
-  display: flex;
-  gap: 0.35rem;
-  flex-wrap: wrap;
-  margin-bottom: 0.6rem;
-}
-
-.clienta-discount-chips button {
-  padding: 6px 10px;
-  border-radius: 999px;
-  border: 1px solid #cfd8ea;
-  background: #ffffff;
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: #3a4a63;
-}
-
-.clienta-discount-chips button.is-active {
-  background: var(--primary);
-  border-color: var(--primary);
-  color: #ffffff;
-}
-
-.clienta-discount-custom {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--muted);
-  margin-bottom: 0.6rem;
-}
-
-.clienta-discount-custom input {
-  flex: 1;
-  min-width: 0;
-  height: 34px;
-  border: 1px solid #cfd8ea;
-  border-radius: 8px;
-  padding: 0 8px;
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: var(--text);
-}
-
-.clienta-discount-preview {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: var(--success-soft);
-  border: 1px solid #bbf7d0;
-  border-radius: 8px;
-  padding: 8px 10px;
-  margin-bottom: 0.6rem;
-  font-size: 0.78rem;
-  font-weight: 700;
-  color: #15803d;
-}
-
-.clienta-discount-preview strong {
-  font-size: 1rem;
-}
-
-.clienta-discount-actions {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.clienta-discount-actions .btn {
-  flex: 1;
-  height: 36px;
-  font-size: 0.78rem;
 }
 
 .preview {
@@ -3381,20 +3269,21 @@
       calc(env(safe-area-inset-left, 0px) + var(--add-popup-gutter-x));
     align-items: flex-start;
     justify-content: center;
-    overflow-y: auto;
+    height: 100dvh;
+    min-height: 100dvh;
+    overflow: hidden;
   }
 
   .sheet.full.sheet-add-item-ios {
     box-sizing: border-box;
     width: 100%;
     max-width: 100%;
-    height: auto;
+    height: 100%;
     max-height: 100%;
     margin: 0;
     border-radius: clamp(16px, 4vw, 20px);
     border: 1px solid #dce6f2;
-    overflow-y: auto;
-    overflow-x: visible;
+    overflow: hidden;
   }
 
   .sheet-add-item-ios .sheet-header {
@@ -3407,10 +3296,26 @@
   }
 
   .sheet-add-item-ios .sheet-body {
-    flex: 0 1 auto;
-    min-height: auto;
+    flex: 1 1 auto;
+    min-height: 0;
     padding: 10px 12px 12px;
-    overflow: visible;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .sheet-add-item-ios .clienta-discount-popover {
+    position: relative;
+    inset: auto;
+    width: 100%;
+    margin-top: var(--ui-space-8, 8px);
+    border-radius: var(--ui-radius-md, 12px);
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.1);
+  }
+
+  .sheet-add-item-ios .clienta-discount-popover--up {
+    inset: auto;
   }
 
   .sheet-add-item-ios .add-item {
@@ -3450,7 +3355,8 @@
   .sheet.full.sheet-add-item-ios .sheet-footer {
     margin-top: 0;
     grid-template-columns: 1fr;
-    padding: 10px 12px calc(12px + env(safe-area-inset-bottom));
+    flex: 0 0 auto;
+    padding: 10px 12px 12px;
   }
 
   .sheet-add-item-ios .sheet-footer .btn.ghost {
@@ -5111,11 +5017,19 @@ code {
   justify-content: center;
   z-index: 120;
   padding: 1rem;
+  box-sizing: border-box;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .sheet-backdrop--center {
   align-items: center;
   z-index: 160;
+  padding:
+    max(12px, env(safe-area-inset-top, 0px))
+    max(12px, env(safe-area-inset-right, 0px))
+    max(12px, env(safe-area-inset-bottom, 0px))
+    max(12px, env(safe-area-inset-left, 0px));
 }
 
 .sheet {
@@ -5186,6 +5100,51 @@ code {
 
 .popup-confirm-sheet {
   max-width: 560px;
+}
+
+.late-add-note-sheet {
+  max-height: calc(100dvh - 24px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  overflow-y: auto;
+}
+
+.late-add-note-input {
+  min-height: 120px;
+  resize: vertical;
+  background: #ffffff;
+  color: #0f172a;
+  -webkit-text-fill-color: #0f172a;
+  caret-color: #0f172a;
+}
+
+.late-add-note-input:focus-visible {
+  border-color: #2563eb;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+}
+
+.late-add-note-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--ui-space-8, 8px);
+  color: #64748b;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+@media (max-width: 640px) {
+  .late-add-note-sheet {
+    width: 100%;
+    max-height: calc(100dvh - 24px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  }
+
+  .late-add-note-input {
+    min-height: 112px;
+    resize: none;
+  }
+
+  .late-add-note-sheet .sheet-actions .btn {
+    min-height: var(--ui-touch-target-min, 44px);
+  }
 }
 
 .change-customer-sheet {

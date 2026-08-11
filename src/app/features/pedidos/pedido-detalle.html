@@ -518,27 +518,49 @@
 
     @if (lateAddNoteModalOpen()) {
       <div class="sheet-backdrop sheet-backdrop--center" (click)="cancelLateAdditionNote()">
-        <div class="sheet package-delete-sheet popup-confirm-sheet" role="dialog" aria-modal="true" aria-labelledby="late-add-note-title" (click)="$event.stopPropagation()">
+        <div
+          class="sheet package-delete-sheet popup-confirm-sheet late-add-note-sheet"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="late-add-note-title"
+          (click)="$event.stopPropagation()"
+          (keydown.escape)="cancelLateAdditionNote(); $event.stopPropagation()"
+        >
           <div class="sheet-handle" aria-hidden="true"></div>
           <h2 id="late-add-note-title">{{ lateAddNoteTitle() }}</h2>
           <p class="muted popup-alert-message">{{ lateAddNoteMessage() }}</p>
           <div class="sheet-field">
-            <label>Nota para bit&aacute;cora</label>
+            <label for="late-add-note-input">Nota para bit&aacute;cora</label>
             <textarea
-              class="input"
+              id="late-add-note-input"
+              class="input late-add-note-input"
               rows="4"
               maxlength="280"
+              autofocus
               [ngModel]="lateAddNoteValue()"
-              (ngModelChange)="lateAddNoteValue.set($event)"
+              (ngModelChange)="lateAddNoteValue.set($event); lateAddNoteError.set(null)"
+              [attr.aria-invalid]="lateAddNoteError() ? 'true' : null"
+              [attr.aria-describedby]="lateAddNoteError() ? 'late-add-note-help late-add-note-error' : 'late-add-note-help'"
               placeholder="Ejemplo: Clienta pidi&oacute; de &uacute;ltimo minuto durante empaque."
             ></textarea>
+            <div id="late-add-note-help" class="late-add-note-meta">
+              <span>M&iacute;nimo 8 caracteres</span>
+              <span>{{ lateAddNoteValue().length }}/280</span>
+            </div>
           </div>
           @if (lateAddNoteError()) {
-            <p class="field-error">{{ lateAddNoteError() }}</p>
+            <p id="late-add-note-error" class="field-error" role="alert">{{ lateAddNoteError() }}</p>
           }
           <div class="sheet-actions popup-confirm-actions">
             <button type="button" class="btn ghost" (click)="cancelLateAdditionNote()">Cancelar</button>
-            <button type="button" class="btn primary" (click)="confirmLateAdditionNote()">Guardar nota</button>
+            <button
+              type="button"
+              class="btn primary"
+              [disabled]="lateAddNoteValue().trim().length < 8"
+              (click)="confirmLateAdditionNote()"
+            >
+              Guardar nota
+            </button>
           </div>
         </div>
       </div>
@@ -981,6 +1003,8 @@
                         type="button"
                         class="price-edit-btn"
                         aria-label="Definir descuento para precio clienta"
+                        [attr.aria-expanded]="quickDiscountItemId() === item.item_id"
+                        [attr.aria-controls]="'quick-discount-' + item.item_id"
                         (click)="openQuickDiscount(item, $any($event.currentTarget)); $event.stopPropagation()"
                       >
                         <span class="material-symbols-rounded" aria-hidden="true">more_horiz</span>
@@ -995,71 +1019,27 @@
                     </span>
                   }
                   @if (quickDiscountItemId() === item.item_id) {
-                    <div
+                    <app-clienta-discount-panel
                       class="clienta-discount-popover"
                       [class.clienta-discount-popover--up]="quickDiscountUpward()"
                       [class.clienta-discount-popover--left]="quickDiscountLeftAlign()"
+                      [panelId]="'quick-discount-' + item.item_id"
+                      title="Definir descuento"
+                      [mode]="quickDiscountMode()"
+                      [percent]="quickDiscountPct()"
+                      [fixedAmount]="quickDiscountFixed()"
+                      [previewText]="previewQuickDiscount(item) === null ? '—' : formatCurrency(previewQuickDiscount(item)!)"
+                      [saving]="quickDiscountSaving()"
+                      [applyDisabled]="previewQuickDiscount(item) === null"
+                      [errorText]="previewQuickDiscount(item) === null ? 'Este producto necesita precio p&uacute;blico para calcular el descuento.' : null"
+                      applyLabel="Aplicar"
+                      (modeChange)="setQuickDiscountMode($event)"
+                      (percentChange)="setQuickDiscountPct($event)"
+                      (fixedAmountChange)="setQuickDiscountFixed($event)"
+                      (cancel)="closeQuickDiscount()"
+                      (apply)="applyQuickDiscount(item)"
                       (click)="$event.stopPropagation()"
-                    >
-                      <p class="clienta-discount-popover-title">
-                        <span class="material-symbols-rounded" aria-hidden="true">sell</span>
-                        Definir descuento
-                      </p>
-                      <div class="clienta-discount-seg">
-                        <button type="button" [class.is-active]="quickDiscountMode() === 'pct'" (click)="setQuickDiscountMode('pct')">
-                          % Descuento
-                        </button>
-                        <button type="button" [class.is-active]="quickDiscountMode() === 'fixed'" (click)="setQuickDiscountMode('fixed')">
-                          $ Fijo
-                        </button>
-                      </div>
-                      @if (quickDiscountMode() === "pct") {
-                        <div class="clienta-discount-chips">
-                          @for (pct of [10, 15, 20, 25, 30]; track pct) {
-                            <button type="button" [class.is-active]="quickDiscountPct() === pct" (click)="setQuickDiscountPct(pct)">
-                              {{ pct }}%
-                            </button>
-                          }
-                        </div>
-                        <label class="clienta-discount-custom">
-                          <span>Personalizado</span>
-                          <input
-                            type="number"
-                            min="0"
-                            max="100"
-                            [value]="quickDiscountPct()"
-                            (input)="setQuickDiscountPct($any($event.target).valueAsNumber)"
-                          />
-                          <span>%</span>
-                        </label>
-                      } @else {
-                        <label class="clienta-discount-custom">
-                          <span>Descuento fijo</span>
-                          <span>MXN</span>
-                          <input
-                            type="number"
-                            min="0"
-                            [value]="quickDiscountFixed()"
-                            (input)="setQuickDiscountFixed($any($event.target).valueAsNumber)"
-                          />
-                        </label>
-                      }
-                      <div class="clienta-discount-preview">
-                        <span>Precio clienta</span>
-                        <strong>{{ previewQuickDiscount(item) === null ? "—" : formatCurrency(previewQuickDiscount(item)!) }}</strong>
-                      </div>
-                      <div class="clienta-discount-actions">
-                        <button type="button" class="btn ghost" (click)="closeQuickDiscount()">Cancelar</button>
-                        <button
-                          type="button"
-                          class="btn primary"
-                          [disabled]="previewQuickDiscount(item) === null || quickDiscountSaving()"
-                          (click)="applyQuickDiscount(item)"
-                        >
-                          Aplicar
-                        </button>
-                      </div>
-                    </div>
+                    />
                   }
                 </div>
 
@@ -2676,6 +2656,7 @@
                   class="clienta-discount-btn"
                   aria-label="Definir descuento para precio clienta"
                   [attr.aria-expanded]="clientaDiscountOpen()"
+                  aria-controls="clienta-discount-panel"
                   (click)="toggleClientaDiscount($any($event.currentTarget)); $event.stopPropagation()"
                 >
                   <span class="material-symbols-rounded" aria-hidden="true">more_horiz</span>
@@ -2696,61 +2677,26 @@
               />
             </div>
             @if (clientaDiscountOpen()) {
-              <div class="clienta-discount-popover" [class.clienta-discount-popover--up]="clientaDiscountOpenUpward()" (click)="$event.stopPropagation()">
-                <p class="clienta-discount-popover-title">
-                  <span class="material-symbols-rounded" aria-hidden="true">sell</span>
-                  Definir precio clienta
-                </p>
-                <div class="clienta-discount-seg">
-                  <button type="button" [class.is-active]="clientaDiscountMode() === 'pct'" (click)="setClientaDiscountMode('pct')">
-                    % Descuento
-                  </button>
-                  <button type="button" [class.is-active]="clientaDiscountMode() === 'fixed'" (click)="setClientaDiscountMode('fixed')">
-                    $ Fijo
-                  </button>
-                </div>
-                @if (clientaDiscountMode() === "pct") {
-                  <div class="clienta-discount-chips">
-                    @for (pct of [10, 15, 20, 25, 30]; track pct) {
-                      <button type="button" [class.is-active]="clientaDiscountPct() === pct" (click)="setClientaDiscountPct(pct)">
-                        {{ pct }}%
-                      </button>
-                    }
-                  </div>
-                  <label class="clienta-discount-custom">
-                    <span>Personalizado</span>
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      [value]="clientaDiscountPct()"
-                      (input)="setClientaDiscountPct($any($event.target).valueAsNumber)"
-                    />
-                    <span>%</span>
-                  </label>
-                } @else {
-                  <label class="clienta-discount-custom">
-                    <span>Descuento fijo</span>
-                    <span>MXN</span>
-                    <input
-                      type="number"
-                      min="0"
-                      [value]="clientaDiscountFixed()"
-                      (input)="setClientaDiscountFixed($any($event.target).valueAsNumber)"
-                    />
-                  </label>
-                }
-                <div class="clienta-discount-preview">
-                  <span>Precio clienta</span>
-                  <strong>{{ previewClientaDiscount() === null ? "—" : formatCurrency(previewClientaDiscount()!) }}</strong>
-                </div>
-                <div class="clienta-discount-actions">
-                  <button type="button" class="btn ghost" (click)="closeClientaDiscount()">Cancelar</button>
-                  <button type="button" class="btn primary" [disabled]="previewClientaDiscount() === null" (click)="applyClientaDiscount()">
-                    Aplicar
-                  </button>
-                </div>
-              </div>
+              <app-clienta-discount-panel
+                class="clienta-discount-popover"
+                [class.clienta-discount-popover--up]="clientaDiscountOpenUpward()"
+                panelId="clienta-discount-panel"
+                title="Definir precio clienta"
+                [mode]="clientaDiscountMode()"
+                [percent]="clientaDiscountPct()"
+                [fixedAmount]="clientaDiscountFixed()"
+                [previewText]="previewClientaDiscount() === null ? '—' : formatCurrency(previewClientaDiscount()!)"
+                [applyDisabled]="previewClientaDiscount() === null"
+                [errorText]="previewClientaDiscount() === null ? 'Captura primero el precio final para calcular el descuento.' : null"
+                applyLabel="Aplicar precio"
+                helpText="Después guarda los cambios del producto para confirmar."
+                (modeChange)="setClientaDiscountMode($event)"
+                (percentChange)="setClientaDiscountPct($event)"
+                (fixedAmountChange)="setClientaDiscountFixed($event)"
+                (cancel)="closeClientaDiscount()"
+                (apply)="applyClientaDiscount()"
+                (click)="$event.stopPropagation()"
+              />
             }
           </div>
           <div class="field price-row-field">
@@ -3152,4 +3098,3 @@
     <button type="button" class="btn" routerLink="/main/pedidos">Volver a la lista</button>
   </section>
 }
-
