@@ -221,7 +221,7 @@ export class CatalogProductsImportComponent implements OnDestroy {
     this.catalogSuppliers().find((supplier) => supplier.supplier_id === this.selectedSupplierId()) || null,
   );
 
-  rejectedRows = computed(() => this.preview().rows.filter((row) => !row.valid));
+  rejectedCount = computed(() => this.preview().invalidValues);
   latestFullImportBySupplier = computed(() => {
     const out = new Map<string, CatalogImportJob>();
     for (const job of this.importJobs.completedJobs()) {
@@ -270,7 +270,7 @@ export class CatalogProductsImportComponent implements OnDestroy {
   importWarnings = computed(() => {
     const warnings: string[] = [];
     const preview = this.preview();
-    if (this.rejectedRows().length > 0) warnings.push(`${this.rejectedRows().length} fila(s) no se importaran.`);
+    if (this.rejectedCount() > 0) warnings.push(`${this.rejectedCount()} fila(s) no se importaran.`);
     if (preview.total > 0 && !this.mapping().nameColumns.length) warnings.push("El nombre se armara con el identificador disponible porque no elegiste columnas de nombre.");
     if (preview.duplicateSku > 0) warnings.push(`${preview.duplicateSku} fila(s) repetidas se consolidarán y conservarán como apariciones del catálogo.`);
     if (this.importMode() === "full") warnings.push("Catálogo completo marcara como precio viejo lo que no venga en este Excel.");
@@ -282,7 +282,6 @@ export class CatalogProductsImportComponent implements OnDestroy {
   constructor() {
     this.importJobs.watch();
     this.suppliers.loadFromFirestore().catch(() => null).finally(() => {
-      for (const supplier of this.catalogSuppliers()) void this.loadSupplierMetrics(supplier.supplier_id);
       this.ensureSupplierSelection();
       this.watchSelectedSupplierPage();
     });
@@ -584,7 +583,7 @@ export class CatalogProductsImportComponent implements OnDestroy {
         },
         total_rows: this.preview().total,
         valid_rows: validRowCount,
-        rejected_rows: this.rejectedRows().length,
+        rejected_rows: this.rejectedCount(),
         supplier_id: supplier.supplier_id,
         supplier_name: supplier.display_name,
         price_cost_discount_pct: mapping.costRule.mode === "formula" && mapping.costRule.percentOperation === "discount" && mapping.costRule.percentSource === "fixed" ? mapping.costRule.percentValue : 0,
@@ -1155,7 +1154,9 @@ export class CatalogProductsImportComponent implements OnDestroy {
 
     const validCount = normalized.filter((row) => row.valid).length;
     return {
-      rows: normalized,
+      // La UI sólo muestra la muestra y los contadores. Evitamos clonar y
+      // conservar otras ~12 mil filas normalizadas además de rawRows/matrix.
+      rows: [],
       sample: normalized.slice(0, 20),
       total: normalized.length,
       valid: validCount,

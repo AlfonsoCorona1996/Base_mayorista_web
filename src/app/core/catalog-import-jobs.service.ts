@@ -40,6 +40,11 @@ export interface CatalogImportJob {
   not_in_file_count: number;
   percent: number;
   error: string | null;
+  error_code: string | null;
+  failure_phase: string | null;
+  generation_finalize_state: "running" | "completed" | null;
+  worker_phase: "rows" | "finalize" | null;
+  last_checkpoint_at?: unknown;
   supplier_id: string | null;
   supplier_name: string | null;
   price_cost_discount_pct: number | null;
@@ -231,7 +236,14 @@ export class CatalogImportJobsService {
     if (job.status === "queued_validation") return "En espera de revisión";
     if (job.status === "parsing") return "Revisando tu archivo...";
     if (job.status === "queued") return "En espera para aplicarse";
-    if (job.status === "committing" || job.status === "running") return "Aplicando los cambios...";
+    if (job.status === "committing" || job.status === "running") {
+      if (job.generation_finalize_state === "running"
+        || job.worker_phase === "finalize"
+        || job.valid_rows > 0 && job.processed_rows >= job.valid_rows) {
+        return "Finalizando y activando el catálogo...";
+      }
+      return "Aplicando los cambios...";
+    }
     if (job.status === "failed") return "No se pudo completar";
     return "En proceso";
   }
@@ -418,11 +430,15 @@ export class CatalogImportJobsService {
     const valid = this.safeNumber(data["valid_rows"]);
     const processed = this.safeNumber(data["processed_rows"]);
     const progressBase = valid > 0 ? valid : total;
+    const reportedPercent = Math.min(100, this.safeNumber(data["percent"]));
+    const calculatedPercent = progressBase > 0
+      ? Math.min(100, Math.round((processed / progressBase) * 100))
+      : 0;
     const percent = status === "completed"
       ? 100
-      : progressBase > 0
-        ? Math.min(100, Math.round((processed / progressBase) * 100))
-        : this.safeNumber(data["percent"]);
+      : status === "committing" || status === "running"
+        ? Math.min(99, Math.max(reportedPercent, calculatedPercent))
+        : Math.max(reportedPercent, calculatedPercent);
     return {
       job_id: String(data["job_id"] || fallbackId || ""),
       business_id: normalizeBusinessId(data["business_id"]),
@@ -443,6 +459,15 @@ export class CatalogImportJobsService {
       not_in_file_count: this.safeNumber(data["not_in_file_count"]),
       percent,
       error: typeof data["error"] === "string" && data["error"].trim() ? String(data["error"]) : null,
+      error_code: this.nullableText(data["error_code"]),
+      failure_phase: this.nullableText(data["failure_phase"]),
+      generation_finalize_state: data["generation_finalize_state"] === "running" || data["generation_finalize_state"] === "completed"
+        ? data["generation_finalize_state"]
+        : null,
+      worker_phase: data["worker_phase"] === "rows" || data["worker_phase"] === "finalize"
+        ? data["worker_phase"]
+        : null,
+      last_checkpoint_at: data["last_checkpoint_at"] ?? null,
       supplier_id: this.nullableText(data["supplier_id"]),
       supplier_name: this.nullableText(data["supplier_name"]),
       price_cost_discount_pct: this.safeNullablePercent(data["price_cost_discount_pct"]),

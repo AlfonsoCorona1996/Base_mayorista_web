@@ -277,7 +277,9 @@ function buildPreview(rows: Record<string, unknown>[], mapping: ImportMapping) {
 
   const validCount = normalized.filter((row) => row.valid).length;
   return {
-    rows: normalized,
+    // El hilo principal no necesita otra copia completa de todas las filas;
+    // conserva rawRows para remapear y recibe sólo muestra + contadores.
+    rows: [],
     sample: normalized.slice(0, 20),
     total: normalized.length,
     valid: validCount,

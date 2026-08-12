@@ -2275,6 +2275,7 @@
         <div class="sheet-header" [attr.aria-hidden]="clientaDiscountOpen() ? 'true' : null" [attr.inert]="clientaDiscountOpen() ? '' : null">
           <div class="sheet-handle" aria-hidden="true"></div>
           <div class="sheet-title-wrap">
+            <span class="add-item-kicker">Pedido en edición</span>
             <h2 id="add-item-modal-title">
               <span class="material-symbols-rounded" aria-hidden="true">add_box</span>
               {{ isConvertMode() ? "Convertir item manual" : (isEditMode() ? "Editar producto" : "Agregar producto") }}
@@ -2290,7 +2291,11 @@
           [attr.inert]="clientaDiscountOpen() || addItemSaving() ? '' : null"
           (scroll)="onAddItemSheetScroll()"
         >
-          <div class="add-item" [class.add-item--catalog-v2]="!!selectedCatalogProduct()">
+          <div
+            class="add-item"
+            [class.add-item--catalog-v2]="!!selectedCatalogProduct()"
+            [class.add-item--manual]="isManualSource()"
+          >
           @if (isConvertMode() && convertTargetItem(); as targetItem) {
             <p class="registration-alert">
               Convirtiendo: <strong>{{ targetItem.title }}</strong>. Selecciona catalogo o inventario para reemplazar este item manual.
@@ -2313,7 +2318,7 @@
                   [disabled]="!vm.canEditItems || isEditMode()"
                 />
                 <span class="material-symbols-rounded" aria-hidden="true">storefront</span>
-                <span>Catalogo</span>
+                <span>Catálogo</span>
               </label>
               <label>
                 <input
@@ -2346,10 +2351,7 @@
           @if (!isManualSource() && !isEditMode() && !selectedPreview()) {
             <div class="product-search">
               <div class="field">
-                <label>
-                  <span class="material-symbols-rounded" aria-hidden="true">search</span>
-                  Buscar producto
-                </label>
+                <label>Buscar producto</label>
                 <div class="search-input-wrap">
                   <span class="material-symbols-rounded" aria-hidden="true">search</span>
                   <input
@@ -2635,140 +2637,138 @@
           }
           }
           @if (canSubmitNewItem()) {
-          <div class="field price-row-field add-item-quantity">
-            <label>
-              <span class="material-symbols-rounded" aria-hidden="true">tag</span>
-              Cantidad
-            </label>
-            <div class="add-item-stepper">
-              <button type="button" aria-label="Disminuir cantidad" [disabled]="addItemSaving() || newItemQty() <= 1" (click)="decreaseNewItemQty()">
-                <span class="material-symbols-rounded" aria-hidden="true">remove</span>
-              </button>
-              <input
-                class="input"
-                type="number"
-                inputmode="numeric"
-                min="1"
-                [(ngModel)]="newItemQty"
-                [disabled]="addItemSaving() || !vm.canEditItems"
-              />
-              <button type="button" aria-label="Aumentar cantidad" [disabled]="addItemSaving()" (click)="increaseNewItemQty()">
-                <span class="material-symbols-rounded" aria-hidden="true">add</span>
-              </button>
-            </div>
-          </div>
-          @if (!selectedCatalogProduct()) {
-            <div class="field price-row-field add-item-price-final">
-              <label>
-                <span class="material-symbols-rounded" aria-hidden="true">payments</span>
-                Precio final
-              </label>
-              <div class="money" [class.money-invalid]="priceRuleInvalid()">
-                <span>MXN</span>
-                <input
-                  class="input"
-                  type="text"
-                  [value]="priceDisplayValue('final')"
-                  (focus)="onPriceInputFocus('final')"
-                  (input)="onPriceInputChange('final', $any($event.target).value)"
-                  (blur)="onPriceInputBlur('final')"
-                  [disabled]="!canSubmitNewItem() || !vm.canEditItems"
-                />
-              </div>
-            </div>
-          }
-          <div class="field field-clienta-price price-row-field">
-            <label>
-              <span class="material-symbols-rounded" aria-hidden="true">person</span>
-              {{ selectedCatalogProduct() ? "Precio de venta" : "Precio clienta" }}
-            </label>
-            <div class="money" [class.money-readonly]="!canEditClientaPrice(current)" [class.money-invalid]="priceRuleInvalid()">
-              <span>$</span>
-              <input
-                class="input"
-                type="text"
-                [value]="priceDisplayValue('clienta')"
-                (focus)="onPriceInputFocus('clienta')"
-                (input)="onPriceInputChange('clienta', $any($event.target).value)"
-                (blur)="onPriceInputBlur('clienta')"
-                [readonly]="!canEditClientaPrice(current)"
-                [disabled]="!canSubmitNewItem() || !canEditClientaPrice(current)"
-              />
-              @if (showClientaDiscountButton()) {
-                <button
-                  #clientaDiscountButton
-                  type="button"
-                  class="clienta-discount-btn"
-                  aria-label="Cambiar descuento de precio clienta"
-                  title="Cambiar descuento"
-                  [attr.aria-expanded]="clientaDiscountOpen()"
-                  aria-controls="clienta-discount-panel"
-                  (click)="toggleClientaDiscount(); $event.stopPropagation()"
-                >
-                  <span class="material-symbols-rounded" aria-hidden="true">percent</span>
-                  <span class="clienta-discount-btn__label">Descuento</span>
+          <section class="add-item-purchase" aria-label="Cantidad y precios">
+            <div class="field price-row-field add-item-quantity">
+              <label for="add-item-quantity">Cantidad</label>
+              <div class="add-item-stepper">
+                <button type="button" aria-label="Disminuir cantidad" [disabled]="addItemSaving() || newItemQty() <= 1" (click)="decreaseNewItemQty()">
+                  <span class="material-symbols-rounded" aria-hidden="true">remove</span>
                 </button>
-              }
-            </div>
-          </div>
-          <div class="field price-row-field add-item-price-cost">
-            <label>
-              <span class="material-symbols-rounded" aria-hidden="true">receipt_long</span>
-              Precio costo
-            </label>
-            <div class="money" [class.money-readonly]="!isManualSource()" [class.money-invalid]="priceRuleInvalid()">
-              <span>MXN</span>
-              <input
-                class="input"
-                type="text"
-                [value]="priceDisplayValue('costo')"
-                (focus)="onPriceInputFocus('costo')"
-                (input)="onPriceInputChange('costo', $any($event.target).value)"
-                (blur)="onPriceInputBlur('costo')"
-                [readonly]="!isManualSource()"
-                [disabled]="!canSubmitNewItem() || !vm.canEditItems || !isManualSource()"
-              />
-            </div>
-          </div>
-          @if (clientaDiscountSummary(); as discountSummary) {
-            <p class="clienta-discount-caption">
-              <span class="material-symbols-rounded" aria-hidden="true">sell</span>
-              {{ discountSummary }}
-            </p>
-          }
-          @if (selectedCatalogProduct()) {
-            <div class="catalog-price-summary" [class.catalog-price-summary--negative]="priceRuleInvalid()" role="status" aria-live="polite">
-              <span class="material-symbols-rounded" aria-hidden="true">{{ priceRuleInvalid() ? "warning" : "trending_up" }}</span>
-              <strong>{{ catalogPriceMarginLabel() }}</strong>
-            </div>
-            @if (priceOverrideError() && !priceOverrideNeedsReason()) {
-              <p class="field-error catalog-price-error" role="alert">{{ priceOverrideError() }}</p>
-            }
-            @if (priceOverrideNeedsReason()) {
-              <div class="field catalog-price-reason">
-                <label for="catalog-price-override-reason">
-                  <span class="material-symbols-rounded" aria-hidden="true">edit_note</span>
-                  Motivo del ajuste
-                </label>
-                <textarea
-                  id="catalog-price-override-reason"
+                <input
+                  id="add-item-quantity"
                   class="input"
-                  rows="3"
-                  maxlength="280"
-                  [ngModel]="priceOverrideReason()"
-                  (ngModelChange)="priceOverrideReason.set($event); priceOverrideError.set(null)"
-                  [attr.aria-describedby]="priceOverrideError() ? 'catalog-price-override-error' : null"
-                  placeholder="Explica por qué se usará este precio (mínimo 8 caracteres)."
-                ></textarea>
-                @if (priceOverrideError()) {
-                  <p id="catalog-price-override-error" class="field-error" role="alert">{{ priceOverrideError() }}</p>
-                }
-                @if (priceRuleInvalid() && !canAuthorizeBelowCost()) {
-                  <p class="field-error" role="alert">Tu usuario no puede autorizar ventas por debajo del costo.</p>
+                  type="number"
+                  inputmode="numeric"
+                  min="1"
+                  [(ngModel)]="newItemQty"
+                  [disabled]="addItemSaving() || !vm.canEditItems"
+                />
+                <button type="button" aria-label="Aumentar cantidad" [disabled]="addItemSaving()" (click)="increaseNewItemQty()">
+                  <span class="material-symbols-rounded" aria-hidden="true">add</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="add-item-prices" [class.add-item-prices--compact]="!!selectedCatalogProduct()">
+              @if (!selectedCatalogProduct()) {
+                <div class="field price-row-field add-item-price-final">
+                  <label for="add-item-price-final">Precio final</label>
+                  <div class="money" [class.money-invalid]="priceRuleInvalid()">
+                    <span>MXN</span>
+                    <input
+                      id="add-item-price-final"
+                      class="input"
+                      type="text"
+                      [value]="priceDisplayValue('final')"
+                      (focus)="onPriceInputFocus('final')"
+                      (input)="onPriceInputChange('final', $any($event.target).value)"
+                      (blur)="onPriceInputBlur('final')"
+                      [disabled]="!canSubmitNewItem() || !vm.canEditItems"
+                    />
+                  </div>
+                </div>
+              }
+              <div class="field field-clienta-price price-row-field">
+                <label for="add-item-price-clienta">{{ selectedCatalogProduct() ? "Precio de venta" : "Precio clienta" }}</label>
+                <div class="money" [class.money-readonly]="!canEditClientaPrice(current)" [class.money-invalid]="priceRuleInvalid()">
+                  <span>$</span>
+                  <input
+                    id="add-item-price-clienta"
+                    class="input"
+                    type="text"
+                    [value]="priceDisplayValue('clienta')"
+                    (focus)="onPriceInputFocus('clienta')"
+                    (input)="onPriceInputChange('clienta', $any($event.target).value)"
+                    (blur)="onPriceInputBlur('clienta')"
+                    [readonly]="!canEditClientaPrice(current)"
+                    [disabled]="!canSubmitNewItem() || !canEditClientaPrice(current)"
+                  />
+                  @if (showClientaDiscountButton()) {
+                    <button
+                      #clientaDiscountButton
+                      type="button"
+                      class="clienta-discount-btn"
+                      aria-label="Cambiar descuento de precio clienta"
+                      title="Cambiar descuento"
+                      [attr.aria-expanded]="clientaDiscountOpen()"
+                      aria-controls="clienta-discount-panel"
+                      (click)="toggleClientaDiscount(); $event.stopPropagation()"
+                    >
+                      <span class="material-symbols-rounded" aria-hidden="true">percent</span>
+                      <span class="clienta-discount-btn__label">Descuento</span>
+                    </button>
+                  }
+                </div>
+                @if (clientaDiscountSummary(); as discountSummary) {
+                  <p class="clienta-discount-caption">
+                    {{ discountSummary }}
+                  </p>
                 }
               </div>
+
+              <div class="field price-row-field add-item-price-cost">
+                <label for="add-item-price-cost">Precio costo</label>
+                <div class="money" [class.money-readonly]="!isManualSource()" [class.money-invalid]="priceRuleInvalid()">
+                  <span>MXN</span>
+                  <input
+                    id="add-item-price-cost"
+                    class="input"
+                    type="text"
+                    [value]="priceDisplayValue('costo')"
+                    (focus)="onPriceInputFocus('costo')"
+                    (input)="onPriceInputChange('costo', $any($event.target).value)"
+                    (blur)="onPriceInputBlur('costo')"
+                    [readonly]="!isManualSource()"
+                    [disabled]="!canSubmitNewItem() || !vm.canEditItems || !isManualSource()"
+                  />
+                </div>
+              </div>
+            </div>
+
+            @if (selectedCatalogProduct()) {
+              <div class="catalog-price-summary" [class.catalog-price-summary--negative]="priceRuleInvalid()" role="status" aria-live="polite">
+                <span class="material-symbols-rounded" aria-hidden="true">{{ priceRuleInvalid() ? "warning" : "trending_up" }}</span>
+                <strong>{{ catalogPriceMarginLabel() }}</strong>
+              </div>
+              @if (priceOverrideError() && !priceOverrideNeedsReason()) {
+                <p class="field-error catalog-price-error" role="alert">{{ priceOverrideError() }}</p>
+              }
+              @if (priceOverrideNeedsReason()) {
+                <div class="field catalog-price-reason">
+                  <label for="catalog-price-override-reason">
+                    <span class="material-symbols-rounded" aria-hidden="true">edit_note</span>
+                    Motivo del ajuste
+                  </label>
+                  <textarea
+                    id="catalog-price-override-reason"
+                    class="input"
+                    rows="3"
+                    maxlength="280"
+                    [ngModel]="priceOverrideReason()"
+                    (ngModelChange)="priceOverrideReason.set($event); priceOverrideError.set(null)"
+                    [attr.aria-describedby]="priceOverrideError() ? 'catalog-price-override-error' : null"
+                    placeholder="Explica por qué se usará este precio (mínimo 8 caracteres)."
+                  ></textarea>
+                  @if (priceOverrideError()) {
+                    <p id="catalog-price-override-error" class="field-error" role="alert">{{ priceOverrideError() }}</p>
+                  }
+                  @if (priceRuleInvalid() && !canAuthorizeBelowCost()) {
+                    <p class="field-error" role="alert">Tu usuario no puede autorizar ventas por debajo del costo.</p>
+                  }
+                </div>
+              }
             }
-          }
+          </section>
           }
           @if (addItemSuccessMessage(); as successMessage) {
             <p class="add-item-success" role="status">

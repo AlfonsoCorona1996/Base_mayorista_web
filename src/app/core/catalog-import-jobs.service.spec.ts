@@ -57,6 +57,16 @@ describe("CatalogImportJobsService", () => {
       expect(job?.percent).toBe(100);
     });
 
+    it("reserva 100% para completed aunque todas las filas ya estén procesadas", () => {
+      const job = service.jobFromRaw(rawJob({
+        status: "committing",
+        valid_rows: 11_998,
+        processed_rows: 11_998,
+        percent: 99,
+      }));
+      expect(job?.percent).toBe(99);
+    });
+
     it("regresa null para un payload vacio", () => {
       expect(service.jobFromRaw(null)).toBeNull();
       expect(service.jobFromRaw(undefined)).toBeNull();
@@ -130,6 +140,16 @@ describe("CatalogImportJobsService", () => {
       expect(label("committing")).toBe("Aplicando los cambios...");
       expect(label("completed")).toBe("Completada");
       expect(label("failed")).toBe("No se pudo completar");
+    });
+
+    it("explica la fase de activación después de procesar todas las filas", () => {
+      const job = service.jobFromRaw(rawJob({
+        status: "committing",
+        valid_rows: 11_998,
+        processed_rows: 11_998,
+        worker_phase: "finalize",
+      }))!;
+      expect(service.jobStatusLabel(job)).toBe("Finalizando y activando el catálogo...");
     });
   });
 

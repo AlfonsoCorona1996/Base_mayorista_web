@@ -4,6 +4,17 @@ Todos los cambios relevantes del frontend se documentan aquí. El formato sigue
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa
 [Versionado Semántico](https://semver.org/lang/es/).
 
+## [2.2.1] - 2026-08-12
+
+### Cambiado
+
+- El catálogo solicita métricas únicamente para el proveedor visible y deja de conservar una segunda copia completa de las filas normalizadas del preview.
+
+### Corregido
+
+- El avance de una importación permanece en 99% mientras se finaliza y activa la nueva generación.
+- La fase final muestra “Finalizando y activando el catálogo” en lugar de aparentar que la publicación ya terminó.
+
 ## [2.2.0] - 2026-08-11
 
 ### Añadido

@@ -150,8 +150,7 @@ export class AddItemProductSelectionComponent implements OnDestroy {
   readonly variantListId = computed(() => `${this.panelId()}-variants`);
   readonly colorListId = computed(() => `${this.panelId()}-colors`);
   readonly canApplyDraft = computed(() => (
-    this.draftVariant().trim().length > 0
-    && this.draftColor().trim().length > 0
+    (this.draftVariant().trim().length > 0 || this.draftColor().trim().length > 0)
     && !!this.selectedDraftImageUrl()
     && !this.saving()
   ));
