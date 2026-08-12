@@ -352,6 +352,15 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
       expect(component.addItemSubmitDisabled(null)).toBeFalse();
     });
 
+    it("does not dismiss the product dialog while the item is being saved", () => {
+      component.addItemModalOpen.set(true);
+      component.addItemSaving.set(true);
+
+      component.closeAddItemModal();
+
+      expect(component.addItemModalOpen()).toBeTrue();
+    });
+
     it("calculates a catalog discount from the original sale price", () => {
       const product = makeProduct("rosa-24", "Rosa", "24");
       component.newItemSource.set("catalogo");

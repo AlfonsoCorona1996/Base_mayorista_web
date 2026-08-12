@@ -282,6 +282,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   @ViewChild("manualTitleInput") manualTitleInput?: ElementRef<HTMLInputElement>;
   @ViewChild("clientaDiscountButton") clientaDiscountButton?: ElementRef<HTMLButtonElement>;
   @ViewChild("addItemDiscountDialog") addItemDiscountDialog?: ElementRef<HTMLElement>;
+  @ViewChild(AddItemProductSelectionComponent) addItemProductSelection?: AddItemProductSelectionComponent;
   @ViewChild("pageHead") pageHead?: ElementRef<HTMLElement>;
   private readonly onAnyScroll = () => {
     const scrollingEl = document.scrollingElement as HTMLElement | null;
@@ -2721,7 +2722,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         this.sameText(product.size, option.variant) && this.sameText(product.color, option.color)
       )) || result.variants.find((product) => this.sameText(product.size, option.variant)) || result.variants[0];
       if (matching) {
-        this.applyCatalogProductSelection(matching, result);
+        this.applyCatalogProductSelection(matching, result, false);
         return;
       }
     }
@@ -4607,6 +4608,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   closeAddItemModal() {
+    if (this.addItemSaving()) return;
     this.resetAddItemForm();
     this.addItemModalOpen.set(false);
   }
@@ -4623,6 +4625,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.addItemSaving.set(false);
     this.addItemSuccessMessage.set(null);
     this.addItemError.set(null);
+    this.clientaDiscountOpen.set(false);
     this.addItemProvisionalOption.set(null);
     this.addItemProvisionalEditorOpen.set(false);
     this.pendingNewItemImageFile.set(null);
@@ -4762,6 +4765,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.newItemTitle.set("");
     this.addItemSuccessMessage.set(null);
     this.addItemError.set(null);
+    this.clientaDiscountOpen.set(false);
     this.addItemProvisionalOption.set(null);
     this.addItemProvisionalEditorOpen.set(false);
     this.pendingNewItemImageFile.set(null);
@@ -9221,6 +9225,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.selectedCatalogProduct.set(null);
     this.selectedCatalogSearchResult.set(null);
     this.captureOfficialAddItemOption();
+    this.focusSelectedProductOptions();
   }
 
   pickCatalog(doc: NormalizedListingDoc, variant: any, color: string) {
@@ -9264,13 +9269,18 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.selectedCatalogProduct.set(null);
     this.selectedCatalogSearchResult.set(null);
     this.captureOfficialAddItemOption();
+    this.focusSelectedProductOptions();
   }
 
   pickCatalogProduct(product: CatalogProduct, result: CatalogProductSearchResult | null = null) {
     this.applyCatalogProductSelection(product, result);
   }
 
-  private applyCatalogProductSelection(product: CatalogProduct, result: CatalogProductSearchResult | null = null) {
+  private applyCatalogProductSelection(
+    product: CatalogProduct,
+    result: CatalogProductSearchResult | null = null,
+    focusOptions = true,
+  ) {
     const clientaPrice = product.prices.clienta ?? product.price_clienta;
     const costPrice = product.prices.cost ?? product.price_cost;
     const defaultTier: CatalogPriceTier = clientaPrice !== null && clientaPrice !== undefined
@@ -9317,6 +9327,11 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.priceWarningReason.set(reason);
     this.priceWarningLatestImportLabel.set(this.latestSupplierImportLabel(product));
     this.captureOfficialAddItemOption();
+    if (focusOptions) this.focusSelectedProductOptions();
+  }
+
+  private focusSelectedProductOptions(): void {
+    setTimeout(() => this.addItemProductSelection?.focusOptionPicker(), 0);
   }
 
   private captureOfficialAddItemOption(): void {

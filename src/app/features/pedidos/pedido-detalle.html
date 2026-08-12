@@ -2264,7 +2264,14 @@
 
   @if (addItemModalOpen()) {
     <div class="sheet-backdrop sheet-backdrop--add-item" (click)="closeAddItemModal()">
-      <div class="sheet full sheet-add-item-ios" role="dialog" aria-modal="true" aria-labelledby="add-item-modal-title" (click)="$event.stopPropagation()">
+      <div
+        class="sheet full sheet-add-item-ios"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-item-modal-title"
+        [attr.aria-busy]="addItemSaving()"
+        (click)="$event.stopPropagation()"
+      >
         <div class="sheet-header" [attr.aria-hidden]="clientaDiscountOpen() ? 'true' : null" [attr.inert]="clientaDiscountOpen() ? '' : null">
           <div class="sheet-handle" aria-hidden="true"></div>
           <div class="sheet-title-wrap">
@@ -2273,11 +2280,16 @@
               {{ isConvertMode() ? "Convertir item manual" : (isEditMode() ? "Editar producto" : "Agregar producto") }}
             </h2>
           </div>
-          <button type="button" class="btn ghost" aria-label="Cerrar" (click)="closeAddItemModal()">
+          <button type="button" class="btn ghost" aria-label="Cerrar" [disabled]="addItemSaving()" (click)="closeAddItemModal()">
             <span class="material-symbols-rounded" aria-hidden="true">close</span>
           </button>
         </div>
-        <div class="sheet-body" [attr.aria-hidden]="clientaDiscountOpen() ? 'true' : null" [attr.inert]="clientaDiscountOpen() ? '' : null" (scroll)="onAddItemSheetScroll()">
+        <div
+          class="sheet-body"
+          [attr.aria-hidden]="clientaDiscountOpen() ? 'true' : null"
+          [attr.inert]="clientaDiscountOpen() || addItemSaving() ? '' : null"
+          (scroll)="onAddItemSheetScroll()"
+        >
           <div class="add-item" [class.add-item--catalog-v2]="!!selectedCatalogProduct()">
           @if (isConvertMode() && convertTargetItem(); as targetItem) {
             <p class="registration-alert">
@@ -2774,7 +2786,7 @@
         </div>
         </div>
         <div class="sheet-footer" [attr.aria-hidden]="clientaDiscountOpen() ? 'true' : null" [attr.inert]="clientaDiscountOpen() ? '' : null">
-          <button type="button" class="btn ghost" (click)="closeAddItemModal()">Cancelar</button>
+          <button type="button" class="btn ghost" [disabled]="addItemSaving()" (click)="closeAddItemModal()">Cancelar</button>
           <div class="add-item-primary-wrap">
             @if (addItemProvisionalEditorOpen()) {
               <span id="add-item-pending-option">Confirma o cancela la nueva opción</span>
