@@ -7719,7 +7719,7 @@ code {
 
 .sheet-add-item-ios .add-item-prices {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.2fr) minmax(0, 0.9fr);
   gap: var(--ui-space-8, 8px);
   min-width: 0;
 }
@@ -7801,6 +7801,7 @@ code {
 .sheet-add-item-ios .add-item-purchase .clienta-discount-btn {
   gap: 2px;
   padding-inline: var(--ui-space-4, 4px);
+  white-space: nowrap;
 }
 
 .sheet-add-item-ios .field-clienta-price .money > span {
@@ -7811,7 +7812,7 @@ code {
 .sheet-add-item-ios .field-clienta-price .money .input {
   flex: 1 1 auto;
   width: 0;
-  min-width: 36px;
+  min-width: 28px;
   height: 46px;
   padding-inline: var(--ui-space-4, 4px);
 }
