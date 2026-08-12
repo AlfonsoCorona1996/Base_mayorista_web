@@ -5609,6 +5609,26 @@ code {
   white-space: nowrap;
 }
 
+.catalog-option-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  max-width: 100%;
+  padding: 4px 8px;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.catalog-option-chip .material-symbols-rounded {
+  flex: 0 0 auto;
+  font-size: 0.9rem;
+}
+
 .registration-hint {
   margin-top: 8px;
 }
@@ -7502,6 +7522,335 @@ code {
 .sheet-add-item-ios select.input:-webkit-autofill {
   -webkit-text-fill-color: #0f172a !important;
   box-shadow: 0 0 0 1000px #ffffff inset !important;
+}
+
+/* Flujo de agregar producto aprobado en Storybook. El sheet mantiene una sola
+   region desplazable (body); las acciones y subdialogos no alteran su altura. */
+.sheet.full.sheet-add-item-ios {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.sheet-add-item-ios .sheet-body {
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.sheet-add-item-ios .add-item-selection {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.sheet-add-item-ios .add-item-search-action {
+  display: grid;
+  place-items: center;
+  flex: 0 0 var(--ui-touch-target-min, 44px);
+  width: var(--ui-touch-target-min, 44px);
+  min-height: var(--ui-touch-target-min, 44px);
+  padding: 0;
+  border: 0;
+  border-radius: var(--ui-radius-sm, 8px);
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.sheet-add-item-ios .add-item-search-action .material-symbols-rounded {
+  color: inherit;
+  font-size: 1.125rem;
+}
+
+.sheet-add-item-ios .add-item-search-help {
+  color: #64748b;
+  font-size: 0.6875rem;
+  line-height: 1.4;
+}
+
+.sheet-add-item-ios .add-item-stepper {
+  display: grid;
+  grid-template-columns: 44px minmax(44px, 1fr) 44px;
+  min-width: 0;
+  min-height: var(--ui-control-height-comfortable, 48px);
+  overflow: hidden;
+  border: 1px solid #cbd5e1;
+  border-radius: var(--ui-radius-sm, 8px);
+  background: #ffffff;
+}
+
+.sheet-add-item-ios .add-item-stepper button {
+  display: grid;
+  place-items: center;
+  min-width: var(--ui-touch-target-min, 44px);
+  min-height: var(--ui-touch-target-min, 44px);
+  padding: 0;
+  border: 0;
+  background: #f8fafc;
+  color: #334155;
+  cursor: pointer;
+}
+
+.sheet-add-item-ios .add-item-stepper button:first-child {
+  border-right: 1px solid #e2e8f0;
+}
+
+.sheet-add-item-ios .add-item-stepper button:last-child {
+  border-left: 1px solid #e2e8f0;
+}
+
+.sheet-add-item-ios .add-item-stepper .material-symbols-rounded {
+  font-size: 1.125rem;
+}
+
+.sheet-add-item-ios .add-item-stepper .input {
+  width: 100%;
+  min-width: 0;
+  height: 46px;
+  min-height: 46px;
+  padding: 0 var(--ui-space-4, 4px);
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  background: #ffffff;
+  font-weight: 700;
+  text-align: center;
+  appearance: textfield;
+}
+
+.sheet-add-item-ios .add-item-stepper .input::-webkit-inner-spin-button,
+.sheet-add-item-ios .add-item-stepper .input::-webkit-outer-spin-button {
+  margin: 0;
+  appearance: none;
+}
+
+.sheet-add-item-ios .field-clienta-price .money {
+  gap: var(--ui-space-4, 4px);
+  height: 48px;
+  min-height: 48px;
+  padding: 0 var(--ui-space-4, 4px) 0 var(--ui-space-8, 8px);
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.sheet-add-item-ios .field-clienta-price .money > span {
+  min-width: auto;
+  padding: 0;
+}
+
+.sheet-add-item-ios .field-clienta-price .money .input {
+  flex: 1 1 auto;
+  width: 0;
+  min-width: 36px;
+  height: 46px;
+  padding-inline: var(--ui-space-4, 4px);
+}
+
+.sheet-add-item-ios .clienta-discount-btn {
+  position: static;
+  transform: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ui-space-4, 4px);
+  flex: 0 0 auto;
+  width: auto;
+  height: 40px;
+  min-width: var(--ui-touch-target-min, 44px);
+  min-height: 40px;
+  padding: 0 var(--ui-space-8, 8px);
+  border: 0;
+  border-radius: var(--ui-radius-sm, 8px);
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 0.6875rem;
+  font-weight: 800;
+}
+
+.sheet-add-item-ios .clienta-discount-btn::before {
+  content: none;
+}
+
+.sheet-add-item-ios .clienta-discount-btn[aria-expanded="true"] {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.sheet-add-item-ios .clienta-discount-btn .material-symbols-rounded {
+  font-size: 1.125rem;
+}
+
+.sheet-add-item-ios .clienta-discount-caption {
+  margin: 0;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.sheet-add-item-ios .add-item-success,
+.sheet-add-item-ios .add-item-error {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-8, 8px);
+  min-width: 0;
+  margin: 0;
+  padding: var(--ui-space-12, 12px);
+  border-radius: var(--ui-radius-sm, 8px);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.sheet-add-item-ios .add-item-success {
+  background: #ecfdf5;
+  color: #166534;
+}
+
+.sheet-add-item-ios .add-item-error {
+  background: #fff1f2;
+  color: #9f1239;
+}
+
+.sheet-add-item-ios .add-item-error > span:nth-child(2) {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.sheet-add-item-ios .add-item-error button {
+  min-height: var(--ui-touch-target-min, 44px);
+  padding-inline: var(--ui-space-12, 12px);
+  border: 1px solid #fecdd3;
+  border-radius: var(--ui-radius-sm, 8px);
+  background: #ffffff;
+  color: #9f1239;
+  font: inherit;
+  cursor: pointer;
+}
+
+.sheet-add-item-ios .add-item-primary-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--ui-space-8, 8px);
+  min-width: 0;
+  margin-left: auto;
+}
+
+.sheet-add-item-ios .add-item-primary-wrap > span {
+  min-width: 0;
+  color: #9a3412;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.sheet-add-item-ios .add-item-primary-wrap .btn.primary {
+  width: auto;
+  min-width: 160px;
+}
+
+.add-item-spinner {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: add-item-spin 0.8s linear infinite;
+}
+
+.sheet-add-item-ios .add-item-discount-layer {
+  position: absolute;
+  inset: 0;
+  z-index: var(--ui-z-modal, 60);
+  display: grid;
+  place-items: center;
+  padding: var(--ui-space-16, 16px);
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(1px);
+}
+
+.sheet-add-item-ios .add-item-discount-dialog {
+  width: min(420px, 100%);
+  max-height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border-radius: var(--ui-radius-md, 12px);
+  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.34);
+  overscroll-behavior: contain;
+}
+
+.sheet-add-item-ios .add-item-discount-dialog app-clienta-discount-panel {
+  width: 100%;
+}
+
+@keyframes add-item-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (min-width: 960px) {
+  .sheet-add-item-ios .add-item .add-item-quantity {
+    grid-column: span 2;
+  }
+
+  .sheet-add-item-ios .add-item .add-item-price-final,
+  .sheet-add-item-ios .add-item .add-item-price-cost {
+    grid-column: span 3;
+  }
+
+  .sheet-add-item-ios .add-item .field-clienta-price {
+    grid-column: span 4;
+  }
+
+  .sheet-add-item-ios .add-item--catalog-v2 .add-item-quantity {
+    grid-column: span 3;
+  }
+
+  .sheet-add-item-ios .add-item--catalog-v2 .field-clienta-price {
+    grid-column: span 5;
+  }
+
+  .sheet-add-item-ios .add-item--catalog-v2 .add-item-price-cost {
+    grid-column: span 4;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 959px) {
+  .sheet-add-item-ios .clienta-discount-btn__label {
+    display: none;
+  }
+
+  .sheet-add-item-ios .clienta-discount-btn {
+    flex-basis: var(--ui-touch-target-min, 44px);
+    width: var(--ui-touch-target-min, 44px);
+    padding-inline: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .sheet-add-item-ios .add-item-primary-wrap {
+    display: grid;
+    width: 100%;
+    margin: 0;
+  }
+
+  .sheet-add-item-ios .add-item-primary-wrap > span {
+    text-align: center;
+  }
+
+  .sheet-add-item-ios .add-item-primary-wrap .btn.primary {
+    width: 100%;
+  }
+
+  .sheet-add-item-ios .clienta-discount-btn__label {
+    display: inline;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .add-item-spinner {
+    animation: none;
+  }
 }
 
 /* ── Sheet de pago ── */

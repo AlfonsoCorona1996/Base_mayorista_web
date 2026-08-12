@@ -37,6 +37,12 @@ import { ApiError, UserAdminApiService } from "../../services/user-admin-api.ser
 import { FIRESTORE, STORAGE } from "../../core/firebase.providers";
 import { ActivityLogComponent } from "../../shared/components/activity-log/activity-log.component";
 import { ClientaDiscountPanelComponent } from "../../shared/components/clienta-discount-panel/clienta-discount-panel.component";
+import {
+  AddItemProductSelectionComponent,
+  CatalogProductOption,
+  ProductSelectionImage,
+  ProvisionalProductOption,
+} from "../../shared/components/add-item-product-selection/add-item-product-selection.component";
 import { BarcodeScannerComponent } from "../../shared/barcode-scanner/barcode-scanner.component";
 import { AuthzService } from "../../core/authz.service";
 import { AuthService } from "../../core/auth.service";
@@ -230,6 +236,7 @@ const CATALOG_QUERY_SYNONYMS: Record<string, string[]> = {
     NgStyle,
     ActivityLogComponent,
     ClientaDiscountPanelComponent,
+    AddItemProductSelectionComponent,
     BarcodeScannerComponent,
   ],
   templateUrl: "./pedido-detalle.html",
@@ -273,6 +280,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   @ViewChild("timelineSection") timelineSection?: ElementRef<HTMLElement>;
   @ViewChild("productSearchInput") productSearchInput?: ElementRef<HTMLInputElement>;
   @ViewChild("manualTitleInput") manualTitleInput?: ElementRef<HTMLInputElement>;
+  @ViewChild("clientaDiscountButton") clientaDiscountButton?: ElementRef<HTMLButtonElement>;
+  @ViewChild("addItemDiscountDialog") addItemDiscountDialog?: ElementRef<HTMLElement>;
   @ViewChild("pageHead") pageHead?: ElementRef<HTMLElement>;
   private readonly onAnyScroll = () => {
     const scrollingEl = document.scrollingElement as HTMLElement | null;
@@ -443,6 +452,17 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   // ─────────────────────────────────────────────────────────────────────────
 
   addItemModalOpen = signal(false);
+  addItemSaving = signal(false);
+  addItemSuccessMessage = signal<string | null>(null);
+  addItemError = signal<string | null>(null);
+  addItemProvisionalOption = signal<ProvisionalProductOption | null>(null);
+  addItemProvisionalEditorOpen = signal(false);
+  pendingNewItemImageFile = signal<File | null>(null);
+  selectedCatalogSearchResult = signal<CatalogProductSearchResult | null>(null);
+  officialItemVariant = signal("");
+  officialItemColor = signal("");
+  officialItemImage = signal<string | null>(null);
+  officialItemVariantId = signal<string | null>(null);
   addItemMode = signal<"add" | "convert" | "edit">("add");
   convertTargetItemId = signal<string | null>(null);
   editTargetItemId = signal<string | null>(null);
@@ -526,7 +546,6 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   priceOverrideReason = signal("");
   priceOverrideError = signal<string | null>(null);
   clientaDiscountOpen = signal(false);
-  clientaDiscountOpenUpward = signal(false);
   clientaDiscountMode = signal<"pct" | "fixed">("pct");
   clientaDiscountPct = signal(25);
   clientaDiscountFixed = signal(0);
@@ -2614,12 +2633,142 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     return this.isEditMode() && this.orderBusinessId(order) === "bm";
   }
 
-  /** Selector rapido de descuento para "Precio clienta" — solo aplica a items sin
-   * el picker de tarifas de catalogo (ver selectedCatalogProduct), que ya resuelve
-   * su propio precio via catalogBasePrice()/catalogPriceTier() y ya no tiene precio
-   * publico del cual descontar. */
   showClientaDiscountButton(): boolean {
-    return this.canSubmitNewItem() && !this.selectedCatalogProduct();
+    return this.canSubmitNewItem() && this.clientaDiscountBasePrice() !== null;
+  }
+
+  clientaDiscountBasePrice(): number | null {
+    if (this.selectedCatalogProduct()) return this.catalogBasePrice("clienta");
+    return this.newItemPricePublic();
+  }
+
+  addItemSubmitDisabled(order: Order | null = this.order()): boolean {
+    return !this.canSubmitNewItem()
+      || !this.canEditItems(order)
+      || this.addItemSaving()
+      || this.addItemProvisionalEditorOpen();
+  }
+
+  addItemSelectionImages(): readonly ProductSelectionImage[] {
+    const rows: ProductSelectionImage[] = [];
+    const seen = new Set<string>();
+    const add = (url: string | null | undefined, label: string, color: string | null = null) => {
+      const cleanUrl = String(url || "").trim();
+      if (!cleanUrl || seen.has(cleanUrl)) return;
+      seen.add(cleanUrl);
+      rows.push({ id: `image-${rows.length + 1}`, url: cleanUrl, label, color });
+    };
+
+    const doc = this.selectedCatalogDoc();
+    for (const color of doc?.product_colors || []) add(color.image_url, color.name || "Imagen por color", color.name || null);
+    for (const [index, url] of (doc?.cover_images || []).entries()) add(url, `Imagen general ${index + 1}`);
+    add(doc?.preview_image_url, "Vista principal");
+
+    const result = this.selectedCatalogSearchResult();
+    for (const variant of result?.variants || []) add(variant.image_url, variant.color || variant.size || variant.name, variant.color || null);
+    add(this.selectedCatalogProduct()?.image_url, this.newItemColor() || "Imagen del producto", this.newItemColor() || null);
+    add(this.selectedPreview()?.image, this.newItemColor() || "Imagen seleccionada", this.newItemColor() || null);
+    return rows;
+  }
+
+  addItemCurrentImageId(): string | null {
+    const current = this.selectedPreview()?.image;
+    return this.addItemSelectionImages().find((image) => image.url === current)?.id || null;
+  }
+
+  addItemAvailableVariants(): readonly string[] {
+    const resultVariants = (this.selectedCatalogSearchResult()?.variants || [])
+      .map((product) => String(product.size || "").trim())
+      .filter(Boolean);
+    const options = [...this.catalogVariantOptions(), ...resultVariants];
+    if (!options.length && this.newItemVariant().trim()) options.push(this.newItemVariant().trim());
+    return Array.from(new Set(options));
+  }
+
+  addItemAvailableColors(): readonly string[] {
+    const resultColors = (this.selectedCatalogSearchResult()?.variants || [])
+      .map((product) => String(product.color || "").trim())
+      .filter(Boolean);
+    const options = [...this.catalogColorOptions(), ...resultColors];
+    if (!options.length && this.newItemColor().trim()) options.push(this.newItemColor().trim());
+    return Array.from(new Set(options));
+  }
+
+  addItemCombinationCount(): number {
+    const variants = this.selectedCatalogSearchResult()?.variants;
+    if (variants?.length) return variants.length;
+    return this.addItemAvailableVariants().length * this.addItemAvailableColors().length;
+  }
+
+  selectedProductCode(): string | null {
+    const product = this.selectedCatalogProduct();
+    if (product) return this.catalogProductDisplayCode(product);
+    return this.newItemSku() || this.newItemProductId();
+  }
+
+  clearSelectedAddItemProduct(): void {
+    const source = this.newItemSource();
+    this.clearAddItemDraftForSourceChange();
+    this.newItemSource.set(source);
+    this.showProductList.set(true);
+    this.focusProductSearchInput();
+  }
+
+  onAddItemCatalogOptionChange(option: CatalogProductOption): void {
+    const result = this.selectedCatalogSearchResult();
+    if (result?.variants.length) {
+      const matching = result.variants.find((product) => (
+        this.sameText(product.size, option.variant) && this.sameText(product.color, option.color)
+      )) || result.variants.find((product) => this.sameText(product.size, option.variant)) || result.variants[0];
+      if (matching) {
+        this.applyCatalogProductSelection(matching, result);
+        return;
+      }
+    }
+    if (option.variant !== this.newItemVariant()) this.onVariantChange(option.variant);
+    if (option.color !== this.newItemColor() && this.catalogColorOptions().includes(option.color)) this.onColorChange(option.color);
+    this.captureOfficialAddItemOption();
+  }
+
+  onAddItemProvisionalEditorChange(open: boolean): void {
+    this.addItemProvisionalEditorOpen.set(open);
+  }
+
+  onAddItemProvisionalApply(option: ProvisionalProductOption): void {
+    if (this.newItemSource() !== "catalogo") return;
+    this.addItemProvisionalOption.set(option);
+    this.pendingNewItemImageFile.set(option.uploadedFile || null);
+    this.newItemVariant.set(option.variant);
+    this.newItemColor.set(option.color);
+    this.newItemVariantId.set(null);
+    this.selectedPreview.update((preview) => preview ? {
+      ...preview,
+      variant: option.variant,
+      color: option.color,
+      image: option.imageUrl,
+    } : preview);
+  }
+
+  clearAddItemProvisionalOption(): void {
+    this.addItemProvisionalOption.set(null);
+    this.pendingNewItemImageFile.set(null);
+    this.newItemVariant.set(this.officialItemVariant());
+    this.newItemColor.set(this.officialItemColor());
+    this.newItemVariantId.set(this.officialItemVariantId());
+    this.selectedPreview.update((preview) => preview ? {
+      ...preview,
+      variant: this.officialItemVariant(),
+      color: this.officialItemColor(),
+      image: this.officialItemImage(),
+    } : preview);
+  }
+
+  increaseNewItemQty(): void {
+    this.newItemQty.update((qty) => Math.max(1, Math.trunc(Number(qty) || 1)) + 1);
+  }
+
+  decreaseNewItemQty(): void {
+    this.newItemQty.update((qty) => Math.max(1, Math.trunc(Number(qty) || 1) - 1));
   }
 
   nextStatus(order: Order | null): OrderStatus | null {
@@ -4388,6 +4537,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.addItemMode.set("add");
     this.addItemModalOpen.set(true);
     void this.refreshAddItemSources({ force: true });
+    this.focusProductSearchInput();
   }
 
   openConvertItemModal(item: OrderItem) {
@@ -4403,6 +4553,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.newItemPricePublic.set(item.price_public ?? null);
     this.newItemPriceClienta.set(item.price_clienta ?? null);
     this.newItemPriceCost.set(item.price_cost ?? null);
+    this.newItemDiscount.set(item.discount_pct ?? null);
     this.updatePriceDraftFromSignals();
     this.addItemModalOpen.set(true);
     void this.refreshAddItemSources({ force: true });
@@ -4423,6 +4574,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.newItemPricePublic.set(item.price_public ?? null);
     this.newItemPriceClienta.set(item.price_clienta ?? null);
     this.newItemPriceCost.set(item.price_cost ?? null);
+    this.newItemDiscount.set(item.discount_pct ?? null);
     this.newItemInventoryId.set(item.inventory_id || null);
     this.newItemSupplierId.set(item.supplier_id || null);
     this.newItemProductId.set(item.product_id || null);
@@ -4440,6 +4592,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       image: item.image_url || null,
       source: item.source === "inventario" ? "Inventario" : item.source === "catalogo" ? "Catalogo" : "Manual",
     });
+    this.captureOfficialAddItemOption();
     this.addItemModalOpen.set(true);
     if (item.product_ref_type === "catalog_product" && item.product_id) {
       const requestedItemId = item.item_id;
@@ -4467,6 +4620,17 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.convertTargetItemId.set(null);
     this.editTargetItemId.set(null);
     this.newItemSource.set("catalogo");
+    this.addItemSaving.set(false);
+    this.addItemSuccessMessage.set(null);
+    this.addItemError.set(null);
+    this.addItemProvisionalOption.set(null);
+    this.addItemProvisionalEditorOpen.set(false);
+    this.pendingNewItemImageFile.set(null);
+    this.selectedCatalogSearchResult.set(null);
+    this.officialItemVariant.set("");
+    this.officialItemColor.set("");
+    this.officialItemImage.set(null);
+    this.officialItemVariantId.set(null);
     this.newItemTitle.set("");
     this.newItemVariant.set("");
     this.newItemColor.set("");
@@ -4474,6 +4638,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.newItemPricePublic.set(null);
     this.newItemPriceCost.set(null);
     this.newItemPriceClienta.set(null);
+    this.newItemDiscount.set(null);
     this.priceInputFocused.set(null);
     this.priceInputDraft.set({ final: "", clienta: "", costo: "" });
     this.supplierDiscountPct.set(null);
@@ -4518,6 +4683,10 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     if (normalized !== "manual") {
       void this.refreshAddItemSources();
     }
+    setTimeout(() => {
+      if (normalized === "manual") this.manualTitleInput?.nativeElement.focus();
+      else this.productSearchInput?.nativeElement.focus();
+    }, 0);
   }
 
   onNewItemSearchChange(value: string): void {
@@ -4575,18 +4744,39 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     return product.primary_barcode || product.supplier_sku || product.sku || "Sin código";
   }
 
+  catalogSearchResultRepresentative(result: CatalogProductSearchResult): CatalogProduct | null {
+    return result.product || result.variants[0] || null;
+  }
+
+  catalogSearchResultOptionSummary(result: CatalogProductSearchResult): string {
+    const colors = new Set(result.variants.map((variant) => String(variant.color || "").trim()).filter(Boolean));
+    const sizes = new Set(result.variants.map((variant) => String(variant.size || "").trim()).filter(Boolean));
+    return `${colors.size} colores · ${sizes.size} variantes · ${result.variants.length} combinaciones`;
+  }
+
   private clearAddItemDraftForSourceChange() {
     if (this.catalogProductSearchTimer) {
       clearTimeout(this.catalogProductSearchTimer);
       this.catalogProductSearchTimer = null;
     }
     this.newItemTitle.set("");
+    this.addItemSuccessMessage.set(null);
+    this.addItemError.set(null);
+    this.addItemProvisionalOption.set(null);
+    this.addItemProvisionalEditorOpen.set(false);
+    this.pendingNewItemImageFile.set(null);
+    this.selectedCatalogSearchResult.set(null);
+    this.officialItemVariant.set("");
+    this.officialItemColor.set("");
+    this.officialItemImage.set(null);
+    this.officialItemVariantId.set(null);
     this.newItemVariant.set("");
     this.newItemColor.set("");
     this.newItemQty.set(1);
     this.newItemPricePublic.set(null);
     this.newItemPriceCost.set(null);
     this.newItemPriceClienta.set(null);
+    this.newItemDiscount.set(null);
     this.priceInputFocused.set(null);
     this.priceInputDraft.set({ final: "", clienta: "", costo: "" });
     this.supplierDiscountPct.set(null);
@@ -4623,15 +4813,34 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   async submitItemForm(order: Order | null) {
-    if (this.isEditMode()) {
-      await this.updateExistingItem(order);
-      return;
+    if (this.addItemSubmitDisabled(order)) return;
+    const mode = this.addItemMode();
+    const title = this.newItemTitle().trim() || "Producto";
+    this.addItemSaving.set(true);
+    this.addItemError.set(null);
+    this.addItemSuccessMessage.set(null);
+    this.error.set(null);
+    try {
+      if (mode === "edit") {
+        await this.updateExistingItem(order);
+      } else if (mode === "convert") {
+        await this.convertManualItem(order);
+      } else {
+        await this.addItem(order);
+      }
+      if (this.error()) {
+        this.addItemError.set(this.error());
+      } else if (mode === "add" && !this.selectedPreview() && !this.newItemTitle().trim()) {
+        this.addItemSuccessMessage.set(`${title} añadido. Puedes agregar otro producto.`);
+        this.focusProductSearchInput();
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "No se pudo guardar el producto. Intenta nuevamente.";
+      this.error.set(message);
+      this.addItemError.set(message);
+    } finally {
+      this.addItemSaving.set(false);
     }
-    if (this.isConvertMode()) {
-      await this.convertManualItem(order);
-      return;
-    }
-    await this.addItem(order);
   }
 
   packageDisplayLabel(order: Order, pkg: PackageRecord): string {
@@ -7391,7 +7600,9 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     if (this.orderHeadMenuOpen() && !target?.closest(".order-head-menu")) {
       this.orderHeadMenuOpen.set(false);
     }
-    if (this.clientaDiscountOpen() && !target?.closest(".field-clienta-price")) {
+    if (this.clientaDiscountOpen()
+      && !target?.closest(".field-clienta-price")
+      && !target?.closest(".add-item-discount-dialog")) {
       this.clientaDiscountOpen.set(false);
     }
     if (this.quickDiscountItemId() && !target?.closest(".price-stack")) {
@@ -8155,6 +8366,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     if (source === "catalogo") {
       await this.ensureSelectedCatalogProductImage();
     }
+    const itemId = `item-${Date.now()}`;
+    await this.prepareProvisionalItemImage(order.order_id, itemId);
     const state: OrderItemState = source === "inventario" ? "reservado_inventario" : "confirmando_proveedor";
     const lateMeta: Partial<OrderItem> | undefined = lateNote
       ? {
@@ -8166,7 +8379,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
           late_addition_added_by: "admin",
         }
       : undefined;
-    const item: OrderItem = this.buildOrderItemFromForm(`item-${Date.now()}`, source, state, lateMeta);
+    const item: OrderItem = this.buildOrderItemFromForm(itemId, source, state, lateMeta);
     const existingMatch = (order.items || []).find((row) => this.isSamePendingProduct(row, item));
     const canMergeExisting = !!existingMatch && this.canMergeIntoExistingRow(order, existingMatch) && !lateNote;
     if (existingMatch && canMergeExisting) {
@@ -8296,6 +8509,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     if (source === "catalogo") {
       await this.ensureSelectedCatalogProductImage();
     }
+    await this.prepareProvisionalItemImage(order.order_id, target.item_id);
     const converted = this.buildOrderItemFromForm(target.item_id, source, state);
     const nextItems = (order.items || []).map((item) => (item.item_id === target.item_id ? converted : item));
     await this.orders.updateItems(order.order_id, nextItems);
@@ -8352,6 +8566,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     if (this.newItemSource() === "catalogo") {
       await this.ensureSelectedCatalogProductImage();
     }
+    await this.prepareProvisionalItemImage(order.order_id, target.item_id);
 
     const nextQty = Math.max(1, this.newItemQty());
     const packedQty = this.itemPackedQty(live, target.item_id);
@@ -8396,6 +8611,9 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       discount_pct: this.newItemDiscount(),
       confirmed_qty: nextConfirmedQty,
       image_url: this.selectedPreview()?.image || target.image_url || null,
+      ...(this.newItemSource() === "catalogo"
+        ? this.catalogProvisionalOrderItemMeta(target.product_id || null, target)
+        : {}),
     };
 
     const nextItems = (live.items || []).map((item) => (item.item_id === target.item_id ? updated : item));
@@ -8506,8 +8724,39 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       discount_pct: this.newItemDiscount(),
       inventory_id: source === "inventario" ? this.newItemInventoryId() : null,
       image_url: this.selectedPreview()?.image || null,
+      ...(source === "catalogo"
+        ? this.catalogProvisionalOrderItemMeta(selectedImportedProduct?.product_id || this.newItemProductId())
+        : {}),
     };
     return { ...base, ...(extra || {}) };
+  }
+
+  private async prepareProvisionalItemImage(orderId: string, itemId: string): Promise<void> {
+    const file = this.pendingNewItemImageFile();
+    if (!file || !this.addItemProvisionalOption()) return;
+    const imageUrl = await this.orders.uploadOrderItemDraftImage(orderId, itemId, file);
+    this.selectedPreview.update((preview) => preview ? { ...preview, image: imageUrl } : preview);
+    this.addItemProvisionalOption.update((option) => option ? { ...option, imageUrl, uploadedFile: null } : option);
+    this.pendingNewItemImageFile.set(null);
+  }
+
+  private catalogProvisionalOrderItemMeta(baseProductId: string | null, existing?: OrderItem): Partial<OrderItem> {
+    const option = this.addItemProvisionalOption();
+    if (!option) {
+      if (existing?.catalog_option_status !== "pending_review") return {};
+      return {
+        catalog_option_status: "pending_review",
+        catalog_option_base_product_id: existing?.catalog_option_base_product_id || null,
+        catalog_option_image_source: existing?.catalog_option_image_source || null,
+        catalog_option_requested_at: existing?.catalog_option_requested_at || null,
+      };
+    }
+    return {
+      catalog_option_status: "pending_review",
+      catalog_option_base_product_id: baseProductId,
+      catalog_option_image_source: option.uploadedFileName ? "upload" : "catalog",
+      catalog_option_requested_at: new Date().toISOString(),
+    };
   }
 
   private orderItemPriceAuditMeta(item: OrderItem): Record<string, unknown> {
@@ -8593,6 +8842,9 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     // Detect rows that represent the same SKU/product+variant+color.
     // Late changes decide later if we merge or keep a separate line.
     if (existing.state === "cancelado" || existing.state === "devuelto") return false;
+    if (existing.catalog_option_status === "pending_review" || incoming.catalog_option_status === "pending_review") {
+      return false;
+    }
     if (existing.inventory_id && incoming.inventory_id) {
       return existing.inventory_id === incoming.inventory_id;
     }
@@ -8942,6 +9194,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.newItemPricePublic.set(final);
     this.newItemPriceClienta.set(this.computeClientaPrice(final));
     this.newItemPriceCost.set(costo);
+    this.newItemDiscount.set(final === null ? null : 25);
     this.updatePriceDraftFromSignals();
     this.newItemSource.set("inventario");
     this.newItemSearch.set("");
@@ -8966,6 +9219,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     });
     this.selectedCatalogDoc.set(null);
     this.selectedCatalogProduct.set(null);
+    this.selectedCatalogSearchResult.set(null);
+    this.captureOfficialAddItemOption();
   }
 
   pickCatalog(doc: NormalizedListingDoc, variant: any, color: string) {
@@ -8982,6 +9237,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.newItemPricePublic.set(prices.final);
     this.newItemPriceClienta.set(this.computeClientaPrice(prices.final));
     this.newItemPriceCost.set(prices.costo);
+    this.newItemDiscount.set(prices.final === null ? null : 25);
     this.updatePriceDraftFromSignals();
     this.newItemSource.set("catalogo");
     this.newItemSearch.set("");
@@ -9006,9 +9262,15 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     });
     this.selectedCatalogDoc.set(doc);
     this.selectedCatalogProduct.set(null);
+    this.selectedCatalogSearchResult.set(null);
+    this.captureOfficialAddItemOption();
   }
 
-  pickCatalogProduct(product: CatalogProduct) {
+  pickCatalogProduct(product: CatalogProduct, result: CatalogProductSearchResult | null = null) {
+    this.applyCatalogProductSelection(product, result);
+  }
+
+  private applyCatalogProductSelection(product: CatalogProduct, result: CatalogProductSearchResult | null = null) {
     const clientaPrice = product.prices.clienta ?? product.price_clienta;
     const costPrice = product.prices.cost ?? product.price_cost;
     const defaultTier: CatalogPriceTier = clientaPrice !== null && clientaPrice !== undefined
@@ -9020,6 +9282,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.newItemPricePublic.set(null);
     this.newItemPriceClienta.set(clientaPrice);
     this.newItemPriceCost.set(costPrice);
+    this.newItemDiscount.set(null);
     this.catalogPriceTier.set(defaultTier);
     this.priceOverrideReason.set("");
     this.priceOverrideError.set(null);
@@ -9047,11 +9310,27 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     });
     this.selectedCatalogDoc.set(null);
     this.selectedCatalogProduct.set(product);
+    this.selectedCatalogSearchResult.set(result);
     this.catalogProductSuggestions.set([]);
     const reason = this.catalogProductPriceWarningReason(product);
     this.priceWarningAckReason.set(null);
     this.priceWarningReason.set(reason);
     this.priceWarningLatestImportLabel.set(this.latestSupplierImportLabel(product));
+    this.captureOfficialAddItemOption();
+  }
+
+  private captureOfficialAddItemOption(): void {
+    this.addItemProvisionalOption.set(null);
+    this.addItemProvisionalEditorOpen.set(false);
+    this.pendingNewItemImageFile.set(null);
+    this.officialItemVariant.set(this.newItemVariant());
+    this.officialItemColor.set(this.newItemColor());
+    this.officialItemImage.set(this.selectedPreview()?.image || null);
+    this.officialItemVariantId.set(this.newItemVariantId());
+  }
+
+  private sameText(left: string | null | undefined, right: string | null | undefined): boolean {
+    return String(left || "").trim().toLocaleLowerCase("es-MX") === String(right || "").trim().toLocaleLowerCase("es-MX");
   }
 
   private catalogProductPriceWarningReason(product: CatalogProduct | null): string | null {
@@ -9424,22 +9703,42 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     return Number((finalPrice * 0.75).toFixed(2));
   }
 
-  /** Abre el popover hacia abajo por defecto, pero si no cabe dentro del
-   * area visible del modal (estimando su alto real, ~360px) lo abre hacia
-   * arriba en su lugar, igual que hace el prototipo. Asi nunca requiere
-   * scroll para verse completo. */
-  toggleClientaDiscount(anchor?: HTMLElement) {
-    const willOpen = !this.clientaDiscountOpen();
-    if (willOpen && anchor) {
-      const estimatedPopoverHeight = 360;
-      const spaceBelow = window.innerHeight - anchor.getBoundingClientRect().bottom;
-      this.clientaDiscountOpenUpward.set(spaceBelow < estimatedPopoverHeight);
+  toggleClientaDiscount() {
+    if (this.clientaDiscountOpen()) {
+      this.closeClientaDiscount();
+      return;
     }
-    this.clientaDiscountOpen.update((open) => !open);
+    this.clientaDiscountOpen.set(true);
+    setTimeout(() => this.addItemDiscountDialog?.nativeElement.querySelector<HTMLButtonElement>("button")?.focus(), 0);
   }
 
   closeClientaDiscount() {
     this.clientaDiscountOpen.set(false);
+    setTimeout(() => this.clientaDiscountButton?.nativeElement.focus(), 0);
+  }
+
+  onAddItemDiscountKeydown(event: KeyboardEvent): void {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      this.closeClientaDiscount();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const dialog = this.addItemDiscountDialog?.nativeElement;
+    if (!dialog) return;
+    const focusable = Array.from(dialog.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    ));
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && (document.activeElement === first || !dialog.contains(document.activeElement))) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
   }
 
   setClientaDiscountMode(mode: "pct" | "fixed") {
@@ -9456,7 +9755,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   previewClientaDiscount(): number | null {
-    const final = this.newItemPricePublic();
+    const final = this.clientaDiscountBasePrice();
     if (final === null || final === undefined) return null;
     const result =
       this.clientaDiscountMode() === "pct"
@@ -9468,15 +9767,17 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   applyClientaDiscount() {
     const value = this.previewClientaDiscount();
     if (value === null) return;
+    const base = this.clientaDiscountBasePrice();
     this.setPriceValue("clienta", value);
+    this.newItemDiscount.set(base && base > 0 ? Number((((base - value) / base) * 100).toFixed(2)) : null);
     this.updatePriceDraftFromSignals();
-    this.clientaDiscountOpen.set(false);
+    this.closeClientaDiscount();
   }
 
   /** Leyenda siempre en vivo con el descuento efectivo actual, sin importar si
    * se fijo escribiendo directo, con el picker de tarifas o con este popover. */
   clientaDiscountSummary(): string | null {
-    const final = this.newItemPricePublic();
+    const final = this.clientaDiscountBasePrice();
     const clienta = this.newItemPriceClienta();
     if (final === null || final === undefined || final <= 0) return null;
     if (clienta === null || clienta === undefined) return null;

@@ -26,13 +26,13 @@ import { ShipmentsService } from "../../core/shipments.service";
 import { OperationalExpenseReportsService } from "../../core/operational-expense-reports.service";
 import { UserAdminApiService } from "../../services/user-admin-api.service";
 import type { OrderItem } from "../../core/orders.service";
-import type { CatalogProduct } from "../../core/catalog-products.service";
+import type { CatalogProduct, CatalogProductSearchResult } from "../../core/catalog-products.service";
 
 /**
  * Estas pruebas cubren solo la LOGICA nueva/modificada de esta ronda de
- * fidelidad literal al prototipo: el selector de descuento para "Precio
- * clienta" (popover, leyenda en vivo, badge por producto) y el cambio de
- * tabs. No renderizan el template (no se llama a fixture.detectChanges())
+ * fidelidad literal al prototipo: selección agrupada, opción provisional,
+ * descuento de "Precio clienta" en diálogo, badge por producto y tabs.
+ * No renderizan el template (no se llama a fixture.detectChanges())
  * para evitar disparar ngOnInit(), que dispara llamadas reales a servicios
  * (watch() de suscripciones, resolucion de ruta) fuera del alcance de estas
  * pruebas unitarias.
@@ -121,7 +121,7 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
     });
   });
 
-  describe("showClientaDiscountButton (visible en BM/manual, oculto con producto de Catalogo)", () => {
+  describe("showClientaDiscountButton (visible cuando existe un precio base)", () => {
     function makeCatalogProduct(overrides: Partial<CatalogProduct> = {}): CatalogProduct {
       return {
         product_id: "prod-1",
@@ -141,15 +141,17 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
 
     it("is visible as soon as the form can be submitted (manual source)", () => {
       component.newItemSource.set("manual");
+      component.newItemPricePublic.set(100);
       expect(component.canSubmitNewItem()).toBeTrue();
       expect(component.showClientaDiscountButton()).toBeTrue();
     });
 
-    it("is hidden once a Catalogo product is selected (no hay precio publico del cual descontar)", () => {
+    it("uses the original catalog sale price as the discount base", () => {
       component.newItemSource.set("manual");
       component.selectedCatalogProduct.set(makeCatalogProduct());
       expect(component.canSubmitNewItem()).toBeTrue();
-      expect(component.showClientaDiscountButton()).toBeFalse();
+      expect(component.clientaDiscountBasePrice()).toBe(80);
+      expect(component.showClientaDiscountButton()).toBeTrue();
     });
   });
 
@@ -269,6 +271,99 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
 
       expect(component.newItemPriceClienta()).toBe(200);
       expect(component.clientaDiscountOpen()).toBeTrue();
+    });
+  });
+
+  describe("flujo completo de seleccion y opcion provisional", () => {
+    function makeProduct(id: string, color: string, size: string): CatalogProduct {
+      return {
+        product_id: id,
+        catalog_product_id: id,
+        business_id: "catalogo",
+        name: "Sandalia Winnie Pooh",
+        color,
+        size,
+        sku: id,
+        prices: { cost: 50, clienta: 100, currency: "MXN" },
+        price_cost: 50,
+        price_clienta: 100,
+        sellable: true,
+        image_url: `https://example.test/${color}.jpg`,
+      } as CatalogProduct;
+    }
+
+    it("summarizes a grouped catalog result instead of exposing every combination as a search row", () => {
+      const variants = [
+        makeProduct("rosa-24", "Rosa", "24"),
+        makeProduct("rosa-25", "Rosa", "25"),
+        makeProduct("negro-24", "Negro", "24"),
+      ];
+      const result: CatalogProductSearchResult = {
+        result_id: "sandalia",
+        product: variants[0],
+        group: null,
+        bundle: null,
+        variants,
+        matched_identifier: null,
+        requires_selection: true,
+      };
+
+      expect(component.catalogSearchResultRepresentative(result)?.product_id).toBe("rosa-24");
+      expect(component.catalogSearchResultOptionSummary(result)).toBe("2 colores · 2 variantes · 3 combinaciones");
+    });
+
+    it("keeps provisional edits separate until they are explicitly confirmed", () => {
+      component.newItemSource.set("catalogo");
+      component.newItemVariant.set("24");
+      component.newItemColor.set("Rosa");
+      component.selectedPreview.set({
+        title: "Sandalia Winnie Pooh",
+        variant: "24",
+        color: "Rosa",
+        image: "https://example.test/rosa.jpg",
+        source: "Catálogo",
+      });
+      component.onAddItemProvisionalEditorChange(true);
+
+      expect(component.addItemProvisionalEditorOpen()).toBeTrue();
+
+      component.onAddItemProvisionalApply({
+        variant: "26",
+        color: "Verde menta",
+        imageId: "verde",
+        imageUrl: "https://example.test/verde.jpg",
+        uploadedFileName: null,
+      });
+
+      expect(component.newItemVariant()).toBe("26");
+      expect(component.newItemColor()).toBe("Verde menta");
+      expect(component.selectedPreview()?.image).toContain("verde.jpg");
+      expect(component.addItemProvisionalOption()).not.toBeNull();
+    });
+
+    it("blocks the order action while the provisional editor has an unconfirmed draft", () => {
+      spyOn(component, "canSubmitNewItem").and.returnValue(true);
+      spyOn(component, "canEditItems").and.returnValue(true);
+
+      component.onAddItemProvisionalEditorChange(true);
+      expect(component.addItemSubmitDisabled(null)).toBeTrue();
+
+      component.onAddItemProvisionalEditorChange(false);
+      expect(component.addItemSubmitDisabled(null)).toBeFalse();
+    });
+
+    it("calculates a catalog discount from the original sale price", () => {
+      const product = makeProduct("rosa-24", "Rosa", "24");
+      component.newItemSource.set("catalogo");
+      component.selectedCatalogProduct.set(product);
+      component.newItemPriceClienta.set(100);
+      component.setClientaDiscountPct(25);
+
+      expect(component.previewClientaDiscount()).toBe(75);
+      component.applyClientaDiscount();
+      expect(component.newItemPriceClienta()).toBe(75);
+      expect(component.newItemDiscount()).toBe(25);
+      expect(component.catalogPriceTier()).toBe("manual");
     });
   });
 

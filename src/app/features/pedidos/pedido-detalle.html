@@ -952,6 +952,15 @@
                     @if (isManualItem(item)) {
                       <span class="registration-chip">Pendiente de registro</span>
                     }
+                    @if (item.catalog_option_status === "pending_review") {
+                      <span
+                        class="catalog-option-chip"
+                        title="Esta combinación se usó sólo en el pedido y requiere revisión de catálogo"
+                      >
+                        <span class="material-symbols-rounded" aria-hidden="true">pending_actions</span>
+                        Pendiente de catálogo
+                      </span>
+                    }
                     @if (card.returnedQty > 0) {
                       <span class="return-status-chip" [class.return-status-chip--full]="card.isReturned">
                         {{ card.isReturned ? "Devuelto" : card.returnedQty + " devuelta(s) · " + card.netQty + " neta(s)" }}
@@ -2256,7 +2265,7 @@
   @if (addItemModalOpen()) {
     <div class="sheet-backdrop sheet-backdrop--add-item" (click)="closeAddItemModal()">
       <div class="sheet full sheet-add-item-ios" role="dialog" aria-modal="true" aria-labelledby="add-item-modal-title" (click)="$event.stopPropagation()">
-        <div class="sheet-header">
+        <div class="sheet-header" [attr.aria-hidden]="clientaDiscountOpen() ? 'true' : null" [attr.inert]="clientaDiscountOpen() ? '' : null">
           <div class="sheet-handle" aria-hidden="true"></div>
           <div class="sheet-title-wrap">
             <h2 id="add-item-modal-title">
@@ -2268,8 +2277,8 @@
             <span class="material-symbols-rounded" aria-hidden="true">close</span>
           </button>
         </div>
-        <div class="sheet-body" (scroll)="onAddItemSheetScroll()">
-          <div class="add-item">
+        <div class="sheet-body" [attr.aria-hidden]="clientaDiscountOpen() ? 'true' : null" [attr.inert]="clientaDiscountOpen() ? '' : null" (scroll)="onAddItemSheetScroll()">
+          <div class="add-item" [class.add-item--catalog-v2]="!!selectedCatalogProduct()">
           @if (isConvertMode() && convertTargetItem(); as targetItem) {
             <p class="registration-alert">
               Convirtiendo: <strong>{{ targetItem.title }}</strong>. Selecciona catalogo o inventario para reemplazar este item manual.
@@ -2322,7 +2331,7 @@
               }
             </div>
           </div>
-          @if (!isManualSource() && !isEditMode()) {
+          @if (!isManualSource() && !isEditMode() && !selectedPreview()) {
             <div class="product-search">
               <div class="field">
                 <label>
@@ -2339,10 +2348,19 @@
                     [ngModel]="newItemSearch()"
                     (ngModelChange)="onNewItemSearchChange($event)"
                   (focus)="showProductList.set(true)"
-                  (keydown.escape)="showProductList.set(false)"
+                    (keydown.escape)="showProductList.set(false)"
                     [disabled]="!vm.canEditItems"
                   />
+                  @if (newItemSearch()) {
+                    <button type="button" class="add-item-search-action" aria-label="Limpiar búsqueda" (click)="onNewItemSearchChange(''); productSearchInput.focus()">
+                      <span class="material-symbols-rounded" aria-hidden="true">close</span>
+                    </button>
+                  }
+                  <button type="button" class="add-item-search-action" aria-label="Escanear código de barras" (click)="openBarcodeScanner('add')">
+                    <span class="material-symbols-rounded" aria-hidden="true">barcode_scanner</span>
+                  </button>
                 </div>
+                <small class="add-item-search-help">Escribe al menos 2 caracteres o escanea el código.</small>
               </div>
               @if (showProductList() && (inventorySuggestions().length > 0 || catalogSuggestions().length > 0 || catalogProductSuggestions().length > 0 || catalogProductSearching() || catalogProductSearchAttempted() || catalogProductSearchError())) {
                 <div class="listbox" role="listbox" aria-label="Resultados de productos">
@@ -2429,15 +2447,15 @@
                           </span>
                         </div>
                       }
-                      @for (p of result.bundle ? [] : result.variants; track p.product_id) {
+                      @if (!result.bundle && catalogSearchResultRepresentative(result); as p) {
                         <button
                           type="button"
                           role="option"
                           class="listbox-option"
-                          [attr.aria-label]="p.name + ', ' + catalogProductDisplayCode(p) + ', ' + (p.color || 'sin color') + ', ' + (p.size || 'sin talla')"
-                          (mousedown)="$event.preventDefault(); beginProductPick(); pickCatalogProduct(p)"
-                          (touchstart)="$event.preventDefault(); beginProductPick(); pickCatalogProduct(p)"
-                          (click)="beginProductPick(); pickCatalogProduct(p)"
+                          [attr.aria-label]="p.name + ', ' + catalogSearchResultOptionSummary(result)"
+                          (mousedown)="$event.preventDefault(); beginProductPick(); pickCatalogProduct(p, result)"
+                          (touchstart)="$event.preventDefault(); beginProductPick(); pickCatalogProduct(p, result)"
+                          (click)="beginProductPick(); pickCatalogProduct(p, result)"
                         >
                           @if (p.image_url) {
                             <img class="listbox-thumb" [src]="p.image_url" alt="" />
@@ -2453,7 +2471,7 @@
                             <div class="card-title">{{ p.name }}</div>
                             <div class="card-meta">
                               <span class="material-symbols-rounded" aria-hidden="true">tag</span>
-                              {{ catalogProductDisplayCode(p) }} · {{ p.color || "Sin color" }} · {{ p.size || "Sin talla" }}
+                              {{ catalogProductDisplayCode(p) }} · {{ catalogSearchResultOptionSummary(result) }}
                             </div>
                             @if (!result.requires_selection) {
                               <div class="catalog-search-match">{{ catalogSearchResultMeta(result) }}</div>
@@ -2461,10 +2479,10 @@
                           </div>
                           <span class="card-tag cat">
                             <span class="material-symbols-rounded" aria-hidden="true">storefront</span>
-                            Variante
+                            Elegir opciones
                           </span>
                         </button>
-                      } @empty {
+                      } @else {
                         @if (!result.bundle) {
                         <p class="catalog-search-empty">Este grupo todavía no tiene variantes vendibles.</p>
                         }
@@ -2485,42 +2503,34 @@
               }
             </div>
           }
+          @if (!isManualSource()) {
           @if (selectedPreview(); as preview) {
-            <div class="preview">
-              @if (preview.image) {
-                <img [src]="preview.image" alt="" />
-              } @else {
-                <div class="photo-placeholder photo-placeholder-md" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M4 7h4l2-2h4l2 2h4v12H4z"></path>
-                    <circle cx="12" cy="13" r="3"></circle>
-                  </svg>
-                </div>
-              }
-              <div class="preview-content">
-                <p class="preview-title">{{ preview.title }}</p>
-                <p class="preview-meta">
-                  <span class="material-symbols-rounded" aria-hidden="true">straighten</span>
-                  {{ preview.variant || "Sin variante" }}
-                  <span class="preview-dot">&middot;</span>
-                  <span class="material-symbols-rounded" aria-hidden="true">palette</span>
-                  {{ preview.color || "Sin color" }}
-                </p>
-                <div class="preview-chips">
-                  @if (!selectedPreviewHasColorImage()) {
-                    <span class="color-chip">
-                      <span class="material-symbols-rounded" aria-hidden="true">palette</span>
-                      {{ preview.color }}
-                    </span>
-                  }
-                  <span class="preview-tag">
-                    <span class="material-symbols-rounded" aria-hidden="true">sell</span>
-                    {{ preview.source }}
-                  </span>
-                </div>
-              </div>
-            </div>
+            <app-add-item-product-selection
+              class="add-item-selection"
+              panelId="pedido-add-item-selection"
+              [productTitle]="preview.title"
+              [productCode]="selectedProductCode()"
+              [sourceLabel]="preview.source"
+              [variant]="newItemVariant()"
+              [color]="newItemColor()"
+              [images]="addItemSelectionImages()"
+              [availableVariants]="addItemAvailableVariants()"
+              [availableColors]="addItemAvailableColors()"
+              [combinationCount]="addItemCombinationCount()"
+              [currentImageId]="addItemCurrentImageId()"
+              [provisionalOption]="addItemProvisionalOption()"
+              [allowProvisionalOption]="newItemSource() === 'catalogo' && !isConvertMode() && !isEditMode()"
+              [allowChangeProduct]="!isEditMode()"
+              [saving]="addItemSaving()"
+              (changeProduct)="clearSelectedAddItemProduct()"
+              (catalogOptionChange)="onAddItemCatalogOptionChange($event)"
+              (provisionalOptionApply)="onAddItemProvisionalApply($event)"
+              (provisionalOptionClear)="clearAddItemProvisionalOption()"
+              (provisionalEditorOpenChange)="onAddItemProvisionalEditorChange($event)"
+            />
           }
+          }
+          @if (isManualSource()) {
           <div class="field manual-title-field">
             <label>
               <span class="material-symbols-rounded" aria-hidden="true">sell</span>
@@ -2611,21 +2621,32 @@
               />
             </div>
           }
-          <div class="field price-row-field">
+          }
+          @if (canSubmitNewItem()) {
+          <div class="field price-row-field add-item-quantity">
             <label>
               <span class="material-symbols-rounded" aria-hidden="true">tag</span>
               Cantidad
             </label>
-            <input
-              class="input"
-              type="number"
-              min="1"
-              [(ngModel)]="newItemQty"
-              [disabled]="!canSubmitNewItem() || !vm.canEditItems"
-            />
+            <div class="add-item-stepper">
+              <button type="button" aria-label="Disminuir cantidad" [disabled]="addItemSaving() || newItemQty() <= 1" (click)="decreaseNewItemQty()">
+                <span class="material-symbols-rounded" aria-hidden="true">remove</span>
+              </button>
+              <input
+                class="input"
+                type="number"
+                inputmode="numeric"
+                min="1"
+                [(ngModel)]="newItemQty"
+                [disabled]="addItemSaving() || !vm.canEditItems"
+              />
+              <button type="button" aria-label="Aumentar cantidad" [disabled]="addItemSaving()" (click)="increaseNewItemQty()">
+                <span class="material-symbols-rounded" aria-hidden="true">add</span>
+              </button>
+            </div>
           </div>
           @if (!selectedCatalogProduct()) {
-            <div class="field price-row-field">
+            <div class="field price-row-field add-item-price-final">
               <label>
                 <span class="material-symbols-rounded" aria-hidden="true">payments</span>
                 Precio final
@@ -2645,26 +2666,12 @@
             </div>
           }
           <div class="field field-clienta-price price-row-field">
-            <div class="field-label-row">
-              <label>
-                <span class="material-symbols-rounded" aria-hidden="true">person</span>
-                {{ selectedCatalogProduct() ? "Precio de venta" : "Precio clienta" }}
-              </label>
-              @if (showClientaDiscountButton()) {
-                <button
-                  type="button"
-                  class="clienta-discount-btn"
-                  aria-label="Definir descuento para precio clienta"
-                  [attr.aria-expanded]="clientaDiscountOpen()"
-                  aria-controls="clienta-discount-panel"
-                  (click)="toggleClientaDiscount($any($event.currentTarget)); $event.stopPropagation()"
-                >
-                  <span class="material-symbols-rounded" aria-hidden="true">more_horiz</span>
-                </button>
-              }
-            </div>
+            <label>
+              <span class="material-symbols-rounded" aria-hidden="true">person</span>
+              {{ selectedCatalogProduct() ? "Precio de venta" : "Precio clienta" }}
+            </label>
             <div class="money" [class.money-readonly]="!canEditClientaPrice(current)" [class.money-invalid]="priceRuleInvalid()">
-              <span>MXN</span>
+              <span>$</span>
               <input
                 class="input"
                 type="text"
@@ -2675,31 +2682,24 @@
                 [readonly]="!canEditClientaPrice(current)"
                 [disabled]="!canSubmitNewItem() || !canEditClientaPrice(current)"
               />
+              @if (showClientaDiscountButton()) {
+                <button
+                  #clientaDiscountButton
+                  type="button"
+                  class="clienta-discount-btn"
+                  aria-label="Cambiar descuento de precio clienta"
+                  title="Cambiar descuento"
+                  [attr.aria-expanded]="clientaDiscountOpen()"
+                  aria-controls="clienta-discount-panel"
+                  (click)="toggleClientaDiscount(); $event.stopPropagation()"
+                >
+                  <span class="material-symbols-rounded" aria-hidden="true">percent</span>
+                  <span class="clienta-discount-btn__label">Descuento</span>
+                </button>
+              }
             </div>
-            @if (clientaDiscountOpen()) {
-              <app-clienta-discount-panel
-                class="clienta-discount-popover"
-                [class.clienta-discount-popover--up]="clientaDiscountOpenUpward()"
-                panelId="clienta-discount-panel"
-                title="Definir precio clienta"
-                [mode]="clientaDiscountMode()"
-                [percent]="clientaDiscountPct()"
-                [fixedAmount]="clientaDiscountFixed()"
-                [previewText]="previewClientaDiscount() === null ? '—' : formatCurrency(previewClientaDiscount()!)"
-                [applyDisabled]="previewClientaDiscount() === null"
-                [errorText]="previewClientaDiscount() === null ? 'Captura primero el precio final para calcular el descuento.' : null"
-                applyLabel="Aplicar precio"
-                helpText="Después guarda los cambios del producto para confirmar."
-                (modeChange)="setClientaDiscountMode($event)"
-                (percentChange)="setClientaDiscountPct($event)"
-                (fixedAmountChange)="setClientaDiscountFixed($event)"
-                (cancel)="closeClientaDiscount()"
-                (apply)="applyClientaDiscount()"
-                (click)="$event.stopPropagation()"
-              />
-            }
           </div>
-          <div class="field price-row-field">
+          <div class="field price-row-field add-item-price-cost">
             <label>
               <span class="material-symbols-rounded" aria-hidden="true">receipt_long</span>
               Precio costo
@@ -2757,14 +2757,78 @@
               </div>
             }
           }
+          }
+          @if (addItemSuccessMessage(); as successMessage) {
+            <p class="add-item-success" role="status">
+              <span class="material-symbols-rounded" aria-hidden="true">check_circle</span>
+              {{ successMessage }}
+            </p>
+          }
+          @if (addItemError(); as addError) {
+            <div class="add-item-error" role="alert">
+              <span class="material-symbols-rounded" aria-hidden="true">error</span>
+              <span>{{ addError }}</span>
+              <button type="button" (click)="submitItemForm(current)" [disabled]="addItemSubmitDisabled(current)">Reintentar</button>
+            </div>
+          }
         </div>
         </div>
-        <div class="sheet-footer">
+        <div class="sheet-footer" [attr.aria-hidden]="clientaDiscountOpen() ? 'true' : null" [attr.inert]="clientaDiscountOpen() ? '' : null">
           <button type="button" class="btn ghost" (click)="closeAddItemModal()">Cancelar</button>
-          <button type="button" class="btn primary" (click)="submitItemForm(current)" [disabled]="!canSubmitNewItem() || !vm.canEditItems">
-            {{ isConvertMode() ? "Convertir item" : (isEditMode() ? "Guardar cambios" : "Anadir al pedido") }}
-          </button>
+          <div class="add-item-primary-wrap">
+            @if (addItemProvisionalEditorOpen()) {
+              <span id="add-item-pending-option">Confirma o cancela la nueva opción</span>
+            } @else if (!canSubmitNewItem()) {
+              <span>Selecciona un producto para continuar</span>
+            }
+            <button
+              type="button"
+              class="btn primary"
+              (click)="submitItemForm(current)"
+              [disabled]="addItemSubmitDisabled(current)"
+              [attr.aria-describedby]="addItemProvisionalEditorOpen() ? 'add-item-pending-option' : null"
+            >
+              @if (addItemSaving()) {
+                <span class="add-item-spinner" aria-hidden="true"></span>
+                Guardando…
+              } @else {
+                {{ isConvertMode() ? "Convertir item" : (isEditMode() ? "Guardar cambios" : "Añadir al pedido") }}
+              }
+            </button>
+          </div>
         </div>
+
+        @if (clientaDiscountOpen()) {
+          <div class="add-item-discount-layer" (click)="closeClientaDiscount()">
+            <div
+              #addItemDiscountDialog
+              class="add-item-discount-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="clienta-discount-panel-title"
+              (click)="$event.stopPropagation()"
+              (keydown)="onAddItemDiscountKeydown($event)"
+            >
+              <app-clienta-discount-panel
+                panelId="clienta-discount-panel"
+                title="Cambiar descuento de precio clienta"
+                [mode]="clientaDiscountMode()"
+                [percent]="clientaDiscountPct()"
+                [fixedAmount]="clientaDiscountFixed()"
+                [previewText]="previewClientaDiscount() === null ? '—' : formatCurrency(previewClientaDiscount()!)"
+                [applyDisabled]="previewClientaDiscount() === null"
+                [errorText]="previewClientaDiscount() === null ? 'Captura primero el precio base para calcular el descuento.' : null"
+                applyLabel="Aplicar"
+                helpText="El descuento se calcula sobre el precio base del producto seleccionado."
+                (modeChange)="setClientaDiscountMode($event)"
+                (percentChange)="setClientaDiscountPct($event)"
+                (fixedAmountChange)="setClientaDiscountFixed($event)"
+                (cancel)="closeClientaDiscount()"
+                (apply)="applyClientaDiscount()"
+              />
+            </div>
+          </div>
+        }
       </div>
       @if (isManualSource() && manualSuggestionsOpen() && manualSuggestions().length > 0) {
         <ul

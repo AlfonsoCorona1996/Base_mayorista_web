@@ -1,0 +1,338 @@
+<section class="experience" role="dialog" aria-modal="true" aria-labelledby="add-product-demo-title">
+  <header
+    class="experience__header"
+    [attr.aria-hidden]="discountEditorOpen() ? 'true' : null"
+    [attr.inert]="discountEditorOpen() ? '' : null"
+  >
+    <div>
+      <span class="experience__kicker">Pedido en edición</span>
+      <h2 id="add-product-demo-title">
+        <span class="material-symbols-rounded" aria-hidden="true">add_box</span>
+        Agregar producto
+      </h2>
+    </div>
+    <button type="button" class="experience__icon-button" aria-label="Cerrar prototipo">
+      <span class="material-symbols-rounded" aria-hidden="true">close</span>
+    </button>
+  </header>
+
+  <div
+    class="experience__body"
+    [attr.aria-hidden]="discountEditorOpen() ? 'true' : null"
+    [attr.inert]="discountEditorOpen() ? '' : null"
+  >
+    <fieldset class="experience__sources" [disabled]="isSaving()">
+      <legend>Origen del producto</legend>
+      <div>
+        <label [class.is-active]="source() === 'catalogo'">
+          <input type="radio" name="demo-source" value="catalogo" [checked]="source() === 'catalogo'" (change)="setSource('catalogo')" />
+          <span class="material-symbols-rounded" aria-hidden="true">storefront</span>
+          Catálogo
+        </label>
+        <label [class.is-active]="source() === 'inventario'">
+          <input type="radio" name="demo-source" value="inventario" [checked]="source() === 'inventario'" (change)="setSource('inventario')" />
+          <span class="material-symbols-rounded" aria-hidden="true">inventory_2</span>
+          Inventario
+        </label>
+        <label [class.is-active]="source() === 'manual'">
+          <input type="radio" name="demo-source" value="manual" [checked]="source() === 'manual'" (change)="setSource('manual')" />
+          <span class="material-symbols-rounded" aria-hidden="true">edit_note</span>
+          Manual
+        </label>
+      </div>
+    </fieldset>
+
+    @if (source() !== "manual") {
+      <div class="experience__search-field">
+        <label for="add-product-demo-search">Buscar producto</label>
+        <div class="experience__search-shell">
+          <span class="material-symbols-rounded" aria-hidden="true">search</span>
+          <input
+            #searchInput
+            id="add-product-demo-search"
+            type="search"
+            role="combobox"
+            autocomplete="off"
+            aria-autocomplete="list"
+            aria-controls="add-product-demo-results"
+            [attr.aria-expanded]="state() === 'results' || state() === 'loading' || state() === 'empty'"
+            [value]="query()"
+            [disabled]="isSaving()"
+            (input)="onSearch($any($event.target).value)"
+            placeholder="Código, nombre, modelo o estilo"
+          />
+          @if (query()) {
+            <button type="button" class="experience__search-action" aria-label="Limpiar búsqueda" [disabled]="isSaving()" (click)="clearSearch()">
+              <span class="material-symbols-rounded" aria-hidden="true">close</span>
+            </button>
+          }
+          <button type="button" class="experience__search-action" aria-label="Escanear código de barras" [disabled]="isSaving()" (click)="startScanner()">
+            <span class="material-symbols-rounded" aria-hidden="true">barcode_scanner</span>
+          </button>
+        </div>
+        <p>Escribe al menos 2 caracteres o escanea el código.</p>
+      </div>
+
+      @if (state() === "loading") {
+        <div id="add-product-demo-results" class="experience__results-status" role="status" aria-live="polite">
+          <span class="experience__spinner" aria-hidden="true"></span>
+          Buscando productos…
+        </div>
+      } @else if (state() === "results") {
+        <div id="add-product-demo-results" class="experience__results" aria-label="Resultados de productos">
+          <div class="experience__results-head">
+            <strong>{{ results.length }} productos</strong>
+            <span>La talla y el color se eligen después</span>
+          </div>
+          <ul>
+            @for (result of results; track result.id) {
+              <li>
+                <button type="button" [disabled]="isSaving()" (click)="selectProduct(result)">
+                  @if (resultImage(result); as resultImage) {
+                    <img [src]="resultImage.url" alt="" />
+                  }
+                  <span class="experience__result-main">
+                    <strong>{{ result.title }}</strong>
+                    <small>{{ result.code }}</small>
+                    <span class="experience__result-options">
+                      {{ result.availableColors.length }} colores · {{ result.availableVariants.length }} variantes ·
+                      {{ combinationCount(result) }} combinaciones
+                    </span>
+                  </span>
+                  <span class="experience__result-price">{{ result.price }}</span>
+                  <span class="material-symbols-rounded" aria-hidden="true">chevron_right</span>
+                </button>
+              </li>
+            }
+          </ul>
+        </div>
+      } @else if (state() === "empty") {
+        <div id="add-product-demo-results" class="experience__empty" role="status">
+          <span class="material-symbols-rounded" aria-hidden="true">search_off</span>
+          <strong>No encontramos ese producto</strong>
+          <p>Revisa el código, intenta con el modelo o cambia de origen.</p>
+          <button type="button" (click)="clearSearch()">Limpiar búsqueda</button>
+        </div>
+      }
+    } @else {
+      <div class="experience__manual-placeholder">
+        <span class="material-symbols-rounded" aria-hidden="true">edit_note</span>
+        <div>
+          <strong>Captura manual</strong>
+          <p>En la implementación real, el foco se moverá al nombre del producto.</p>
+        </div>
+      </div>
+    }
+
+    @if (selectedProduct(); as selected) {
+      <app-add-item-product-selection
+        panelId="add-product-demo-selection"
+        [productTitle]="longProductTitle() ? 'Sandalia Winnie Pooh edición especial con correa ajustable y acabado brillante' : selected.title"
+        [productCode]="selected.code"
+        [sourceLabel]="sourceLabel()"
+        [variant]="selected.variant"
+        [color]="selected.color"
+        [images]="productImages()"
+        [availableVariants]="selected.availableVariants"
+        [availableColors]="selected.availableColors"
+        [currentImageId]="selected.imageId"
+        [provisionalOption]="provisionalOption()"
+        [allowProvisionalOption]="source() === 'catalogo'"
+        [editorInitiallyOpen]="optionEditorInitiallyOpen()"
+        [galleryInitiallyOpen]="imageGalleryInitiallyOpen()"
+        [saving]="isSaving()"
+        (changeProduct)="changeProduct()"
+        (catalogOptionChange)="onCatalogOptionChange($event)"
+        (provisionalOptionApply)="onProvisionalOptionApply($event)"
+        (provisionalOptionClear)="clearProvisionalOption()"
+        (provisionalEditorOpenChange)="onProvisionalEditorOpenChange($event)"
+      />
+
+      @if (state() === "duplicate") {
+        <div class="experience__duplicate" role="status">
+          <span class="material-symbols-rounded" aria-hidden="true">merge</span>
+          <div>
+            <strong>Este producto ya está en el pedido</strong>
+            <span>Actualmente tiene 2 piezas. Al agregar 1, la cantidad se actualizará a 3.</span>
+          </div>
+        </div>
+      }
+
+      <section class="experience__purchase" aria-label="Cantidad y precios">
+        <div class="experience__quantity">
+          <span id="add-product-demo-quantity-label" class="experience__field-label">Cantidad</span>
+          <span class="experience__stepper">
+            <button type="button" aria-label="Disminuir cantidad" [disabled]="isSaving() || quantity() <= 1" (click)="decreaseQuantity()">
+              <span class="material-symbols-rounded" aria-hidden="true">remove</span>
+            </button>
+            <input
+              #quantityInput
+              type="number"
+              inputmode="numeric"
+              min="1"
+              aria-labelledby="add-product-demo-quantity-label"
+              [value]="quantity()"
+              [disabled]="isSaving()"
+              (input)="setQuantity(+$any($event.target).value)"
+            />
+            <button type="button" aria-label="Aumentar cantidad" [disabled]="isSaving()" (click)="increaseQuantity()">
+              <span class="material-symbols-rounded" aria-hidden="true">add</span>
+            </button>
+          </span>
+        </div>
+
+        <div class="experience__prices">
+          <div class="experience__price-field">
+            <span id="add-product-demo-final-price-label" class="experience__field-label">Precio final</span>
+            @if (source() === "catalogo") {
+              <output class="experience__money-control experience__money-control--readonly" aria-labelledby="add-product-demo-final-price-label">
+                {{ formatMxn(finalPrice()) }}
+              </output>
+            } @else {
+              <span class="experience__money-control">
+                <span aria-hidden="true">MXN</span>
+                <input
+                  type="number"
+                  inputmode="decimal"
+                  min="0"
+                  step="0.01"
+                  aria-labelledby="add-product-demo-final-price-label"
+                  [value]="finalPrice()"
+                  [disabled]="isSaving()"
+                  (input)="setFinalPrice(+$any($event.target).value)"
+                />
+              </span>
+            }
+          </div>
+
+          <div class="experience__price-field experience__price-field--clienta">
+            <span id="add-product-demo-clienta-price-label" class="experience__field-label">Precio clienta</span>
+            <span class="experience__money-control experience__money-control--clienta">
+              <span aria-hidden="true">$</span>
+              <input
+                type="number"
+                inputmode="decimal"
+                min="0"
+                step="0.01"
+                aria-labelledby="add-product-demo-clienta-price-label"
+                [value]="clientaPrice()"
+                [disabled]="isSaving()"
+                (input)="setClientaPrice(+$any($event.target).value)"
+              />
+              <button
+                #discountButton
+                type="button"
+                class="experience__discount-button"
+                [class.is-active]="discountEditorOpen()"
+                [attr.aria-expanded]="discountEditorOpen()"
+                aria-controls="add-product-demo-discount"
+                aria-label="Cambiar descuento de precio clienta"
+                title="Cambiar descuento"
+                [disabled]="isSaving()"
+                (click)="discountEditorOpen() ? closeDiscountEditor() : openDiscountEditor(); $event.preventDefault()"
+              >
+                <span class="material-symbols-rounded" aria-hidden="true">percent</span>
+                <span class="experience__discount-button-label">Descuento</span>
+              </button>
+            </span>
+            <small>{{ discountSummary() }}</small>
+          </div>
+
+          <div class="experience__price-field">
+            <span id="add-product-demo-cost-price-label" class="experience__field-label">Precio costo</span>
+            <output class="experience__money-control experience__money-control--readonly" aria-labelledby="add-product-demo-cost-price-label">
+              {{ formatMxn(costPrice()) }}
+            </output>
+          </div>
+        </div>
+
+      </section>
+    }
+
+    @if (state() === "error") {
+      <div class="experience__message experience__message--error" role="alert">
+        <span class="material-symbols-rounded" aria-hidden="true">error</span>
+        <div>
+          <strong>No pudimos agregar el producto</strong>
+          <span>La conexión tardó demasiado. Tus datos siguen aquí para que puedas intentarlo de nuevo.</span>
+        </div>
+        <button type="button" (click)="retry()">Reintentar</button>
+      </div>
+    }
+
+    @if (state() === "success") {
+      <div class="experience__message experience__message--success" role="status">
+        <span class="material-symbols-rounded" aria-hidden="true">check_circle</span>
+        <div>
+          <strong>Producto añadido</strong>
+          <span>Puedes buscar y agregar otro sin cerrar esta ventana.</span>
+        </div>
+      </div>
+    }
+
+    <p class="experience__live" aria-live="polite">{{ liveMessage() }}</p>
+  </div>
+
+  <footer
+    class="experience__footer"
+    [attr.aria-hidden]="discountEditorOpen() ? 'true' : null"
+    [attr.inert]="discountEditorOpen() ? '' : null"
+  >
+    <button type="button" class="experience__cancel" [disabled]="isSaving()">Cancelar</button>
+    <div class="experience__primary-wrap">
+      @if (provisionalEditorOpen()) {
+        <span id="add-product-demo-pending-option" class="experience__pending-option">
+          Confirma o cancela la nueva opción
+        </span>
+      } @else if (!selectedProduct() && state() !== "success") {
+        <span>Selecciona un producto para continuar</span>
+      }
+      <button
+        type="button"
+        class="experience__primary"
+        [disabled]="primaryDisabled()"
+        [attr.aria-describedby]="provisionalEditorOpen() ? 'add-product-demo-pending-option' : null"
+        (click)="submit()"
+      >
+        @if (isSaving()) {
+          <span class="experience__spinner" aria-hidden="true"></span>
+          Añadiendo producto…
+        } @else {
+          Añadir al pedido
+        }
+      </button>
+    </div>
+  </footer>
+
+  @if (discountEditorOpen()) {
+    <div class="experience__discount-layer" (click)="closeDiscountEditor()">
+      <div
+        #discountEditor
+        class="experience__discount-dialog"
+        id="add-product-demo-discount"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-product-demo-clienta-discount-title"
+        (click)="$event.stopPropagation()"
+        (keydown)="onDiscountDialogKeydown($event)"
+      >
+        <app-clienta-discount-panel
+          panelId="add-product-demo-clienta-discount"
+          title="Cambiar descuento de precio clienta"
+          [mode]="discountMode()"
+          [percent]="discountPercent()"
+          [fixedAmount]="discountFixedAmount()"
+          [previewText]="discountPreviewText()"
+          [saving]="isSaving()"
+          [applyDisabled]="discountApplyDisabled()"
+          helpText="El descuento se calcula sobre el precio final de la combinación elegida."
+          (modeChange)="discountMode.set($event)"
+          (percentChange)="discountPercent.set($event)"
+          (fixedAmountChange)="discountFixedAmount.set($event)"
+          (cancel)="closeDiscountEditor()"
+          (apply)="applyClientaDiscount()"
+        />
+      </div>
+    </div>
+  }
+</section>

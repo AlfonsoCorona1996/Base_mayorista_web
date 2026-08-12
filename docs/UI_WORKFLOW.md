@@ -27,6 +27,7 @@ Cuando el problema abarque una pantalla o flujo todavía indefinido, puede añad
 - Componente real: `ClientaDiscountPanelComponent`
 - Historia: `Pedidos/Clienta discount panel`
 - Integración: alta/edición de producto y descuento rápido de artículos del pedido.
+- Prototipo siguiente: `Pedidos/Agregar producto/Experiencia completa`, con selección verificable y opciones provisionales de talla/color.
 
 ## Comandos
 

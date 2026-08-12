@@ -27,6 +27,16 @@ const preview: Preview = {
           styles: { width: "768px", height: "1024px" },
           type: "tablet",
         },
+        desktop1024: {
+          name: "Desktop 1024 × 768",
+          styles: { width: "1024px", height: "768px" },
+          type: "desktop",
+        },
+        desktop1440: {
+          name: "Desktop 1440 × 900",
+          styles: { width: "1440px", height: "900px" },
+          type: "desktop",
+        },
       },
     },
     a11y: {

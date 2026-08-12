@@ -20,6 +20,7 @@ import { calculateOrderFinancials, netItemQty } from "../../core/order-financial
 import { CustomerFollowupsService } from "../../core/customer-followups.service";
 import { Shipment, ShipmentBusinessSummary, ShipmentItem, ShipmentsService } from "../../core/shipments.service";
 import { AuthzService } from "../../core/authz.service";
+import { canMarkOrderAsPaidFromTable } from "./order-table-bulk-actions";
 
 type IntentFilter =
   | "hoy"
@@ -428,7 +429,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   });
 
   tableMarkPaidEligibleRows = computed(() =>
-    this.tableSelectedRows().filter((order) => order.status === "ready_for_route")
+    this.tableSelectedRows().filter((order) => canMarkOrderAsPaidFromTable(order))
   );
 
   tableMarkDeliveredEligibleRows = computed(() =>
@@ -985,7 +986,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
         }
       } else if (action === "mark_pagado") {
         for (const order of selectedRows) {
-          if (order.status !== "ready_for_route") {
+          if (!canMarkOrderAsPaidFromTable(order)) {
             skipped += 1;
             continue;
           }

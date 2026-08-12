@@ -30,5 +30,6 @@ del repositorio.
 
 ## Compatibilidad de este release
 
-- Frontend `2.1.x` funciona con backend `2.1.4`, usando temporalmente el endpoint completo de pedidos.
-- Para las mutaciones incrementales y la identificación exacta en UI requiere backend `2.2.x`.
+- Frontend `2.1.x` funciona con backend `2.2.x` para mutaciones incrementales e identificación exacta en UI.
+- Frontend `2.2.x` requiere backend `2.3.x` para sellar en servidor la auditoría de opciones provisionales de catálogo.
+- Desplegar primero backend `2.3.x` y después frontend `2.2.x`; el cambio de contrato es aditivo y compatible.

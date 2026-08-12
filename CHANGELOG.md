@@ -4,6 +4,27 @@ Todos los cambios relevantes del frontend se documentan aquí. El formato sigue
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa
 [Versionado Semántico](https://semver.org/lang/es/).
 
+## [2.2.0] - 2026-08-11
+
+### Añadido
+
+- Selección agrupada de catálogo: la búsqueda muestra un resultado por producto y talla/color se eligen dentro del card.
+- Opción provisional exclusiva del pedido para capturar una talla o color faltante, reutilizar cualquier imagen del producto o subir una nueva.
+- Galería filtrable e imágenes ampliables desde el producto seleccionado, las sugerencias y la biblioteca completa.
+- Estados visibles de guardado, error recuperable y captura continua al añadir varios productos.
+
+### Cambiado
+
+- El formulario de producto enfoca automáticamente la búsqueda y utiliza controles táctiles para cantidad.
+- El descuento de precio clienta se abre como diálogo bloqueante sin desplazar ni recortar el formulario.
+- La distribución de cantidad y precios responde sin desbordamiento desde 360 px hasta escritorio.
+
+### Corregido
+
+- Una opción provisional sin confirmar bloquea “Añadir al pedido” y no puede mezclarse con una línea oficial existente.
+- Inventario y captura manual ya no ofrecen por error el alta provisional de talla o color.
+- Las imágenes nuevas validan formato y tamaño antes de subirse y conservan correctamente el último borrador confirmado.
+
 ## [2.1.1] - 2026-08-10
 
 ### Añadido

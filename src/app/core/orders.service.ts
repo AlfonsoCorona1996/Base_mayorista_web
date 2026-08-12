@@ -111,6 +111,11 @@ export interface OrderItem {
   discount_pct?: number | null;
   inventory_id?: string | null;
   image_url?: string | null;
+  catalog_option_status?: "official" | "pending_review" | null;
+  catalog_option_base_product_id?: string | null;
+  catalog_option_image_source?: "catalog" | "upload" | null;
+  catalog_option_requested_at?: string | null;
+  catalog_option_requested_by?: { uid: string; name: string } | null;
   late_addition?: boolean;
   late_addition_note?: string | null;
   late_addition_status?: "pending" | "arrived" | "missing" | "damaged" | null;
@@ -1453,6 +1458,14 @@ export class OrdersService {
       imageUrl: url,
     }, actor);
     return url;
+  }
+
+  async uploadOrderItemDraftImage(orderId: string, itemId: string, file: File): Promise<string> {
+    const extension = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
+    const path = `orders/${orderId}/items/${itemId}/draft-${Date.now()}.${extension}`;
+    const storageEntry = ref(STORAGE, path);
+    await uploadBytes(storageEntry, file, { contentType: file.type || "image/jpeg" });
+    return getDownloadURL(storageEntry);
   }
 
   async listIncidents(orderId: string): Promise<Incident[]> {

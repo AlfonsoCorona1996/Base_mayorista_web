@@ -1,0 +1,395 @@
+<section
+  class="selection"
+  [attr.aria-label]="'Producto seleccionado: ' + productTitle()"
+  [attr.aria-hidden]="imageGalleryOpen() || imagePreviewUrl() ? 'true' : null"
+  [attr.inert]="imageGalleryOpen() || imagePreviewUrl() ? '' : null"
+>
+  <div class="selection__eyebrow">
+    <span class="material-symbols-rounded" aria-hidden="true">check_circle</span>
+    Producto seleccionado
+  </div>
+
+  <article class="selection__card" [class.selection__card--provisional]="activeOption()">
+    <div class="selection__main">
+      @if (displayImageUrl(); as imageUrl) {
+        <button
+          type="button"
+          class="selection__image-button"
+          [attr.aria-label]="'Ampliar imagen de ' + productTitle()"
+          (click)="openImagePreview(imageUrl, $event)"
+        >
+          <img [src]="imageUrl" alt="" />
+          <span class="selection__zoom material-symbols-rounded" aria-hidden="true">zoom_in</span>
+        </button>
+      } @else {
+        <div class="selection__image-placeholder" aria-hidden="true">
+          <span class="material-symbols-rounded">image_not_supported</span>
+        </div>
+      }
+
+      <div class="selection__details">
+        <div class="selection__badges">
+          <span class="selection__source">{{ sourceLabel() }}</span>
+          @if (editorOpen()) {
+            <span class="selection__preview-badge">
+              <span class="material-symbols-rounded" aria-hidden="true">visibility</span>
+              Vista previa
+            </span>
+          } @else if (activeOption()) {
+            <span class="selection__provisional-badge">
+              <span class="material-symbols-rounded" aria-hidden="true">pending_actions</span>
+              Opción provisional
+            </span>
+          }
+        </div>
+        <h3>{{ productTitle() }}</h3>
+        @if (productCode()) {
+          <p class="selection__code">Código: {{ productCode() }}</p>
+        }
+        @if (activeOption()) {
+          <div class="selection__attributes" aria-label="Opción elegida">
+            <span>
+              <span class="material-symbols-rounded" aria-hidden="true">straighten</span>
+              {{ displayVariant() }}
+            </span>
+            <span>
+              <span class="material-symbols-rounded" aria-hidden="true">palette</span>
+              {{ displayColor() }}
+            </span>
+          </div>
+        }
+      </div>
+    </div>
+
+    @if (allowChangeProduct()) {
+      <button type="button" class="selection__change" [disabled]="saving()" (click)="changeProduct.emit()">
+        <span class="material-symbols-rounded" aria-hidden="true">swap_horiz</span>
+        Cambiar producto
+      </button>
+    }
+
+    @if (!activeOption() && !editorOpen()) {
+      <fieldset class="selection__option-picker">
+        <legend>
+          <strong>Elige talla y color</strong>
+          <span>{{ availableCombinationCount() }} combinaciones disponibles</span>
+        </legend>
+        <div class="selection__option-fields">
+          <label>
+            <span>Talla / variante</span>
+            <select
+              #variantSelect
+              [value]="variant()"
+              [disabled]="saving()"
+              (change)="chooseCatalogVariant($any($event.target).value)"
+            >
+              @for (availableVariant of availableVariants(); track availableVariant) {
+                <option [value]="availableVariant">{{ availableVariant }}</option>
+              }
+            </select>
+          </label>
+          <label>
+            <span>Color</span>
+            <select [value]="color()" [disabled]="saving()" (change)="chooseCatalogColor($any($event.target).value)">
+              @for (availableColor of availableColors(); track availableColor) {
+                <option [value]="availableColor">{{ availableColor }}</option>
+              }
+            </select>
+          </label>
+        </div>
+      </fieldset>
+    } @else if (activeOption() && !editorOpen()) {
+      <button type="button" class="selection__catalog-option" [disabled]="saving()" (click)="useCatalogOption()">
+        <span class="material-symbols-rounded" aria-hidden="true">inventory_2</span>
+        Elegir una opción del catálogo
+      </button>
+    }
+  </article>
+
+  @if (!editorOpen() && allowProvisionalOption()) {
+    <div class="selection__missing">
+      <div>
+        <strong>¿No aparece la talla o el color?</strong>
+        <span>Crea una combinación provisional sin salir del pedido.</span>
+      </div>
+      <button
+        #editorOpenButton
+        type="button"
+        class="selection__missing-action"
+        aria-expanded="false"
+        [attr.aria-controls]="panelId() + '-editor'"
+        [disabled]="saving()"
+        (click)="openEditor()"
+      >
+        <span class="material-symbols-rounded" aria-hidden="true">add</span>
+        {{ activeOption() ? "Editar opción" : "Agregar talla o color" }}
+      </button>
+    </div>
+  }
+
+  @if (editorOpen()) {
+    <section class="option-editor" [id]="panelId() + '-editor'" [attr.aria-labelledby]="editorTitleId()">
+      <header class="option-editor__header">
+        <div>
+          <span class="option-editor__badge">Sólo para este pedido</span>
+          <h4 [id]="editorTitleId()">Agregar talla o color</h4>
+        </div>
+        <button type="button" class="option-editor__close" aria-label="Cerrar formulario para agregar talla o color" (click)="closeEditor()">
+          <span class="material-symbols-rounded" aria-hidden="true">close</span>
+        </button>
+      </header>
+
+      <p class="option-editor__intro">
+        Puedes cambiar uno o ambos datos. El catálogo no se modificará automáticamente; la opción quedará pendiente de revisión.
+      </p>
+
+      <div class="option-editor__fields">
+        <label>
+          <span>Talla / variante</span>
+          <input
+            #draftVariantInput
+            type="text"
+            [attr.list]="variantListId()"
+            [value]="draftVariant()"
+            [disabled]="saving()"
+            (input)="draftVariant.set($any($event.target).value)"
+            placeholder="Ej. 26, XL o Modelo nuevo"
+          />
+          <datalist [id]="variantListId()">
+            @for (availableVariant of availableVariants(); track availableVariant) {
+              <option [value]="availableVariant"></option>
+            }
+          </datalist>
+        </label>
+
+        <label>
+          <span>Color</span>
+          <input
+            type="text"
+            [attr.list]="colorListId()"
+            [value]="draftColor()"
+            [disabled]="saving()"
+            (input)="draftColor.set($any($event.target).value)"
+            placeholder="Ej. Verde menta"
+          />
+          <datalist [id]="colorListId()">
+            @for (availableColor of availableColors(); track availableColor) {
+              <option [value]="availableColor"></option>
+            }
+          </datalist>
+        </label>
+      </div>
+
+      <fieldset class="option-editor__images">
+        <legend>Imagen para esta opción</legend>
+        <p>Mostramos hasta 3 sugeridas. Abre la galería para ver todas, incluidas las imágenes sin color.</p>
+        <div class="option-editor__image-grid">
+          @for (image of inlineImages(); track image.id) {
+            <article class="option-editor__image-option" [class.is-selected]="selectedImageId() === image.id">
+              <button
+                type="button"
+                class="option-editor__image-preview"
+                [attr.aria-label]="'Ampliar ' + image.label"
+                (click)="openImagePreview(image.url, $event)"
+              >
+                <img [src]="image.url" alt="" />
+                <span class="option-editor__zoom material-symbols-rounded" aria-hidden="true">zoom_in</span>
+              </button>
+              <label class="option-editor__image-select">
+                <input
+                  type="radio"
+                  [name]="panelId() + '-image'"
+                  [value]="image.id"
+                  [checked]="selectedImageId() === image.id"
+                  [disabled]="saving()"
+                  (change)="selectExistingImage(image.id)"
+                />
+                <span>{{ image.label }}</span>
+              </label>
+              @if (selectedImageId() === image.id) {
+                <span class="option-editor__selected material-symbols-rounded" aria-hidden="true">check_circle</span>
+              }
+            </article>
+          }
+
+          @if (images().length > 0) {
+            <button type="button" class="option-editor__gallery-open" [disabled]="saving()" (click)="openImageGallery($event)">
+              <span class="material-symbols-rounded" aria-hidden="true">photo_library</span>
+              <strong>Ver todas</strong>
+              <small>{{ images().length }} guardadas</small>
+            </button>
+          }
+
+          <label class="option-editor__upload" [class.is-selected]="selectedImageId() === 'uploaded'">
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              [disabled]="saving()"
+              [attr.aria-describedby]="uploadError() ? panelId() + '-upload-error' : null"
+              (change)="onFileSelected($event)"
+            />
+            @if (uploadedImageUrl(); as uploadedUrl) {
+              <img [src]="uploadedUrl" alt="" />
+              <span>{{ uploadedFileName() }}</span>
+              <span class="option-editor__selected material-symbols-rounded" aria-hidden="true">check_circle</span>
+            } @else {
+              <span class="material-symbols-rounded" aria-hidden="true">add_photo_alternate</span>
+              <strong>Subir nueva</strong>
+              <small>JPG, PNG o WebP</small>
+            }
+          </label>
+        </div>
+        @if (uploadError(); as error) {
+          <p class="option-editor__upload-error" [id]="panelId() + '-upload-error'" role="alert">{{ error }}</p>
+        }
+      </fieldset>
+
+      <div class="option-editor__notice">
+        <span class="material-symbols-rounded" aria-hidden="true">fact_check</span>
+        <span><strong>Quedará pendiente de catálogo.</strong> Podrá revisarse y convertirse después en una variante oficial.</span>
+      </div>
+
+      <div class="option-editor__actions">
+        <button type="button" class="option-editor__button" [disabled]="saving()" (click)="closeEditor()">Cancelar</button>
+        <button
+          type="button"
+          class="option-editor__button option-editor__button--primary"
+          [disabled]="!canApplyDraft()"
+          (click)="applyDraft()"
+        >
+          @if (saving()) {
+            <span class="option-editor__spinner" aria-hidden="true"></span>
+            Preparando…
+          } @else {
+            Usar en este pedido
+          }
+        </button>
+      </div>
+    </section>
+  }
+
+  @if (liveMessage()) {
+    <p class="selection__success" role="status">
+      <span class="material-symbols-rounded" aria-hidden="true">check_circle</span>
+      {{ liveMessage() }}
+    </p>
+  }
+</section>
+
+@if (imageGalleryOpen()) {
+  <div
+    class="selection-gallery"
+    [attr.aria-hidden]="imagePreviewUrl() ? 'true' : null"
+    [attr.inert]="imagePreviewUrl() ? '' : null"
+    (click)="closeImageGallery()"
+  >
+    <section
+      #imageGalleryDialog
+      class="selection-gallery__dialog"
+      role="dialog"
+      aria-modal="true"
+      [attr.aria-labelledby]="panelId() + '-gallery-title'"
+      (click)="$event.stopPropagation()"
+      (keydown)="onGalleryKeydown($event)"
+    >
+      <header class="selection-gallery__header">
+        <div>
+          <span>Biblioteca del producto</span>
+          <h4 [id]="panelId() + '-gallery-title'">Elegir imagen guardada</h4>
+        </div>
+        <button type="button" class="selection-gallery__close" aria-label="Cerrar galería" (click)="closeImageGallery()">
+          <span class="material-symbols-rounded" aria-hidden="true">close</span>
+        </button>
+      </header>
+
+      <p class="selection-gallery__intro">Amplía las imágenes para revisarlas o selecciona una para esta opción.</p>
+
+      <div class="selection-gallery__filters" aria-label="Filtrar imágenes">
+        <button type="button" [attr.aria-pressed]="imageGalleryFilter() === 'all'" (click)="setImageGalleryFilter('all')">
+          Todas ({{ images().length }})
+        </button>
+        <button
+          type="button"
+          [attr.aria-pressed]="imageGalleryFilter() === 'color'"
+          [disabled]="imagesForSelectedColor().length === 0"
+          (click)="setImageGalleryFilter('color')"
+        >
+          Del color ({{ imagesForSelectedColor().length }})
+        </button>
+        <button type="button" [attr.aria-pressed]="imageGalleryFilter() === 'unassigned'" (click)="setImageGalleryFilter('unassigned')">
+          Sin asignar ({{ unassignedImages().length }})
+        </button>
+      </div>
+
+      @if (filteredGalleryImages().length > 0) {
+        <div class="selection-gallery__grid">
+          @for (image of filteredGalleryImages(); track image.id) {
+            <article class="selection-gallery__image" [class.is-selected]="gallerySelectedImageId() === image.id">
+              <button
+                type="button"
+                class="selection-gallery__preview"
+                [attr.aria-label]="'Ampliar ' + image.label"
+                (click)="openImagePreview(image.url, $event)"
+              >
+                <img [src]="image.url" alt="" />
+                <span class="selection-gallery__zoom material-symbols-rounded" aria-hidden="true">zoom_in</span>
+              </button>
+              <label class="selection-gallery__select">
+                <input
+                  type="radio"
+                  [name]="panelId() + '-gallery-image'"
+                  [value]="image.id"
+                  [checked]="gallerySelectedImageId() === image.id"
+                  (change)="selectGalleryImage(image.id)"
+                />
+                <span>
+                  <strong>{{ image.label }}</strong>
+                  <small>{{ image.color || "Sin asignar" }}</small>
+                </span>
+              </label>
+              @if (gallerySelectedImageId() === image.id) {
+                <span class="selection-gallery__selected material-symbols-rounded" aria-hidden="true">check_circle</span>
+              }
+            </article>
+          }
+        </div>
+      } @else {
+        <div class="selection-gallery__empty" role="status">
+          <span class="material-symbols-rounded" aria-hidden="true">image_not_supported</span>
+          No hay imágenes en este filtro.
+        </div>
+      }
+
+      <footer class="selection-gallery__footer">
+        <button type="button" class="selection-gallery__cancel" (click)="closeImageGallery()">Cancelar</button>
+        <button
+          type="button"
+          class="selection-gallery__confirm"
+          [disabled]="!canConfirmGalleryImage()"
+          (click)="confirmGalleryImage()"
+        >
+          Usar imagen seleccionada
+        </button>
+      </footer>
+    </section>
+  </div>
+}
+
+@if (imagePreviewUrl(); as previewUrl) {
+  <div class="selection-lightbox" (click)="closeImagePreview()">
+    <div
+      #imageLightboxDialog
+      class="selection-lightbox__dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Vista ampliada del producto"
+      (click)="$event.stopPropagation()"
+      (keydown)="onLightboxKeydown($event)"
+    >
+      <button type="button" class="selection-lightbox__close" aria-label="Cerrar imagen ampliada" (click)="closeImagePreview()">
+        <span class="material-symbols-rounded" aria-hidden="true">close</span>
+      </button>
+      <img [src]="previewUrl" [alt]="productTitle()" />
+    </div>
+  </div>
+}
