@@ -65,6 +65,17 @@ export interface ReserveStockInput {
   idempotencyKey: string;
 }
 
+export class InventoryStockInsufficientError extends Error {
+  constructor(
+    readonly inventoryId: string,
+    readonly available: number,
+    readonly requested: number,
+  ) {
+    super(`Stock insuficiente para ${inventoryId}. Disponible ${available}, requerido ${requested}.`);
+    this.name = "InventoryStockInsufficientError";
+  }
+}
+
 export interface ReleaseReservationInput {
   sku: string;
   qty: number;
@@ -98,6 +109,10 @@ export interface ReceiveInboundInput {
   image_url?: string | null;
   notes?: string | null;
   receipt_reason?: string | null;
+}
+
+export interface InventoryMutationOptions {
+  refreshCache?: boolean;
 }
 
 export type InventoryMovementType =
@@ -328,10 +343,11 @@ export class InventoryService {
     await this.loadFromFirestore();
   }
 
-  async reserveStock(input: ReserveStockInput): Promise<void> {
+  async reserveStock(input: ReserveStockInput, options: InventoryMutationOptions = {}): Promise<void> {
     const inventoryId = (input.sku || "").trim();
     if (!inventoryId) throw new Error("sku requerido para reservar");
     const qty = this.toSafeQty(input.qty);
+    if (qty <= 0) throw new Error("cantidad requerida para reservar");
     const idKey = this.safeIdempotencyKey(input.idempotencyKey);
     const ref = doc(this.colRef, inventoryId);
 
@@ -346,7 +362,7 @@ export class InventoryService {
       const available = this.toSafeQty(row.available_qty ?? onHand - reserved);
       const reservations = this.normalizeReservations(row.reservations);
       if (qty > available) {
-        throw new Error(`Stock insuficiente para ${inventoryId}. Disponible ${available}, requerido ${qty}.`);
+        throw new InventoryStockInsufficientError(inventoryId, available, qty);
       }
 
       const nextReserved = reserved + qty;
@@ -367,13 +383,16 @@ export class InventoryService {
       }, { orderId: input.orderId, orderItemId: input.orderItemId });
     });
 
-    await this.loadFromFirestore();
+    if (options.refreshCache !== false) {
+      await this.refreshCacheAfterMutation();
+    }
   }
 
   async releaseReservation(input: ReleaseReservationInput): Promise<void> {
     const inventoryId = (input.sku || "").trim();
     if (!inventoryId) throw new Error("sku requerido para liberar reserva");
     const qty = this.toSafeQty(input.qty);
+    if (qty <= 0) throw new Error("cantidad requerida para liberar reserva");
     const idKey = this.safeIdempotencyKey(input.idempotencyKey);
     const ref = doc(this.colRef, inventoryId);
 
@@ -405,7 +424,7 @@ export class InventoryService {
       }, { orderId: input.orderId, orderItemId: input.orderItemId });
     });
 
-    await this.loadFromFirestore();
+    await this.refreshCacheAfterMutation();
   }
 
   async consumeOnDelivery(input: ConsumeOnDeliveryInput): Promise<void> {
@@ -448,7 +467,7 @@ export class InventoryService {
     await this.loadFromFirestore();
   }
 
-  async receiveInbound(input: ReceiveInboundInput): Promise<void> {
+  async receiveInbound(input: ReceiveInboundInput, options: InventoryMutationOptions = {}): Promise<void> {
     const inventoryId = (input.sku || "").trim();
     if (!inventoryId) throw new Error("sku requerido para recepción");
     const qty = this.toSafeQty(input.qty);
@@ -523,7 +542,9 @@ export class InventoryService {
       }, { reason: receiptReason });
     });
 
-    await this.loadFromFirestore();
+    if (options.refreshCache !== false) {
+      await this.refreshCacheAfterMutation();
+    }
   }
 
   async receiveReturn(input: ReceiveReturnInput): Promise<void> {
@@ -775,6 +796,12 @@ export class InventoryService {
       .trim()
       .replace(/[^a-zA-Z0-9_-]+/g, "_")
       .slice(0, 120);
+  }
+
+  private async refreshCacheAfterMutation(): Promise<void> {
+    // La transacción ya fue confirmada. Una falla de lectura posterior no debe
+    // reportar la mutación como fallida ni disparar una compensación incorrecta.
+    await this.loadFromFirestore().catch(() => undefined);
   }
 
   private withIdempotency(source: Record<string, string>, key: string | null, nowIso: string): Record<string, string> {

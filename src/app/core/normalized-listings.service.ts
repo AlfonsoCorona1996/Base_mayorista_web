@@ -22,6 +22,7 @@ import type {
   NormalizedListingDoc,
   NormalizedListingDocV3,
   ListPage,
+  RawPost,
   ReviewPatch,
   PartialNormalizedUpdate,
   StockState,
@@ -149,6 +150,19 @@ export class NormalizedListingsService {
     const snap = await getDoc(ref);
     if (!snap.exists()) throw new Error("Not found");
     return snap.data() as NormalizedListingDoc;
+  }
+
+  async getRawPostImageUrls(rawPostId: string): Promise<string[]> {
+    const cleanId = rawPostId.trim();
+    if (!cleanId) return [];
+
+    const snap = await getDoc(doc(FIRESTORE, "raw_posts", cleanId));
+    if (!snap.exists()) return [];
+
+    const rawPost = snap.data() as Partial<RawPost>;
+    return (rawPost.media?.images || [])
+      .map((image) => String(image?.url || "").trim())
+      .filter((url): url is string => Boolean(url));
   }
 
   async updateListing(id: string, patch: PartialNormalizedUpdate): Promise<void> {

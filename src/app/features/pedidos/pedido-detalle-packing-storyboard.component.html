@@ -1,0 +1,280 @@
+<main
+  class="experience-shell"
+  [class.experience-shell--interactive]="layoutMode() === 'interactive'"
+>
+  <header class="experience-head">
+    <div>
+      <p class="eyebrow">Pedido detalle · propuesta UI/UX</p>
+      <h1>Activación guiada de Paquetes</h1>
+      <p class="intro">
+        Paquetes se habilita con el primer producto empacable y mantiene una señal moderada hasta
+        completar todo el pedido.
+      </p>
+    </div>
+
+    @if (layoutMode() === 'interactive') {
+      <div class="demo-actions" aria-label="Controles de la demostración">
+        @if (currentState() === 'locked') {
+          <button type="button" class="demo-button demo-button--primary" (click)="enablePacking()">
+            <span class="material-symbols-rounded" aria-hidden="true">task_alt</span>
+            Simular primer producto recibido
+          </button>
+        } @else if (currentState() === 'ready') {
+          <button type="button" class="demo-button demo-button--primary" (click)="openPackages()">
+            <span class="material-symbols-rounded" aria-hidden="true">deployed_code</span>
+            Abrir Paquetes
+          </button>
+        } @else if (currentState() === 'opened') {
+          <button
+            type="button"
+            class="demo-button demo-button--primary"
+            (click)="completePacking()"
+          >
+            <span class="material-symbols-rounded" aria-hidden="true">inventory_2</span>
+            Simular empaque completo
+          </button>
+        } @else {
+          <button type="button" class="demo-button" (click)="resetDemo()">
+            <span class="material-symbols-rounded" aria-hidden="true">replay</span>
+            Reiniciar demo
+          </button>
+        }
+      </div>
+    }
+  </header>
+
+  <p class="sr-status" role="status" aria-live="polite">{{ liveMessage() }}</p>
+
+  <section
+    class="storyboard"
+    [class.storyboard--single]="layoutMode() === 'interactive'"
+    aria-label="Storyboard de activación de Paquetes"
+  >
+    @for (frame of visibleFrames(); track frame.state) {
+      <article class="story-frame" [attr.data-state]="frame.state">
+        <header class="story-frame__head">
+          <span class="step-chip">{{ frame.step }}</span>
+          <div>
+            <h2>{{ frame.title }}</h2>
+            <p>{{ frame.description }}</p>
+          </div>
+        </header>
+
+        <div class="app-window">
+          <div class="order-context">
+            <div>
+              <span class="order-context__label">Pedido</span>
+              <strong>#BM-2048</strong>
+            </div>
+            <span class="order-state" [class.order-state--ready]="frame.state === 'packed'">
+              <span class="material-symbols-rounded" aria-hidden="true">
+                {{ frame.state === 'packed' ? 'check_circle' : 'local_shipping' }}
+              </span>
+              {{ frame.state === 'packed' ? 'Empacado' : frame.receivedCount + ' de 3 recibidos' }}
+            </span>
+          </div>
+
+          <nav class="section-tabs" aria-label="Secciones del pedido" role="tablist">
+            <button
+              type="button"
+              role="tab"
+              class="section-tab"
+              [class.is-active]="frame.state === 'locked' || frame.state === 'ready'"
+              [attr.aria-selected]="frame.state === 'locked' || frame.state === 'ready'"
+              tabindex="-1"
+            >
+              <span class="material-symbols-rounded" aria-hidden="true">shopping_bag</span>
+              Productos
+            </button>
+
+            <button
+              type="button"
+              role="tab"
+              class="section-tab section-tab--packages"
+              [class.is-locked]="frame.state === 'locked'"
+              [class.is-ready]="frame.state === 'ready'"
+              [class.is-pending]="frame.state === 'ready' || frame.state === 'opened'"
+              [class.is-active]="frame.state === 'opened' || frame.state === 'packed'"
+              [disabled]="frame.state === 'locked'"
+              [attr.aria-selected]="frame.state === 'opened' || frame.state === 'packed'"
+              [attr.aria-describedby]="
+                frame.state === 'locked' ? 'packing-locked-' + frame.step : null
+              "
+              (click)="
+                layoutMode() === 'interactive' && frame.state === 'ready' ? openPackages() : null
+              "
+            >
+              <span class="material-symbols-rounded" aria-hidden="true">
+                {{ frame.state === 'locked' ? 'lock' : 'deployed_code' }}
+              </span>
+              Paquetes
+              @if (frame.state === 'ready' || frame.state === 'opened') {
+                <span class="ready-badge">Pendiente</span>
+              }
+            </button>
+
+            <button
+              type="button"
+              role="tab"
+              class="section-tab"
+              aria-selected="false"
+              tabindex="-1"
+            >
+              <span class="material-symbols-rounded" aria-hidden="true">warning</span>
+              Incidencias
+            </button>
+            <button
+              type="button"
+              role="tab"
+              class="section-tab"
+              aria-selected="false"
+              tabindex="-1"
+            >
+              <span class="material-symbols-rounded" aria-hidden="true">history</span>
+              Bitácora
+            </button>
+          </nav>
+
+          @if (frame.state === 'locked' || frame.state === 'ready') {
+            <section class="product-panel" aria-label="Recepción de productos">
+              <div class="panel-title-row">
+                <div>
+                  <p class="panel-kicker">Productos</p>
+                  <h3>Recepción de productos</h3>
+                </div>
+                <span class="received-count">{{ frame.receivedCount }} de 3 recibidos</span>
+              </div>
+
+              <div class="product-list">
+                @for (product of products; track product.name; let productIndex = $index) {
+                  <div class="product-row">
+                    <span class="product-thumb" aria-hidden="true"></span>
+                    <span class="product-copy">
+                      <strong>{{ product.name }}</strong>
+                      <small>{{ product.detail }} · {{ product.qty }} pzas</small>
+                    </span>
+                    @if (productIndex < frame.receivedCount) {
+                      <span class="received-icon material-symbols-rounded" aria-label="Recibido"
+                        >check_circle</span
+                      >
+                    } @else {
+                      <span
+                        class="waiting-icon material-symbols-rounded"
+                        aria-label="Esperando recepción"
+                        >schedule</span
+                      >
+                    }
+                  </div>
+                }
+              </div>
+            </section>
+
+            @if (frame.state === 'locked') {
+              <p class="locked-helper" [id]="'packing-locked-' + frame.step">
+                <span class="material-symbols-rounded" aria-hidden="true">lock</span>
+                Disponible al recibir el primer producto
+              </p>
+            }
+
+            @if (frame.state === 'ready') {
+              <aside class="ready-notice" aria-label="Paquetes disponible">
+                <span class="notice-icon material-symbols-rounded" aria-hidden="true">info</span>
+                <p>Ya hay 1 producto disponible. Puedes empacarlo mientras llegan los demás.</p>
+                @if (layoutMode() === 'interactive') {
+                  <button type="button" (click)="openPackages()">Ir a Paquetes</button>
+                } @else {
+                  <span class="notice-cta" aria-hidden="true">Ir a Paquetes</span>
+                }
+              </aside>
+            }
+          } @else {
+            <section
+              class="packing-panel"
+              [attr.aria-label]="frame.state === 'packed' ? 'Pedido empacado' : 'Empacando pedido'"
+            >
+              <div class="panel-title-row">
+                <div>
+                  <p class="panel-kicker">Paquetes</p>
+                  <h3>{{ frame.state === 'packed' ? 'Pedido empacado' : 'Empacando pedido' }}</h3>
+                  <p class="panel-description">
+                    {{
+                      frame.state === 'packed'
+                        ? 'Todas las piezas están dentro de cajas cerradas'
+                        : '1 producto listo; 2 siguen esperando recepción'
+                    }}
+                  </p>
+                </div>
+                @if (frame.state === 'opened') {
+                  <button type="button" class="scanner-button">
+                    <span class="material-symbols-rounded" aria-hidden="true">barcode_scanner</span>
+                    Scanner PC
+                  </button>
+                }
+              </div>
+
+              @if (frame.state === 'opened') {
+                <p class="packing-waiting">
+                  <span class="material-symbols-rounded" aria-hidden="true">schedule</span>
+                  El pedido seguirá como Pendiente hasta recibir y empacar los otros 2 productos.
+                </p>
+              }
+
+              <div class="packing-grid">
+                <section
+                  class="packing-column"
+                  [attr.aria-labelledby]="'unassigned-title-' + frame.step"
+                >
+                  <h4 [id]="'unassigned-title-' + frame.step">Productos sin asignar</h4>
+                  @if (frame.state === 'opened') {
+                    @for (product of products.slice(0, 1); track product.name) {
+                      <div class="packing-product">
+                        <span class="product-thumb" aria-hidden="true"></span>
+                        <span>
+                          <strong>{{ product.name }}</strong>
+                          <small>{{ product.qty }} pzas</small>
+                        </span>
+                      </div>
+                    }
+                  } @else {
+                    <p class="packing-complete-copy">
+                      <span class="material-symbols-rounded" aria-hidden="true">check_circle</span>
+                      Sin productos pendientes
+                    </p>
+                  }
+                </section>
+
+                <section
+                  class="packing-column"
+                  [attr.aria-labelledby]="'boxes-title-' + frame.step"
+                >
+                  <h4 [id]="'boxes-title-' + frame.step">Cajas</h4>
+                  <article class="box-card">
+                    <span class="material-symbols-rounded" aria-hidden="true">inventory_2</span>
+                    <span>
+                      <strong>Caja 1</strong>
+                      <small>{{
+                        frame.state === 'packed' ? '3 productos · Cerrada' : '0 productos'
+                      }}</small>
+                    </span>
+                  </article>
+                  @if (frame.state === 'opened') {
+                    <button type="button" class="new-box-button">
+                      <span class="material-symbols-rounded" aria-hidden="true">add</span>
+                      Nueva caja
+                    </button>
+                  }
+                </section>
+              </div>
+            </section>
+          }
+        </div>
+      </article>
+    }
+  </section>
+
+  <footer class="experience-note">
+    <span class="material-symbols-rounded" aria-hidden="true">motion_photos_off</span>
+    El badge permanece hasta completar el pedido. Fuera de Paquetes hay dos pulsos suaves cada 9
+    segundos; dentro de la sección se pausan. Con movimiento reducido se usa un resaltado estático.
+  </footer>
+</main>

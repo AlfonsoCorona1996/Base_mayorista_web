@@ -55,6 +55,12 @@ export interface SupplierOperationRow {
   updated_at: string;
 }
 
+export interface SupplierReceiptOptions {
+  refreshInventory?: boolean;
+  reloadSupplierOperations?: boolean;
+  syncOrderStatus?: boolean;
+}
+
 @Injectable({ providedIn: "root" })
 export class SupplierOperationsService {
   private colRef = collection(FIRESTORE, "supplier_operations");
@@ -86,9 +92,9 @@ export class SupplierOperationsService {
 
     let createdOrUpdated = 0;
 
-    for (const item of toCreate) {
+    await this.forEachWithConcurrency(toCreate, 4, async (item) => {
       const supplierId = (item.supplier_id || "").trim();
-      if (!supplierId) continue;
+      if (!supplierId) return;
 
       const opId = this.buildOpId(order.order_id, item.item_id);
       const ref = doc(this.colRef, opId);
@@ -132,7 +138,7 @@ export class SupplierOperationsService {
         tx.set(ref, payload, { merge: true });
       });
       createdOrUpdated += 1;
-    }
+    });
 
     await this.loadFromFirestore();
     return createdOrUpdated;
@@ -161,7 +167,11 @@ export class SupplierOperationsService {
         if (reload) await this.loadFromFirestore();
         return;
       }
-      await this.receiveLineAndAllocate(lineId, idempotencyKey || `${lineId}:${newState}`);
+      await this.receiveLineAndAllocate(
+        lineId,
+        idempotencyKey || `${lineId}:${newState}`,
+        { reloadSupplierOperations: reload },
+      );
       return;
     }
 
@@ -193,7 +203,11 @@ export class SupplierOperationsService {
     }
   }
 
-  async receiveLineAndAllocate(lineId: string, idempotencyKey: string): Promise<void> {
+  async receiveLineAndAllocate(
+    lineId: string,
+    idempotencyKey: string,
+    options: SupplierReceiptOptions = {},
+  ): Promise<void> {
     const opRef = doc(this.colRef, lineId);
     const safeRoot = this.safeIdempotencyKey(idempotencyKey || `supplier-receive-${lineId}`);
     const txKey = `tx_${safeRoot}`;
@@ -220,46 +234,52 @@ export class SupplierOperationsService {
     const qty = this.safeQty(row.quantity);
     const inventoryId = row.inventory_item_id || this.buildInventoryIdForLine(row);
 
-    await this.inventory.receiveInbound({
-      sku: inventoryId,
-      product_id: row.product_id,
-      variant_id: row.variant_id,
-      business_id: row.business_id,
-      qty,
-      unit_price: row.price_cost,
-      supplierOperationId: row.op_id,
-      lineId: row.order_item_id,
-      idempotencyKey: `inbound_${safeRoot}`,
-      title: row.title,
-      supplier_id: row.supplier_id || null,
-      variant_name: row.variant || null,
-      color_name: row.color || null,
-      image_url: row.image_url || null,
-    });
+    await this.inventory.receiveInbound(
+      {
+        sku: inventoryId,
+        product_id: row.product_id,
+        variant_id: row.variant_id,
+        business_id: row.business_id,
+        qty,
+        unit_price: row.price_cost,
+        supplierOperationId: row.op_id,
+        lineId: row.order_item_id,
+        idempotencyKey: `inbound_${safeRoot}`,
+        title: row.title,
+        supplier_id: row.supplier_id || null,
+        variant_name: row.variant || null,
+        color_name: row.color || null,
+        image_url: row.image_url || null,
+      },
+      { refreshCache: options.refreshInventory !== false },
+    );
     await this.logOrderEvent(row.order_id, "INVENTORY_INBOUND_RECEIVED", `Recepcion inventario para ${row.title}`, {
       opId: row.op_id,
       inventoryId,
       qty,
       idempotencyKey: `inbound_${safeRoot}`,
-    });
+    }).catch(() => undefined);
 
     const reserveForOrderId = String(row.reserved_for_order_id || "").trim();
     const canReserveForOrder = !!reserveForOrderId && !!String(row.order_item_id || "").trim() && qty > 0;
     if (canReserveForOrder) {
-      await this.inventory.reserveStock({
-        sku: inventoryId,
-        qty,
-        orderId: reserveForOrderId,
-        orderItemId: row.order_item_id,
-        idempotencyKey: `reserve_${safeRoot}`,
-      });
+      await this.inventory.reserveStock(
+        {
+          sku: inventoryId,
+          qty,
+          orderId: reserveForOrderId,
+          orderItemId: row.order_item_id,
+          idempotencyKey: `reserve_${safeRoot}`,
+        },
+        { refreshCache: options.refreshInventory !== false },
+      );
       await this.logOrderEvent(row.order_id, "INVENTORY_RESERVED", `Reserva inventario para ${row.title}`, {
         opId: row.op_id,
         inventoryId,
         qty,
         orderId: reserveForOrderId,
         idempotencyKey: `reserve_${safeRoot}`,
-      });
+      }).catch(() => undefined);
     }
 
     const finalizeKey = `final_${safeRoot}`;
@@ -300,9 +320,14 @@ export class SupplierOperationsService {
       inventoryId,
       qty,
       idempotencyKey: safeRoot,
-    });
-    await this.syncOrderStatus(row.order_id);
-    await this.loadFromFirestore();
+    }).catch(() => undefined);
+    if (options.syncOrderStatus !== false) {
+      await this.syncOrderStatus(row.order_id);
+    }
+
+    if (options.reloadSupplierOperations !== false) {
+      await this.loadFromFirestore();
+    }
   }
 
   async removeByOrder(orderId: string): Promise<void> {
@@ -490,6 +515,25 @@ export class SupplierOperationsService {
       .trim()
       .replace(/[^a-zA-Z0-9_-]+/g, "_")
       .slice(0, 120);
+  }
+
+  private async forEachWithConcurrency<T>(
+    items: readonly T[],
+    concurrency: number,
+    task: (item: T) => Promise<void>,
+  ): Promise<void> {
+    let nextIndex = 0;
+    const worker = async () => {
+      while (nextIndex < items.length) {
+        const index = nextIndex;
+        nextIndex += 1;
+        await task(items[index]);
+      }
+    };
+    const workerCount = Math.min(items.length, Math.max(1, Math.trunc(concurrency)));
+    const results = await Promise.allSettled(Array.from({ length: workerCount }, () => worker()));
+    const failure = results.find((result): result is PromiseRejectedResult => result.status === "rejected");
+    if (failure) throw failure.reason;
   }
 
   private async syncOrderStatus(orderId: string): Promise<void> {

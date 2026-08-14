@@ -14,7 +14,11 @@ import { SuppliersService } from "../../core/suppliers.service";
 import { OrdersService, Order, OrderCollectionEvent, OrderEvent, OrderItem, OrderItemState, OrderStatus, PackageRecord, Incident, IncidentSeverity } from "../../core/orders.service";
 import { RoutesService } from "../../core/routes.service";
 import { LocalitiesService } from "../../core/localities.service";
-import { InventoryService, InventoryItem } from "../../core/inventory.service";
+import {
+  InventoryItem,
+  InventoryService,
+  InventoryStockInsufficientError,
+} from "../../core/inventory.service";
 import { NormalizedListingsService, NormalizedListingDoc } from "../../core/normalized-listings.service";
 import { SupplierOperationsService } from "../../core/supplier-operations.service";
 import { isSupplierReceiptComplete } from "../../core/supplier-operation-state";
@@ -54,6 +58,13 @@ import { OperationalExpenseReport, OperationalExpenseReportsService } from "../.
 
 type EstadoConfirmacion = "pendiente" | "confirmado" | "sin_stock";
 type CatalogPriceTier = "clienta" | "manual";
+type ReservedInventoryMutation = {
+  inventoryId: string;
+  orderItemId: string;
+  qty: number;
+  reserveKey: string;
+  compensationKey: string;
+};
 type OrderItemPriceAudit = Pick<
   OrderItem,
   | "price_selected_tier"
@@ -73,6 +84,16 @@ type ProductCountsVm = {
   hasPending: boolean;
   canMagicConfirm: boolean;
   insufficient: number;
+};
+
+type ProductBulkActionProgress = {
+  completed: number;
+  total: number;
+};
+
+type SupplierBulkReceiptResult = {
+  item: OrderItem;
+  error: string | null;
 };
 
 type ProductCardVm = {
@@ -154,6 +175,8 @@ type OrderViewVm = {
   phase: { actionId: string; label: string } | null;
   isPackingWorkflowPhase: boolean;
   canCreatePackages: boolean;
+  packingAvailable: boolean;
+  packingPending: boolean;
   canEditItems: boolean;
   canAddProducts: boolean;
   canViewFinancialSummary: boolean;
@@ -307,6 +330,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   error = signal<string | null>(null);
   initialHydration = signal(true);
   private lastInventoryBlockedAlertAt = 0;
+  private inventoryMutationSequence = 0;
 
   order = computed<Order | null>(() => this.orders.getById(this.orderId()));
   incidents = signal<Incident[]>([]);
@@ -324,6 +348,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   moreActionsSheetOpen = signal(false);
   activeTab = signal<"incidencias" | "productos" | "paquetes" | "bitacora">("productos");
   actionToast = signal<string | null>(null);
+  productBulkActionSaving = signal(false);
+  productBulkActionProgress = signal<ProductBulkActionProgress | null>(null);
   operationsSheetOpen = signal(false);
   operationalDestination = signal<"durango" | "gdl" | "otro">("durango");
   operationalCustomDestination = signal("");
@@ -503,6 +529,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   newItemVariant = signal("");
   newItemColor = signal("");
   newItemInventoryId = signal<string | null>(null);
+  selectedInventoryItemSnapshot = signal<InventoryItem | null>(null);
+  selectedInventoryAvailableOverride = signal<{ inventoryId: string; available: number } | null>(null);
   newItemQty = signal(1);
   newItemPricePublic = signal<number | null>(null);
   newItemPriceCost = signal<number | null>(null);
@@ -518,6 +546,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   supplierDiscountLabel = signal<string | null>(null);
   selectedPreview = signal<{ title: string; variant: string; color: string; image: string | null; source: string } | null>(null);
   selectedCatalogDoc = signal<NormalizedListingDoc | null>(null);
+  selectedCatalogSourceImages = signal<readonly string[]>([]);
   selectedCatalogProduct = signal<CatalogProduct | null>(null);
   priceWarningOpen = signal(false);
   priceWarningProduct = signal<CatalogProduct | null>(null);
@@ -543,6 +572,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   private barcodeAliasSourceCode = signal("");
   private catalogProductSearchTimer: ReturnType<typeof setTimeout> | null = null;
   private catalogProductSearchRequest = 0;
+  private catalogSourceImagesRequest = 0;
   catalogPriceTier = signal<CatalogPriceTier>("clienta");
   priceOverrideReason = signal("");
   priceOverrideError = signal<string | null>(null);
@@ -571,6 +601,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     return (this.order()?.items || []).find((item) => item.item_id === id) || null;
   });
   inventoryLoaded = signal(false);
+  inventorySourceLoading = signal(false);
+  inventorySourceError = signal<string | null>(null);
   catalogLoaded = signal(false);
   showProductList = signal(false);
   returnModalOpen = signal(false);
@@ -613,6 +645,49 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     for (const row of this.inventory.items()) map.set(row.inventory_id, row);
     return map;
   });
+  selectedInventoryItem = computed(() => {
+    const inventoryId = this.newItemInventoryId();
+    if (!inventoryId) return null;
+    const current = this.inventoryById().get(inventoryId);
+    if (current) return current;
+    const snapshot = this.selectedInventoryItemSnapshot();
+    return snapshot?.inventory_id === inventoryId ? snapshot : null;
+  });
+  selectedInventoryAvailableQty = computed(() => {
+    const item = this.selectedInventoryItem();
+    if (!item) return null;
+    const override = this.selectedInventoryAvailableOverride();
+    return override?.inventoryId === item.inventory_id
+      ? override.available
+      : this.inventoryAvailableQty(item);
+  });
+  newItemQuantityMax = computed(() => {
+    if (this.newItemSource() !== "inventario" || !this.newItemInventoryId()) return null;
+    const available = this.selectedInventoryAvailableQty();
+    if (available === null) return null;
+    const target = this.isEditMode() ? this.editTargetItem() : null;
+    const currentReserved = target?.source === "inventario"
+      && target.inventory_id === this.newItemInventoryId()
+      ? this.itemQuantity(target)
+      : 0;
+    return available + currentReserved;
+  });
+  newItemInventoryQuantityError = computed(() => {
+    if (this.newItemSource() !== "inventario" || !this.newItemInventoryId()) return null;
+    if (this.inventorySourceLoading()) return null;
+    if (this.inventorySourceError()) return this.inventorySourceError();
+    const item = this.selectedInventoryItem();
+    if (!item) return "Este artículo ya no está disponible en inventario.";
+    const maxQty = this.newItemQuantityMax() ?? 0;
+    const qty = this.normalizedNewItemQty();
+    if (maxQty <= 0) return "Este artículo ya no tiene piezas disponibles.";
+    if (qty > maxQty) {
+      return this.isEditMode()
+        ? `Puedes dejar como máximo ${maxQty} pieza(s) en este pedido.`
+        : `Solo hay ${maxQty} pieza(s) disponibles.`;
+    }
+    return null;
+  });
   private itemImageByItemId = computed(() => {
     const map = new Map<string, string | null>();
     const currentOrder = this.order();
@@ -641,16 +716,26 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     return matches.slice(0, 12);
   });
 
+  inventorySearchActive = computed(() => (
+    this.newItemSource() === "inventario" && this.normalizeSearchText(this.newItemSearch()).length >= 2
+  ));
   inventorySuggestions = computed(() => {
-    if (this.newItemSource() !== "inventario") return [];
+    if (!this.inventorySearchActive() || this.inventorySourceLoading() || this.inventorySourceError()) return [];
     const term = this.normalizeSearchText(this.newItemSearch());
-    if (term.length < 2) return [];
     return this.inventory.items()
       .filter((item) => {
         const blob = this.normalizeSearchText([item.title, item.color_name || "", item.variant_name || "", item.size_label || ""].join(" "));
-        return blob.includes(term);
+        return this.inventoryAvailableQty(item) > 0 && blob.includes(term);
       })
       .slice(0, 6);
+  });
+  unavailableInventoryMatchesCount = computed(() => {
+    if (!this.inventorySearchActive() || this.inventorySourceLoading() || this.inventorySourceError()) return 0;
+    const term = this.normalizeSearchText(this.newItemSearch());
+    return this.inventory.items().filter((item) => {
+      const blob = this.normalizeSearchText([item.title, item.color_name || "", item.variant_name || "", item.size_label || ""].join(" "));
+      return this.inventoryAvailableQty(item) <= 0 && blob.includes(term);
+    }).length;
   });
   catalogSuggestions = computed(() => {
     if (this.newItemSource() !== "catalogo") return [];
@@ -858,7 +943,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     }));
     const unpackedCount = unpackedRows.reduce((sum, row) => sum + row.qty, 0);
     const confirmedPieces = this.confirmedPieces(currentOrder);
-    const packedCount = Math.max(0, confirmedPieces - unpackedCount);
+    const packedCount = this.packedCount(currentOrder);
     const progressPercent = confirmedPieces > 0
       ? Math.max(0, Math.min(100, Math.round((packedCount * 100) / confirmedPieces)))
       : 0;
@@ -874,7 +959,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       confirmedPieces,
       progressPercent,
       canDispatch: this.canFinishPacking(currentOrder),
-      canStartPacking: packBlockedCount === 0,
+      canStartPacking: this.canStartPacking(currentOrder),
       packBlockedCount,
       activeOpenBoxNumber: activeOpen?.boxNumber ?? null,
       openBoxesCount: openBoxes.length,
@@ -899,6 +984,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     const confirmedPiecesPercent = totalPieces > 0
       ? Math.max(0, Math.min(100, Math.round((confirmedPieces * 100) / totalPieces)))
       : 0;
+    const packingAvailable = caps.canCreatePackages || this.hasPackingStarted(currentOrder);
 
     return {
       customerName: this.customerName(currentOrder),
@@ -907,6 +993,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       phase,
       isPackingWorkflowPhase: this.isPackingWorkflowPhase(currentOrder),
       canCreatePackages: caps.canCreatePackages,
+      packingAvailable,
+      packingPending: packingAvailable && !this.isPackingComplete(currentOrder),
       canEditItems: this.canEditItems(currentOrder),
       canAddProducts: this.canAddProducts(currentOrder),
       canViewFinancialSummary: this.canViewFinancialSummary(currentOrder),
@@ -953,13 +1041,20 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       this.suppliers.loadFromFirestore().catch(() => null),
       this.rutas.loadFromFirestore().catch(() => null),
       this.localities.loadFromFirestore().catch(() => null),
-      this.inventory.loadFromFirestore().catch(() => null),
+      this.inventory.loadFromFirestore()
+        .then(() => {
+          this.inventoryLoaded.set(true);
+          this.inventorySourceError.set(null);
+        })
+        .catch(() => {
+          this.inventorySourceError.set("No se pudo actualizar el inventario.");
+          return null;
+        }),
       this.finance.loadAccounts().catch(() => null),
       this.operationalExpenseReports.loadAll().catch(() => null),
       this.supplierOperations.loadFromFirestore().catch(() => null),
       this.loadAssigneeOptions().catch(() => null),
     ]).then(() => {
-      this.inventoryLoaded.set(true);
       const currentOrder = this.orders.getById(this.orderId());
       if (!currentOrder) {
         this.error.set("Pedido no encontrado");
@@ -1966,6 +2061,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         limitedEdit: false,
       };
     }
+    const packingAvailable = this.isPackingAvailable(order);
     switch (order.status) {
       case "borrador":
         return {
@@ -1990,12 +2086,12 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
           canEditItems: true,
           canConfirmItems: true,
           canRegisterReception: false,
-          canCreatePackages: false,
-          canAssignItemsToPackages: false,
-          canPrintLabels: false,
+          canCreatePackages: packingAvailable,
+          canAssignItemsToPackages: packingAvailable,
+          canPrintLabels: packingAvailable,
           canDeliverByPackage: false,
           canRegisterPayment: false,
-          canPack: false,
+          canPack: packingAvailable,
           limitedEdit: true,
         };
       case "recibido_qa":
@@ -2005,12 +2101,12 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
           canEditItems: false,
           canConfirmItems: false,
           canRegisterReception: true,
-          canCreatePackages: true,
-          canAssignItemsToPackages: true,
-          canPrintLabels: true,
+          canCreatePackages: packingAvailable,
+          canAssignItemsToPackages: packingAvailable,
+          canPrintLabels: packingAvailable,
           canDeliverByPackage: false,
           canRegisterPayment: false,
-          canPack: true,
+          canPack: packingAvailable,
           limitedEdit: false,
         };
       case "en_ruta":
@@ -2092,7 +2188,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         if (this.canFinishPacking(order)) {
           return { actionId: "dispatch", label: "Terminar empaquetado" };
         }
-        return { actionId: "pack", label: this.canStartPacking(order) ? "Terminar empaquetado" : "Empacar" };
+        return { actionId: "pack", label: this.hasPackingStarted(order) ? "Terminar empaquetado" : "Empacar" };
       case "empaque":
         return { actionId: "dispatch", label: "Terminar empaquetado" };
       case "ready_for_route":
@@ -2111,6 +2207,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
   isPackingWorkflowPhase(order: Order | null): boolean {
     if (!order) return false;
+    if (this.isPackingAvailable(order)) return true;
     const action = this.phaseAction(order)?.actionId;
     if (action === "pack" || action === "dispatch") return true;
     return order.status === "ready_for_route" || order.status === "assigned_to_run";
@@ -2160,6 +2257,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   canFinishPacking(order: Order): boolean {
+    if (this.pendingPieces(order) > 0) return false;
+    if (this.packBlockedCount(order) > 0) return false;
     if (this.closedPackagesCount(order) <= 0) return false;
     if (this.openPackingBoxes(order).length > 0) return false;
     if (this.hasEmptyPackages(order)) return false;
@@ -2481,6 +2580,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
   productBulkActionType(order: Order | null): "mark_available" | "mark_received" | null {
     if (!order || this.isOrderClosed(order)) return null;
+    if (this.productBulkActionSaving()) return "mark_received";
     if (this.isConfirmItemsPhase(order)) return "mark_available";
     if (order.status === "empaque") return null;
     if (this.pendingSupplierReceptionItems(order).length > 0) return "mark_received";
@@ -2488,7 +2588,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   canRunProductBulkAction(order: Order | null): boolean {
-    if (!order || !this.canEditItems(order)) return false;
+    if (!order || !this.canEditItems(order) || this.productBulkActionSaving()) return false;
     const actionType = this.productBulkActionType(order);
     if (actionType === "mark_available") {
       return this.canUseStockMenuActions(order) && this.pendingConfirmationItemsCount(order) > 0;
@@ -2501,7 +2601,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
   async runProductBulkAction() {
     const order = this.order();
-    if (!order || !this.canEditItems(order)) return;
+    if (!order || !this.canEditItems(order) || this.productBulkActionSaving()) return;
     const actionType = this.productBulkActionType(order);
     if (actionType === "mark_available") {
       await this.confirmarTodoDisponible();
@@ -2517,11 +2617,126 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     const targets = this.pendingSupplierReceptionItems(order);
     if (targets.length === 0) return;
 
-    for (const item of targets) {
-      await this.receiveItem(order, item, { silentToast: true });
+    this.productBulkActionSaving.set(true);
+    this.productBulkActionProgress.set({ completed: 0, total: targets.length });
+    this.setItemsActionLoading(targets, true);
+    this.actionError.set(null);
+
+    try {
+      await this.supplierOperations.upsertFromConfirmedOrder(order, this.customerName(order));
+      const results = await this.mapWithConcurrency(
+        targets,
+        4,
+        async (item): Promise<SupplierBulkReceiptResult> => {
+          const opId = this.supplierOpId(order, item);
+          try {
+            await this.supplierOperations.receiveLineAndAllocate(
+              opId,
+              `${opId}:recibido`,
+              {
+                refreshInventory: false,
+                reloadSupplierOperations: false,
+                syncOrderStatus: false,
+              },
+            );
+            return { item, error: null };
+          } catch (error) {
+            return {
+              item,
+              error: error instanceof Error ? error.message : "Error desconocido al recibir el producto.",
+            };
+          } finally {
+            this.setItemActionLoading(item, false);
+            this.productBulkActionProgress.update((current) => current
+              ? { ...current, completed: Math.min(current.total, current.completed + 1) }
+              : current);
+          }
+        },
+      );
+
+      const successful = results.filter((result) => result.error === null);
+      const failed = results.filter((result) => result.error !== null);
+
+      if (successful.length > 0) {
+        const successfulIds = new Set(successful.map((result) => result.item.item_id));
+        const liveOrder = this.orders.getById(order.order_id) || order;
+        const nextItems = (liveOrder.items || []).map((item) => successfulIds.has(item.item_id)
+          ? { ...item, state: "recibido_qa" as const }
+          : item);
+        await this.orders.updateItems(order.order_id, nextItems);
+        await this.orders.syncDerivedStatus(order.order_id);
+        await Promise.all(
+          successful.map(({ item }) => this.logOrderEventBestEffort(
+            order.order_id,
+            "ITEM_RECEIVED_QA",
+            `Recibido desde proveedor: ${item.title}`,
+            { itemId: item.item_id, supplierOpId: this.supplierOpId(order, item) },
+          )),
+        );
+      }
+
+      const cacheRefreshes = await Promise.allSettled([
+        this.inventory.loadFromFirestore(),
+        this.supplierOperations.loadFromFirestore(),
+      ]);
+      const cacheRefreshFailed = cacheRefreshes.some((result) => result.status === "rejected");
+      await this.refreshEvents().catch(() => undefined);
+
+      if (failed.length > 0) {
+        const firstError = failed[0].error;
+        const failureMessage =
+          `${failed.length} de ${targets.length} producto(s) no se pudieron recibir. Puedes reintentar los pendientes.`
+          + (firstError ? ` Primer error: ${firstError}` : "");
+        this.actionError.set(failureMessage);
+        void this.showPopupAlert(failureMessage, "Recepción incompleta");
+      } else if (cacheRefreshFailed) {
+        const refreshMessage = "Los productos se recibieron, pero no se pudo actualizar toda la información en pantalla. Recarga la página.";
+        this.actionError.set(refreshMessage);
+        void this.showPopupAlert(refreshMessage, "Actualización pendiente");
+      } else {
+        this.actionError.set(null);
+      }
+
+      if (successful.length > 0) {
+        const suffix = failed.length > 0 ? `; ${failed.length} pendiente(s).` : ".";
+        this.showActionToast(`${successful.length} producto(s) recibido(s)${suffix}`);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Error desconocido al recibir los productos.";
+      const failureMessage = `No se pudo completar la recepción masiva: ${message}`;
+      this.actionError.set(failureMessage);
+      void this.showPopupAlert(failureMessage, "No se pudo completar");
+    } finally {
+      this.setItemsActionLoading(targets, false);
+      this.productBulkActionSaving.set(false);
+      this.productBulkActionProgress.set(null);
     }
-    await this.refreshEvents();
-    this.showActionToast(`Se marcaron ${targets.length} producto(s) como recibidos.`);
+  }
+
+  productBulkActionProgressLabel(): string {
+    const progress = this.productBulkActionProgress();
+    if (!progress) return "Procesando recepción...";
+    if (progress.completed >= progress.total) return "Finalizando recepción...";
+    return `Recibiendo ${progress.completed} de ${progress.total}...`;
+  }
+
+  private async mapWithConcurrency<T, R>(
+    items: readonly T[],
+    concurrency: number,
+    task: (item: T) => Promise<R>,
+  ): Promise<R[]> {
+    const results = new Array<R>(items.length);
+    let nextIndex = 0;
+    const worker = async () => {
+      while (nextIndex < items.length) {
+        const index = nextIndex;
+        nextIndex += 1;
+        results[index] = await task(items[index]);
+      }
+    };
+    const workerCount = Math.min(items.length, Math.max(1, Math.trunc(concurrency)));
+    await Promise.all(Array.from({ length: workerCount }, () => worker()));
+    return results;
   }
 
   canMagicConfirm(order: Order): boolean {
@@ -2647,7 +2862,12 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     return !this.canSubmitNewItem()
       || !this.canEditItems(order)
       || this.addItemSaving()
-      || this.addItemProvisionalEditorOpen();
+      || this.addItemProvisionalEditorOpen()
+      || (this.newItemSource() === "inventario" && (
+        this.inventorySourceLoading()
+        || !!this.inventorySourceError()
+        || !!this.newItemInventoryQuantityError()
+      ));
   }
 
   addItemSelectionImages(): readonly ProductSelectionImage[] {
@@ -2664,6 +2884,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     for (const color of doc?.product_colors || []) add(color.image_url, color.name || "Imagen por color", color.name || null);
     for (const [index, url] of (doc?.cover_images || []).entries()) add(url, `Imagen general ${index + 1}`);
     add(doc?.preview_image_url, "Vista principal");
+    for (const [index, url] of this.selectedCatalogSourceImages().entries()) add(url, `Imagen sin asignar ${index + 1}`);
 
     const result = this.selectedCatalogSearchResult();
     for (const variant of result?.variants || []) add(variant.image_url, variant.color || variant.size || variant.name, variant.color || null);
@@ -2765,11 +2986,40 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   increaseNewItemQty(): void {
-    this.newItemQty.update((qty) => Math.max(1, Math.trunc(Number(qty) || 1)) + 1);
+    const current = this.normalizedNewItemQty();
+    const maxQty = this.newItemQuantityMax();
+    if (maxQty !== null && current >= maxQty) return;
+    this.newItemQty.set(current + 1);
   }
 
   decreaseNewItemQty(): void {
-    this.newItemQty.update((qty) => Math.max(1, Math.trunc(Number(qty) || 1) - 1));
+    this.newItemQty.set(Math.max(1, this.normalizedNewItemQty() - 1));
+  }
+
+  normalizedNewItemQty(): number {
+    return Math.max(1, Math.trunc(Number(this.newItemQty()) || 1));
+  }
+
+  inventoryAvailableQty(item: InventoryItem): number {
+    const value = Number(item.available_qty ?? item.quantity_on_hand ?? 0);
+    return Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 0;
+  }
+
+  canIncreaseNewItemQty(): boolean {
+    const maxQty = this.newItemQuantityMax();
+    return maxQty === null || this.normalizedNewItemQty() < maxQty;
+  }
+
+  selectedInventoryAvailabilityLabel(): string | null {
+    if (this.inventorySourceLoading()) return "Actualizando piezas disponibles...";
+    if (this.inventorySourceError()) return null;
+    const available = this.selectedInventoryAvailableQty();
+    if (available === null) return null;
+    const target = this.isEditMode() ? this.editTargetItem() : null;
+    if (target?.source === "inventario" && target.inventory_id === this.newItemInventoryId()) {
+      return `${available} pieza(s) adicionales disponibles · máximo ${this.newItemQuantityMax()} en el pedido.`;
+    }
+    return `${available} pieza(s) disponibles para agregar.`;
   }
 
   nextStatus(order: Order | null): OrderStatus | null {
@@ -3096,12 +3346,28 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   canStartPacking(order: Order): boolean {
-    return this.packBlockedCount(order) === 0;
+    return this.isPackingAvailable(order);
+  }
+
+  isPackingAvailable(order: Order): boolean {
+    if (this.isOrderClosed(order)) return this.hasPackingStarted(order);
+    return this.hasPackingStarted(order) || this.unpackedItems(order).length > 0;
+  }
+
+  isPackingComplete(order: Order): boolean {
+    if (this.pendingPieces(order) > 0) return false;
+    if (this.packBlockedCount(order) > 0) return false;
+    if (this.unpackedCount(order) > 0) return false;
+    return order.packing?.status === "done" || this.canFinishPacking(order);
   }
 
   packedCount(order: Order): number {
-    const totalConfirmed = this.confirmedPieces(order);
-    return Math.max(0, totalConfirmed - this.unpackedCount(order));
+    const packedMap = this.packedQtyByItem(order);
+    return this.confirmedItems(order).reduce((sum, item) => {
+      const confirmed = Math.max(0, this.confirmedQty(item));
+      const packed = Math.max(0, packedMap.get(item.item_id) || 0);
+      return sum + Math.min(confirmed, packed);
+    }, 0);
   }
 
   packingProgressPercent(order: Order): number {
@@ -3139,6 +3405,16 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
   private setItemActionLoading(item: OrderItem, loading: boolean) {
     this.itemActionLoading.update((current) => ({ ...current, [item.item_id]: loading }));
+  }
+
+  private setItemsActionLoading(items: readonly OrderItem[], loading: boolean) {
+    this.itemActionLoading.update((current) => {
+      const next = { ...current };
+      for (const item of items) {
+        next[item.item_id] = loading;
+      }
+      return next;
+    });
   }
 
   private showActionToast(message: string) {
@@ -3527,7 +3803,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   async createPackage(order: Order | null) {
-    if (!order || this.packingBusy()) return;
+    if (!order || this.packingBusy() || !this.canCreateNewBox(order)) return;
     this.packingBusy.set(true);
     try {
       const pkg: PackageRecord = {
@@ -4503,12 +4779,27 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     if (!force && now - this.lastAddItemSourcesRefreshAt < 6000) return;
     if (this.addItemSourcesRefreshPromise) return this.addItemSourcesRefreshPromise;
 
+    this.inventorySourceLoading.set(true);
+    this.inventorySourceError.set(null);
+    let inventoryRefreshed = false;
     this.addItemSourcesRefreshPromise = (async () => {
       const orderBusiness = this.orderBusinessId();
       const tasks: Promise<unknown>[] = [
         this.inventory
           .loadFromFirestore()
-          .then(() => this.inventoryLoaded.set(true)),
+          .then(() => {
+            inventoryRefreshed = true;
+            this.inventoryLoaded.set(true);
+            const selectedId = this.newItemInventoryId();
+            if (selectedId) {
+              this.selectedInventoryItemSnapshot.set(this.inventoryById().get(selectedId) || null);
+              this.selectedInventoryAvailableOverride.set(null);
+            }
+          })
+          .catch((error: unknown) => {
+            this.inventorySourceError.set("No se pudo actualizar el inventario. Intenta nuevamente.");
+            throw error;
+          }),
         this.manualHistory.load(orderBusiness),
       ];
       if (orderBusiness === "bm") {
@@ -4525,12 +4816,17 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         this.catalogLoaded.set(true);
       }
       await Promise.allSettled(tasks);
-      this.lastAddItemSourcesRefreshAt = Date.now();
+      if (inventoryRefreshed) this.lastAddItemSourcesRefreshAt = Date.now();
     })().finally(() => {
+      this.inventorySourceLoading.set(false);
       this.addItemSourcesRefreshPromise = null;
     });
 
     return this.addItemSourcesRefreshPromise;
+  }
+
+  retryAddItemInventory(): void {
+    void this.refreshAddItemSources({ force: true });
   }
 
   openAddItemModal() {
@@ -4577,6 +4873,10 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.newItemPriceCost.set(item.price_cost ?? null);
     this.newItemDiscount.set(item.discount_pct ?? null);
     this.newItemInventoryId.set(item.inventory_id || null);
+    this.selectedInventoryItemSnapshot.set(
+      item.inventory_id ? this.inventoryById().get(item.inventory_id) || null : null,
+    );
+    this.selectedInventoryAvailableOverride.set(null);
     this.newItemSupplierId.set(item.supplier_id || null);
     this.newItemProductId.set(item.product_id || null);
     this.newItemSku.set(item.sku || item.inventory_id || null);
@@ -4648,6 +4948,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.supplierDiscountLabel.set(null);
     this.newItemSearch.set("");
     this.newItemInventoryId.set(null);
+    this.selectedInventoryItemSnapshot.set(null);
+    this.selectedInventoryAvailableOverride.set(null);
     this.newItemSupplierId.set(null);
     this.newItemProductId.set(null);
     this.newItemSku.set(null);
@@ -4657,6 +4959,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.catalogColorOptions.set([]);
     this.selectedPreview.set(null);
     this.selectedCatalogDoc.set(null);
+    this.clearAddItemCatalogSourceImages();
     this.selectedCatalogProduct.set(null);
     this.priceWarningOpen.set(false);
     this.priceWarningProduct.set(null);
@@ -4787,6 +5090,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.supplierDiscountLabel.set(null);
     this.newItemSearch.set("");
     this.newItemInventoryId.set(null);
+    this.selectedInventoryItemSnapshot.set(null);
+    this.selectedInventoryAvailableOverride.set(null);
     this.newItemSupplierId.set(null);
     this.newItemProductId.set(null);
     this.newItemSku.set(null);
@@ -4797,6 +5102,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.catalogColorOptions.set([]);
     this.selectedPreview.set(null);
     this.selectedCatalogDoc.set(null);
+    this.clearAddItemCatalogSourceImages();
     this.selectedCatalogProduct.set(null);
     this.catalogProductSuggestions.set([]);
     this.catalogProductSearching.set(false);
@@ -8348,21 +8654,17 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       this.error.set("Escribe el nombre del producto");
       return;
     }
-    const qty = Math.max(1, this.newItemQty());
-    if (this.newItemSource() === "inventario" && this.newItemInventoryId()) {
-      const inv = this.inventoryById().get(this.newItemInventoryId()!);
-      if (inv && inv.quantity_on_hand <= 0) {
-        await this.showInventoryBlockedAlert(inv);
-        this.selectedPreview.set(null);
-        return;
-      }
+    const qty = this.normalizedNewItemQty();
+    const source = this.newItemSource();
+    if (source === "inventario" && this.newItemInventoryQuantityError()) {
+      this.error.set(this.newItemInventoryQuantityError());
+      return;
     }
     if (!(await this.confirmPriceOverrideIfNeeded())) return;
     const needsLateNote = this.requiresLateAdditionNote(order);
     const lateNote = needsLateNote ? await this.requestLateAdditionNote(order) : null;
     if (needsLateNote && !lateNote) return;
 
-    const source = this.newItemSource();
     if (source === "catalogo" && this.selectedCatalogProduct()) {
       const ok = await this.confirmCatalogPriceWarningIfNeeded();
       if (!ok) return;
@@ -8394,56 +8696,54 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
           quantity: this.itemQuantity(row) + qty,
         };
       });
-      await this.orders.updateItems(order.order_id, nextItems);
-      await this.orders.logEvent(order.order_id, "ITEM_MERGED_QTY", `Cantidad actualizada: ${item.title}`, {
+      const reservation = await this.commitOrderMutationWithInventoryReservation({
+        orderId: order.order_id,
+        orderItemId: existingMatch.item_id,
+        inventoryId: item.source === "inventario" ? item.inventory_id || null : null,
+        itemTitle: item.title,
+        qty,
+        mutateOrder: () => this.orders.updateItems(order.order_id, nextItems),
+      });
+      await this.logOrderEventBestEffort(order.order_id, "ITEM_MERGED_QTY", `Cantidad actualizada: ${item.title}`, {
         itemId: existingMatch.item_id,
         addedQty: qty,
         ...this.orderItemPriceAuditMeta(item),
       });
-      if (item.source === "inventario" && item.inventory_id) {
-        const reserveKey = this.buildInventoryMutationKey("reserve", order.order_id, existingMatch.item_id, item.inventory_id, qty);
-        await this.inventory.reserveStock({
-          sku: item.inventory_id,
+      if (reservation) {
+        await this.logOrderEventBestEffort(order.order_id, "INVENTORY_RESERVED", `Reserva inventario: ${item.title}`, {
+          inventoryId: reservation.inventoryId,
           qty,
-          orderId: order.order_id,
-          orderItemId: existingMatch.item_id,
-          idempotencyKey: reserveKey,
-        });
-        await this.orders.logEvent(order.order_id, "INVENTORY_RESERVED", `Reserva inventario: ${item.title}`, {
-          inventoryId: item.inventory_id,
-          qty,
-          idempotencyKey: reserveKey,
+          idempotencyKey: reservation.reserveKey,
         });
       }
     } else {
-      await this.orders.addItem(order.order_id, item);
+      const reservation = await this.commitOrderMutationWithInventoryReservation({
+        orderId: order.order_id,
+        orderItemId: item.item_id,
+        inventoryId: item.source === "inventario" ? item.inventory_id || null : null,
+        itemTitle: item.title,
+        qty,
+        mutateOrder: () => this.orders.addItem(order.order_id, item),
+      });
       if (lateNote) {
-        await this.orders.logEvent(order.order_id, "ITEM_ADDED_LATE", `Item agregado fuera de flujo: ${item.title}`, {
+        await this.logOrderEventBestEffort(order.order_id, "ITEM_ADDED_LATE", `Item agregado fuera de flujo: ${item.title}`, {
           itemId: item.item_id,
           source: item.source,
           note: lateNote,
           orderStatus: order.status,
         });
       } else {
-        await this.orders.logEvent(order.order_id, "ITEM_ADDED", `Item agregado: ${item.title}`, {
+        await this.logOrderEventBestEffort(order.order_id, "ITEM_ADDED", `Item agregado: ${item.title}`, {
           itemId: item.item_id,
           source: item.source,
           ...this.orderItemPriceAuditMeta(item),
         });
       }
-      if (item.source === "inventario" && item.inventory_id) {
-        const reserveKey = this.buildInventoryMutationKey("reserve", order.order_id, item.item_id, item.inventory_id, qty);
-        await this.inventory.reserveStock({
-          sku: item.inventory_id,
+      if (reservation) {
+        await this.logOrderEventBestEffort(order.order_id, "INVENTORY_RESERVED", `Reserva inventario: ${item.title}`, {
+          inventoryId: reservation.inventoryId,
           qty,
-          orderId: order.order_id,
-          orderItemId: item.item_id,
-          idempotencyKey: reserveKey,
-        });
-        await this.orders.logEvent(order.order_id, "INVENTORY_RESERVED", `Reserva inventario: ${item.title}`, {
-          inventoryId: item.inventory_id,
-          qty,
-          idempotencyKey: reserveKey,
+          idempotencyKey: reservation.reserveKey,
         });
       }
     }
@@ -8464,7 +8764,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     if (lateNote) {
       this.addItemModalOpen.set(false);
     }
-    await this.refreshEvents();
+    await this.refreshEvents().catch(() => undefined);
   }
 
   async convertManualItem(order: Order | null) {
@@ -8495,14 +8795,10 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       this.error.set("Escribe el nombre del producto");
       return;
     }
-    const qty = Math.max(1, this.newItemQty());
-    if (source === "inventario" && this.newItemInventoryId()) {
-      const inv = this.inventoryById().get(this.newItemInventoryId()!);
-      if (inv && inv.quantity_on_hand <= 0) {
-        await this.showInventoryBlockedAlert(inv);
-        this.selectedPreview.set(null);
-        return;
-      }
+    const qty = this.normalizedNewItemQty();
+    if (source === "inventario" && this.newItemInventoryQuantityError()) {
+      this.error.set(this.newItemInventoryQuantityError());
+      return;
     }
     if (!(await this.confirmPriceOverrideIfNeeded())) return;
     const state: OrderItemState = source === "inventario" ? "reservado_inventario" : "confirmando_proveedor";
@@ -8516,23 +8812,22 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     await this.prepareProvisionalItemImage(order.order_id, target.item_id);
     const converted = this.buildOrderItemFromForm(target.item_id, source, state);
     const nextItems = (order.items || []).map((item) => (item.item_id === target.item_id ? converted : item));
-    await this.orders.updateItems(order.order_id, nextItems);
-    if (converted.source === "inventario" && converted.inventory_id) {
-      const reserveKey = this.buildInventoryMutationKey("reserve", order.order_id, converted.item_id, converted.inventory_id, qty);
-      await this.inventory.reserveStock({
-        sku: converted.inventory_id,
+    const reservation = await this.commitOrderMutationWithInventoryReservation({
+      orderId: order.order_id,
+      orderItemId: converted.item_id,
+      inventoryId: converted.source === "inventario" ? converted.inventory_id || null : null,
+      itemTitle: converted.title,
+      qty,
+      mutateOrder: () => this.orders.updateItems(order.order_id, nextItems),
+    });
+    if (reservation) {
+      await this.logOrderEventBestEffort(order.order_id, "INVENTORY_RESERVED", `Reserva inventario: ${converted.title}`, {
+        inventoryId: reservation.inventoryId,
         qty,
-        orderId: order.order_id,
-        orderItemId: converted.item_id,
-        idempotencyKey: reserveKey,
-      });
-      await this.orders.logEvent(order.order_id, "INVENTORY_RESERVED", `Reserva inventario: ${converted.title}`, {
-        inventoryId: converted.inventory_id,
-        qty,
-        idempotencyKey: reserveKey,
+        idempotencyKey: reservation.reserveKey,
       });
     }
-    await this.orders.logEvent(order.order_id, "ITEM_CONVERTED", `Item convertido: ${target.title}`, {
+    await this.logOrderEventBestEffort(order.order_id, "ITEM_CONVERTED", `Item convertido: ${target.title}`, {
       itemId: target.item_id,
       from: "manual",
       to: converted.source,
@@ -8541,7 +8836,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     });
     this.resetAddItemForm();
     this.addItemModalOpen.set(false);
-    await this.refreshEvents();
+    await this.refreshEvents().catch(() => undefined);
     this.showActionToast("Item convertido.");
   }
 
@@ -8562,6 +8857,10 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       this.error.set("Escribe el nombre del producto.");
       return;
     }
+    if (this.newItemSource() === "inventario" && this.newItemInventoryQuantityError()) {
+      this.error.set(this.newItemInventoryQuantityError());
+      return;
+    }
     if (!(await this.confirmPriceOverrideIfNeeded())) return;
     if (this.newItemSource() === "catalogo" && this.selectedCatalogProduct()) {
       const ok = await this.confirmCatalogPriceWarningIfNeeded();
@@ -8572,7 +8871,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     }
     await this.prepareProvisionalItemImage(order.order_id, target.item_id);
 
-    const nextQty = Math.max(1, this.newItemQty());
+    const nextQty = this.normalizedNewItemQty();
     const packedQty = this.itemPackedQty(live, target.item_id);
     if (nextQty < packedQty) {
       this.error.set(`No puedes dejar ${nextQty} pieza(s): hay ${packedQty} ya empacada(s).`);
@@ -8621,43 +8920,64 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     };
 
     const nextItems = (live.items || []).map((item) => (item.item_id === target.item_id ? updated : item));
-    await this.orders.updateItems(order.order_id, nextItems);
-
-    if (target.source === "inventario" && target.inventory_id) {
-      const delta = nextQty - this.itemQuantity(target);
-      if (delta > 0) {
-        const reserveKey = this.buildInventoryMutationKey("reserve", order.order_id, target.item_id, target.inventory_id, delta);
-        await this.inventory.reserveStock({
-          sku: target.inventory_id,
+    const inventoryId = target.source === "inventario" ? target.inventory_id || null : null;
+    const delta = inventoryId ? nextQty - this.itemQuantity(target) : 0;
+    if (inventoryId && delta > 0) {
+      const reservation = await this.commitOrderMutationWithInventoryReservation({
+        orderId: order.order_id,
+        orderItemId: target.item_id,
+        inventoryId,
+        itemTitle: updated.title,
+        qty: delta,
+        mutateOrder: () => this.orders.updateItems(order.order_id, nextItems),
+      });
+      if (reservation) {
+        await this.logOrderEventBestEffort(order.order_id, "INVENTORY_RESERVED", `Reserva inventario: ${updated.title}`, {
+          inventoryId,
           qty: delta,
-          orderId: order.order_id,
-          orderItemId: target.item_id,
-          idempotencyKey: reserveKey,
+          idempotencyKey: reservation.reserveKey,
         });
-        await this.orders.logEvent(order.order_id, "INVENTORY_RESERVED", `Reserva inventario: ${updated.title}`, {
-          inventoryId: target.inventory_id,
-          qty: delta,
-          idempotencyKey: reserveKey,
-        });
-      } else if (delta < 0) {
+      }
+    } else {
+      await this.orders.updateItems(order.order_id, nextItems);
+      if (inventoryId && delta < 0) {
         const releaseQty = Math.abs(delta);
-        const releaseKey = this.buildInventoryMutationKey("release", order.order_id, target.item_id, target.inventory_id, releaseQty);
-        await this.inventory.releaseReservation({
-          sku: target.inventory_id,
-          qty: releaseQty,
-          orderId: order.order_id,
-          orderItemId: target.item_id,
-          idempotencyKey: releaseKey,
-        });
-        await this.orders.logEvent(order.order_id, "INVENTORY_RESERVATION_RELEASED", `Liberación inventario: ${updated.title}`, {
-          inventoryId: target.inventory_id,
+        const mutationToken = this.nextInventoryMutationToken();
+        const releaseKey = this.buildInventoryMutationKey(
+          "release",
+          order.order_id,
+          target.item_id,
+          inventoryId,
+          releaseQty,
+          mutationToken,
+        );
+        try {
+          await this.inventory.releaseReservation({
+            sku: inventoryId,
+            qty: releaseQty,
+            orderId: order.order_id,
+            orderItemId: target.item_id,
+            idempotencyKey: releaseKey,
+          });
+        } catch (releaseError) {
+          try {
+            await this.orders.updateItems(order.order_id, live.items || []);
+          } catch {
+            throw new Error(
+              "La cantidad del pedido cambió, pero no se pudo liberar el inventario. Revisa este artículo antes de continuar.",
+            );
+          }
+          throw releaseError;
+        }
+        await this.logOrderEventBestEffort(order.order_id, "INVENTORY_RESERVATION_RELEASED", `Liberación inventario: ${updated.title}`, {
+          inventoryId,
           qty: releaseQty,
           idempotencyKey: releaseKey,
         });
       }
     }
 
-    await this.orders.logEvent(order.order_id, "ITEM_UPDATED", `Item editado: ${updated.title}`, {
+    await this.logOrderEventBestEffort(order.order_id, "ITEM_UPDATED", `Item editado: ${updated.title}`, {
       itemId: target.item_id,
       prevQty: this.itemQuantity(target),
       nextQty,
@@ -8679,7 +8999,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
     this.resetAddItemForm();
     this.addItemModalOpen.set(false);
-    await this.refreshEvents();
+    await this.refreshEvents().catch(() => undefined);
     this.showActionToast("Producto actualizado.");
   }
 
@@ -8707,7 +9027,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       title: this.newItemTitle().trim(),
       variant: this.newItemVariant().trim() || null,
       color: this.newItemColor().trim() || null,
-      quantity: Math.max(1, this.newItemQty()),
+      quantity: this.normalizedNewItemQty(),
       source,
       product_ref_type: productRefType,
       state,
@@ -9180,10 +9500,12 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   async pickInventory(item: InventoryItem) {
-    if (item.quantity_on_hand <= 0) {
+    if (this.inventoryAvailableQty(item) <= 0) {
       await this.showInventoryBlockedAlert(item);
       this.selectedPreview.set(null);
       this.newItemInventoryId.set(null);
+      this.selectedInventoryItemSnapshot.set(null);
+      this.selectedInventoryAvailableOverride.set(null);
       this.lockItemFields.set(false);
       this.showProductList.set(true);
       this.focusProductSearchInput();
@@ -9203,6 +9525,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.newItemSource.set("inventario");
     this.newItemSearch.set("");
     this.newItemInventoryId.set(item.inventory_id);
+    this.selectedInventoryItemSnapshot.set(item);
+    this.selectedInventoryAvailableOverride.set(null);
     this.newItemSupplierId.set(item.supplier_id || null);
     this.newItemProductId.set(item.inventory_id || null);
     this.newItemSku.set(item.sku || item.inventory_id || null);
@@ -9222,6 +9546,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       source: "Inventario",
     });
     this.selectedCatalogDoc.set(null);
+    this.clearAddItemCatalogSourceImages();
     this.selectedCatalogProduct.set(null);
     this.selectedCatalogSearchResult.set(null);
     this.captureOfficialAddItemOption();
@@ -9247,6 +9572,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.newItemSource.set("catalogo");
     this.newItemSearch.set("");
     this.newItemInventoryId.set(null);
+    this.selectedInventoryItemSnapshot.set(null);
+    this.selectedInventoryAvailableOverride.set(null);
     this.newItemSupplierId.set(doc.supplier_id || null);
     this.newItemProductId.set(doc.normalized_id || null);
     this.newItemSku.set(String(variant?.sku || "").trim() || null);
@@ -9266,6 +9593,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       source: "Catálogo",
     });
     this.selectedCatalogDoc.set(doc);
+    void this.loadAddItemCatalogSourceImages(doc);
     this.selectedCatalogProduct.set(null);
     this.selectedCatalogSearchResult.set(null);
     this.captureOfficialAddItemOption();
@@ -9300,6 +9628,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.newItemSource.set("catalogo");
     this.newItemSearch.set("");
     this.newItemInventoryId.set(null);
+    this.selectedInventoryItemSnapshot.set(null);
+    this.selectedInventoryAvailableOverride.set(null);
     this.newItemSupplierId.set(product.supplier_id || null);
     this.newItemProductId.set(product.product_id);
     this.newItemSku.set(product.primary_barcode || product.sku || product.supplier_sku || null);
@@ -9319,6 +9649,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       source: "Catálogo",
     });
     this.selectedCatalogDoc.set(null);
+    this.clearAddItemCatalogSourceImages();
     this.selectedCatalogProduct.set(product);
     this.selectedCatalogSearchResult.set(result);
     this.catalogProductSuggestions.set([]);
@@ -9493,6 +9824,35 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     return (
       (doc.product_colors || []).find((c) => (c.name || "").trim().toLowerCase() === target)?.image_url || null
     );
+  }
+
+  private async loadAddItemCatalogSourceImages(doc: NormalizedListingDoc): Promise<void> {
+    const request = ++this.catalogSourceImagesRequest;
+    this.selectedCatalogSourceImages.set([]);
+
+    try {
+      const sourceUrls = await this.catalog.getRawPostImageUrls(doc.raw_post_id || "");
+      if (
+        request !== this.catalogSourceImagesRequest
+        || this.selectedCatalogDoc()?.normalized_id !== doc.normalized_id
+      ) return;
+
+      const excludedUrls = new Set(
+        (doc.review?.excluded_image_urls || [])
+          .map((url) => String(url || "").trim())
+          .filter(Boolean),
+      );
+      this.selectedCatalogSourceImages.set(
+        Array.from(new Set(sourceUrls.map((url) => url.trim()).filter((url) => url && !excludedUrls.has(url)))),
+      );
+    } catch {
+      if (request === this.catalogSourceImagesRequest) this.selectedCatalogSourceImages.set([]);
+    }
+  }
+
+  private clearAddItemCatalogSourceImages(): void {
+    this.catalogSourceImagesRequest += 1;
+    this.selectedCatalogSourceImages.set([]);
   }
 
   private getVariantPriceSet(variant: any): { final: number | null; clienta: number | null; costo: number | null } {
@@ -9833,34 +10193,36 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     return new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(value);
   }
 
-  private async buildInventoryBlockedAlert(item: InventoryItem): Promise<{
-    itemTitle: string;
-    reservedBy: string;
-    customerName: string;
-    orderId: string;
-  }> {
-    const holder = this.findOrderHoldingInventory(item.inventory_id);
-    const nameFromEvents = holder?.orderId ? await this.findReservedByFromEvents(holder.orderId) : null;
-    return {
-      itemTitle: item.title || "este articulo",
-      reservedBy: this.toFirstName(nameFromEvents || holder?.reservedBy || "Admin"),
-      customerName: holder?.customerName || "otra clienta",
-      orderId: holder?.orderId || "otro pedido",
-    };
-  }
-
   private async showInventoryBlockedAlert(item: InventoryItem) {
     const now = Date.now();
     if (now - this.lastInventoryBlockedAlertAt < 600) return;
     this.lastInventoryBlockedAlertAt = now;
-    const blocked = await this.buildInventoryBlockedAlert(item);
-    await this.showPopupAlert(
-      `No puedes anadir ${blocked.itemTitle} a este pedido ya que ${blocked.reservedBy} lo aparto para ${blocked.customerName} en el pedido ${blocked.orderId}.`,
-      "Inventario reservado",
-    );
-    if (blocked.orderId && blocked.orderId !== "otro pedido") {
-      await navigator.clipboard.writeText(blocked.orderId).catch(() => null);
+    const itemTitle = item.title || "este artículo";
+    const reserved = Math.max(0, Math.trunc(Number(item.reserved_qty || 0)));
+    const inReview = Math.max(0, Math.trunc(Number(item.in_review_qty || 0)));
+    const damaged = Math.max(0, Math.trunc(Number(item.damaged_qty || 0)));
+    if (reserved > 0) {
+      const holder = this.findOrderHoldingInventory(item.inventory_id);
+      const nameFromEvents = holder?.orderId ? await this.findReservedByFromEvents(holder.orderId) : null;
+      const holderDetail = holder
+        ? ` ${this.toFirstName(nameFromEvents || holder.reservedBy)} lo apartó para ${holder.customerName} en el pedido ${holder.orderId}.`
+        : ` Hay ${reserved} pieza(s) apartadas en otros pedidos.`;
+      await this.showPopupAlert(
+        `No puedes añadir ${itemTitle} porque ya no tiene piezas disponibles.${holderDetail}`,
+        "Sin piezas disponibles",
+      );
+      if (holder?.orderId) {
+        await navigator.clipboard.writeText(holder.orderId).catch(() => null);
+      }
+      return;
     }
+
+    const reason = inReview > 0
+      ? `${inReview} pieza(s) están en revisión.`
+      : damaged > 0
+        ? `${damaged} pieza(s) están marcadas como dañadas.`
+        : "No hay existencia disponible.";
+    await this.showPopupAlert(`No puedes añadir ${itemTitle}. ${reason}`, "Sin piezas disponibles");
   }
 
   private focusProductSearchInput() {
@@ -9958,13 +10320,111 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     return this.formatCurrency(value);
   }
 
+  private async commitOrderMutationWithInventoryReservation(input: {
+    orderId: string;
+    orderItemId: string;
+    inventoryId: string | null;
+    itemTitle: string;
+    qty: number;
+    mutateOrder: () => Promise<void>;
+  }): Promise<ReservedInventoryMutation | null> {
+    if (!input.inventoryId) {
+      await input.mutateOrder();
+      return null;
+    }
+
+    const mutationToken = this.nextInventoryMutationToken();
+    const reserveKey = this.buildInventoryMutationKey(
+      "reserve",
+      input.orderId,
+      input.orderItemId,
+      input.inventoryId,
+      input.qty,
+      mutationToken,
+    );
+    const compensationKey = this.buildInventoryMutationKey(
+      "release",
+      input.orderId,
+      input.orderItemId,
+      input.inventoryId,
+      input.qty,
+      `rollback_${mutationToken}`,
+    );
+    const reservation: ReservedInventoryMutation = {
+      inventoryId: input.inventoryId,
+      orderItemId: input.orderItemId,
+      qty: input.qty,
+      reserveKey,
+      compensationKey,
+    };
+
+    try {
+      await this.inventory.reserveStock({
+        sku: input.inventoryId,
+        qty: input.qty,
+        orderId: input.orderId,
+        orderItemId: input.orderItemId,
+        idempotencyKey: reserveKey,
+      });
+    } catch (error) {
+      if (error instanceof InventoryStockInsufficientError) {
+        this.selectedInventoryAvailableOverride.set({
+          inventoryId: error.inventoryId,
+          available: error.available,
+        });
+        const availabilityMessage = error.available > 0
+          ? `Solo quedan ${error.available} pieza(s) disponibles de ${input.itemTitle}.`
+          : `Ya no quedan piezas disponibles de ${input.itemTitle}.`;
+        throw new Error(`${availabilityMessage} Ajusta la cantidad o elige otro producto.`);
+      }
+      throw error;
+    }
+
+    try {
+      await input.mutateOrder();
+    } catch (orderError) {
+      try {
+        await this.inventory.releaseReservation({
+          sku: reservation.inventoryId,
+          qty: reservation.qty,
+          orderId: input.orderId,
+          orderItemId: reservation.orderItemId,
+          idempotencyKey: reservation.compensationKey,
+        });
+      } catch {
+        throw new Error(
+          `No se agregó ${input.itemTitle} al pedido y no se pudo liberar su reserva. Revisa el inventario antes de reintentar.`,
+        );
+      }
+      throw orderError;
+    }
+
+    return reservation;
+  }
+
+  private async logOrderEventBestEffort(
+    orderId: string,
+    type: string,
+    message: string,
+    meta?: Record<string, unknown>,
+  ): Promise<void> {
+    await this.orders.logEvent(orderId, type, message, meta).catch(() => undefined);
+  }
+
+  private nextInventoryMutationToken(): string {
+    this.inventoryMutationSequence += 1;
+    return `${Date.now().toString(36)}_${this.inventoryMutationSequence.toString(36)}`;
+  }
+
   private buildInventoryMutationKey(
     action: "reserve" | "release",
     orderId: string,
     orderItemId: string,
     inventoryId: string,
     qty: number,
+    mutationToken?: string,
   ): string {
-    return `${action}_${orderId}_${orderItemId}_${inventoryId}_${Math.max(0, Math.trunc(qty))}`;
+    const operation = mutationToken ? `_${mutationToken}` : "";
+    return `${action}${operation}_${orderId}_${orderItemId}_${inventoryId}_${Math.max(0, Math.trunc(qty))}`;
   }
 }

@@ -615,10 +615,24 @@
           <span class="section-nav-count">{{ current.items.length }}</span>
         }
       </button>
-      <button type="button" role="tab" [attr.aria-selected]="activeTab() === 'paquetes'" [class.is-active]="activeTab() === 'paquetes'" (click)="setActiveTab('paquetes')">
-        <span class="material-symbols-rounded" aria-hidden="true">deployed_code</span>
+      <button
+        type="button"
+        role="tab"
+        class="section-nav-packages"
+        [attr.aria-selected]="activeTab() === 'paquetes'"
+        [attr.aria-label]="!vm.packingAvailable ? 'Paquetes. Se habilita cuando al menos un producto esté disponible para empacar.' : vm.packingPending ? 'Paquetes, pendiente de empacar' : 'Paquetes'"
+        [attr.title]="!vm.packingAvailable ? 'Se habilita cuando haya al menos un producto disponible para empacar' : null"
+        [class.is-active]="activeTab() === 'paquetes'"
+        [class.is-packing-pending]="vm.packingPending"
+        [class.needs-attention]="vm.packingPending && activeTab() !== 'paquetes'"
+        [disabled]="!vm.packingAvailable"
+        (click)="setActiveTab('paquetes')"
+      >
+        <span class="material-symbols-rounded" aria-hidden="true">{{ vm.packingAvailable ? "deployed_code" : "lock" }}</span>
         Paquetes
-        @if (current.packages.length) {
+        @if (vm.packingPending) {
+          <span class="section-nav-status section-nav-status--pending">Pendiente</span>
+        } @else if (current.packages.length) {
           <span class="section-nav-count">{{ current.packages.length }}</span>
         }
       </button>
@@ -757,9 +771,15 @@
               class="btn ghost with-icon"
               (click)="runProductBulkAction()"
               [disabled]="!canRunProductBulkAction(current)"
+              [attr.aria-busy]="productBulkActionSaving()"
             >
-              <span class="material-symbols-rounded btn-icon" aria-hidden="true">task_alt</span>
-              {{ bulkAction === "mark_received" ? "Marcar todo recibido" : "Marcar todo disponible" }}
+              @if (productBulkActionSaving() && bulkAction === "mark_received") {
+                <span class="btn-spinner" aria-hidden="true"></span>
+                <span aria-live="polite">{{ productBulkActionProgressLabel() }}</span>
+              } @else {
+                <span class="material-symbols-rounded btn-icon" aria-hidden="true">task_alt</span>
+                {{ bulkAction === "mark_received" ? "Marcar todo recibido" : "Marcar todo disponible" }}
+              }
             </button>
           }
         </div>
@@ -1126,7 +1146,12 @@
       <section class="panel package-shell packing-mode" id="paquetes" #packagesSection [class.tab-hidden]="activeTab() !== 'paquetes'">
         <header class="packHeader">
           <h2>Empacando Pedido</h2>
-          <p>{{ packing.unpackedCount }} pendientes por empacar</p>
+          <p>
+            {{ packing.unpackedCount }} disponibles sin empacar
+            @if (packing.packBlockedCount > 0) {
+              <span>· {{ packing.packBlockedCount }} esperando recepción</span>
+            }
+          </p>
           <div class="packHeaderActions">
             <button
               type="button"
@@ -1154,7 +1179,7 @@
                   </svg>
                   CAJAS ABIERTAS
                 </p>
-                <button type="button" class="newBoxBtn" [disabled]="packingBusy()" (click)="$event.stopPropagation(); createPackage(current)">
+                <button type="button" class="newBoxBtn" [disabled]="packingBusy() || !canCreateNewBox(current)" (click)="$event.stopPropagation(); createPackage(current)">
                   + Nueva caja
                 </button>
               </div>
@@ -1434,7 +1459,7 @@
       }
     } @else {
       <section class="panel locked package-shell" id="paquetes" #packagesSection [class.tab-hidden]="activeTab() !== 'paquetes'">
-        <p class="muted package-empty-note">Los paquetes se habilitan al recibir/QA o empaque.</p>
+        <p class="muted package-empty-note">Paquetes se habilita cuando al menos un producto esté recibido y disponible para empacar.</p>
       </section>
     }
 
@@ -1629,10 +1654,10 @@
               }
             </header>
 
-            @if (!vm.canStartPacking) {
+            @if (vm.packBlockedCount > 0) {
               <div class="sheet-warning">
-                <p class="eyebrow">Bloqueo operativo</p>
-                <p>Faltan {{ vm.packBlockedCount }} item(s) por recibir de proveedor antes de empacar.</p>
+                <p class="eyebrow">Recepción parcial</p>
+                <p>Puedes empacar lo disponible; todavía faltan {{ vm.packBlockedCount }} item(s) por recibir de proveedor.</p>
               </div>
             }
 
@@ -2376,38 +2401,58 @@
                 </div>
                 <small class="add-item-search-help">Escribe al menos 2 caracteres o escanea el código.</small>
               </div>
-              @if (showProductList() && (inventorySuggestions().length > 0 || catalogSuggestions().length > 0 || catalogProductSuggestions().length > 0 || catalogProductSearching() || catalogProductSearchAttempted() || catalogProductSearchError())) {
+              @if (showProductList() && (inventorySearchActive() || catalogSuggestions().length > 0 || catalogProductSuggestions().length > 0 || catalogProductSearching() || catalogProductSearchAttempted() || catalogProductSearchError())) {
                 <div class="listbox" role="listbox" aria-label="Resultados de productos">
+                  @if (inventorySearchActive()) {
+                    @if (inventorySourceLoading()) {
+                      <div class="listbox-option listbox-option--loading" role="status" aria-live="polite">
+                        <span class="material-symbols-rounded" aria-hidden="true">progress_activity</span>
+                        Actualizando piezas disponibles...
+                      </div>
+                    } @else if (inventorySourceError(); as inventoryError) {
+                      <div class="catalog-search-empty catalog-search-empty--error product-search-state" role="alert">
+                        <span>{{ inventoryError }}</span>
+                        <button type="button" class="btn ghost" (click)="retryAddItemInventory()">Reintentar</button>
+                      </div>
+                    } @else {
+                      @for (s of inventorySuggestions(); track s.inventory_id) {
+                        <button type="button" role="option" class="listbox-option" [attr.aria-label]="'Inventario: ' + s.title + ', ' + inventoryAvailableQty(s) + ' piezas disponibles'" (mousedown)="$event.preventDefault(); beginProductPick(); pickInventory(s)" (touchstart)="$event.preventDefault(); beginProductPick(); pickInventory(s)" (click)="beginProductPick(); pickInventory(s)">
+                          @if (s.image_urls[0]) {
+                            <img class="listbox-thumb" [src]="s.image_urls[0]" alt="" />
+                          } @else {
+                            <div class="photo-placeholder photo-placeholder-sm" aria-hidden="true">
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M4 7h4l2-2h4l2 2h4v12H4z"></path>
+                                <circle cx="12" cy="13" r="3"></circle>
+                              </svg>
+                            </div>
+                          }
+                          <div class="listbox-main">
+                            <div class="card-title">{{ s.title }}</div>
+                            <div class="card-meta">
+                              <span class="material-symbols-rounded" aria-hidden="true">tune</span>
+                              {{ s.variant_name || s.size_label || "Variante" }} - {{ s.color_name || "Color" }}
+                            </div>
+                          </div>
+                          <span class="card-tag inv">
+                            <span class="material-symbols-rounded" aria-hidden="true">inventory_2</span>
+                            Disponibles: {{ inventoryAvailableQty(s) }}
+                          </span>
+                        </button>
+                      } @empty {
+                        <div class="catalog-search-empty" role="status">
+                          {{ unavailableInventoryMatchesCount() > 0
+                            ? "Encontramos el artículo, pero no tiene piezas disponibles."
+                            : "No hay artículos disponibles para esta búsqueda." }}
+                        </div>
+                      }
+                    }
+                  }
                   @if (catalogProductSearching()) {
                     <div class="listbox-option listbox-option--loading" role="status" aria-live="polite">
                       <span class="material-symbols-rounded" aria-hidden="true">progress_activity</span>
                       Buscando identificadores y variantes...
                     </div>
-                  }
-                  @for (s of inventorySuggestions(); track s.inventory_id) {
-                    <button type="button" role="option" class="listbox-option" [attr.aria-label]="'Inventario: ' + s.title" (mousedown)="$event.preventDefault(); beginProductPick(); pickInventory(s)" (touchstart)="$event.preventDefault(); beginProductPick(); pickInventory(s)" (click)="beginProductPick(); pickInventory(s)">
-                      @if (s.image_urls[0]) {
-                        <img class="listbox-thumb" [src]="s.image_urls[0]" alt="" />
-                      } @else {
-                        <div class="photo-placeholder photo-placeholder-sm" aria-hidden="true">
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M4 7h4l2-2h4l2 2h4v12H4z"></path>
-                            <circle cx="12" cy="13" r="3"></circle>
-                          </svg>
-                        </div>
-                      }
-                      <div class="listbox-main">
-                        <div class="card-title">{{ s.title }}</div>
-                        <div class="card-meta">
-                          <span class="material-symbols-rounded" aria-hidden="true">tune</span>
-                          {{ s.variant_name || s.size_label || "Variante" }} - {{ s.color_name || "Color" }}
-                        </div>
-                      </div>
-                      <span class="card-tag inv">
-                        <span class="material-symbols-rounded" aria-hidden="true">inventory_2</span>
-                        Inventario - {{ s.quantity_on_hand }} pzas
-                      </span>
-                    </button>
                   }
                   @for (c of catalogSuggestions(); track c.doc.normalized_id) {
                     <button type="button" role="option" class="listbox-option" [attr.aria-label]="'Catalogo: ' + c.doc.listing.title" (mousedown)="$event.preventDefault(); beginProductPick(); pickCatalog(c.doc, c.variant, c.color)" (touchstart)="$event.preventDefault(); beginProductPick(); pickCatalog(c.doc, c.variant, c.color)" (click)="beginProductPick(); pickCatalog(c.doc, c.variant, c.color)">
@@ -2638,7 +2683,7 @@
           }
           @if (canSubmitNewItem()) {
           <section class="add-item-purchase" aria-label="Cantidad y precios">
-            <div class="field price-row-field add-item-quantity">
+            <div class="field price-row-field add-item-quantity" [class.field-invalid]="!!newItemInventoryQuantityError()">
               <label for="add-item-quantity">Cantidad</label>
               <div class="add-item-stepper">
                 <button type="button" aria-label="Disminuir cantidad" [disabled]="addItemSaving() || newItemQty() <= 1" (click)="decreaseNewItemQty()">
@@ -2650,13 +2695,31 @@
                   type="number"
                   inputmode="numeric"
                   min="1"
+                  [attr.max]="newItemQuantityMax()"
                   [(ngModel)]="newItemQty"
+                  [attr.aria-invalid]="newItemInventoryQuantityError() ? 'true' : null"
+                  [attr.aria-describedby]="newItemInventoryQuantityError()
+                    ? (selectedInventoryAvailabilityLabel()
+                      ? 'add-item-inventory-availability add-item-inventory-quantity-error'
+                      : 'add-item-inventory-quantity-error')
+                    : (selectedInventoryAvailabilityLabel() ? 'add-item-inventory-availability' : null)"
                   [disabled]="addItemSaving() || !vm.canEditItems"
                 />
-                <button type="button" aria-label="Aumentar cantidad" [disabled]="addItemSaving()" (click)="increaseNewItemQty()">
+                <button type="button" aria-label="Aumentar cantidad" [disabled]="addItemSaving() || !canIncreaseNewItemQty()" (click)="increaseNewItemQty()">
                   <span class="material-symbols-rounded" aria-hidden="true">add</span>
                 </button>
               </div>
+              @if (selectedInventoryAvailabilityLabel(); as availabilityLabel) {
+                <small id="add-item-inventory-availability" class="inventory-availability-help">{{ availabilityLabel }}</small>
+              }
+              @if (newItemInventoryQuantityError(); as quantityError) {
+                <small id="add-item-inventory-quantity-error" class="field-error" role="alert">{{ quantityError }}</small>
+                @if (inventorySourceError()) {
+                  <button type="button" class="btn ghost inventory-quantity-retry" (click)="retryAddItemInventory()">
+                    Actualizar inventario
+                  </button>
+                }
+              }
             </div>
 
             <div class="add-item-prices" [class.add-item-prices--compact]="!!selectedCatalogProduct()">

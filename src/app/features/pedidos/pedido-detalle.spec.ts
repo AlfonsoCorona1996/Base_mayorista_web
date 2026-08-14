@@ -1,3 +1,4 @@
+import { signal, WritableSignal } from "@angular/core";
 import { ComponentFixture, TestBed } from "@angular/core/testing";
 import { ActivatedRoute, Router } from "@angular/router";
 import PedidoDetallePage from "./pedido-detalle";
@@ -7,13 +8,20 @@ import { CustomerFollowupsService } from "../../core/customer-followups.service"
 import { SuppliersService } from "../../core/suppliers.service";
 import { RoutesService } from "../../core/routes.service";
 import { LocalitiesService } from "../../core/localities.service";
-import { InventoryService } from "../../core/inventory.service";
-import { NormalizedListingsService } from "../../core/normalized-listings.service";
+import {
+  InventoryItem,
+  InventoryService,
+  InventoryStockInsufficientError,
+} from "../../core/inventory.service";
+import { NormalizedListingDoc, NormalizedListingsService } from "../../core/normalized-listings.service";
 import { CatalogProductsService } from "../../core/catalog-products.service";
 import { CatalogImportJobsService } from "../../core/catalog-import-jobs.service";
 import { BarcodeProductLookupService } from "../../core/barcode-product-lookup.service";
 import { PhysicalBarcodeScannerService } from "../../core/physical-barcode-scanner.service";
-import { SupplierOperationsService } from "../../core/supplier-operations.service";
+import {
+  SupplierOperationRow,
+  SupplierOperationsService,
+} from "../../core/supplier-operations.service";
 import { ManualProductHistoryService } from "../../core/manual-product-history.service";
 import { ReturnsService } from "../../core/returns.service";
 import { FinanceService } from "../../core/finance.service";
@@ -25,13 +33,12 @@ import { RouteRunsService } from "../../services/route-runs.service";
 import { ShipmentsService } from "../../core/shipments.service";
 import { OperationalExpenseReportsService } from "../../core/operational-expense-reports.service";
 import { UserAdminApiService } from "../../services/user-admin-api.service";
-import type { OrderItem } from "../../core/orders.service";
+import type { Order, OrderItem } from "../../core/orders.service";
 import type { CatalogProduct, CatalogProductSearchResult } from "../../core/catalog-products.service";
 
 /**
- * Estas pruebas cubren solo la LOGICA nueva/modificada de esta ronda de
- * fidelidad literal al prototipo: selección agrupada, opción provisional,
- * descuento de "Precio clienta" en diálogo, badge por producto y tabs.
+ * Estas pruebas cubren la lógica aislada de selección, precios, inventario,
+ * opción provisional, badge por producto y tabs.
  * No renderizan el template (no se llama a fixture.detectChanges())
  * para evitar disparar ngOnInit(), que dispara llamadas reales a servicios
  * (watch() de suscripciones, resolucion de ruta) fuera del alcance de estas
@@ -40,6 +47,20 @@ import type { CatalogProduct, CatalogProductSearchResult } from "../../core/cata
 describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
   let component: PedidoDetallePage;
   let fixture: ComponentFixture<PedidoDetallePage>;
+  let inventoryRows: WritableSignal<InventoryItem[]>;
+  let reserveStock: jasmine.Spy;
+  let releaseReservation: jasmine.Spy;
+  let loadInventory: jasmine.Spy;
+  let addOrderItem: jasmine.Spy;
+  let updateOrderItems: jasmine.Spy;
+  let logOrderEvent: jasmine.Spy;
+  let ordersGetById: jasmine.Spy;
+  let syncDerivedStatus: jasmine.Spy;
+  let supplierRows: WritableSignal<SupplierOperationRow[]>;
+  let upsertSupplierOperations: jasmine.Spy;
+  let receiveSupplierLine: jasmine.Spy;
+  let loadSupplierOperations: jasmine.Spy;
+  let getRawPostImageUrls: jasmine.Spy;
 
   const routeMock = {
     snapshot: { paramMap: { get: () => null }, queryParamMap: { get: () => null } },
@@ -47,24 +68,65 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
   };
 
   beforeEach(async () => {
+    inventoryRows = signal<InventoryItem[]>([]);
+    reserveStock = jasmine.createSpy("reserveStock").and.resolveTo();
+    releaseReservation = jasmine.createSpy("releaseReservation").and.resolveTo();
+    loadInventory = jasmine.createSpy("loadFromFirestore").and.resolveTo();
+    addOrderItem = jasmine.createSpy("addItem").and.resolveTo();
+    updateOrderItems = jasmine.createSpy("updateItems").and.resolveTo();
+    logOrderEvent = jasmine.createSpy("logEvent").and.resolveTo();
+    ordersGetById = jasmine.createSpy("getById").and.returnValue(null);
+    syncDerivedStatus = jasmine.createSpy("syncDerivedStatus").and.resolveTo("recibido_qa");
+    supplierRows = signal<SupplierOperationRow[]>([]);
+    upsertSupplierOperations = jasmine.createSpy("upsertFromConfirmedOrder").and.resolveTo(0);
+    receiveSupplierLine = jasmine.createSpy("receiveLineAndAllocate").and.resolveTo();
+    loadSupplierOperations = jasmine.createSpy("loadFromFirestore").and.resolveTo();
+    getRawPostImageUrls = jasmine.createSpy("getRawPostImageUrls").and.resolveTo([]);
+
     await TestBed.configureTestingModule({
       imports: [PedidoDetallePage],
       providers: [
         { provide: ActivatedRoute, useValue: routeMock },
         { provide: Router, useValue: { events: { pipe: () => ({ subscribe: () => {} }) } } },
-        { provide: OrdersService, useValue: {} },
-        { provide: CustomersService, useValue: {} },
+        {
+          provide: OrdersService,
+          useValue: {
+            addItem: addOrderItem,
+            updateItems: updateOrderItems,
+            logEvent: logOrderEvent,
+            getById: ordersGetById,
+            syncDerivedStatus,
+            list: () => [],
+          },
+        },
+        { provide: CustomersService, useValue: { getById: () => null } },
         { provide: CustomerFollowupsService, useValue: {} },
         { provide: SuppliersService, useValue: {} },
         { provide: RoutesService, useValue: {} },
         { provide: LocalitiesService, useValue: {} },
-        { provide: InventoryService, useValue: {} },
-        { provide: NormalizedListingsService, useValue: {} },
+        {
+          provide: InventoryService,
+          useValue: {
+            items: inventoryRows,
+            reserveStock,
+            releaseReservation,
+            loadFromFirestore: loadInventory,
+          },
+        },
+        { provide: NormalizedListingsService, useValue: { getRawPostImageUrls } },
         { provide: CatalogProductsService, useValue: {} },
         { provide: CatalogImportJobsService, useValue: { stop: () => {}, completedJobs: () => [] } },
         { provide: BarcodeProductLookupService, useValue: {} },
         { provide: PhysicalBarcodeScannerService, useValue: { activeMode: () => null, lastCode: () => null, stop: () => {} } },
-        { provide: SupplierOperationsService, useValue: {} },
+        {
+          provide: SupplierOperationsService,
+          useValue: {
+            rows: supplierRows,
+            upsertFromConfirmedOrder: upsertSupplierOperations,
+            receiveLineAndAllocate: receiveSupplierLine,
+            loadFromFirestore: loadSupplierOperations,
+          },
+        },
         { provide: ManualProductHistoryService, useValue: {} },
         { provide: ReturnsService, useValue: {} },
         { provide: FinanceService, useValue: {} },
@@ -88,6 +150,140 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
 
   it("should create", () => {
     expect(component).toBeTruthy();
+  });
+
+  describe("inventario disponible al agregar productos", () => {
+    function makeInventoryItem(
+      inventoryId: string,
+      available: number,
+      overrides: Partial<InventoryItem> = {},
+    ): InventoryItem {
+      const reserved = Math.max(0, Math.trunc(Number(overrides.reserved_qty || 0)));
+      return {
+        inventory_id: inventoryId,
+        business_id: "bm",
+        title: "Sandalia de inventario",
+        sku: inventoryId,
+        product_id: inventoryId,
+        variant_id: null,
+        category_hint: null,
+        supplier_id: null,
+        variant_name: "24",
+        color_name: "Rosa",
+        size_label: "24",
+        quantity_on_hand: available,
+        on_hand_qty: available + reserved,
+        reserved_qty: reserved,
+        available_qty: available,
+        in_review_qty: 0,
+        damaged_qty: 0,
+        unit_price: 50,
+        notes: null,
+        image_urls: [],
+        source_reason: "ajuste_manual",
+        ...overrides,
+      };
+    }
+
+    function makeOrder(items: OrderItem[] = []): Order {
+      return {
+        order_id: "PED-001",
+        business_id: "bm",
+        status: "borrador",
+        items,
+        totals: {},
+      } as Order;
+    }
+
+    async function selectInventory(item: InventoryItem): Promise<void> {
+      inventoryRows.set([item]);
+      await component.pickInventory(item);
+    }
+
+    it("excluye de las sugerencias los artículos sin piezas disponibles", () => {
+      inventoryRows.set([
+        makeInventoryItem("INV-AGOTADO", 0, { reserved_qty: 1, on_hand_qty: 1 }),
+        makeInventoryItem("INV-DISPONIBLE", 2),
+      ]);
+      component.newItemSource.set("inventario");
+      component.newItemSearch.set("sandalia");
+
+      expect(component.inventorySuggestions().map((item) => item.inventory_id)).toEqual(["INV-DISPONIBLE"]);
+      expect(component.unavailableInventoryMatchesCount()).toBe(1);
+    });
+
+    it("limita la cantidad a las piezas realmente disponibles", async () => {
+      await selectInventory(makeInventoryItem("INV-2", 2));
+
+      component.newItemQty.set(2);
+      expect(component.newItemQuantityMax()).toBe(2);
+      expect(component.canIncreaseNewItemQty()).toBeFalse();
+      expect(component.newItemInventoryQuantityError()).toBeNull();
+
+      component.newItemQty.set(3);
+      expect(component.newItemInventoryQuantityError()).toContain("Solo hay 2");
+      expect(component.addItemSubmitDisabled(makeOrder())).toBeTrue();
+    });
+
+    it("reserva inventario antes de agregar el renglón al pedido", async () => {
+      const sequence: string[] = [];
+      reserveStock.and.callFake(async () => {
+        sequence.push("reserve");
+      });
+      addOrderItem.and.callFake(async () => {
+        sequence.push("order");
+      });
+      await selectInventory(makeInventoryItem("INV-3", 3));
+      spyOn(component, "refreshEvents").and.resolveTo();
+
+      await component.addItem(makeOrder());
+
+      expect(sequence).toEqual(["reserve", "order"]);
+      expect(releaseReservation).not.toHaveBeenCalled();
+    });
+
+    it("libera la reserva si falla la actualización del pedido", async () => {
+      const sequence: string[] = [];
+      reserveStock.and.callFake(async () => {
+        sequence.push("reserve");
+      });
+      addOrderItem.and.callFake(async () => {
+        sequence.push("order");
+        throw new Error("Pedido no disponible");
+      });
+      releaseReservation.and.callFake(async () => {
+        sequence.push("release");
+      });
+      await selectInventory(makeInventoryItem("INV-4", 1));
+
+      await expectAsync(component.addItem(makeOrder())).toBeRejectedWithError("Pedido no disponible");
+
+      expect(sequence).toEqual(["reserve", "order", "release"]);
+      expect(releaseReservation).toHaveBeenCalledTimes(1);
+    });
+
+    it("no modifica el pedido cuando otra operación tomó las piezas disponibles", async () => {
+      reserveStock.and.rejectWith(new InventoryStockInsufficientError("INV-5", 0, 1));
+      await selectInventory(makeInventoryItem("INV-5", 1));
+
+      await expectAsync(component.addItem(makeOrder())).toBeRejectedWithError(/Ya no quedan piezas disponibles/);
+
+      expect(addOrderItem).not.toHaveBeenCalled();
+      expect(component.selectedInventoryAvailableQty()).toBe(0);
+      expect(component.newItemInventoryQuantityError()).toContain("ya no tiene piezas");
+    });
+
+    it("no revierte pedido e inventario si solamente falla la bitácora", async () => {
+      logOrderEvent.and.rejectWith(new Error("Bitácora no disponible"));
+      await selectInventory(makeInventoryItem("INV-6", 1));
+      spyOn(component, "refreshEvents").and.resolveTo();
+
+      await component.addItem(makeOrder());
+
+      expect(reserveStock).toHaveBeenCalledTimes(1);
+      expect(addOrderItem).toHaveBeenCalledTimes(1);
+      expect(releaseReservation).not.toHaveBeenCalled();
+    });
   });
 
   describe("itemDiscountBadge (badge por producto en la lista)", () => {
@@ -185,6 +381,62 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
     it("pickCatalogProduct falls back to manual tier when there is no clienta price", () => {
       component.pickCatalogProduct(makeCatalogProduct({ prices: { cost: 50, clienta: null, currency: "MXN" }, price_clienta: null }));
       expect(component.catalogPriceTier()).toBe("manual");
+    });
+  });
+
+  describe("biblioteca de imágenes del producto", () => {
+    it("incluye las fotos originales sin color y omite las excluidas", async () => {
+      getRawPostImageUrls.and.resolveTo([
+        "https://img.test/hueso.jpg",
+        "https://img.test/detalle.jpg",
+        "https://img.test/excluida.jpg",
+        "https://img.test/detalle.jpg",
+      ]);
+      const variant = {
+        variant_name: "Unitalla",
+        sku: "SKU-1",
+        stock_state: "in_stock" as const,
+        notes: null,
+        prices: [],
+        color_names: ["Hueso"],
+      };
+      const doc = {
+        schema_version: "normalized_v1.1",
+        normalized_id: "producto-1",
+        raw_post_id: "raw-1",
+        supplier_id: "proveedor-1",
+        cover_images: ["https://img.test/portada.jpg"],
+        preview_image_url: "https://img.test/portada.jpg",
+        product_colors: [{ name: "Hueso", image_url: "https://img.test/hueso.jpg" }],
+        created_at: null,
+        updated_at: null,
+        listing: {
+          title: "Playera estampada",
+          category_hint: null,
+          price_tiers_global: [],
+          items: [variant],
+        },
+        workflow: { status: "validated", validated_by: null, validated_at: null },
+        review: {
+          preview_image_url: "https://img.test/portada.jpg",
+          excluded_image_urls: ["https://img.test/excluida.jpg"],
+          edited_at: null,
+          edited_by: null,
+        },
+      } satisfies NormalizedListingDoc;
+
+      component.pickCatalog(doc, variant, "Hueso");
+      await fixture.whenStable();
+
+      const images = component.addItemSelectionImages();
+      expect(getRawPostImageUrls).toHaveBeenCalledOnceWith("raw-1");
+      expect(images.map((image) => image.url)).toEqual([
+        "https://img.test/hueso.jpg",
+        "https://img.test/portada.jpg",
+        "https://img.test/detalle.jpg",
+      ]);
+      expect(images.find((image) => image.url.endsWith("detalle.jpg"))?.color).toBeNull();
+      expect(images.some((image) => image.url.endsWith("excluida.jpg"))).toBeFalse();
     });
   });
 
@@ -373,6 +625,201 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
       expect(component.newItemPriceClienta()).toBe(75);
       expect(component.newItemDiscount()).toBe(25);
       expect(component.catalogPriceTier()).toBe("manual");
+    });
+  });
+
+  describe("recepción masiva de proveedor", () => {
+    function makeSupplierOrder(itemCount: number): Order {
+      const items: OrderItem[] = Array.from({ length: itemCount }, (_, index) => ({
+        item_id: `item-${index + 1}`,
+        title: `Producto ${index + 1}`,
+        quantity: 1,
+        confirmed_qty: 1,
+        source: "catalogo",
+        state: "inbound_in_transit",
+        confirmation_state: "confirmed",
+        supplier_id: "supplier-1",
+        product_id: `product-${index + 1}`,
+      }));
+      return {
+        order_id: "order-bulk",
+        business_id: "bm",
+        customer_id: "customer-1",
+        route_id: null,
+        status: "inbound_in_transit",
+        created_at: "2026-08-13T00:00:00.000Z",
+        updated_at: "2026-08-13T00:00:00.000Z",
+        items,
+        packages: [],
+        timeline: [],
+        packing: { status: "in_progress", packages_count: 0 },
+        dispatch_request: { status: "none" },
+        totals: { total_amount: itemCount, paid_amount: 0, balance_due: itemCount },
+      };
+    }
+
+    function prepareBulkOrder(itemCount: number): Order {
+      const order = makeSupplierOrder(itemCount);
+      component.orderId.set(order.order_id);
+      ordersGetById.and.returnValue(order);
+      spyOn(component, "refreshEvents").and.resolveTo();
+      return order;
+    }
+
+    it("muestra progreso mientras prepara y completa la recepción", async () => {
+      prepareBulkOrder(3);
+      let resolveUpsert!: (value: number) => void;
+      upsertSupplierOperations.and.returnValue(new Promise<number>((resolve) => {
+        resolveUpsert = resolve;
+      }));
+
+      const action = component.runProductBulkAction();
+
+      expect(component.productBulkActionSaving()).toBeTrue();
+      expect(component.productBulkActionProgress()).toEqual({ completed: 0, total: 3 });
+      expect(component.productBulkActionProgressLabel()).toBe("Recibiendo 0 de 3...");
+      expect(component.canRunProductBulkAction(component.order())).toBeFalse();
+
+      resolveUpsert(3);
+      await action;
+
+      expect(component.productBulkActionSaving()).toBeFalse();
+      expect(component.productBulkActionProgress()).toBeNull();
+      expect(component.actionToast()).toContain("3 producto(s) recibido(s)");
+    });
+
+    it("procesa varias líneas a la vez y consolida actualizaciones y recargas", async () => {
+      const order = prepareBulkOrder(6);
+      let activeReceipts = 0;
+      let maxConcurrentReceipts = 0;
+      receiveSupplierLine.and.callFake(async () => {
+        activeReceipts += 1;
+        maxConcurrentReceipts = Math.max(maxConcurrentReceipts, activeReceipts);
+        await Promise.resolve();
+        activeReceipts -= 1;
+      });
+
+      await component.runProductBulkAction();
+
+      expect(upsertSupplierOperations).toHaveBeenCalledTimes(1);
+      expect(receiveSupplierLine).toHaveBeenCalledTimes(6);
+      expect(maxConcurrentReceipts).toBeGreaterThan(1);
+      expect(maxConcurrentReceipts).toBeLessThanOrEqual(4);
+      expect(updateOrderItems).toHaveBeenCalledTimes(1);
+      const updatedItems = updateOrderItems.calls.mostRecent().args[1] as OrderItem[];
+      expect(updatedItems.every((item) => item.state === "recibido_qa")).toBeTrue();
+      expect(syncDerivedStatus).toHaveBeenCalledOnceWith(order.order_id);
+      expect(loadInventory).toHaveBeenCalledTimes(1);
+      expect(loadSupplierOperations).toHaveBeenCalledTimes(1);
+      expect(receiveSupplierLine.calls.first().args[2]).toEqual({
+        refreshInventory: false,
+        reloadSupplierOperations: false,
+        syncOrderStatus: false,
+      });
+    });
+
+    it("actualiza solamente las líneas exitosas y deja los fallos disponibles para reintento", async () => {
+      prepareBulkOrder(3);
+      receiveSupplierLine.and.callFake((lineId: string) => lineId.includes("item-2")
+        ? Promise.reject(new Error("No se pudo apartar inventario"))
+        : Promise.resolve());
+
+      await component.runProductBulkAction();
+
+      const updatedItems = updateOrderItems.calls.mostRecent().args[1] as OrderItem[];
+      expect(updatedItems.find((item) => item.item_id === "item-1")?.state).toBe("recibido_qa");
+      expect(updatedItems.find((item) => item.item_id === "item-2")?.state).toBe("inbound_in_transit");
+      expect(updatedItems.find((item) => item.item_id === "item-3")?.state).toBe("recibido_qa");
+      expect(component.actionError()).toContain("1 de 3 producto(s) no se pudieron recibir");
+      expect(component.actionError()).toContain("No se pudo apartar inventario");
+      expect(component.actionToast()).toContain("2 producto(s) recibido(s); 1 pendiente(s)");
+      expect(component.popupAlertOpen()).toBeTrue();
+      expect(component.popupAlertTitle()).toBe("Recepción incompleta");
+    });
+  });
+
+  describe("empaque parcial", () => {
+    function makePartialPackingOrder(): Order {
+      return {
+        order_id: "order-partial-packing",
+        business_id: "bm",
+        customer_id: "customer-1",
+        route_id: null,
+        status: "inbound_in_transit",
+        created_at: "2026-08-13T00:00:00.000Z",
+        updated_at: "2026-08-13T00:00:00.000Z",
+        items: [
+          {
+            item_id: "inventory-ready",
+            title: "Producto de inventario",
+            quantity: 1,
+            confirmed_qty: 1,
+            source: "inventario",
+            state: "reservado_inventario",
+            confirmation_state: "confirmed",
+            inventory_id: "inventory-1",
+          },
+          {
+            item_id: "supplier-waiting",
+            title: "Producto de proveedor",
+            quantity: 1,
+            confirmed_qty: 1,
+            source: "catalogo",
+            state: "inbound_in_transit",
+            confirmation_state: "confirmed",
+            supplier_id: "supplier-1",
+            product_id: "product-1",
+          },
+        ],
+        packages: [],
+        timeline: [],
+        packing: { status: "in_progress", packages_count: 0 },
+        dispatch_request: { status: "none" },
+        totals: { total_amount: 2, paid_amount: 0, balance_due: 2 },
+      };
+    }
+
+    it("habilita Paquetes cuando existe al menos un producto empacable", () => {
+      const order = makePartialPackingOrder();
+
+      expect(component.unpackedItems(order).map((row) => row.item.item_id)).toEqual([
+        "inventory-ready",
+      ]);
+      expect(component.packedCount(order)).toBe(0);
+      expect(component.isPackingAvailable(order)).toBeTrue();
+      expect(component.allowedCapabilities(order, "admin").canCreatePackages).toBeTrue();
+      expect(component.isPackingWorkflowPhase(order)).toBeTrue();
+    });
+
+    it("mantiene Paquetes bloqueado cuando ningún producto está disponible", () => {
+      const order = makePartialPackingOrder();
+      order.items[0] = { ...order.items[0], confirmation_state: "pending" };
+
+      expect(component.isPackingAvailable(order)).toBeFalse();
+      expect(component.allowedCapabilities(order, "admin").canCreatePackages).toBeFalse();
+    });
+
+    it("impide terminar el empaque mientras haya productos esperando recepción", () => {
+      const order = makePartialPackingOrder();
+      order.packages = [
+        {
+          package_id: "package-1",
+          label: "Caja 1",
+          sequence: 1,
+          total_packages: 1,
+          state: "closed",
+          status: "closed",
+          amount_due: null,
+          item_ids: ["inventory-ready"],
+          items: [{ orderItemId: "inventory-ready", name: "Producto de inventario", qty: 1 }],
+          closed_at: "2026-08-13T01:00:00.000Z",
+          created_at: "2026-08-13T00:30:00.000Z",
+        },
+      ];
+
+      expect(component.packBlockedCount(order)).toBe(1);
+      expect(component.canFinishPacking(order)).toBeFalse();
+      expect(component.isPackingComplete(order)).toBeFalse();
     });
   });
 
