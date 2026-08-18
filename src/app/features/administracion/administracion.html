@@ -294,7 +294,7 @@
       <header class="panel-head">
         <div>
           <h3>Retiro de ganancias</h3>
-          <p>La utilidad neta se divide en 2 partes iguales: Socio 1 (Blanca) y Socio 2 (Andrea y Pepe).</p>
+          <p>Solo se reparte la utilidad respaldada por cobros recibidos. Se divide en 2 partes iguales: Socio 1 (Blanca) y Socio 2 (Andrea y Pepe).</p>
         </div>
       </header>
 
@@ -313,7 +313,7 @@
             >
               <p>Disponible para retirar</p>
               <h2>{{ formatCurrency(ws.disponible) }}</h2>
-              <small>Utilidad neta menos retiros registrados. Click para abrir pagina de detalle.</small>
+              <small>Cobros recibidos menos costo invertido, egresos y retiros. Click para abrir la página de detalle.</small>
             </article>
             <article class="kpi-card glass-card">
               <p>Total retirado</p>
@@ -321,9 +321,14 @@
               <small>Acumulado en el ambito seleccionado</small>
             </article>
             <article class="kpi-card glass-card">
-              <p>Utilidad neta base</p>
+              <p>Utilidad cobrada base</p>
               <h2>{{ formatCurrency(ws.baseDisponible) }}</h2>
-              <small>Utilidad neta del ambito seleccionado</small>
+              <small>Cobros recibidos menos costo total invertido y egresos</small>
+            </article>
+            <article class="kpi-card glass-card kpi-card-pending">
+              <p>Ganancia pendiente de cobro</p>
+              <h2>{{ formatCurrency(ws.gananciaPendienteCobro) }}</h2>
+              <small>Margen estimado dentro de {{ formatCurrency(ws.saldoPendienteCobro) }} aún por cobrar</small>
             </article>
             <article class="kpi-card glass-card">
               <p>Retiros no socios</p>
@@ -333,12 +338,12 @@
             <article class="kpi-card glass-card">
               <p>Utilidad repartible</p>
               <h2>{{ formatCurrency(withdrawalPartnerSummary().distributableBase) }}</h2>
-              <small>Utilidad neta base menos retiros no socios</small>
+              <small>Utilidad cobrada base menos retiros no socios</small>
             </article>
             <article class="kpi-card glass-card">
               <p>Parte por socio (50%)</p>
               <h2>{{ formatCurrency(withdrawalPartnerSummary().perPartnerTarget) }}</h2>
-              <small>Meta individual de retiro por socio</small>
+              <small>Meta individual sobre la utilidad ya cobrada</small>
             </article>
             <article class="kpi-card glass-card">
               <p>Retirado socios</p>
@@ -348,12 +353,20 @@
             <article class="kpi-card glass-card">
               <p>{{ partnerPendingLabel("socio_blanca") }}</p>
               <h2>{{ formatCurrency(withdrawalPartnerSummary().pendingBlanca) }}</h2>
-              <small>Retirado: {{ formatCurrency(withdrawalPartnerSummary().withdrawnBlanca) }}</small>
+              @if (withdrawalPartnerSummary().excessBlanca > 0) {
+                <small>Exceso retirado sobre utilidad cobrada: {{ formatCurrency(withdrawalPartnerSummary().excessBlanca) }}</small>
+              } @else {
+                <small>Disponible ahora. Retirado: {{ formatCurrency(withdrawalPartnerSummary().withdrawnBlanca) }}</small>
+              }
             </article>
             <article class="kpi-card glass-card">
               <p>{{ partnerPendingLabel("socio_andrea_pepe") }}</p>
               <h2>{{ formatCurrency(withdrawalPartnerSummary().pendingAndreaPepe) }}</h2>
-              <small>Retirado: {{ formatCurrency(withdrawalPartnerSummary().withdrawnAndreaPepe) }}</small>
+              @if (withdrawalPartnerSummary().excessAndreaPepe > 0) {
+                <small>Exceso retirado sobre utilidad cobrada: {{ formatCurrency(withdrawalPartnerSummary().excessAndreaPepe) }}</small>
+              } @else {
+                <small>Disponible ahora. Retirado: {{ formatCurrency(withdrawalPartnerSummary().withdrawnAndreaPepe) }}</small>
+              }
             </article>
           </div>
         }

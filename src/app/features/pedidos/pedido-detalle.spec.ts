@@ -24,7 +24,7 @@ import {
 } from "../../core/supplier-operations.service";
 import { ManualProductHistoryService } from "../../core/manual-product-history.service";
 import { ReturnsService } from "../../core/returns.service";
-import { FinanceService } from "../../core/finance.service";
+import { FinanceAccount, FinanceService } from "../../core/finance.service";
 import { BusinessScopeService } from "../../core/business-scope.service";
 import { AuthzService } from "../../core/authz.service";
 import { AuthService } from "../../core/auth.service";
@@ -62,6 +62,7 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
   let loadSupplierOperations: jasmine.Spy;
   let getRawPostImageUrls: jasmine.Spy;
   let searchCatalogProducts: jasmine.Spy;
+  let financeAccountRows: WritableSignal<FinanceAccount[]>;
 
   const routeMock = {
     snapshot: { paramMap: { get: () => null }, queryParamMap: { get: () => null } },
@@ -84,6 +85,7 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
     loadSupplierOperations = jasmine.createSpy("loadFromFirestore").and.resolveTo();
     getRawPostImageUrls = jasmine.createSpy("getRawPostImageUrls").and.resolveTo([]);
     searchCatalogProducts = jasmine.createSpy("searchCatalog").and.resolveTo([]);
+    financeAccountRows = signal<FinanceAccount[]>([]);
 
     await TestBed.configureTestingModule({
       imports: [PedidoDetallePage],
@@ -131,7 +133,13 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
         },
         { provide: ManualProductHistoryService, useValue: {} },
         { provide: ReturnsService, useValue: {} },
-        { provide: FinanceService, useValue: {} },
+        {
+          provide: FinanceService,
+          useValue: {
+            accounts: financeAccountRows,
+            loadAccounts: jasmine.createSpy("loadAccounts").and.resolveTo(),
+          },
+        },
         { provide: BusinessScopeService, useValue: { unlockScope: () => {} } },
         { provide: AuthzService, useValue: { canCap: () => true } },
         { provide: AuthService, useValue: {} },
@@ -152,6 +160,79 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
 
   it("should create", () => {
     expect(component).toBeTruthy();
+  });
+
+  describe("cuenta General para devolver dinero", () => {
+    function makeFinanceAccount(
+      accountId: string,
+      businessId: "bm" | "catalogo",
+      name: string,
+      balance: number,
+    ): FinanceAccount {
+      return {
+        account_id: accountId,
+        business_id: businessId,
+        name,
+        balance,
+        notes: null,
+      };
+    }
+
+    function makeReturnOrder(orderId: string, businessId: "bm" | "catalogo"): Order {
+      return {
+        order_id: orderId,
+        business_id: businessId,
+        customer_id: "customer-return",
+        route_id: null,
+        status: "pagado",
+        created_at: "2026-08-18T00:00:00.000Z",
+        updated_at: "2026-08-18T00:00:00.000Z",
+        items: [],
+        packages: [],
+        timeline: [],
+        packing: { status: "done", packages_count: 0 },
+        dispatch_request: { status: "none" },
+        totals: {
+          total_amount: 0,
+          paid_amount: 0,
+          balance_due: 0,
+        },
+      };
+    }
+
+    it("muestra sólo las cuentas del negocio del pedido y preselecciona General", () => {
+      const order = makeReturnOrder("PED-RETURN-BM", "bm");
+      ordersGetById.and.returnValue(order);
+      component.orderId.set(order.order_id);
+      financeAccountRows.set([
+        makeFinanceAccount("acc_catalogo_general", "catalogo", "General", 800),
+        makeFinanceAccount("acc_banco_principal", "bm", "Banco principal", 1200),
+        makeFinanceAccount("acc_caja_general", "bm", "General", 5000),
+      ]);
+
+      expect(component.financeAccounts().map((account) => account.account_id)).toEqual([
+        "acc_banco_principal",
+        "acc_caja_general",
+      ]);
+
+      component.setReturnPaymentResolution("refund");
+
+      expect(component.returnRefundAccountId()).toBe("acc_caja_general");
+      expect(component.selectedReturnRefundAccount()?.balance).toBe(5000);
+    });
+
+    it("usa la única cuenta disponible aunque tenga otro nombre", () => {
+      const order = makeReturnOrder("PED-RETURN-CATALOGO", "catalogo");
+      ordersGetById.and.returnValue(order);
+      component.orderId.set(order.order_id);
+      financeAccountRows.set([
+        makeFinanceAccount("acc_catalogo_operativa", "catalogo", "Operativa", 900),
+      ]);
+
+      component.setReturnPaymentResolution("refund");
+
+      expect(component.returnRefundAccountId()).toBe("acc_catalogo_operativa");
+    });
   });
 
   describe("inventario disponible al agregar productos", () => {

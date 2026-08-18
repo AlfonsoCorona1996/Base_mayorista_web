@@ -333,9 +333,24 @@ service cloud.firestore {
     }
 
     match /finance_accounts/{accountId} {
-      allow read: if canReadBusinessResource() && (hasSection("sections.administracion") || hasCapability("cap.finance.accounts.view"));
+      allow read: if canReadBusinessResource()
+        && (
+          hasSection("sections.administracion")
+          || hasCapability("cap.finance.accounts.view")
+          || hasCapability("cap.payments.refund")
+        );
       allow create: if canCreateBusinessResource() && hasCapability("cap.finance.accounts.create");
-      allow update: if canUpdateBusinessResource() && hasCapability("cap.finance.accounts.edit");
+      allow update: if canUpdateBusinessResource()
+        && (
+          hasCapability("cap.finance.accounts.edit")
+          || (
+            hasCapability("cap.payments.refund")
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["balance", "updated_at"])
+            && request.resource.data.balance is number
+            && resource.data.balance is number
+            && request.resource.data.balance <= resource.data.balance
+          )
+        );
       allow delete: if canReadBusinessResource() && hasCapability("cap.finance.accounts.delete");
     }
 

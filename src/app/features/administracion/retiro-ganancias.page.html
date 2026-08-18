@@ -3,7 +3,7 @@
     <div>
       <p class="eyebrow">Administracion</p>
       <h1>Detalle de retiro de ganancias</h1>
-      <p class="muted">Lista de pedidos con total clienta, inversion y ganancia.</p>
+      <p class="muted">Utilidad respaldada por cobros reales y detalle de pedidos entregados.</p>
     </div>
     <a class="btn ghost" [routerLink]="'/main/administracion'" [queryParams]="{ scope: routeScope() }">Volver a Administracion</a>
   </header>
@@ -35,32 +35,46 @@
 
       <div class="kpi-grid">
         <article class="kpi-card">
-          <p>Ganancia bruta pedidos</p>
-          <h3>{{ formatCurrency(financialBreakdown().grossProfit) }}</h3>
+          <p>Cobros recibidos</p>
+          <h3>{{ formatCurrency(financialBreakdown().collectedRevenue) }}</h3>
+          <small>Solo pagos registrados en pedidos entregados</small>
         </article>
-        <article class="kpi-card">
+        <article class="kpi-card kpi-card-outflow">
+          <p>Costo total invertido</p>
+          <h3>{{ formatCurrency(financialBreakdown().deliveredGrossCost) }}</h3>
+          <small>Incluye el costo que regresó al inventario por devoluciones</small>
+        </article>
+        <article class="kpi-card kpi-card-outflow">
           <p>Gastos (egresos)</p>
           <h3>{{ formatCurrency(financialBreakdown().expensesTotal) }}</h3>
         </article>
         <article class="kpi-card">
-          <p>Utilidad neta base</p>
-          <h3>{{ formatCurrency(financialBreakdown().netProfitBase) }}</h3>
+          <p>Utilidad cobrada base</p>
+          <h3>{{ formatCurrency(financialBreakdown().collectedProfitBase) }}</h3>
+          <small>Cobros menos costo invertido y egresos</small>
         </article>
         <article class="kpi-card">
           <p>Total retirado</p>
           <h3>{{ formatCurrency(financialBreakdown().totalWithdrawn) }}</h3>
         </article>
-        <article class="kpi-card">
+        <article class="kpi-card kpi-card-primary">
           <p>Disponible para retirar</p>
           <h3>{{ formatCurrency(financialBreakdown().available) }}</h3>
+          <small>Solo utilidad que ya está cobrada</small>
         </article>
-        <article class="kpi-card">
+        <article class="kpi-card kpi-card-pending">
+          <p>Ganancia pendiente de cobro</p>
+          <h3>{{ formatCurrency(financialBreakdown().pendingProfit) }}</h3>
+          <small>Margen estimado dentro de {{ formatCurrency(financialBreakdown().pendingCollection) }} aún por cobrar</small>
+        </article>
+        <article class="kpi-card kpi-card-outflow">
           <p>Retiros no socios</p>
           <h3>{{ formatCurrency(withdrawalPartnerSummary().withdrawnNonPartner) }}</h3>
         </article>
         <article class="kpi-card">
           <p>Utilidad repartible</p>
           <h3>{{ formatCurrency(withdrawalPartnerSummary().distributableBase) }}</h3>
+          <small>Basada únicamente en utilidad cobrada</small>
         </article>
         <article class="kpi-card">
           <p>Parte por socio (50%)</p>
@@ -69,10 +83,20 @@
         <article class="kpi-card">
           <p>{{ partnerPendingLabel("socio_blanca") }}</p>
           <h3>{{ formatCurrency(withdrawalPartnerSummary().pendingBlanca) }}</h3>
+          @if (withdrawalPartnerSummary().excessBlanca > 0) {
+            <small>Exceso retirado: {{ formatCurrency(withdrawalPartnerSummary().excessBlanca) }}</small>
+          } @else {
+            <small>Disponible ahora</small>
+          }
         </article>
         <article class="kpi-card">
           <p>{{ partnerPendingLabel("socio_andrea_pepe") }}</p>
           <h3>{{ formatCurrency(withdrawalPartnerSummary().pendingAndreaPepe) }}</h3>
+          @if (withdrawalPartnerSummary().excessAndreaPepe > 0) {
+            <small>Exceso retirado: {{ formatCurrency(withdrawalPartnerSummary().excessAndreaPepe) }}</small>
+          } @else {
+            <small>Disponible ahora</small>
+          }
         </article>
       </div>
 
@@ -128,9 +152,9 @@
 
       <div class="kpi-grid">
         <article class="kpi-card partner-card">
-          <p>Ganancia total repartible</p>
+          <p>Ganancia cobrada repartible</p>
           <h3>{{ formatCurrency(partnerSplit().totalProfit) }}</h3>
-          <small>Basada en filtros actuales</small>
+          <small>Basada en cobros y filtros actuales</small>
         </article>
         <article class="kpi-card partner-card">
           <p>Socio 1 - Blanca Trejo (50%)</p>
@@ -164,7 +188,7 @@
       @if (loading()) {
         <p class="muted">Cargando pedidos...</p>
       } @else if (orderRows().length === 0) {
-        <p class="muted">No hay pedidos para el ambito seleccionado.</p>
+        <p class="muted">No hay pedidos entregados para el ámbito seleccionado.</p>
       } @else {
         <div class="orders-table">
           <div class="orders-head">

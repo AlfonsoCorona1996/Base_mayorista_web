@@ -2113,12 +2113,12 @@
                 <p><strong>{{ formatCurrency(returnResolutionAmount(current, returnItem)) }}</strong> pagados de más</p>
                 <div class="pill source-toggle return-toggle">
                   <label>
-                    <input type="radio" name="returnPaymentResolution" value="credit" [ngModel]="returnPaymentResolution()" (ngModelChange)="returnPaymentResolution.set($event)" />
+                    <input type="radio" name="returnPaymentResolution" value="credit" [ngModel]="returnPaymentResolution()" (ngModelChange)="setReturnPaymentResolution($event)" />
                     <span>Saldo a favor</span>
                   </label>
                   @if (canRefundReturn()) {
                     <label>
-                      <input type="radio" name="returnPaymentResolution" value="refund" [ngModel]="returnPaymentResolution()" (ngModelChange)="returnPaymentResolution.set($event)" />
+                      <input type="radio" name="returnPaymentResolution" value="refund" [ngModel]="returnPaymentResolution()" (ngModelChange)="setReturnPaymentResolution($event)" />
                       <span>Devolver dinero</span>
                     </label>
                   }
@@ -2126,13 +2126,42 @@
                 @if (returnPaymentResolution() === 'refund') {
                   <label class="field">
                     <span>Cuenta de salida</span>
-                    <select class="input" [ngModel]="returnRefundAccountId()" (ngModelChange)="returnRefundAccountId.set($event)">
-                      <option value="">Selecciona una cuenta</option>
+                    <select
+                      class="input"
+                      [ngModel]="returnRefundAccountId()"
+                      (ngModelChange)="returnRefundAccountId.set($event)"
+                      [disabled]="financeAccounts().length === 0"
+                      aria-describedby="return-refund-account-help"
+                    >
+                      <option value="">{{ financeAccounts().length === 0 ? "No hay cuentas disponibles" : "Selecciona una cuenta" }}</option>
                       @for (account of financeAccounts(); track account.account_id) {
-                        <option [value]="account.account_id">{{ account.name }}</option>
+                        <option [value]="account.account_id">{{ account.name }} · {{ formatCurrency(account.balance) }}</option>
                       }
                     </select>
                   </label>
+                  @if (financeAccountsLoadError()) {
+                    <p id="return-refund-account-help" class="return-account-message return-account-message--error" role="alert">
+                      <span class="material-symbols-rounded" aria-hidden="true">error</span>
+                      <span>{{ financeAccountsLoadError() }} Intenta cerrar y abrir nuevamente la devolución.</span>
+                    </p>
+                  } @else if (financeAccounts().length === 0) {
+                    <p id="return-refund-account-help" class="return-account-message return-account-message--error" role="alert">
+                      <span class="material-symbols-rounded" aria-hidden="true">account_balance_wallet</span>
+                      <span>No hay una cuenta para este negocio. Crea <strong>General</strong> en Administración antes de devolver el dinero.</span>
+                    </p>
+                  } @else if (selectedReturnRefundAccount(); as account) {
+                    <p
+                      id="return-refund-account-help"
+                      class="return-account-message"
+                      [class.return-account-message--warning]="(returnRefundBalanceAfter() ?? 0) < 0"
+                    >
+                      <span class="material-symbols-rounded" aria-hidden="true">payments</span>
+                      <span>
+                        Se descontará de <strong>{{ account.name }}</strong> y del total en caja.
+                        Saldo después: <strong>{{ formatCurrency(returnRefundBalanceAfter() ?? 0) }}</strong>.
+                      </span>
+                    </p>
+                  }
                   <label class="field">
                     <span>Método</span>
                     <select class="input" [ngModel]="returnRefundMethod()" (ngModelChange)="returnRefundMethod.set($event)">

@@ -33,7 +33,7 @@ import {
 import { CatalogImportJobsService } from "../../core/catalog-import-jobs.service";
 import { ReturnsService, ReturnDisposition, ReturnPaymentResolution, ReturnRecord } from "../../core/returns.service";
 import { availableReturnQty, calculateOrderFinancials, netItemQty, returnedItemQty } from "../../core/order-financials";
-import { FinanceService } from "../../core/finance.service";
+import { FinanceAccount, FinanceService } from "../../core/finance.service";
 import { BusinessScopeService } from "../../core/business-scope.service";
 import { BusinessId, normalizeBusinessId } from "../../core/rbac.constants";
 import { BarcodeProductLookupService, BarcodeProductMatch } from "../../core/barcode-product-lookup.service";
@@ -630,7 +630,22 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   returnRefundMethod = signal("");
   returnRefundReference = signal("");
   returnSaving = signal(false);
-  financeAccounts = computed(() => this.finance.accounts());
+  financeAccountsLoadError = signal<string | null>(null);
+  financeAccounts = computed(() => {
+    const currentOrder = this.order();
+    if (!currentOrder) return [];
+    const businessId = normalizeBusinessId(currentOrder.business_id);
+    return this.finance.accounts().filter((account) => normalizeBusinessId(account.business_id) === businessId);
+  });
+  defaultReturnRefundAccount = computed(() => {
+    const accounts = this.financeAccounts();
+    return accounts.find((account) => this.isGeneralFinanceAccount(account))
+      || (accounts.length === 1 ? accounts[0] : null);
+  });
+  selectedReturnRefundAccount = computed(() => {
+    const accountId = this.returnRefundAccountId();
+    return this.financeAccounts().find((account) => account.account_id === accountId) || null;
+  });
   private actionToastTimer: ReturnType<typeof setTimeout> | null = null;
   private waNoteTimer: ReturnType<typeof setTimeout> | null = null;
   private waProgressTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1065,7 +1080,12 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
           this.inventorySourceError.set("No se pudo actualizar el inventario.");
           return null;
         }),
-      this.finance.loadAccounts().catch(() => null),
+      this.finance.loadAccounts()
+        .then(() => this.financeAccountsLoadError.set(null))
+        .catch(() => {
+          this.financeAccountsLoadError.set("No se pudieron cargar las cuentas de dinero.");
+          return null;
+        }),
       this.operationalExpenseReports.loadAll().catch(() => null),
       this.supplierOperations.loadFromFirestore().catch(() => null),
       this.loadAssigneeOptions().catch(() => null),
@@ -8401,7 +8421,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.returnDisposition.set("available");
     this.returnReason.set("");
     this.returnPaymentResolution.set("not_required");
-    this.returnRefundAccountId.set("");
+    this.returnRefundAccountId.set(this.defaultReturnRefundAccount()?.account_id || "");
     this.returnRefundMethod.set("");
     this.returnRefundReference.set("");
     this.returnModalOpen.set(true);
@@ -8429,6 +8449,40 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       : row);
     const after = calculateOrderFinancials({ ...order, items });
     return Math.max(0, Number((after.overpaymentAmount - before.overpaymentAmount).toFixed(2)));
+  }
+
+  setReturnPaymentResolution(value: unknown) {
+    const resolution: ReturnPaymentResolution = value === "credit" || value === "refund"
+      ? value
+      : "not_required";
+    this.returnPaymentResolution.set(resolution);
+    if (resolution !== "refund") return;
+
+    const selectedAccountExists = this.financeAccounts().some(
+      (account) => account.account_id === this.returnRefundAccountId(),
+    );
+    if (!selectedAccountExists) {
+      this.returnRefundAccountId.set(this.defaultReturnRefundAccount()?.account_id || "");
+    }
+  }
+
+  returnRefundBalanceAfter(): number | null {
+    const account = this.selectedReturnRefundAccount();
+    if (!account) return null;
+    return Number((account.balance - this.returnResolutionAmount(this.order(), this.returnTargetItem())).toFixed(2));
+  }
+
+  private isGeneralFinanceAccount(account: FinanceAccount): boolean {
+    const accountId = String(account.account_id || "").trim().toLocaleLowerCase("es-MX");
+    const name = String(account.name || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+      .toLocaleLowerCase("es-MX");
+    return accountId === "acc_caja_general"
+      || accountId === "acc_catalogo_general"
+      || name === "general"
+      || name === "caja general";
   }
 
   async confirmReturn(order: Order | null) {

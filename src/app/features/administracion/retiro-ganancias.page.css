@@ -130,17 +130,19 @@ select {
   background: rgba(255, 255, 255, 0.82);
 }
 
-.kpi-grid:first-of-type .kpi-card:nth-child(2),
-.kpi-grid:first-of-type .kpi-card:nth-child(6) {
+.kpi-card-outflow {
   background: rgba(201, 53, 45, 0.08);
   border-color: rgba(201, 53, 45, 0.2);
 }
 
-.kpi-grid:first-of-type .kpi-card:nth-child(5),
-.kpi-grid:first-of-type .kpi-card:nth-child(7),
-.kpi-grid:first-of-type .kpi-card:nth-child(8) {
+.kpi-card-primary {
   background: rgba(12, 102, 244, 0.08);
   border-color: rgba(12, 102, 244, 0.2);
+}
+
+.kpi-card-pending {
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(180, 111, 0, 0.24);
 }
 
 .kpi-card p {
@@ -151,6 +153,10 @@ select {
 .kpi-card h3 {
   margin: 0;
   color: #14314f;
+}
+
+.kpi-card small {
+  color: #52718f;
 }
 
 .partner-card {

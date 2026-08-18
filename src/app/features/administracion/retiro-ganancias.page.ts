@@ -5,6 +5,7 @@ import { AuthzService } from "../../core/authz.service";
 import { CustomersService } from "../../core/customers.service";
 import { Order, OrderItem, OrdersService } from "../../core/orders.service";
 import { calculateItemFinancials, calculateOrderFinancials } from "../../core/order-financials";
+import { calculatePartnerWithdrawalSummary, calculateWithdrawalProfit, isDeliveredForProfit } from "../../core/withdrawal-profit";
 import { RoutesService } from "../../core/routes.service";
 import {
   FinanceAccount,
@@ -171,6 +172,7 @@ export default class RetiroGananciasPage {
     const dir = sortDirection === "asc" ? 1 : -1;
 
     const rows = this.filteredOrders()
+      .filter((order) => isDeliveredForProfit(order))
       .map((order) => this.toOrderRow(order))
       .filter((row) => {
         if (customerFilter && !this.normalizeText(row.customerName).includes(customerFilter)) return false;
@@ -204,15 +206,18 @@ export default class RetiroGananciasPage {
   });
 
   financialBreakdown = computed(() => {
-    const grossProfit = this.toSafeNumber(this.totals().profit);
     const expensesTotal = this.filteredExpenses().reduce((sum, row) => sum + Math.max(0, this.toSafeNumber(row.amount)), 0);
-    const netProfitBase = Math.max(0, grossProfit - expensesTotal);
+    const profit = calculateWithdrawalProfit(this.filteredOrders(), expensesTotal);
+    const collectedProfitBase = Math.max(0, profit.collectedProfitBase);
     const totalWithdrawn = this.filteredWithdrawals().reduce((sum, row) => sum + Math.max(0, this.toSafeNumber(row.amount)), 0);
-    const available = Math.max(0, netProfitBase - totalWithdrawn);
+    const available = Math.max(0, collectedProfitBase - totalWithdrawn);
     return {
-      grossProfit: this.toSafeNumber(grossProfit),
-      expensesTotal: this.toSafeNumber(expensesTotal),
-      netProfitBase: this.toSafeNumber(netProfitBase),
+      expensesTotal: this.toSafeNumber(profit.expensesTotal),
+      collectedRevenue: this.toSafeNumber(profit.collectedRevenue),
+      deliveredGrossCost: this.toSafeNumber(profit.deliveredGrossCost),
+      collectedProfitBase: this.toSafeNumber(collectedProfitBase),
+      pendingCollection: this.toSafeNumber(profit.pendingCollection),
+      pendingProfit: this.toSafeNumber(profit.pendingProfit),
       totalWithdrawn: this.toSafeNumber(totalWithdrawn),
       available: this.toSafeNumber(available),
     };
@@ -228,18 +233,22 @@ export default class RetiroGananciasPage {
       else if (partner === "socio_andrea_pepe") withdrawnAndreaPepe += this.toSafeNumber(row.amount);
       else withdrawnNonPartner += this.toSafeNumber(row.amount);
     }
-    const distributableBase = Math.max(0, this.financialBreakdown().netProfitBase - withdrawnNonPartner);
-    const perPartnerTarget = this.toSafeNumber(distributableBase / 2);
-    const pendingBlanca = Math.max(0, perPartnerTarget - withdrawnBlanca);
-    const pendingAndreaPepe = Math.max(0, perPartnerTarget - withdrawnAndreaPepe);
+    const partnerAmounts = calculatePartnerWithdrawalSummary(
+      this.financialBreakdown().collectedProfitBase,
+      withdrawnBlanca,
+      withdrawnAndreaPepe,
+      withdrawnNonPartner,
+    );
     return {
-      distributableBase: this.toSafeNumber(distributableBase),
-      perPartnerTarget,
+      distributableBase: this.toSafeNumber(partnerAmounts.distributableBase),
+      perPartnerTarget: this.toSafeNumber(partnerAmounts.perPartnerTarget),
       withdrawnBlanca: this.toSafeNumber(withdrawnBlanca),
       withdrawnAndreaPepe: this.toSafeNumber(withdrawnAndreaPepe),
       withdrawnNonPartner: this.toSafeNumber(withdrawnNonPartner),
-      pendingBlanca: this.toSafeNumber(pendingBlanca),
-      pendingAndreaPepe: this.toSafeNumber(pendingAndreaPepe),
+      pendingBlanca: this.toSafeNumber(partnerAmounts.pendingBlanca),
+      pendingAndreaPepe: this.toSafeNumber(partnerAmounts.pendingAndreaPepe),
+      excessBlanca: this.toSafeNumber(partnerAmounts.excessBlanca),
+      excessAndreaPepe: this.toSafeNumber(partnerAmounts.excessAndreaPepe),
     };
   });
 
@@ -440,6 +449,20 @@ export default class RetiroGananciasPage {
     if (this.withdrawalAmount() <= 0) {
       this.error.set("El monto del retiro debe ser mayor a 0.");
       return;
+    }
+    const available = this.financialBreakdown().available;
+    if (this.withdrawalAmount() > available + 0.001) {
+      this.error.set(`No hay utilidad cobrada suficiente. Disponible: ${this.formatCurrency(available)}.`);
+      return;
+    }
+    const selectedPartner = this.asPartnerPurpose(this.withdrawalPurpose());
+    if (selectedPartner) {
+      const partnerSummary = this.withdrawalPartnerSummary();
+      const partnerAvailable = selectedPartner === "socio_blanca" ? partnerSummary.pendingBlanca : partnerSummary.pendingAndreaPepe;
+      if (this.withdrawalAmount() > partnerAvailable + 0.001) {
+        this.error.set(`Ese retiro excede la parte disponible de ${this.withdrawalPurposeLabel(this.withdrawalPurpose())}: ${this.formatCurrency(partnerAvailable)}.`);
+        return;
+      }
     }
     this.error.set(null);
     this.success.set(null);
@@ -663,6 +686,11 @@ export default class RetiroGananciasPage {
     const hint = this.normalizeText(`${row.recipient || ""} ${row.notes || ""}`);
     if (hint.includes("blanca")) return "socio_blanca";
     if (hint.includes("andrea") || hint.includes("pepe")) return "socio_andrea_pepe";
+    return null;
+  }
+
+  private asPartnerPurpose(value: FinanceWithdrawalPurpose): PartnerWithdrawalPurpose | null {
+    if (value === "socio_blanca" || value === "socio_andrea_pepe") return value;
     return null;
   }
 

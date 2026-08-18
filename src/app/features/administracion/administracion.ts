@@ -19,6 +19,7 @@ import { RoutesService } from "../../core/routes.service";
 import { BusinessScopeService } from "../../core/business-scope.service";
 import { BusinessId } from "../../core/rbac.constants";
 import { calculateOrderFinancials, calculateItemFinancials } from "../../core/order-financials";
+import { calculatePartnerWithdrawalSummary, calculateWithdrawalProfit } from "../../core/withdrawal-profit";
 
 type MoneyBucketId =
   | "openDrafts"
@@ -132,6 +133,9 @@ type FinanceSummary = {
   egresos: number;
   utilidadBruta: number;
   utilidadNeta: number;
+  utilidadCobradaBase: number;
+  gananciaPendienteCobro: number;
+  saldoPendienteCobro: number;
   dsoDias: number;
   cajaActual: number;
   porCobrar: number;
@@ -460,13 +464,16 @@ export default class AdministracionPage {
   }
 
   withdrawalSummary = computed(() => {
-    const baseDisponible = Math.max(0, this.summary().utilidadNeta);
+    const summary = this.summary();
+    const baseDisponible = Math.max(0, summary.utilidadCobradaBase);
     const totalRetirado = this.filteredWithdrawals().reduce((sum, row) => sum + this.toSafeNumber(row.amount), 0);
     const disponible = Math.max(0, baseDisponible - totalRetirado);
     return {
       baseDisponible: this.toSafeNumber(baseDisponible),
       totalRetirado: this.toSafeNumber(totalRetirado),
       disponible: this.toSafeNumber(disponible),
+      gananciaPendienteCobro: this.toSafeNumber(summary.gananciaPendienteCobro),
+      saldoPendienteCobro: this.toSafeNumber(summary.saldoPendienteCobro),
     };
   });
 
@@ -486,19 +493,23 @@ export default class AdministracionPage {
       }
     }
 
-    const distributableBase = Math.max(0, this.withdrawalSummary().baseDisponible - withdrawnNonPartner);
-    const perPartnerTarget = this.toSafeNumber(distributableBase / 2);
-    const pendingBlanca = Math.max(0, perPartnerTarget - withdrawnBlanca);
-    const pendingAndreaPepe = Math.max(0, perPartnerTarget - withdrawnAndreaPepe);
+    const partnerAmounts = calculatePartnerWithdrawalSummary(
+      this.withdrawalSummary().baseDisponible,
+      withdrawnBlanca,
+      withdrawnAndreaPepe,
+      withdrawnNonPartner,
+    );
 
     return {
-      distributableBase: this.toSafeNumber(distributableBase),
-      perPartnerTarget: this.toSafeNumber(perPartnerTarget),
+      distributableBase: this.toSafeNumber(partnerAmounts.distributableBase),
+      perPartnerTarget: this.toSafeNumber(partnerAmounts.perPartnerTarget),
       withdrawnBlanca: this.toSafeNumber(withdrawnBlanca),
       withdrawnAndreaPepe: this.toSafeNumber(withdrawnAndreaPepe),
       withdrawnNonPartner: this.toSafeNumber(withdrawnNonPartner),
-      pendingBlanca: this.toSafeNumber(pendingBlanca),
-      pendingAndreaPepe: this.toSafeNumber(pendingAndreaPepe),
+      pendingBlanca: this.toSafeNumber(partnerAmounts.pendingBlanca),
+      pendingAndreaPepe: this.toSafeNumber(partnerAmounts.pendingAndreaPepe),
+      excessBlanca: this.toSafeNumber(partnerAmounts.excessBlanca),
+      excessAndreaPepe: this.toSafeNumber(partnerAmounts.excessAndreaPepe),
     };
   });
 
@@ -1281,6 +1292,8 @@ export default class AdministracionPage {
     averageWindowDays: number;
     stagnationDays: number;
   }): FinanceSummary {
+    const expensesTotal = input.expenses.reduce((sum, row) => sum + Math.max(0, this.toSafeNumber(row.amount)), 0);
+    const withdrawalProfit = calculateWithdrawalProfit(input.orders, expensesTotal);
     const { avgCostUnit, avgSaleUnit, markupMultiplier } = this.estimateMargins(input.orders);
     const bucketMap = this.createBucketMap();
     const orderBucketRows: BucketOrderRow[] = [];
@@ -1365,7 +1378,7 @@ export default class AdministracionPage {
       }
     }
 
-    const egresos = input.expenses.reduce((sum, row) => sum + Math.max(0, this.toSafeNumber(row.amount)), 0);
+    const egresos = expensesTotal;
     const perdidasRegistradas = input.expenses
       .filter((row) => row.category === "perdida")
       .reduce((sum, row) => sum + Math.max(0, this.toSafeNumber(row.amount)), 0);
@@ -1465,6 +1478,9 @@ export default class AdministracionPage {
       egresos,
       utilidadBruta,
       utilidadNeta,
+      utilidadCobradaBase: withdrawalProfit.collectedProfitBase,
+      gananciaPendienteCobro: withdrawalProfit.pendingProfit,
+      saldoPendienteCobro: withdrawalProfit.pendingCollection,
       dsoDias,
       cajaActual,
       porCobrar,

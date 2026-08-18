@@ -8425,6 +8425,38 @@ code {
   border-radius: 14px;
   background: #fff7ed;
 }
+
+.return-account-message {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--ui-space-8);
+  margin: 0;
+  padding: var(--ui-space-12);
+  border: 1px solid #bfdbfe;
+  border-radius: var(--ui-radius-md);
+  background: #eff6ff;
+  color: #1e3a5f;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.return-account-message .material-symbols-rounded {
+  font-size: 1.15rem;
+}
+
+.return-account-message--warning {
+  border-color: #fdba74;
+  background: #fffbeb;
+  color: #9a3412;
+}
+
+.return-account-message--error {
+  border-color: #fecaca;
+  background: #fff1f2;
+  color: #9f1239;
+}
+
 .return-history-inline {
   display: flex;
   flex-wrap: wrap;

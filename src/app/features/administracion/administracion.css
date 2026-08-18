@@ -244,6 +244,11 @@ textarea:focus {
   background: linear-gradient(140deg, rgba(14, 102, 243, 0.18), rgba(75, 201, 176, 0.14));
 }
 
+.kpi-card-pending {
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(180, 111, 0, 0.24);
+}
+
 .panel-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
