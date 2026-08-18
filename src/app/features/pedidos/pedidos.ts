@@ -3082,6 +3082,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     const balanceDue = this.salesNoteBalanceDue(order, totalAmount);
     return this.salesNoteRender.buildSalesNoteImage({
       orderId: order.order_id,
+      businessId: normalizeBusinessId(order.business_id),
       customerName: this.customerName(order.customer_id),
       rows: rows.map((row) => ({
         rowId: row.rowId,

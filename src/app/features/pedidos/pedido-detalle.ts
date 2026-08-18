@@ -25,6 +25,7 @@ import { isSupplierReceiptComplete } from "../../core/supplier-operation-state";
 import { ManualProductHistoryService, ManualProductEntry } from "../../core/manual-product-history.service";
 import {
   CatalogProduct,
+  CatalogProductIdentifierType,
   CatalogProductSearchResult,
   CatalogProductsService,
   catalogProductIdentifierLabel,
@@ -57,6 +58,20 @@ import { ShipmentBusinessSummary, ShipmentItem, ShipmentsService } from "../../c
 import { OperationalExpenseReport, OperationalExpenseReportsService } from "../../core/operational-expense-reports.service";
 
 type EstadoConfirmacion = "pendiente" | "confirmado" | "sin_stock";
+
+const CATALOG_ORDER_SEARCH_IDENTIFIER_TYPES: CatalogProductIdentifierType[] = [
+  "barcode",
+  "supplier_sku",
+  "supplier_variant",
+  "generic",
+  "internet",
+  "model",
+  "style",
+  "bundle",
+  "ocr_alias",
+  "custom",
+];
+
 type CatalogPriceTier = "clienta" | "manual";
 type ReservedInventoryMutation = {
   inventoryId: string;
@@ -5014,7 +5029,12 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.catalogProductSearchAttempted.set(false);
     this.catalogProductSearchError.set(null);
     this.catalogProductSearchTimer = setTimeout(() => {
-      this.catalogProducts.searchCatalog(term, { businessId: "catalogo", limit: 20, sellableOnly: true })
+      this.catalogProducts.searchCatalog(term, {
+        businessId: "catalogo",
+        types: CATALOG_ORDER_SEARCH_IDENTIFIER_TYPES,
+        limit: 20,
+        sellableOnly: true,
+      })
         .then((rows) => {
           if (requestId !== this.catalogProductSearchRequest) return;
           this.catalogProductSuggestions.set(rows);
@@ -5291,6 +5311,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
     return this.salesNoteRender.buildSalesNoteImage({
       orderId: order.order_id,
+      businessId: this.orderBusinessId(order),
       customerName: this.customerName(order),
       rows: rows.map((row) => ({
         rowId: row.item.item_id,

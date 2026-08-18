@@ -47,7 +47,7 @@ describe("contratos de importación de catálogo v2", () => {
       "SKU NAZAN": "205000449728",
       VARIANTE: "18332701",
       GENERICO: "183327",
-      "CÓD. INTERNET": "866893",
+      "CÓD. INTERNET": "888900",
       MODELO: "059-33",
       ESTILO: "10321",
       COMBOID: "COM184",
@@ -55,6 +55,8 @@ describe("contratos de importación de catálogo v2", () => {
 
     expect(identifiers.find((entry) => entry.value === "205000449728")?.type).toBe("supplier_sku");
     expect(identifiers.find((entry) => entry.type === "generic")?.scope).toBe("group");
+    expect(identifiers.find((entry) => entry.value === "888900"))
+      .toEqual(jasmine.objectContaining({ type: "internet", scope: "group", indexable: true }));
     expect(identifiers.find((entry) => entry.type === "bundle")?.scope).toBe("bundle");
     expect(identifiers.find((entry) => entry.value === "0059310781000")?.indexable).toBeTrue();
   });

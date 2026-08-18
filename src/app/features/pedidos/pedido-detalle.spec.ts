@@ -1,5 +1,5 @@
 import { signal, WritableSignal } from "@angular/core";
-import { ComponentFixture, TestBed } from "@angular/core/testing";
+import { ComponentFixture, fakeAsync, flushMicrotasks, TestBed, tick } from "@angular/core/testing";
 import { ActivatedRoute, Router } from "@angular/router";
 import PedidoDetallePage from "./pedido-detalle";
 import { OrdersService } from "../../core/orders.service";
@@ -61,6 +61,7 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
   let receiveSupplierLine: jasmine.Spy;
   let loadSupplierOperations: jasmine.Spy;
   let getRawPostImageUrls: jasmine.Spy;
+  let searchCatalogProducts: jasmine.Spy;
 
   const routeMock = {
     snapshot: { paramMap: { get: () => null }, queryParamMap: { get: () => null } },
@@ -82,6 +83,7 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
     receiveSupplierLine = jasmine.createSpy("receiveLineAndAllocate").and.resolveTo();
     loadSupplierOperations = jasmine.createSpy("loadFromFirestore").and.resolveTo();
     getRawPostImageUrls = jasmine.createSpy("getRawPostImageUrls").and.resolveTo([]);
+    searchCatalogProducts = jasmine.createSpy("searchCatalog").and.resolveTo([]);
 
     await TestBed.configureTestingModule({
       imports: [PedidoDetallePage],
@@ -114,7 +116,7 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
           },
         },
         { provide: NormalizedListingsService, useValue: { getRawPostImageUrls } },
-        { provide: CatalogProductsService, useValue: {} },
+        { provide: CatalogProductsService, useValue: { searchCatalog: searchCatalogProducts } },
         { provide: CatalogImportJobsService, useValue: { stop: () => {}, completedJobs: () => [] } },
         { provide: BarcodeProductLookupService, useValue: {} },
         { provide: PhysicalBarcodeScannerService, useValue: { activeMode: () => null, lastCode: () => null, stop: () => {} } },
@@ -563,6 +565,66 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
       expect(component.catalogSearchResultRepresentative(result)?.product_id).toBe("rosa-24");
       expect(component.catalogSearchResultOptionSummary(result)).toBe("2 colores · 2 variantes · 3 combinaciones");
     });
+
+    it("searches 888900 as an internet group identifier and keeps its variants selectable", fakeAsync(() => {
+      const variants = [
+        makeProduct("18558401", "Negro", "26"),
+        makeProduct("18558402", "Negro", "26.5"),
+      ];
+      const result: CatalogProductSearchResult = {
+        result_id: "internet:888900",
+        product: null,
+        group: {
+          group_id: "185584",
+          business_id: "catalogo",
+          supplier_id: null,
+          name: "AMERICAN FIRE A78",
+          model: "A78",
+          color: null,
+          attributes: {},
+        },
+        bundle: null,
+        variants,
+        matched_identifier: {
+          identifier_id: "internet:888900",
+          type: "internet",
+          value: "888900",
+          normalized_value: "888900",
+          scope: "group",
+          namespace: null,
+          supplier_id: null,
+          is_primary: false,
+        },
+        requires_selection: true,
+      };
+      searchCatalogProducts.and.resolveTo([result]);
+      spyOn(component, "isCatalogoOrder").and.returnValue(true);
+      component.newItemSource.set("catalogo");
+
+      component.onNewItemSearchChange("888900");
+      tick(180);
+      flushMicrotasks();
+
+      expect(searchCatalogProducts).toHaveBeenCalledWith("888900", {
+        businessId: "catalogo",
+        types: [
+          "barcode",
+          "supplier_sku",
+          "supplier_variant",
+          "generic",
+          "internet",
+          "model",
+          "style",
+          "bundle",
+          "ocr_alias",
+          "custom",
+        ],
+        limit: 20,
+        sellableOnly: true,
+      });
+      expect(component.catalogProductSuggestions()).toEqual([result]);
+      expect(component.catalogSearchResultMeta(result)).toBe("Coincidió por código de internet: 888900");
+    }));
 
     it("keeps provisional edits separate until they are explicitly confirmed", () => {
       component.newItemSource.set("catalogo");

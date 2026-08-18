@@ -1,4 +1,11 @@
 import { Injectable } from "@angular/core";
+import { BusinessId, normalizeBusinessId } from "../../core/rbac.constants";
+
+export function salesNoteLogoUrl(businessId: BusinessId | null | undefined): string {
+  return normalizeBusinessId(businessId || "bm") === "catalogo"
+    ? "/logo%20catalogo.png"
+    : "/BaseMayoristaLogo.png";
+}
 
 export type SalesNoteRenderRow = {
   rowId: string;
@@ -15,6 +22,7 @@ export type SalesNoteRenderRow = {
 
 export type BuildSalesNoteImageInput = {
   orderId: string;
+  businessId?: BusinessId;
   customerName: string;
   rows: SalesNoteRenderRow[];
   discountAmount: number;
@@ -82,7 +90,11 @@ export class SalesNoteRenderService {
     if (!ctx) throw new Error("No se pudo crear el lienzo para la nota.");
 
     const rowImages = await this.resolveRowImages(rows, input.resolveRowImage);
-    const logoImage = await this.loadImageElement(input.logoUrl || "/BaseMayoristaLogo.png", false, 4000).catch(() => null);
+    const logoImage = await this.loadImageElement(
+      input.logoUrl || salesNoteLogoUrl(input.businessId),
+      false,
+      4000,
+    ).catch(() => null);
 
     ctx.fillStyle = "#eef2f7";
     ctx.fillRect(0, 0, W, H);
@@ -91,13 +103,16 @@ export class SalesNoteRenderService {
 
     let y = CARD_Y + PAD_TOP;
 
-    const LOGO_SIZE = 216;
-    const logoY = y + (HDR_H - LOGO_SIZE) / 2;
+    const logoSize = logoImage
+      ? this.fittedImageSize(logoImage, 600, 216)
+      : { width: 216, height: 216 };
+    const logoY = y + (HDR_H - logoSize.height) / 2;
     if (logoImage) {
       ctx.save();
-      this.drawRoundedRect(ctx, IX, logoY, LOGO_SIZE, LOGO_SIZE, 20, "#f5f8fc");
+      this.drawRoundedRect(ctx, IX, logoY, logoSize.width, logoSize.height, 20, "#f5f8fc");
+      ctx.fill();
       ctx.clip();
-      this.drawImageCover(ctx, logoImage, IX, logoY, LOGO_SIZE, LOGO_SIZE);
+      ctx.drawImage(logoImage, IX, logoY, logoSize.width, logoSize.height);
       ctx.restore();
     }
 
@@ -443,6 +458,21 @@ export class SalesNoteRenderService {
     const sy = Math.max(0, (sourceHeight - cropHeight) / 2);
 
     ctx.drawImage(image as CanvasImageSource, sx, sy, cropWidth, cropHeight, dx, dy, dw, dh);
+  }
+
+  private fittedImageSize(
+    image: { naturalWidth?: number; naturalHeight?: number; width?: number; height?: number },
+    maxWidth: number,
+    maxHeight: number,
+  ): { width: number; height: number } {
+    const sourceWidth = Number(image.naturalWidth || image.width || 0);
+    const sourceHeight = Number(image.naturalHeight || image.height || 0);
+    if (sourceWidth <= 0 || sourceHeight <= 0) return { width: maxHeight, height: maxHeight };
+    const scale = Math.min(maxWidth / sourceWidth, maxHeight / sourceHeight);
+    return {
+      width: Math.max(1, Math.round(sourceWidth * scale)),
+      height: Math.max(1, Math.round(sourceHeight * scale)),
+    };
   }
 
   private formatCurrency(value: number): string {
