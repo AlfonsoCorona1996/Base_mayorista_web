@@ -3,7 +3,6 @@ import { NgClass } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { RouterLink } from "@angular/router";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
-import type { DocumentData, QueryDocumentSnapshot } from "firebase/firestore";
 import { CategoriesService, Category } from "../../core/categories.service";
 import { STORAGE } from "../../core/firebase.providers";
 import { InventoryItem, InventoryReservation, InventoryService } from "../../core/inventory.service";
@@ -50,7 +49,7 @@ interface InventoryDraft {
   variant_name: string;
   color_name: string;
   size_label: string;
-  quantity_on_hand: number;
+  on_hand_qty: number;
   min_stock: number;
   max_stock: number;
   supplier_lead_days: number;
@@ -484,7 +483,7 @@ export default class InventarioPage {
       variant_name: item.variant_name || "",
       color_name: item.color_name || "",
       size_label: item.size_label || "",
-      quantity_on_hand: this.onHandQty(item),
+      on_hand_qty: this.onHandQty(item),
       min_stock: Number(item.min_stock || 0),
       max_stock: Number(item.max_stock || 0),
       supplier_lead_days: Number(item.supplier_lead_days || 0),
@@ -793,7 +792,7 @@ export default class InventarioPage {
       return;
     }
 
-    if (!Number.isFinite(this.draft.quantity_on_hand) || this.draft.quantity_on_hand < 0) {
+    if (!Number.isFinite(this.draft.on_hand_qty) || this.draft.on_hand_qty < 0) {
       this.error.set("La cantidad debe ser cero o mayor");
       return;
     }
@@ -809,7 +808,7 @@ export default class InventarioPage {
     const reservedQty = existing ? this.reservedQty(existing) : 0;
     const unavailableQty = reservedQty + (existing ? this.reviewQty(existing) + this.damagedQty(existing) : 0);
 
-    if (this.draft.quantity_on_hand < unavailableQty) {
+    if (this.draft.on_hand_qty < unavailableQty) {
       this.error.set(`No puedes dejar menos de ${unavailableQty} piezas físicas: incluyen reservas, revisión y daño.`);
       return;
     }
@@ -817,7 +816,7 @@ export default class InventarioPage {
     this.saving.set(true);
 
     try {
-      const onHandQty = Math.max(0, Math.trunc(this.draft.quantity_on_hand));
+      const onHandQty = Math.max(0, Math.trunc(this.draft.on_hand_qty));
       const availableQty = Math.max(0, onHandQty - unavailableQty);
       const payload: InventoryItem = {
         inventory_id: this.draft.inventory_id,
@@ -839,7 +838,6 @@ export default class InventarioPage {
         min_stock: Math.max(0, Math.trunc(Number(this.draft.min_stock || 0))),
         max_stock: Math.max(0, Math.trunc(Number(this.draft.max_stock || 0))),
         supplier_lead_days: Math.max(0, Math.trunc(Number(this.draft.supplier_lead_days || 0))),
-        quantity_on_hand: availableQty,
         unit_price: this.draft.unit_price,
         notes: this.trimOrNull(this.draft.notes),
         image_urls: this.draft.image_urls,
@@ -1212,7 +1210,7 @@ export default class InventarioPage {
     if (item.available_qty !== null && item.available_qty !== undefined && item.reserved_qty !== null && item.reserved_qty !== undefined) {
       return Math.max(0, Math.trunc(Number(item.available_qty || 0) + Number(item.reserved_qty || 0)));
     }
-    return Math.max(0, Math.trunc(Number(item.quantity_on_hand || 0)));
+    return Math.max(0, Math.trunc(Number(item.on_hand_qty || 0)));
   }
 
   reservedQty(item: InventoryItem): number {
@@ -1486,7 +1484,7 @@ export default class InventarioPage {
       variant_name: "",
       color_name: "",
       size_label: "",
-      quantity_on_hand: 1,
+      on_hand_qty: 1,
       min_stock: 0,
       max_stock: 0,
       supplier_lead_days: 0,
@@ -1562,17 +1560,7 @@ export default class InventarioPage {
   }
 
   private async loadCatalogProductSources(): Promise<NormalizedListingDoc[]> {
-    const docs: NormalizedListingDoc[] = [];
-    let cursor: QueryDocumentSnapshot<DocumentData> | null | undefined;
-
-    for (let pageIndex = 0; pageIndex < 5; pageIndex += 1) {
-      const page = await this.normalizedListings.listValidated(200, cursor);
-      docs.push(...page.docs);
-      cursor = page.nextCursor;
-      if (!cursor) break;
-    }
-
-    return docs;
+    return this.normalizedListings.loadAllValidated("bm");
   }
 
   private sourceImage(

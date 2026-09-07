@@ -151,7 +151,6 @@ async function reconcileReservations(db: FirebaseFirestore.Firestore, orders: Fi
       on_hand_qty: onHand,
       reserved_qty: reserved,
       available_qty: Math.max(0, onHand - reserved),
-      quantity_on_hand: Math.max(0, onHand - reserved),
       reservations,
       reservation_migrated_at: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });

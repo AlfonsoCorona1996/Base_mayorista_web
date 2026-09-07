@@ -132,6 +132,99 @@ export class NormalizedListingsService {
     return this.listByWorkflowStatus("validated", pageSize, cursor);
   }
 
+  private static readonly ALL_VALIDATED_TTL_MS = 5 * 60_000;
+  private static readonly ALL_VALIDATED_PAGE_SIZE = 300;
+  private static readonly ALL_VALIDATED_MAX_PAGES = 40;
+
+  private allValidatedCache = new Map<BusinessId, { rows: NormalizedListingDoc[]; at: number }>();
+  private allValidatedInFlight = new Map<BusinessId, Promise<NormalizedListingDoc[]>>();
+
+  /**
+   * Trae TODOS los listings validados de un negocio, paginando con cursor.
+   *
+   * Reemplaza a `listValidated(n)` en las pantallas que filtran en memoria. Con una
+   * sola pagina los productos mas antiguos quedaban fuera del buscador: BM tenia 131
+   * validados contra un tope de 120 en pedido-detalle, asi que los 11 mas viejos eran
+   * invisibles por mas que se escribiera su nombre completo.
+   *
+   * El resultado se cachea por negocio y las llamadas concurrentes comparten la misma
+   * promesa, para que abrir un pedido no vuelva a descargar el catalogo.
+   */
+  async loadAllValidated(
+    businessId: BusinessId = "bm",
+    options: { force?: boolean } = {},
+  ): Promise<NormalizedListingDoc[]> {
+    const scope = normalizeBusinessId(businessId);
+    if (!this.businessScope.availableBusinessIds().includes(scope)) return [];
+
+    const cached = this.allValidatedCache.get(scope);
+    const fresh = cached && Date.now() - cached.at < NormalizedListingsService.ALL_VALIDATED_TTL_MS;
+    if (!options.force && fresh) return cached.rows;
+
+    const inFlight = this.allValidatedInFlight.get(scope);
+    if (inFlight) return inFlight;
+
+    const request = (async () => {
+      const seen = new Set<string>();
+      const rows: NormalizedListingDoc[] = [];
+      let cursor: QueryDocumentSnapshot<DocumentData> | null | undefined;
+
+      for (let page = 0; page < NormalizedListingsService.ALL_VALIDATED_MAX_PAGES; page += 1) {
+        const result = await this.listValidatedForBusiness(scope, cursor);
+        for (const row of result.docs) {
+          if (!row?.normalized_id || seen.has(row.normalized_id)) continue;
+          seen.add(row.normalized_id);
+          rows.push(row);
+        }
+        // Cortar por cursor y no por docs.length: una pagina puede venir vacia
+        // sin que la coleccion se haya agotado.
+        cursor = result.nextCursor;
+        if (!cursor) break;
+      }
+
+      this.allValidatedCache.set(scope, { rows, at: Date.now() });
+      return rows;
+    })().finally(() => {
+      this.allValidatedInFlight.delete(scope);
+    });
+
+    this.allValidatedInFlight.set(scope, request);
+    return request;
+  }
+
+  /** Invalida el cache de `loadAllValidated` tras editar o validar un listing. */
+  invalidateAllValidated(businessId?: BusinessId): void {
+    if (!businessId) {
+      this.allValidatedCache.clear();
+      return;
+    }
+    this.allValidatedCache.delete(normalizeBusinessId(businessId));
+  }
+
+  private async listValidatedForBusiness(
+    businessId: BusinessId,
+    cursor?: QueryDocumentSnapshot<DocumentData> | null,
+  ): Promise<ListPage<NormalizedListingDoc>> {
+    const pageSize = NormalizedListingsService.ALL_VALIDATED_PAGE_SIZE;
+    let q = query(
+      this.colRef,
+      where("business_id", "==", businessId),
+      where("workflow.status", "==", "validated"),
+      orderBy("created_at", "desc"),
+      limit(pageSize + 1),
+    );
+    if (cursor) q = query(q, startAfter(cursor));
+
+    const snap = await getDocs(q);
+    const hasMore = snap.docs.length > pageSize;
+    const pageDocs = hasMore ? snap.docs.slice(0, pageSize) : snap.docs;
+
+    return {
+      docs: pageDocs.map((entry) => entry.data() as NormalizedListingDoc),
+      nextCursor: hasMore && pageDocs.length ? pageDocs[pageDocs.length - 1] : null,
+    };
+  }
+
   async findValidatedByVariantSku(sku: string, businessId: BusinessId = "bm", pageSize = 8): Promise<NormalizedListingDoc[]> {
     const normalizedSku = this.normalizeSku(sku);
     if (!normalizedSku) return [];

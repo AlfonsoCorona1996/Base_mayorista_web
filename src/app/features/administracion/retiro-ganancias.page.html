@@ -1,194 +1,194 @@
 <section class="withdrawal-page">
-  <header class="page-head">
-    <div>
-      <p class="eyebrow">Administracion</p>
-      <h1>Detalle de retiro de ganancias</h1>
-      <p class="muted">Utilidad respaldada por cobros reales y detalle de pedidos entregados.</p>
+
+  <header class="wd-head">
+    <div class="wd-head__copy">
+      <p class="wd-kicker">Administración · Base Mayorista</p>
+      <h1>Retiro de ganancias</h1>
+      <p class="wd-head__meta">{{ periodLabel() }} · {{ orderRows().length }} pedidos entregados · {{ scopeLabel() }}</p>
     </div>
-    <a class="btn ghost" [routerLink]="'/main/administracion'" [queryParams]="{ scope: routeScope() }">Volver a Administracion</a>
+    <div class="wd-head__actions">
+      <label class="wd-field">
+        <span>Ámbito</span>
+        <select [value]="routeScope()" (change)="setRouteScope($any($event.target).value)">
+          @for (option of scopeOptions(); track trackScope($index, option)) {
+            <option [value]="option.id">{{ option.name }}</option>
+          }
+        </select>
+      </label>
+      @if (canCreateMovements()) {
+        <button type="button" class="wd-btn wd-btn--ghost" (click)="openExpenseModal()">Registrar gasto</button>
+        <button type="button" class="wd-btn wd-btn--primary" (click)="openWithdrawalModal()">Registrar retiro</button>
+      }
+      <a class="wd-btn wd-btn--ghost" [routerLink]="'/main/administracion'" [queryParams]="{ scope: routeScope() }">Volver</a>
+    </div>
   </header>
 
   @if (!canViewMovements()) {
-    <p class="muted">Sin permiso: <code>cap.finance.movements.view</code></p>
+    <p class="wd-empty">Sin permiso: <code>cap.finance.movements.view</code></p>
   } @else {
-    <section class="panel">
-      <div class="scope-row">
-        <label>
-          Ambito
-          <select [value]="routeScope()" (change)="setRouteScope($any($event.target).value)">
-            @for (option of scopeOptions(); track trackScope($index, option)) {
-              <option [value]="option.id">{{ option.name }}</option>
-            }
-          </select>
-        </label>
-        @if (canCreateMovements()) {
-          <div class="cta-row">
-            <button type="button" class="btn cta-expense" (click)="openExpenseModal()">Registrar egreso</button>
-            <button type="button" class="btn cta-withdrawal" (click)="openWithdrawalModal()">Registrar retiro</button>
+
+    @if (success()) { <p class="wd-flash wd-flash--ok">{{ success() }}</p> }
+    @if (error()) { <p class="wd-flash wd-flash--err">{{ error() }}</p> }
+
+    <!-- 1. LA CUENTA -->
+    <div class="wd-duo">
+      <section class="wd-panel">
+        <p class="wd-kicker">Resultado</p>
+        <h2>De la venta a la utilidad</h2>
+        <p class="wd-sub">La mercancía y los gastos salen de aquí. El capital invertido no: regresa como cobranza o inventario.</p>
+        <div class="wd-falls">
+          @for (row of profitWaterfall(); track row.label) {
+            <div class="wd-fall" [attr.data-tone]="row.tone">
+              <span class="wd-fall__label">{{ row.label }}</span>
+              <strong class="wd-fall__value">{{ formatCurrency(row.value) }}</strong>
+              <i><span [style.width]="row.bar"></span></i>
+            </div>
+          }
+        </div>
+      </section>
+
+      <section class="wd-panel wd-panel--accent">
+        <p class="wd-kicker">Disponibilidad</p>
+        <h2>Cuánto de esa utilidad es dinero</h2>
+        <p class="wd-sub">Lo que sigue por cobrar también es suyo. Solo todavía no llega.</p>
+
+        <div class="wd-split" role="img" [attr.aria-label]="'Utilidad cobrada ' + formatPercent(collectedSharePct())">
+          <span class="wd-split__on" [style.width.%]="collectedSharePct()">
+            <b>Ya cobrada · {{ formatPercent(collectedSharePct()) }}</b>
+          </span>
+          <span class="wd-split__off" [style.width.%]="100 - collectedSharePct()">
+            <b>{{ formatPercent(100 - collectedSharePct()) }}</b>
+          </span>
+        </div>
+
+        <div class="wd-pair">
+          <div><p>Ya cobrada</p><strong>{{ formatCurrency(financialBreakdown().collectedNetProfit) }}</strong></div>
+          <div><p>Por cobrar</p><strong class="is-warn">{{ formatCurrency(financialBreakdown().pendingProfit) }}</strong></div>
+        </div>
+
+        <div class="wd-mini">
+          <div><p>Cobros recibidos</p><strong>{{ formatCurrency(financialBreakdown().collectedRevenue) }}</strong></div>
+          <div><p>Ya retirado</p><strong>{{ formatCurrency(financialBreakdown().totalWithdrawn) }}</strong></div>
+          <div><p>Sin repartir</p><strong class="is-ok">{{ formatCurrency(financialBreakdown().available) }}</strong></div>
+        </div>
+      </section>
+    </div>
+
+    @if (withdrawalPartnerSummary().unclassifiedWithdrawals > 0) {
+      <p class="wd-alert">
+        <strong>{{ formatCurrency(withdrawalPartnerSummary().unclassifiedWithdrawals) }}</strong> salieron como retiro sin ser gasto ni reparto de socio. Reclasifícalos para que dejen de descontarse del reparto.
+      </p>
+    }
+
+    <!-- 2. SOCIOS -->
+    <div class="wd-section-head">
+      <div>
+        <p class="wd-kicker">Reparto 50 / 50</p>
+        <h2>Estado de cada socio</h2>
+      </div>
+      <span class="wd-section-note">Le corresponde <strong>{{ formatCurrency(withdrawalPartnerSummary().blanca.share) }}</strong> a cada parte</span>
+    </div>
+
+    <div class="wd-duo">
+      @for (partner of partnerCards(); track partner.id) {
+        <section class="wd-panel wd-partner">
+          <header>
+            <span class="wd-avatar" [class.is-two]="partner.id === 'socio_andrea_pepe'">{{ partner.initials }}</span>
+            <div>
+              <h3>{{ partner.name }}</h3>
+              <p>{{ partner.role }}</p>
+            </div>
+            <span class="wd-share-chip">50%</span>
+          </header>
+
+          <div class="wd-hero" [class.is-negative]="partner.account.availableNow < 0">
+            <p>{{ partner.account.availableNow < 0 ? "Retiró de más" : "Puede retirar hoy" }}</p>
+            <strong>{{ formatCurrency(partner.account.availableNow) }}</strong>
           </div>
-        }
-      </div>
 
-      @if (success()) {
-        <p class="success">{{ success() }}</p>
+          <dl class="wd-lines">
+            <div><dt>Le corresponde en total</dt><dd>{{ formatCurrency(partner.account.share) }}</dd></div>
+            <div><dt>Ya retirado</dt><dd>{{ formatCurrency(partner.account.withdrawn) }}</dd></div>
+            <div><dt>Pedidos pendientes de pago</dt><dd class="is-warn">{{ formatCurrency(partner.account.pendingShare) }}</dd></div>
+          </dl>
+
+          <div class="wd-progress">
+            <div><span>Participación entregada</span><strong>{{ formatPercent(partnerProgress(partner.account)) }}</strong></div>
+            <i><span [style.width.%]="partnerProgress(partner.account)"></span></i>
+          </div>
+
+          @if (canCreateMovements()) {
+            <div class="wd-partner__actions">
+              <button type="button" class="wd-btn wd-btn--primary" [disabled]="partner.account.availableNow <= 0" (click)="openPartnerWithdrawal(partner.id)">
+                {{ partner.account.availableNow <= 0 ? "Sin efectivo disponible" : "Registrar pago" }}
+              </button>
+              <button type="button" class="wd-btn wd-btn--ghost" (click)="setMovementTab('retiros')">Ver retiros</button>
+            </div>
+          }
+        </section>
       }
+    </div>
 
-      <div class="kpi-grid">
-        <article class="kpi-card">
-          <p>Cobros recibidos</p>
-          <h3>{{ formatCurrency(financialBreakdown().collectedRevenue) }}</h3>
-          <small>Solo pagos registrados en pedidos entregados</small>
-        </article>
-        <article class="kpi-card kpi-card-outflow">
-          <p>Costo total invertido</p>
-          <h3>{{ formatCurrency(financialBreakdown().deliveredGrossCost) }}</h3>
-          <small>Incluye el costo que regresó al inventario por devoluciones</small>
-        </article>
-        <article class="kpi-card kpi-card-outflow">
-          <p>Gastos (egresos)</p>
-          <h3>{{ formatCurrency(financialBreakdown().expensesTotal) }}</h3>
-        </article>
-        <article class="kpi-card">
-          <p>Utilidad cobrada base</p>
-          <h3>{{ formatCurrency(financialBreakdown().collectedProfitBase) }}</h3>
-          <small>Cobros menos costo invertido y egresos</small>
-        </article>
-        <article class="kpi-card">
-          <p>Total retirado</p>
-          <h3>{{ formatCurrency(financialBreakdown().totalWithdrawn) }}</h3>
-        </article>
-        <article class="kpi-card kpi-card-primary">
-          <p>Disponible para retirar</p>
-          <h3>{{ formatCurrency(financialBreakdown().available) }}</h3>
-          <small>Solo utilidad que ya está cobrada</small>
-        </article>
-        <article class="kpi-card kpi-card-pending">
-          <p>Ganancia pendiente de cobro</p>
-          <h3>{{ formatCurrency(financialBreakdown().pendingProfit) }}</h3>
-          <small>Margen estimado dentro de {{ formatCurrency(financialBreakdown().pendingCollection) }} aún por cobrar</small>
-        </article>
-        <article class="kpi-card kpi-card-outflow">
-          <p>Retiros no socios</p>
-          <h3>{{ formatCurrency(withdrawalPartnerSummary().withdrawnNonPartner) }}</h3>
-        </article>
-        <article class="kpi-card">
-          <p>Utilidad repartible</p>
-          <h3>{{ formatCurrency(withdrawalPartnerSummary().distributableBase) }}</h3>
-          <small>Basada únicamente en utilidad cobrada</small>
-        </article>
-        <article class="kpi-card">
-          <p>Parte por socio (50%)</p>
-          <h3>{{ formatCurrency(withdrawalPartnerSummary().perPartnerTarget) }}</h3>
-        </article>
-        <article class="kpi-card">
-          <p>{{ partnerPendingLabel("socio_blanca") }}</p>
-          <h3>{{ formatCurrency(withdrawalPartnerSummary().pendingBlanca) }}</h3>
-          @if (withdrawalPartnerSummary().excessBlanca > 0) {
-            <small>Exceso retirado: {{ formatCurrency(withdrawalPartnerSummary().excessBlanca) }}</small>
-          } @else {
-            <small>Disponible ahora</small>
+    <!-- 3. MOVIMIENTOS -->
+    <section class="wd-panel">
+      <div class="wd-panel-head">
+        <div>
+          <p class="wd-kicker">Movimientos</p>
+          <h2>{{ movementCopy().title }}</h2>
+        </div>
+        <div class="wd-tabs" role="tablist">
+          @for (tab of movementTabs(); track tab.id) {
+            <button type="button" role="tab" [attr.aria-selected]="movementTab() === tab.id" [class.is-active]="movementTab() === tab.id" (click)="setMovementTab(tab.id)">
+              {{ tab.label }}<span class="wd-count">{{ tab.count }}</span>
+            </button>
           }
-        </article>
-        <article class="kpi-card">
-          <p>{{ partnerPendingLabel("socio_andrea_pepe") }}</p>
-          <h3>{{ formatCurrency(withdrawalPartnerSummary().pendingAndreaPepe) }}</h3>
-          @if (withdrawalPartnerSummary().excessAndreaPepe > 0) {
-            <small>Exceso retirado: {{ formatCurrency(withdrawalPartnerSummary().excessAndreaPepe) }}</small>
-          } @else {
-            <small>Disponible ahora</small>
-          }
-        </article>
+        </div>
       </div>
 
-      <div class="orders-table">
-        <div class="orders-head expense-head">
-          <span>Fecha</span>
-          <span>Categoria</span>
-          <span>Ruta</span>
-          <span>Monto</span>
-          <span>Notas</span>
-          <span>Cuenta</span>
-        </div>
-        @if (expenseRows().length === 0) {
-          <p class="muted">Sin egresos en este ambito.</p>
-        } @else {
-          @for (row of expenseRows(); track trackExpenseRow($index, row)) {
-            <div class="orders-row expense-row">
-              <span>{{ formatDate(row.occurred_at) }}</span>
-              <span>{{ expenseCategoryLabel(row.category) }}</span>
-              <span>{{ routeName(row.route_id) }}</span>
-              <span>{{ formatCurrency(row.amount) }}</span>
-              <span>{{ row.notes || "-" }}</span>
-              <span>{{ row.account_id || "-" }}</span>
+      @if (movementRows().length === 0) {
+        <p class="wd-empty">{{ movementCopy().empty }}</p>
+      } @else {
+        <div class="wd-table wd-table--moves">
+          <div class="wd-tr wd-tr--head">
+            <span>Fecha</span><span>{{ movementCopy().columnTwo }}</span><span>Concepto</span><span>Cuenta</span><span class="is-num">Monto</span>
+          </div>
+          @for (row of movementRows(); track row.key) {
+            <div class="wd-tr">
+              <span>{{ row.date }}</span>
+              <span><b class="wd-chip" [style.background]="row.chipBg" [style.color]="row.chipInk">{{ row.chipLabel }}</b></span>
+              <span class="wd-truncate">{{ row.note }}</span>
+              <span class="wd-muted">{{ row.account }}</span>
+              <strong class="is-num">{{ formatCurrency(row.amount) }}</strong>
             </div>
           }
-        }
-      </div>
-
-      <div class="orders-table">
-        <div class="orders-head expense-head">
-          <span>Fecha</span>
-          <span>Destino</span>
-          <span>Ruta</span>
-          <span>Monto</span>
-          <span>Notas</span>
-          <span>Cuenta</span>
+          <div class="wd-tr wd-tr--total">
+            <span class="wd-span4">{{ movementCopy().totalLabel }}</span>
+            <strong class="is-num">{{ formatCurrency(movementTotal()) }}</strong>
+          </div>
         </div>
-        @if (withdrawalRows().length === 0) {
-          <p class="muted">Sin retiros en este ambito.</p>
-        } @else {
-          @for (row of withdrawalRows(); track trackWithdrawalRow($index, row)) {
-            <div class="orders-row expense-row">
-              <span>{{ formatDate(row.occurred_at) }}</span>
-              <span>{{ withdrawalDestinationLabel(row) }}</span>
-              <span>{{ routeName(row.route_id) }}</span>
-              <span>{{ formatCurrency(row.amount) }}</span>
-              <span>{{ row.notes || "-" }}</span>
-              <span>{{ row.account_id || "-" }}</span>
-            </div>
-          }
-        }
+      }
+    </section>
+
+    <!-- 4. PEDIDOS -->
+    <section class="wd-panel">
+      <div class="wd-panel-head">
+        <div>
+          <p class="wd-kicker">Origen</p>
+          <h2>Pedidos que generaron esta utilidad</h2>
+          <p class="wd-sub">{{ orderRows().length }} entregados en el ámbito seleccionado</p>
+        </div>
       </div>
 
-      <div class="kpi-grid">
-        <article class="kpi-card partner-card">
-          <p>Ganancia cobrada repartible</p>
-          <h3>{{ formatCurrency(partnerSplit().totalProfit) }}</h3>
-          <small>Basada en cobros y filtros actuales</small>
-        </article>
-        <article class="kpi-card partner-card">
-          <p>Socio 1 - Blanca Trejo (50%)</p>
-          <h3>{{ formatCurrency(partnerSplit().socioBlanca) }}</h3>
-        </article>
-        <article class="kpi-card partner-card">
-          <p>Socio 2 - Andrea y Pepe (50%)</p>
-          <h3>{{ formatCurrency(partnerSplit().socioAndreaPepe) }}</h3>
-        </article>
-      </div>
-
-      <div class="kpi-grid">
-        <article class="kpi-card">
-          <p>Total clienta</p>
-          <h3>{{ formatCurrency(totals().totalClienta) }}</h3>
-        </article>
-        <article class="kpi-card">
-          <p>Inversion</p>
-          <h3>{{ formatCurrency(totals().investment) }}</h3>
-        </article>
-        <article class="kpi-card">
-          <p>Ganancia</p>
-          <h3>{{ formatCurrency(totals().profit) }}</h3>
-        </article>
-      </div>
-
-      @if (error()) {
-        <p class="error">{{ error() }}</p>
+      @if (unnamedOrderCount() > 0) {
+        <p class="wd-alert wd-alert--soft">
+          {{ unnamedOrderCount() }} de {{ orderRows().length }} pedidos no tienen resuelto el nombre de la clienta. La columna se llena sola en cuanto se corrija la relación con el catálogo.
+        </p>
       }
 
       @if (loading()) {
-        <p class="muted">Cargando pedidos...</p>
+        <p class="wd-empty">Cargando pedidos…</p>
       } @else if (orderRows().length === 0) {
-        <p class="muted">No hay pedidos entregados para el ámbito seleccionado.</p>
+        <p class="wd-empty">No hay pedidos entregados para el ámbito seleccionado.</p>
       } @else {
         <div class="orders-table">
           <div class="orders-head">
@@ -330,6 +330,15 @@
             </button>
           }
         </div>
+        <div class="wd-table wd-table--orders">
+          <div class="wd-tr wd-tr--total">
+            <span class="wd-span3">Total de {{ orderRows().length }} pedidos entregados</span>
+            <strong class="is-num">{{ formatCurrency(totals().totalClienta) }}</strong>
+            <strong class="is-num wd-muted">{{ formatCurrency(totals().investment) }}</strong>
+            <strong class="is-num is-ok">{{ formatCurrency(totals().profit) }}</strong>
+          </div>
+        </div>
+        <p class="wd-foot">La ganancia de la tabla es antes de gastos del negocio. Restando {{ formatCurrency(financialBreakdown().expensesTotal) }} se llega a los {{ formatCurrency(financialBreakdown().accruedNetProfit) }} de utilidad repartible.</p>
       }
     </section>
   }
@@ -342,7 +351,7 @@
           <div class="entry-grid">
             <label>Categoria
               <select [ngModel]="expenseCategory()" (ngModelChange)="setExpenseCategory($event)" name="expense_category">
-                <option value="compra_inversion">Compra por inversion</option><option value="perdida">Perdida</option><option value="paqueteria">Paqueteria</option><option value="consumibles">Consumibles</option><option value="deuda_fija">Deuda fija</option><option value="deuda_meses">Deuda a meses</option>
+                @for (option of expenseCategoryOptions; track option.id) {<option [value]="option.id">{{ option.label }}</option>}
               </select>
             </label>
             <label>Monto
@@ -389,7 +398,8 @@
               <input type="date" [ngModel]="withdrawalDate()" (ngModelChange)="setWithdrawalDate($event)" name="withdrawal_date" />
             </label>
             <label>Destino
-              <select [ngModel]="withdrawalPurpose()" (ngModelChange)="setWithdrawalPurpose($event)" name="withdrawal_purpose"><option value="socio_blanca">Socio 1 - Blanca Trejo</option><option value="socio_andrea_pepe">Socio 2 - Andrea y Pepe</option><option value="sueldo">Sueldo / nomina</option><option value="gasto">Gasto</option><option value="inversion">Inversion</option><option value="ahorro">Ahorro</option><option value="persona">Retiro a persona</option><option value="otro">Paqueteria / gastos / otro</option></select>
+              <select [ngModel]="withdrawalPurpose()" (ngModelChange)="setWithdrawalPurpose($event)" name="withdrawal_purpose"><option value="socio_blanca">Socio 1 - Blanca Trejo</option><option value="socio_andrea_pepe">Socio 2 - Andrea y Pepe</option><option value="persona">Retiro a persona</option></select>
+              <small class="wd-hint">Un retiro solo saca dinero hacia un socio o una persona. Paqueteria, viaticos, equipo o compras van en <b>Registrar gasto</b>: ahi restan de la utilidad en vez de descontarse del reparto.</small>
             </label>
             <label>Referencia (opcional)
               <input type="text" [ngModel]="withdrawalRecipient()" (ngModelChange)="setWithdrawalRecipient($event)" name="withdrawal_recipient" />

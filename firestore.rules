@@ -344,6 +344,11 @@ service cloud.firestore {
         && (
           hasCapability("cap.finance.accounts.edit")
           || (
+            (hasCapability("cap.payments.register") || hasCapability("cap.finance.movements.create") || hasCapability("cap.finance.movements.edit") || hasCapability("cap.finance.movements.delete"))
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["balance", "updated_at"])
+            && request.resource.data.balance is number
+          )
+          || (
             hasCapability("cap.payments.refund")
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["balance", "updated_at"])
             && request.resource.data.balance is number
@@ -372,6 +377,43 @@ service cloud.firestore {
       allow read: if canReadBusinessResource() && (hasSection("sections.administracion") || hasCapability("cap.finance.reports.view"));
       allow create: if canCreateBusinessResource() && hasCapability("cap.finance.reports.view");
       allow update, delete: if isSuperAdmin();
+    }
+
+    match /finance_ledger_entries/{entryId} {
+      allow read: if canReadBusinessResource()
+        && (hasSection("sections.administracion") || hasCapability("cap.finance.movements.view"));
+      allow create: if canCreateBusinessResource()
+        && request.resource.data.entry_id == entryId
+        && request.resource.data.cash_effect is number
+        && request.resource.data.amount is number
+        && request.resource.data.period_id is string
+        && (
+          hasCapability("cap.payments.register")
+          || hasCapability("cap.payments.refund")
+          || hasCapability("cap.returns.create")
+          || hasCapability("cap.finance.accounts.create")
+          || hasCapability("cap.finance.accounts.edit")
+          || hasCapability("cap.finance.movements.create")
+          || hasCapability("cap.finance.movements.edit")
+          || hasCapability("cap.finance.movements.delete")
+        );
+      allow update, delete: if false;
+    }
+
+    match /finance_periods/{periodId} {
+      allow read: if canReadBusinessResource()
+        && (hasSection("sections.administracion") || hasCapability("cap.finance.reports.view"));
+      allow create: if canCreateBusinessResource() && hasCapability("cap.finance.reports.view");
+      allow update: if canUpdateBusinessResource()
+        && (
+          isSuperAdmin()
+          || (
+            hasCapability("cap.finance.reports.view")
+            && resource.data.status != "closed"
+            && request.resource.data.status == "closed"
+          )
+        );
+      allow delete: if false;
     }
 
     match /inventory_items/{itemId} {

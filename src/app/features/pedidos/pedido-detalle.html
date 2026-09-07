@@ -604,6 +604,12 @@
             Paquetes <strong>{{ vm.closedPackagesCount }}/{{ vm.packingBoxesCount }}</strong>
           </span>
         }
+        @if (orderShippingFee(current) > 0) {
+          <span class="summary-chip summary-chip--shipping">
+            <span class="material-symbols-rounded" aria-hidden="true">local_shipping</span>
+            Paquetería <strong>{{ formatCurrency(orderShippingFee(current)) }}</strong>
+          </span>
+        }
       </div>
     </section>
 
@@ -755,16 +761,6 @@
               <span class="material-symbols-rounded btn-icon" aria-hidden="true">barcode_scanner</span>
             </button>
           }
-          @if (!isOrderClosed(current)) {
-            <button type="button" class="discount-card-btn" [class.has-discount]="orderDiscountAmount(current) > 0" (click)="openDiscountModal()">
-              <span class="material-symbols-rounded discount-card-btn__icon" aria-hidden="true">local_offer</span>
-              @if (orderDiscountAmount(current) > 0) {
-                -{{ formatCurrency(orderDiscountAmount(current)) }} descuento global
-              } @else {
-                Sin descuento global
-              }
-            </button>
-          }
           @if (productBulkActionType(current); as bulkAction) {
             <button
               type="button"
@@ -781,6 +777,44 @@
                 {{ bulkAction === "mark_received" ? "Marcar todo recibido" : "Marcar todo disponible" }}
               }
             </button>
+          }
+          @if (!isOrderClosed(current)) {
+            <div class="products-more-wrap" (click)="$event.stopPropagation()">
+              <button
+                type="button"
+                class="btn ghost icon-only products-more-btn"
+                aria-label="Más acciones de productos"
+                [attr.aria-expanded]="productsMenuOpen()"
+                aria-controls="products-more-menu"
+                (click)="toggleProductsMenu($event)"
+              >
+                <span class="material-symbols-rounded" aria-hidden="true">more_horiz</span>
+              </button>
+              @if (productsMenuOpen()) {
+                <button type="button" class="products-more-backdrop" aria-label="Cerrar más acciones" (click)="closeProductsMenu()"></button>
+                <div id="products-more-menu" class="products-more-menu" role="menu" aria-label="Más acciones de productos">
+                  <p class="products-more-title">Más acciones</p>
+                  @if (vm.canAddProducts && orderBusinessId(current) === "bm") {
+                    <button type="button" role="menuitem" (click)="openCrossBusinessCatalogModal()">
+                      <span class="material-symbols-rounded" aria-hidden="true">storefront</span>
+                      <span>Agregar producto de Catálogo</span>
+                    </button>
+                  }
+                  <button type="button" role="menuitem" (click)="openShippingFeeModal()">
+                    <span class="material-symbols-rounded" aria-hidden="true">local_shipping</span>
+                    <span>
+                      {{ orderShippingFee(current) > 0 ? "Editar cargo de paquetería · " + formatCurrency(orderShippingFee(current)) : "Agregar cargo de paquetería" }}
+                    </span>
+                  </button>
+                  <button type="button" role="menuitem" (click)="closeProductsMenu(); openDiscountModal()">
+                    <span class="material-symbols-rounded" aria-hidden="true">local_offer</span>
+                    <span>
+                      {{ orderDiscountAmount(current) > 0 ? "Editar descuento global · " + formatCurrency(orderDiscountAmount(current)) : "Aplicar descuento global" }}
+                    </span>
+                  </button>
+                </div>
+              }
+            </div>
           }
         </div>
       </div>
@@ -2145,10 +2179,17 @@
                       <span>{{ financeAccountsLoadError() }} Intenta cerrar y abrir nuevamente la devolución.</span>
                     </p>
                   } @else if (financeAccounts().length === 0) {
-                    <p id="return-refund-account-help" class="return-account-message return-account-message--error" role="alert">
+                    <div id="return-refund-account-help" class="return-account-message return-account-message--error" role="alert">
                       <span class="material-symbols-rounded" aria-hidden="true">account_balance_wallet</span>
-                      <span>No hay una cuenta para este negocio. Crea <strong>General</strong> en Administración antes de devolver el dinero.</span>
-                    </p>
+                      <span>Este negocio no tiene ninguna cuenta de dinero todavía.</span>
+                      @if (canCreateFinanceAccounts()) {
+                        <button type="button" class="btn primary return-account-cta" (click)="createGeneralAccount()" [disabled]="creatingGeneralAccount()">
+                          {{ creatingGeneralAccount() ? "Creando…" : "Crear cuenta General" }}
+                        </button>
+                      } @else {
+                        <span class="return-account-hint">Pide a un administrador que cree la cuenta General.</span>
+                      }
+                    </div>
                   } @else if (selectedReturnRefundAccount(); as account) {
                     <p
                       id="return-refund-account-help"
@@ -2329,10 +2370,10 @@
         <div class="sheet-header" [attr.aria-hidden]="clientaDiscountOpen() ? 'true' : null" [attr.inert]="clientaDiscountOpen() ? '' : null">
           <div class="sheet-handle" aria-hidden="true"></div>
           <div class="sheet-title-wrap">
-            <span class="add-item-kicker">Pedido en edición</span>
+            <span class="add-item-kicker">{{ crossBusinessCatalogMode() ? "Pedido BM" : "Pedido en edición" }}</span>
             <h2 id="add-item-modal-title">
               <span class="material-symbols-rounded" aria-hidden="true">add_box</span>
-              {{ isConvertMode() ? "Convertir item manual" : (isEditMode() ? "Editar producto" : "Agregar producto") }}
+              {{ crossBusinessCatalogMode() && !isEditMode() ? "Agregar producto de Catálogo" : (isConvertMode() ? "Convertir item manual" : (isEditMode() ? "Editar producto" : "Agregar producto")) }}
             </h2>
           </div>
           <button type="button" class="btn ghost" aria-label="Cerrar" [disabled]="addItemSaving()" (click)="closeAddItemModal()">
@@ -2360,6 +2401,7 @@
               Editando: <strong>{{ targetItem.title }}</strong>.
             </p>
           }
+          @if (!crossBusinessCatalogMode()) {
           <div class="section-row">
             <div class="pill source-toggle">
               <label>
@@ -2402,6 +2444,7 @@
               }
             </div>
           </div>
+          }
           @if (!isManualSource() && !isEditMode() && !selectedPreview()) {
             <div class="product-search">
               <div class="field">
@@ -2412,7 +2455,7 @@
                     #productSearchInput
                     class="input"
                     type="text"
-                    [placeholder]="isCatalogoOrder() ? 'Código de barras, internet, genérico, modelo o estilo' : 'Nombre, variante o color'"
+                    [placeholder]="isCatalogoOrder() || crossBusinessCatalogMode() ? 'Código de barras, internet, genérico, modelo o estilo' : 'Nombre, variante o color'"
                     [ngModel]="newItemSearch()"
                     (ngModelChange)="onNewItemSearchChange($event)"
                   (focus)="showProductList.set(true)"
@@ -2481,6 +2524,12 @@
                     <div class="listbox-option listbox-option--loading" role="status" aria-live="polite">
                       <span class="material-symbols-rounded" aria-hidden="true">progress_activity</span>
                       Buscando identificadores y variantes...
+                    </div>
+                  }
+                  @if (catalogSourceError(); as catalogError) {
+                    <div class="catalog-search-empty catalog-search-empty--error product-search-state" role="alert">
+                      <span>{{ catalogError }}</span>
+                      <button type="button" class="btn ghost" (click)="retryAddItemCatalog()">Reintentar</button>
                     </div>
                   }
                   @for (c of catalogSuggestions(); track c.doc.normalized_id) {
@@ -3018,8 +3067,14 @@
             <span class="payment-summary-label">Descuento</span>
             <span class="payment-summary-value payment-summary-value--discount">-${{ paymentDiscountValue(current) | number:'1.2-2' }}</span>
           </div>
+          @if (orderShippingFee(current) > 0) {
+            <div class="payment-summary-item">
+              <span class="payment-summary-label">Paquetería</span>
+              <span class="payment-summary-value payment-summary-value--shipping">+${{ orderShippingFee(current) | number:'1.2-2' }}</span>
+            </div>
+          }
           <div class="payment-summary-item">
-            <span class="payment-summary-label">Total con descuento</span>
+            <span class="payment-summary-label">Total del pedido</span>
             <span class="payment-summary-value">${{ paymentTotalWithDiscount(current) | number:'1.2-2' }}</span>
           </div>
           @if ((current.totals.paid_amount || 0) > 0) {
@@ -3179,6 +3234,78 @@
     </div>
   }
 
+  @if (shippingFeeModalOpen() && order(); as current) {
+    <div class="sheet-backdrop sheet-backdrop--center" (click)="closeShippingFeeModal()">
+      <div class="sheet payment-sheet shipping-fee-sheet" role="dialog" aria-modal="true" aria-labelledby="shipping-fee-modal-title" (click)="$event.stopPropagation()">
+        <div class="sheet-handle" aria-hidden="true"></div>
+
+        <div class="payment-sheet-header">
+          <span class="material-symbols-rounded payment-sheet-icon shipping-fee-sheet-icon" aria-hidden="true">local_shipping</span>
+          <h2 id="shipping-fee-modal-title">{{ orderShippingFee(current) > 0 ? "Editar cargo de paquetería" : "Agregar cargo de paquetería" }}</h2>
+        </div>
+
+        <p class="shipping-fee-sheet-note">
+          Se cobrará a la clienta y aparecerá separado de los productos en su nota.
+        </p>
+
+        <div class="payment-summary-row">
+          <div class="payment-summary-item">
+            <span class="payment-summary-label">Productos</span>
+            <span class="payment-summary-value">${{ totals().totalClienta | number:'1.2-2' }}</span>
+          </div>
+          @if (orderDiscountAmount(current) > 0) {
+            <div class="payment-summary-item">
+              <span class="payment-summary-label">Descuento global</span>
+              <span class="payment-summary-value payment-summary-value--discount">-${{ orderDiscountAmount(current) | number:'1.2-2' }}</span>
+            </div>
+          }
+          <div class="payment-summary-item">
+            <span class="payment-summary-label">Cargo de paquetería</span>
+            <span class="payment-summary-value payment-summary-value--shipping">+${{ shippingFeeDraftValue() | number:'1.2-2' }}</span>
+          </div>
+          <div class="payment-summary-item payment-summary-item--total">
+            <span class="payment-summary-label">Nuevo total</span>
+            <span class="payment-summary-value">${{ shippingFeeTotalPreview(current) | number:'1.2-2' }}</span>
+          </div>
+        </div>
+
+        <div class="sheet-field">
+          <label class="sheet-label" for="shipping-fee-amount-input">
+            <span class="material-symbols-rounded" aria-hidden="true">attach_money</span>
+            Importe a cobrar
+          </label>
+          <input
+            id="shipping-fee-amount-input"
+            class="input payment-amount-input"
+            type="number"
+            min="0"
+            step="0.01"
+            inputmode="decimal"
+            placeholder="0.00"
+            [ngModel]="shippingFeeDraft()"
+            (ngModelChange)="shippingFeeDraft.set($event)"
+            (keyup.enter)="saveOrderShippingFee(current)"
+            autofocus
+          />
+        </div>
+
+        @if (shippingFeeError()) {
+          <p class="payment-error" role="alert">{{ shippingFeeError() }}</p>
+        }
+
+        <div class="sheet-actions">
+          <button type="button" class="btn primary" [disabled]="shippingFeeSaving()" (click)="saveOrderShippingFee(current)">
+            {{ shippingFeeSaving() ? "Guardando..." : "Guardar cargo" }}
+          </button>
+          <button type="button" class="btn danger" [disabled]="shippingFeeSaving() || orderShippingFee(current) <= 0" (click)="clearOrderShippingFee(current)">
+            Quitar cargo
+          </button>
+          <button type="button" class="btn ghost" [disabled]="shippingFeeSaving()" (click)="closeShippingFeeModal()">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  }
+
   @if (discountModalOpen() && order(); as current) {
     <div class="sheet-backdrop sheet-backdrop--center" (click)="closeDiscountModal()">
       <div class="sheet payment-sheet discount-sheet" role="dialog" aria-modal="true" aria-labelledby="discount-modal-title" (click)="$event.stopPropagation()">
@@ -3190,7 +3317,7 @@
         </div>
 
         <p class="discount-sheet-note">
-          Este descuento se aplica al total de la nota de venta y no crea items para empaque.
+          Este descuento se aplica solo a los productos. El cargo de paquetería se suma después y no se descuenta.
         </p>
 
         <div class="payment-summary-row">
@@ -3203,7 +3330,7 @@
             <span class="payment-summary-value payment-summary-value--discount">-${{ discountDraftValue(current) | number:'1.2-2' }}</span>
           </div>
           <div class="payment-summary-item">
-            <span class="payment-summary-label">Total con descuento</span>
+            <span class="payment-summary-label">Total del pedido</span>
             <span class="payment-summary-value">${{ discountTotalPreview(current) | number:'1.2-2' }}</span>
           </div>
         </div>

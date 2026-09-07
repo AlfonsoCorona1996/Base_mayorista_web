@@ -190,7 +190,7 @@ export default class EmbarquesPage {
         const financials = calculateOrderFinancials(order);
         const routeName = order.route_id ? this.routes.getById(order.route_id)?.name || "Ruta sin nombre" : "Sin ruta";
         const localityName = customer?.locality_id ? this.localities.getById(customer.locality_id)?.name || "Localidad sin nombre" : "Sin localidad";
-        const closedPackagesCount = (order.packages || []).filter((pkg) => pkg.status === "closed" || pkg.state === "armado" || pkg.state === "closed").length;
+        const closedPackagesCount = (order.packages || []).filter((pkg) => pkg.state === "closed").length;
         return {
           ...order,
           customerName: customer ? `${customer.first_name} ${customer.last_name}`.trim() || "Clienta" : "Clienta",
@@ -379,7 +379,6 @@ export default class EmbarquesPage {
             orderId,
             {
               shipment_id: shipment.shipment_id,
-              custody_status: "shipment",
               current_holder_location: "in_transit",
             },
             "Embarque enviado GDL-Durango",
@@ -410,7 +409,6 @@ export default class EmbarquesPage {
           this.orders.updateOperationalState(
             orderId,
             {
-              custody_status: "durango",
               current_holder_location: "durango",
             },
             "Embarque recibido en Durango",
@@ -614,15 +612,15 @@ export default class EmbarquesPage {
   private canShipOrder(order: Order): boolean {
     if (["cancelado", "devuelto", "closed"].includes(order.status)) return false;
     if (order.delivery_status === "delivered") return false;
-    if (order.custody_status === "customer") return false;
+    if (order.current_holder_location === "customer") return false;
     if ((order.packages || []).length > 0) {
-      return (order.packages || []).some((pkg) => pkg.status === "closed" || pkg.state === "armado" || pkg.state === "closed");
+      return (order.packages || []).some((pkg) => pkg.state === "closed");
     }
-    return order.packing?.status === "done" || ["ready_for_route", "assigned_to_run", "packing", "empaque"].includes(order.status);
+    return order.packing?.status === "done" || ["ready_for_route", "assigned_to_run", "empaque"].includes(order.status);
   }
 
   private packageItemsForOrder(order: CandidateOrder): ShipmentItem[] {
-    const sourcePackages = (order.packages || []).filter((pkg) => pkg.status === "closed" || pkg.state === "armado" || pkg.state === "closed");
+    const sourcePackages = (order.packages || []).filter((pkg) => pkg.state === "closed");
     if (!sourcePackages.length && (order.packages || []).length > 0) return [];
     if (!sourcePackages.length) {
       return [

@@ -745,7 +745,7 @@
             </label>
             <label class="field">
               <span>{{ editingId() ? "Existencia física" : "Existencia inicial" }} <em>*</em></span>
-              <input type="number" min="0" class="input" [(ngModel)]="draft.quantity_on_hand" name="quantity_on_hand" required />
+              <input type="number" min="0" class="input" [(ngModel)]="draft.on_hand_qty" name="on_hand_qty" required />
               @if (editingReservedQty() > 0) {
                 <small>Debe conservar al menos {{ editingReservedQty() }} pza(s) por las reservas activas.</small>
               } @else {

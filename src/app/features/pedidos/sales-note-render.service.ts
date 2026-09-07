@@ -7,6 +7,40 @@ export function salesNoteLogoUrl(businessId: BusinessId | null | undefined): str
     : "/BaseMayoristaLogo.png";
 }
 
+/**
+ * Porcentaje de descuento que se imprime en la nota.
+ *
+ * Sale de los precios, no del `discount_pct` guardado: ese campo se queda viejo
+ * cuando el articulo se represia y la nota termina contradiciendo los dos
+ * numeros que ella misma imprime a un lado. El valor guardado solo se usa
+ * cuando no hay precio publico del cual derivarlo.
+ */
+export function computeDiscountPctFromPrices(publicPrice: unknown, clientaPrice: unknown): number | null {
+  // Un precio ausente no es un descuento: sin este guardia Number(null) da 0 y
+  // un precio clienta vacio se leeria como "-100%".
+  const ausente = (value: unknown) =>
+    value === null || value === undefined || (typeof value === "string" && value.trim() === "");
+  if (ausente(publicPrice) || ausente(clientaPrice)) return null;
+  const publico = Number(publicPrice);
+  const clienta = Number(clientaPrice);
+  if (!Number.isFinite(publico) || !Number.isFinite(clienta)) return null;
+  if (publico <= 0 || clienta < 0 || publico <= clienta) return null;
+  return Number((((publico - clienta) / publico) * 100).toFixed(2));
+}
+
+export function resolveSalesNoteDiscountPct(
+  rawPct: unknown,
+  finalPrice: number | null,
+  clientaPrice: number,
+): number | null {
+  const derived = computeDiscountPctFromPrices(finalPrice, clientaPrice);
+  // Se redondea a entero y nunca baja de 1: la pastilla dice "-1%", no "-0%".
+  if (derived !== null) return Math.max(1, Math.round(derived));
+  const parsed = Number(typeof rawPct === "string" ? rawPct.replace(/,/g, "").trim() : rawPct);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return Math.round(parsed);
+}
+
 export type SalesNoteRenderRow = {
   rowId: string;
   title: string;
@@ -26,6 +60,7 @@ export type BuildSalesNoteImageInput = {
   customerName: string;
   rows: SalesNoteRenderRow[];
   discountAmount: number;
+  shippingFee?: number;
   balanceDue: number;
   date?: Date;
   logoUrl?: string;
@@ -38,7 +73,8 @@ export class SalesNoteRenderService {
     const rows = input.rows || [];
     const subtotal = rows.reduce((sum, row) => sum + Number(row.lineTotal || 0), 0);
     const discount = Math.min(subtotal, Math.max(0, Number(input.discountAmount || 0)));
-    const totalAmount = Math.max(0, subtotal - discount);
+    const shippingFee = Math.max(0, Number(input.shippingFee || 0));
+    const totalAmount = Math.max(0, subtotal - discount + shippingFee);
     const balanceRaw = Number(input.balanceDue);
     const balanceDue = Number.isFinite(balanceRaw) && balanceRaw >= 0 ? balanceRaw : totalAmount;
     const totalClientProfit = this.totalClientProfit(rows);
@@ -66,7 +102,7 @@ export class SalesNoteRenderService {
     const ITEM_H = 114;
     const ITEM_GAP = 14;
     const TOTL_PRE = 30;
-    const TOTL_H = totalClientProfit > 0 ? 190 : 150;
+    const TOTL_H = (totalClientProfit > 0 ? 190 : 150) + (shippingFee > 0 ? 34 : 0);
 
     const itemsH = rows.length > 0
       ? rows.length * ITEM_H + (rows.length - 1) * ITEM_GAP
@@ -238,7 +274,17 @@ export class SalesNoteRenderService {
     ctx.textAlign = "right";
     ctx.fillText(`-${this.formatCurrency(discount)}`, IR, discountRowY);
 
-    const balanceLabelY = discountRowY + 34;
+    let balanceLabelY = discountRowY + 34;
+    if (shippingFee > 0) {
+      ctx.fillStyle = "#2563eb";
+      ctx.font = "700 24px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+      ctx.textAlign = "left";
+      ctx.fillText("Paquetería", IX, balanceLabelY);
+      ctx.textAlign = "right";
+      ctx.fillText(`+${this.formatCurrency(shippingFee)}`, IR, balanceLabelY);
+      balanceLabelY += 34;
+    }
+
     ctx.fillStyle = "#7a94ae";
     ctx.font = "600 30px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
     ctx.textAlign = "left";
@@ -360,10 +406,7 @@ export class SalesNoteRenderService {
   }
 
   private resolveDiscountPct(row: SalesNoteRenderRow, finalPrice: number | null, clientaPrice: number): number | null {
-    const explicit = this.safePositiveNumber(row.discountPct);
-    if (explicit !== null) return Math.round(explicit);
-    if (finalPrice === null || finalPrice <= clientaPrice || finalPrice <= 0) return null;
-    return Math.max(1, Math.round((1 - clientaPrice / finalPrice) * 100));
+    return resolveSalesNoteDiscountPct(row.discountPct, finalPrice, clientaPrice);
   }
 
   private safePositiveNumber(value: unknown): number | null {

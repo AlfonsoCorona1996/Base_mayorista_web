@@ -30,11 +30,14 @@ export interface InventoryItem {
   variant_name: string | null;
   color_name: string | null;
   size_label: string | null;
-  // Backward-compatible field used by current UI cards as available stock.
-  quantity_on_hand: number;
-  on_hand_qty?: number;
+  /**
+   * Existencia fisica total: incluye lo apartado, lo que esta en revision y lo
+   * dañado. Es lo que hay en la bodega si lo cuentas a mano.
+   */
+  on_hand_qty: number;
   reserved_qty?: number;
-  available_qty?: number;
+  /** Lo que se puede vender hoy: on_hand_qty menos apartado, revision y daño. */
+  available_qty: number;
   in_review_qty?: number;
   damaged_qty?: number;
   min_stock?: number;
@@ -48,6 +51,55 @@ export interface InventoryItem {
   idempotency_keys?: Record<string, string>;
   created_at?: any;
   updated_at?: any;
+}
+
+/**
+ * Campos que ya no se escriben pero pueden existir en documentos viejos.
+ * `quantity_on_hand` guardaba la cantidad *disponible*, no la existencia, pese
+ * a su nombre. Solo se lee al normalizar; nunca se vuelve a escribir.
+ * La migracion `firebase:migrate-inventory-qty` los limpia.
+ */
+export interface LegacyInventoryFields {
+  quantity_on_hand?: number;
+}
+
+export interface InventoryQuantities {
+  onHand: number;
+  reserved: number;
+  available: number;
+  inReview: number;
+  damaged: number;
+}
+
+function safeInventoryQty(value: unknown): number {
+  const parsed = Number(value ?? 0);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(0, Math.trunc(parsed));
+}
+
+/**
+ * Unico lugar donde se interpretan las cantidades de un documento de
+ * inventario crudo. Existe porque los documentos viejos solo traen
+ * `quantity_on_hand`, que a pesar del nombre guardaba la cantidad
+ * *disponible*: en esos casos lo apartado, lo dañado y lo que esta en revision
+ * se suman de vuelta para reconstruir la existencia fisica.
+ */
+export function readInventoryQuantities(data: Record<string, unknown> | null | undefined): InventoryQuantities {
+  const source = data || {};
+  const reserved = safeInventoryQty(source["reserved_qty"]);
+  const inReview = safeInventoryQty(source["in_review_qty"]);
+  const damaged = safeInventoryQty(source["damaged_qty"]);
+
+  const hasOnHand = source["on_hand_qty"] !== undefined && source["on_hand_qty"] !== null;
+  const hasAvailable = source["available_qty"] !== undefined && source["available_qty"] !== null;
+  const legacyAvailable = safeInventoryQty(source["quantity_on_hand"]);
+
+  const available = hasAvailable ? safeInventoryQty(source["available_qty"]) : legacyAvailable;
+  const onHand = hasOnHand
+    ? safeInventoryQty(source["on_hand_qty"])
+    : available + reserved + inReview + damaged;
+
+  return { onHand, reserved, available, inReview, damaged };
 }
 
 export interface InventoryReservation {
@@ -136,6 +188,7 @@ export interface InventoryMovement {
   delta_reserved: number;
   delta_in_review: number;
   delta_damaged: number;
+  write_off_amount: number;
   order_id: string | null;
   order_item_id: string | null;
   return_id: string | null;
@@ -244,7 +297,7 @@ export class InventoryService {
       const idMap = current?.idempotency_keys || {};
       if (idKey && idMap[idKey]) return;
 
-      const onHand = this.toSafeQty(item.on_hand_qty ?? item.available_qty ?? item.quantity_on_hand);
+      const onHand = this.toSafeQty(item.on_hand_qty);
       const reserved = this.toSafeQty(item.reserved_qty ?? 0);
       const inReview = this.toSafeQty(item.in_review_qty ?? current?.in_review_qty ?? 0);
       const damaged = this.toSafeQty(item.damaged_qty ?? current?.damaged_qty ?? 0);
@@ -271,7 +324,6 @@ export class InventoryService {
         min_stock: this.toSafeQty(item.min_stock ?? current?.min_stock ?? 0),
         max_stock: this.toSafeQty(item.max_stock ?? current?.max_stock ?? 0),
         supplier_lead_days: this.toSafeQty(item.supplier_lead_days ?? current?.supplier_lead_days ?? 0),
-        quantity_on_hand: available,
         unit_price: this.toSafePrice(item.unit_price),
         notes: item.notes || null,
         image_urls: Array.isArray(item.image_urls) ? item.image_urls.filter(Boolean) : [],
@@ -322,7 +374,7 @@ export class InventoryService {
       const row = this.normalizeItem(snap.data() as Partial<InventoryItem>, snap.id);
       if (idKey && row.idempotency_keys?.[idKey]) return;
 
-      const currentOnHand = this.toSafeQty(row.on_hand_qty ?? row.available_qty ?? row.quantity_on_hand);
+      const currentOnHand = this.toSafeQty(row.on_hand_qty);
       const reserved = this.toSafeQty(row.reserved_qty ?? 0);
       const nextOnHand = Math.max(reserved, this.toSafeQty(currentOnHand + delta));
       const nextAvailable = this.toSafeQty(nextOnHand - reserved);
@@ -331,7 +383,6 @@ export class InventoryService {
         on_hand_qty: nextOnHand,
         reserved_qty: reserved,
         available_qty: nextAvailable,
-        quantity_on_hand: nextAvailable,
         updated_at: serverTimestamp(),
         idempotency_keys: this.withIdempotency(row.idempotency_keys || {}, idKey, nowIso),
       });
@@ -357,7 +408,7 @@ export class InventoryService {
       const row = this.normalizeItem(snap.data() as Partial<InventoryItem>, snap.id);
       if (row.idempotency_keys?.[idKey]) return;
 
-      const onHand = this.toSafeQty(row.on_hand_qty ?? row.available_qty ?? row.quantity_on_hand);
+      const onHand = this.toSafeQty(row.on_hand_qty);
       const reserved = this.toSafeQty(row.reserved_qty ?? 0);
       const available = this.toSafeQty(row.available_qty ?? onHand - reserved);
       const reservations = this.normalizeReservations(row.reservations);
@@ -372,7 +423,6 @@ export class InventoryService {
       tx.update(ref, {
         reserved_qty: nextReserved,
         available_qty: nextAvailable,
-        quantity_on_hand: nextAvailable,
         reservations: nextReservations,
         updated_at: serverTimestamp(),
         idempotency_keys: this.withIdempotency(row.idempotency_keys || {}, idKey, nowIso),
@@ -402,7 +452,7 @@ export class InventoryService {
       const row = this.normalizeItem(snap.data() as Partial<InventoryItem>, snap.id);
       if (row.idempotency_keys?.[idKey]) return;
 
-      const onHand = this.toSafeQty(row.on_hand_qty ?? row.available_qty ?? row.quantity_on_hand);
+      const onHand = this.toSafeQty(row.on_hand_qty);
       const reserved = this.toSafeQty(row.reserved_qty ?? 0);
       const nextReserved = Math.max(0, reserved - qty);
       const nextAvailable = Math.max(0, onHand - nextReserved);
@@ -412,7 +462,6 @@ export class InventoryService {
       tx.update(ref, {
         reserved_qty: nextReserved,
         available_qty: nextAvailable,
-        quantity_on_hand: nextAvailable,
         reservations: nextReservations,
         updated_at: serverTimestamp(),
         idempotency_keys: this.withIdempotency(row.idempotency_keys || {}, idKey, nowIso),
@@ -440,7 +489,7 @@ export class InventoryService {
       const row = this.normalizeItem(snap.data() as Partial<InventoryItem>, snap.id);
       if (row.idempotency_keys?.[idKey]) return;
 
-      const onHand = this.toSafeQty(row.on_hand_qty ?? row.available_qty ?? row.quantity_on_hand);
+      const onHand = this.toSafeQty(row.on_hand_qty);
       const reserved = this.toSafeQty(row.reserved_qty ?? 0);
       const consumedQty = Math.min(qty, reserved, onHand);
       const nextOnHand = Math.max(0, onHand - consumedQty);
@@ -453,7 +502,6 @@ export class InventoryService {
         on_hand_qty: nextOnHand,
         reserved_qty: nextReserved,
         available_qty: nextAvailable,
-        quantity_on_hand: nextAvailable,
         reservations: nextReservations,
         updated_at: serverTimestamp(),
         idempotency_keys: this.withIdempotency(row.idempotency_keys || {}, idKey, nowIso),
@@ -497,7 +545,6 @@ export class InventoryService {
           variant_name: input.variant_name ?? null,
           color_name: input.color_name ?? null,
           size_label: null,
-          quantity_on_hand: available,
           on_hand_qty: onHand,
           reserved_qty: reserved,
           available_qty: available,
@@ -521,7 +568,7 @@ export class InventoryService {
       const row = this.normalizeItem(snap.data() as Partial<InventoryItem>, snap.id);
       if (row.idempotency_keys?.[idKey]) return;
 
-      const onHand = this.toSafeQty(row.on_hand_qty ?? row.available_qty ?? row.quantity_on_hand);
+      const onHand = this.toSafeQty(row.on_hand_qty);
       const reserved = this.toSafeQty(row.reserved_qty ?? 0);
       const nextOnHand = onHand + qty;
       const nextAvailable = Math.max(0, nextOnHand - reserved);
@@ -532,7 +579,6 @@ export class InventoryService {
         on_hand_qty: nextOnHand,
         reserved_qty: reserved,
         available_qty: nextAvailable,
-        quantity_on_hand: nextAvailable,
         updated_at: serverTimestamp(),
         idempotency_keys: this.withIdempotency(row.idempotency_keys || {}, idKey, nowIso),
       });
@@ -572,7 +618,6 @@ export class InventoryService {
           variant_name: input.variant_name ?? null,
           color_name: input.color_name ?? null,
           size_label: input.size_label ?? null,
-          quantity_on_hand: qty,
           on_hand_qty: qty,
           reserved_qty: 0,
           available_qty: qty,
@@ -595,7 +640,7 @@ export class InventoryService {
 
       const row = this.normalizeItem(snap.data() as Partial<InventoryItem>, snap.id);
       if (row.idempotency_keys?.[idKey]) return;
-      const onHand = this.toSafeQty(row.on_hand_qty ?? row.available_qty ?? row.quantity_on_hand);
+      const onHand = this.toSafeQty(row.on_hand_qty);
       const reserved = this.toSafeQty(row.reserved_qty ?? 0);
       const nextOnHand = onHand + qty;
       const nextAvailable = Math.max(0, nextOnHand - reserved);
@@ -605,7 +650,6 @@ export class InventoryService {
         on_hand_qty: nextOnHand,
         reserved_qty: reserved,
         available_qty: nextAvailable,
-        quantity_on_hand: nextAvailable,
         source_reason: row.source_reason || "devolucion",
         updated_at: serverTimestamp(),
         idempotency_keys: this.withIdempotency(row.idempotency_keys || {}, idKey, nowIso),
@@ -650,13 +694,12 @@ export class InventoryService {
     return `INV-${base}-${suffix}`;
   }
 
-  private normalizeItem(data: Partial<InventoryItem>, fallbackId: string): InventoryItem {
+  private normalizeItem(data: Partial<InventoryItem> & LegacyInventoryFields, fallbackId: string): InventoryItem {
     const title = (data.title || "Producto sin nombre").trim();
-    const onHand = this.toSafeQty(data.on_hand_qty ?? data.available_qty ?? data.quantity_on_hand);
-    const reserved = this.toSafeQty(data.reserved_qty ?? 0);
-    const inReview = this.toSafeQty(data.in_review_qty ?? 0);
-    const damaged = this.toSafeQty(data.damaged_qty ?? 0);
-    const available = this.toSafeQty(data.available_qty ?? onHand - reserved - inReview - damaged);
+    const { onHand, reserved, inReview, damaged } = readInventoryQuantities(data as Record<string, unknown>);
+    const available = data.available_qty !== undefined && data.available_qty !== null
+      ? this.toSafeQty(data.available_qty)
+      : this.toSafeQty(onHand - reserved - inReview - damaged);
 
     return {
       inventory_id: data.inventory_id || fallbackId,
@@ -678,7 +721,6 @@ export class InventoryService {
       min_stock: this.toSafeQty(data.min_stock ?? 0),
       max_stock: this.toSafeQty(data.max_stock ?? 0),
       supplier_lead_days: this.toSafeQty(data.supplier_lead_days ?? 0),
-      quantity_on_hand: available,
       unit_price: this.toSafePrice(data.unit_price),
       notes: data.notes || null,
       image_urls: Array.isArray(data.image_urls) ? data.image_urls.filter(Boolean) : [],
@@ -711,6 +753,7 @@ export class InventoryService {
       delta_reserved: Number(data["delta_reserved"] || 0),
       delta_in_review: Number(data["delta_in_review"] || 0),
       delta_damaged: Number(data["delta_damaged"] || 0),
+      write_off_amount: Number(data["write_off_amount"] || 0),
       order_id: this.optionalText(data["order_id"]),
       order_item_id: this.optionalText(data["order_item_id"]),
       return_id: this.optionalText(data["return_id"]),

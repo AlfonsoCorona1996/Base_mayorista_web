@@ -1,6 +1,6 @@
 import { Injectable, computed, inject, signal } from "@angular/core";
 import { InventoryService } from "./inventory.service";
-import type { Order, OrderItem } from "./orders.service";
+import type { Order, OrderItem, OrderStatus } from "./orders.service";
 import { FIREBASE_AUTH, FIRESTORE } from "./firebase.providers";
 import {
   collection,
@@ -472,7 +472,7 @@ export class SupplierOperationsService {
 
     const inv = this.inventory.items().find((entry) => entry.inventory_id === inventoryId) || null;
     if (!inv) return;
-    const onHand = this.safeQty(inv.on_hand_qty ?? inv.quantity_on_hand);
+    const onHand = this.safeQty(inv.on_hand_qty);
     const reserved = this.safeQty(inv.reserved_qty ?? 0);
     const note = String(inv.notes || "");
     const autoCreatedFromLine = note.includes(row.op_id);
@@ -552,11 +552,13 @@ export class SupplierOperationsService {
       .filter((status): status is SupplierOperationStatus => !!status);
     if (statuses.length === 0) return;
 
-    let nextStatus: "supplier_processing" | "inbound_in_transit" | "recibido_qa" = "supplier_processing";
+    // Tipado como OrderStatus a proposito: asi el compilador impide volver a
+    // escribir un nombre fuera del vocabulario canonico.
+    let nextStatus: OrderStatus = "supplier_processing";
     if (statuses.every((status) => status === "recibido")) {
       nextStatus = "recibido_qa";
     } else if (statuses.some((status) => status === "en_camino")) {
-      nextStatus = "inbound_in_transit";
+      nextStatus = "en_transito";
     }
 
     const orderSnap = await getDoc(doc(FIRESTORE, "orders", orderId));

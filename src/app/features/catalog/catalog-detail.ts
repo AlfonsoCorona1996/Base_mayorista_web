@@ -71,7 +71,7 @@ export default class CatalogDetailPage {
     const product = this.doc();
     if (!product) return { units: 0, sales: 0, profit: 0, returns: 0, customers: 0, available: 0, reserved: 0, review: 0, lastSale: null as string | null };
     const skus = new Set(product.listing.items.map((item) => (item.sku || "").trim().toLowerCase()).filter(Boolean));
-    const completed = new Set(["delivered", "delivered_partial", "entregado", "closed", "pagado", "pago_pendiente", "pagado_parcial"]);
+    const completed = new Set(["entregado", "entregado_parcial", "closed", "pagado", "pago_pendiente", "pagado_parcial"]);
     let units = 0;
     let sales = 0;
     let profit = 0;
@@ -109,7 +109,7 @@ export default class CatalogDetailPage {
       profit,
       returns,
       customers: customers.size,
-      available: stock.reduce((sum, row) => sum + Number(row.available_qty ?? row.quantity_on_hand ?? 0), 0),
+      available: stock.reduce((sum, row) => sum + Number(row.available_qty ?? 0), 0),
       reserved: stock.reduce((sum, row) => sum + Number(row.reserved_qty || 0), 0),
       review: stock.reduce((sum, row) => sum + Number(row.in_review_qty || 0), 0),
       lastSale,

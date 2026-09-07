@@ -10,6 +10,7 @@ import {
   onSnapshot,
   orderBy,
   query,
+  runTransaction,
   serverTimestamp,
   setDoc,
   startAfter,
@@ -37,37 +38,93 @@ import {
   isSupplierReceiptComplete,
   supplierOperationReservedForOrderId,
 } from "./supplier-operation-state";
+import { financePeriodDocumentId, ledgerEntryPayload, monthIdFromDateInput } from "./finance-ledger";
 
+/**
+ * Estados del pedido. Vocabulario cerrado a proposito: antes terminaba en
+ * `(string & {})`, que hacia que TypeScript aceptara cualquier texto y no
+ * avisara de un estado mal escrito.
+ *
+ * Cuatro conceptos tenian dos nombres vivos al mismo tiempo, uno en español y
+ * otro en ingles. Se conserva el español y `normalizeOrderStatus` traduce el
+ * ingles al leer, para documentos que la migracion todavia no toca:
+ *
+ *   delivered          -> entregado
+ *   delivered_partial  -> entregado_parcial
+ *   in_transit         -> en_ruta
+ *   packing            -> empaque
+ *   inbound_in_transit -> en_transito
+ *
+ * Los estados que solo existian en ingles (`supplier_processing`, `closed`,
+ * `ready_for_route`, `assigned_to_run`) no tenian duplicado y se quedan como
+ * estan: renombrarlos seria churn sin ganar correccion.
+ */
 export type OrderStatus =
   | "borrador"
   | "confirmando_proveedor"
   | "reservado_inventario"
   | "solicitado_proveedor"
   | "supplier_processing"
-  | "inbound_in_transit"
   | "en_transito"
   | "recibido_qa"
-  | "packing"
   | "empaque"
   | "ready_for_route"
   | "assigned_to_run"
-  | "in_transit"
-  | "delivered"
-  | "delivered_partial"
-  | "closed"
   | "en_ruta"
   | "entregado"
+  | "entregado_parcial"
+  | "closed"
   | "pago_pendiente"
   | "pagado_parcial"
   | "pagado"
   | "cancelado"
-  | "devuelto"
-  | (string & {});
+  | "devuelto";
+
+export const ORDER_STATUSES: readonly OrderStatus[] = [
+  "borrador",
+  "confirmando_proveedor",
+  "reservado_inventario",
+  "solicitado_proveedor",
+  "supplier_processing",
+  "en_transito",
+  "recibido_qa",
+  "empaque",
+  "ready_for_route",
+  "assigned_to_run",
+  "en_ruta",
+  "entregado",
+  "entregado_parcial",
+  "closed",
+  "pago_pendiente",
+  "pagado_parcial",
+  "pagado",
+  "cancelado",
+  "devuelto",
+] as const;
+
+/** Nombre viejo -> nombre canonico. Solo los cuatro conceptos duplicados. */
+export const LEGACY_ORDER_STATUS_ALIASES: Readonly<Record<string, OrderStatus>> = {
+  delivered: "entregado",
+  delivered_partial: "entregado_parcial",
+  in_transit: "en_ruta",
+  packing: "empaque",
+  inbound_in_transit: "en_transito",
+};
+
+/**
+ * Unico lugar donde se interpreta el estado guardado de un pedido. Un valor
+ * desconocido cae en `borrador` en vez de propagarse: es el estado sin
+ * consecuencias, y asi un dato corrupto no simula una entrega ni un cobro.
+ */
+export function normalizeOrderStatus(value: unknown): OrderStatus {
+  const raw = String(value ?? "").trim();
+  if ((ORDER_STATUSES as readonly string[]).includes(raw)) return raw as OrderStatus;
+  return LEGACY_ORDER_STATUS_ALIASES[raw] ?? "borrador";
+}
 
 export type OrderItemState = OrderStatus | "sin_estado";
 export type CollectionStatus = "none" | "pending" | "paid" | "remind_later";
 export type OrderFulfillmentStatus = "pending" | "packing_gdl" | "packed_gdl" | "packing_durango" | "packed_durango";
-export type OrderCustodyStatus = "gdl" | "shipment" | "durango" | "delivery_staff" | "customer";
 export type OrderDeliveryStatus = "pending" | "delivered" | "not_delivered" | "incident";
 export type OrderCustomerPaymentStatus = "pending" | "partial" | "collected";
 export type OrderSettlementStatus = "not_applicable" | "pending" | "sent_to_gdl" | "received" | "reconciled" | "difference";
@@ -78,6 +135,7 @@ export type OrderCollectionVerificationStatus = "reported" | "confirmed" | "reje
 export interface OrderItem {
   item_id: string;
   business_id?: BusinessId;
+  source_business_id?: BusinessId | null;
   title: string;
   variant?: string | null;
   color?: string | null;
@@ -124,13 +182,46 @@ export interface OrderItem {
   late_addition_added_by?: string | null;
 }
 
+export type PackageState = "open" | "closed" | "en_ruta" | "entregado" | "devuelto";
+
+/** Valores viejos que todavia pueden venir en Firestore. */
+interface LegacyPackageFields {
+  state?: string;
+  status?: "open" | "closed";
+}
+
+/**
+ * Traduce una caja guardada al vocabulario unico de `state`. `armado` era
+ * sinonimo de `closed`, y `status` un subconjunto redundante que solo distinguia
+ * abierta de cerrada. Cuando falta `state`, manda `status`.
+ */
+export function normalizePackage(raw: PackageRecord & LegacyPackageFields): PackageRecord {
+  const legacyState = String(raw?.state || "").trim();
+  const known: PackageState[] = ["open", "closed", "en_ruta", "entregado", "devuelto"];
+
+  let state: PackageState;
+  if (legacyState === "armado") state = "closed";
+  else if ((known as string[]).includes(legacyState)) state = legacyState as PackageState;
+  else state = raw?.status === "closed" ? "closed" : "open";
+
+  const { status: _legacyStatus, ...rest } = raw as PackageRecord & { status?: unknown };
+  return { ...rest, state } as PackageRecord;
+}
+
 export interface PackageRecord {
   package_id: string;
   label: string;
   sequence: number;
   total_packages: number;
-  state: "armado" | "en_ruta" | "entregado" | "devuelto" | "open" | "closed";
-  status?: "open" | "closed";
+  /**
+   * Ciclo de vida de la caja, en orden: se arma abierta, se cierra al terminar
+   * de empacarla, sale a ruta y termina entregada o devuelta.
+   *
+   * Es el unico campo de estado de la caja. Antes convivia con `status`
+   * (open/closed), que era un subconjunto redundante, y con el valor `armado`,
+   * sinonimo de `closed`. `normalizePackage` traduce ambos.
+   */
+  state: PackageState;
   amount_due: number | null;
   item_ids: string[];
   items?: Array<{
@@ -172,6 +263,7 @@ export interface OrderTotals {
   paid_amount: number;
   balance_due: number;
   discount_amount?: number;
+  shipping_fee?: number;
   gross_amount?: number;
   returns_amount?: number;
   net_amount?: number;
@@ -213,7 +305,6 @@ export interface Order {
   route_stop_id?: string | null;
   shipment_id?: string | null;
   fulfillment_status?: OrderFulfillmentStatus;
-  custody_status?: OrderCustodyStatus;
   delivery_status?: OrderDeliveryStatus;
   customer_payment_status?: OrderCustomerPaymentStatus;
   settlement_status?: OrderSettlementStatus;
@@ -293,15 +384,15 @@ export function computeOrderStatus(
 ): OrderStatus {
   const terminalStatuses: OrderStatus[] = [
     "recibido_qa",
-    "packing",
+    
     "empaque",
     "ready_for_route",
     "assigned_to_run",
-    "in_transit",
+    
     "en_ruta",
     "entregado",
-    "delivered",
-    "delivered_partial",
+    
+    
     "pago_pendiente",
     "pagado_parcial",
     "pagado",
@@ -314,7 +405,7 @@ export function computeOrderStatus(
   if (items.length === 0) return "borrador";
   if (supplierOps.length === 0) return allItemsResolved ? "recibido_qa" : order.status;
   if (supplierOps.every((op) => op.status === "recibido")) return "recibido_qa";
-  if (supplierOps.some((op) => op.status === "en_camino")) return "inbound_in_transit";
+  if (supplierOps.some((op) => op.status === "en_camino")) return "en_transito";
   return "supplier_processing";
 }
 
@@ -490,7 +581,7 @@ export class OrdersService {
             label: "Paquete 1/1",
             sequence: 1,
             total_packages: 1,
-            state: "armado",
+            state: "closed",
             amount_due: 1420,
             item_ids: ["item-1"],
             created_at: now,
@@ -630,7 +721,7 @@ export class OrdersService {
 
   async updateStatus(orderId: string, status: OrderStatus, note?: string) {
     const now = new Date().toISOString();
-    const marksDelivered = status === "entregado" || status === "delivered" || status === "closed";
+    const marksDelivered = status === "entregado" || status === "closed";
     this.rows.update((current) =>
       current.map((order) => {
         if (order.order_id !== orderId) return order;
@@ -673,7 +764,6 @@ export class OrdersService {
       Pick<
         Order,
         | "fulfillment_status"
-        | "custody_status"
         | "delivery_status"
         | "customer_payment_status"
         | "settlement_status"
@@ -708,9 +798,8 @@ export class OrdersService {
         order.order_id === orderId
           ? {
               ...order,
-              status: "delivered",
+              status: "entregado",
               delivery_status: "delivered",
-              custody_status: "customer",
               current_holder_location: "customer",
               delivered_at: order.delivered_at || now,
               updated_at: now,
@@ -725,7 +814,6 @@ export class OrdersService {
     await updateDoc(doc(this.colRef, orderId), {
       status: "delivered",
       delivery_status: "delivered",
-      custody_status: "customer",
       current_holder_location: "customer",
       delivered_at: serverTimestamp(),
       updated_at: serverTimestamp(),
@@ -744,7 +832,6 @@ export class OrdersService {
       orderId,
       {
         delivery_status: deliveryStatus,
-        custody_status: "durango",
         current_holder_location: "durango",
       },
       note || (deliveryStatus === "incident" ? "Incidencia de entrega" : "Pedido no entregado"),
@@ -759,95 +846,135 @@ export class OrdersService {
     note?: string | null,
     options: RegisterCollectionOptions = {},
   ): Promise<string> {
-    const currentOrder = this.getById(orderId);
-    const previousPaid = Math.max(0, Number(currentOrder?.totals?.paid_amount || 0));
     const paymentReceived = Math.max(0, Number.isFinite(amount) ? amount : 0);
-    const safePaid = Number((previousPaid + paymentReceived).toFixed(2));
-    const calculated = currentOrder
-      ? calculateOrderFinancials({ ...currentOrder, totals: { ...currentOrder.totals, paid_amount: safePaid } })
-      : null;
-    const safeTotal = calculated?.netAmount ?? Math.max(0, Number(currentOrder?.totals?.total_amount || 0));
-    const balanceDue = calculated?.balanceDue ?? Math.max(0, safeTotal - safePaid);
-    const persistedTotals = currentOrder
-      ? toPersistedOrderTotals({ ...currentOrder, totals: { ...currentOrder.totals, paid_amount: safePaid } })
-      : {
-          total_amount: safeTotal,
-          net_amount: safeTotal,
-          paid_amount: safePaid,
-          balance_due: balanceDue,
-          discount_amount: 0,
-          overpayment_amount: Math.max(0, safePaid - safeTotal),
-        };
-
-    let nextStatus: OrderStatus;
-    if (safePaid <= 0) nextStatus = "pago_pendiente";
-    else if (balanceDue <= 0) nextStatus = "pagado";
-    else nextStatus = "pagado_parcial";
-
-    const customerPaymentStatus: OrderCustomerPaymentStatus =
-      safePaid <= 0 ? "pending" : balanceDue <= 0 ? "collected" : "partial";
-    const settlementStatus: OrderSettlementStatus = paymentReceived > 0 ? "pending" : currentOrder?.settlement_status || "not_applicable";
+    if (paymentReceived <= 0) throw new Error("El cobro debe ser mayor a cero.");
     const now = new Date().toISOString();
     const actor = this.currentActor(collectedByName || undefined);
     const eventId = ulid();
+    const eventRef = doc(FIRESTORE, "order_collection_events", eventId);
+    const verificationStatus = options.verificationStatus || "confirmed";
+    const sourceLocation = options.sourceLocation || "gdl";
+    let savedOrder: Order | null = null;
+    let savedBalanceDue = 0;
+    let savedBusinessId: BusinessId = normalizeBusinessId(this.getById(orderId)?.business_id);
 
-    this.rows.update((current) =>
-      current.map((order) => {
-        if (order.order_id !== orderId) return order;
-        return {
-          ...order,
-          status: nextStatus,
-          updated_at: now,
-          paid_at: customerPaymentStatus === "collected" ? now : order.paid_at || null,
-          customer_payment_status: customerPaymentStatus,
-          settlement_status: settlementStatus,
-          collection_status: customerPaymentStatus === "collected" ? "paid" : balanceDue > 0 ? "pending" : order.collection_status || "none",
-          collection_reminder_at: customerPaymentStatus === "collected" ? null : order.collection_reminder_at || null,
-          collection_note: note || (customerPaymentStatus === "collected" ? "Cobro liquidado." : order.collection_note || null),
-          totals: persistedTotals as unknown as OrderTotals,
-          timeline: [
-            ...order.timeline,
-            { id: `t-${Date.now()}`, label: `Cobro registrado: $${paymentReceived}`, created_at: now },
-          ],
-        };
-      }),
-    );
+    await runTransaction(FIRESTORE, async (tx) => {
+      const orderRef = doc(this.colRef, orderId);
+      const orderSnap = await tx.get(orderRef);
+      if (!orderSnap.exists()) throw new Error("El pedido ya no existe.");
+      const liveOrder = this.normalize(orderSnap.id, orderSnap.data());
+      const businessId = normalizeBusinessId(liveOrder.business_id);
+      savedBusinessId = businessId;
+      const accountId = options.accountId || (businessId === "bm" ? "acc_caja_general" : `acc_${businessId}_general`);
+      const accountRef = doc(FIRESTORE, "finance_accounts", accountId);
+      const periodId = monthIdFromDateInput(now);
+      const periodRef = doc(FIRESTORE, "finance_periods", financePeriodDocumentId(businessId, periodId));
+      const [accountSnap, periodSnap] = await Promise.all([tx.get(accountRef), tx.get(periodRef)]);
+      if (periodSnap.exists() && periodSnap.data()["status"] === "closed") {
+        throw new Error(`El periodo ${periodId} está cerrado. Reábrelo antes de registrar el cobro.`);
+      }
+      if (!accountSnap.exists()) throw new Error("No existe la cuenta General para registrar el cobro.");
+      if (normalizeBusinessId(accountSnap.data()["business_id"]) !== businessId) {
+        throw new Error("La cuenta de cobro pertenece a otro negocio.");
+      }
 
-    await updateDoc(doc(this.colRef, orderId), {
-      status: nextStatus,
-      updated_at: serverTimestamp(),
-      totals: persistedTotals,
-      paid_at: customerPaymentStatus === "collected" ? serverTimestamp() : currentOrder?.paid_at || null,
-      customer_payment_status: customerPaymentStatus,
-      settlement_status: settlementStatus,
-      collection_status: customerPaymentStatus === "collected" ? "paid" : balanceDue > 0 ? "pending" : currentOrder?.collection_status || "none",
-      collection_reminder_at: customerPaymentStatus === "collected" ? null : currentOrder?.collection_reminder_at || null,
-      collection_note: note || (customerPaymentStatus === "collected" ? "Cobro liquidado." : currentOrder?.collection_note || null),
-      timeline: this.getById(orderId)?.timeline || [],
+      const previousPaid = Math.max(0, Number(liveOrder.totals?.paid_amount || 0));
+      const safePaid = Number((previousPaid + paymentReceived).toFixed(2));
+      const discountAmount = options.discountAmount == null
+        ? Number(liveOrder.totals?.discount_amount || 0)
+        : Math.max(0, Number(options.discountAmount || 0));
+      const persistedTotals = toPersistedOrderTotals({
+        ...liveOrder,
+        totals: { ...liveOrder.totals, discount_amount: discountAmount, paid_amount: safePaid },
+      });
+      const balanceDue = Math.max(0, Number(persistedTotals["balance_due"] || 0));
+      const customerPaymentStatus: OrderCustomerPaymentStatus = safePaid <= 0 ? "pending" : balanceDue <= 0 ? "collected" : "partial";
+      const nextStatus: OrderStatus = safePaid <= 0 ? "pago_pendiente" : balanceDue <= 0 ? "pagado" : "pagado_parcial";
+      const settlementStatus: OrderSettlementStatus = paymentReceived > 0 ? "pending" : liveOrder.settlement_status || "not_applicable";
+      const timeline = [
+        ...(liveOrder.timeline || []),
+        { id: `t-${eventId}`, label: `Cobro registrado: $${paymentReceived}`, created_at: now },
+      ];
+      tx.update(orderRef, {
+        status: nextStatus,
+        updated_at: serverTimestamp(),
+        totals: persistedTotals,
+        paid_at: customerPaymentStatus === "collected" ? serverTimestamp() : liveOrder.paid_at || null,
+        customer_payment_status: customerPaymentStatus,
+        settlement_status: settlementStatus,
+        collection_status: customerPaymentStatus === "collected" ? "paid" : "pending",
+        collection_reminder_at: customerPaymentStatus === "collected" ? null : liveOrder.collection_reminder_at || null,
+        collection_note: note || (customerPaymentStatus === "collected" ? "Cobro liquidado." : liveOrder.collection_note || null),
+        timeline,
+      });
+      tx.set(eventRef, {
+        event_id: eventId,
+        order_id: orderId,
+        business_id: businessId,
+        account_id: accountId,
+        amount: paymentReceived,
+        method,
+        status_after: customerPaymentStatus,
+        settlement_status_after: settlementStatus,
+        source_location: sourceLocation,
+        verification_status: verificationStatus,
+        collected_by: actor,
+        reported_by: this.currentActor(options.reportedByName || collectedByName || undefined),
+        verified_by: verificationStatus === "reported" ? null : this.currentActor(),
+        verified_at: verificationStatus === "reported" ? null : serverTimestamp(),
+        cash_occurred_at: verificationStatus === "reported" ? null : now.slice(0, 10),
+        note: note || null,
+        created_at: serverTimestamp(),
+      });
+      if (verificationStatus === "confirmed") {
+        const ledgerId = `ledger_collection_${eventId}`;
+        const ledger = ledgerEntryPayload({
+          entry_id: ledgerId,
+          business_id: businessId,
+          account_id: accountId,
+          kind: "collection",
+          cash_effect: paymentReceived,
+          occurred_at: now.slice(0, 10),
+          source: "order_collection",
+          source_id: eventId,
+          order_id: orderId,
+          return_id: null,
+          reverses_entry_id: null,
+          data_quality: "native",
+          notes: note || null,
+          created_by: FIREBASE_AUTH.currentUser?.uid || null,
+        });
+        tx.set(doc(FIRESTORE, "finance_ledger_entries", ledgerId), { ...ledger, created_at: serverTimestamp() });
+        tx.update(accountRef, {
+          balance: Number((Number(accountSnap.data()["balance"] || 0) + paymentReceived).toFixed(2)),
+          updated_at: serverTimestamp(),
+        });
+      }
+      savedBalanceDue = balanceDue;
+      savedOrder = {
+        ...liveOrder,
+        status: nextStatus,
+        updated_at: now,
+        paid_at: customerPaymentStatus === "collected" ? now : liveOrder.paid_at || null,
+        customer_payment_status: customerPaymentStatus,
+        settlement_status: settlementStatus,
+        collection_status: customerPaymentStatus === "collected" ? "paid" : "pending",
+        collection_reminder_at: customerPaymentStatus === "collected" ? null : liveOrder.collection_reminder_at || null,
+        collection_note: note || (customerPaymentStatus === "collected" ? "Cobro liquidado." : liveOrder.collection_note || null),
+        totals: persistedTotals as unknown as OrderTotals,
+        timeline,
+      };
     });
 
-    await setDoc(doc(FIRESTORE, "order_collection_events", eventId), {
-      event_id: eventId,
-      order_id: orderId,
-      business_id: currentOrder?.business_id || "bm",
-      amount: paymentReceived,
-      method,
-      status_after: customerPaymentStatus,
-      settlement_status_after: settlementStatus,
-      source_location: options.sourceLocation || "gdl",
-      verification_status: options.verificationStatus || "confirmed",
-      collected_by: actor,
-      reported_by: this.currentActor(options.reportedByName || collectedByName || undefined),
-      verified_by: options.verificationStatus === "reported" ? null : this.currentActor(),
-      verified_at: options.verificationStatus === "reported" ? null : serverTimestamp(),
-      note: note || null,
-      created_at: serverTimestamp(),
-    });
+    if (savedOrder) {
+      const updatedOrder: Order = savedOrder;
+      this.rows.update((current) => current.map((order) => order.order_id === orderId ? updatedOrder : order));
+    }
     await this.logEvent(orderId, "CUSTOMER_COLLECTION_REGISTERED", `Cobro registrado: $${paymentReceived}`, {
       amount: paymentReceived,
       method,
-      balance_due: balanceDue,
-      business_id: currentOrder?.business_id || "bm",
+      balance_due: savedBalanceDue,
+      business_id: savedBusinessId,
     });
     return eventId;
   }
@@ -861,12 +988,61 @@ export class OrdersService {
       .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
   }
 
+  async listCollectionEventsForAvailableBusinesses(): Promise<OrderCollectionEvent[]> {
+    const businessIds = this.businessScope.availableBusinessIds();
+    if (businessIds.length === 0) return [];
+    const snap = await getDocs(
+      query(collection(FIRESTORE, "order_collection_events"), where("business_id", "in", businessIds)),
+    );
+    return snap.docs
+      .map((entry) => this.normalizeCollectionEvent(entry.id, entry.data() as Record<string, any>))
+      .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
+  }
+
   async confirmReportedCollection(event: OrderCollectionEvent, note?: string | null): Promise<void> {
-    await updateDoc(doc(FIRESTORE, "order_collection_events", event.event_id), {
-      verification_status: "confirmed",
-      verified_by: this.currentActor(),
-      verified_at: serverTimestamp(),
-      ...(note ? { verification_note: note } : {}),
+    const occurredAt = new Date().toISOString().slice(0, 10);
+    await runTransaction(FIRESTORE, async (tx) => {
+      const eventRef = doc(FIRESTORE, "order_collection_events", event.event_id);
+      const eventSnap = await tx.get(eventRef);
+      if (!eventSnap.exists()) throw new Error("El cobro reportado ya no existe.");
+      if (eventSnap.data()["verification_status"] === "confirmed") return;
+      const businessId = normalizeBusinessId(eventSnap.data()["business_id"]);
+      const accountId = String(eventSnap.data()["account_id"] || (businessId === "bm" ? "acc_caja_general" : `acc_${businessId}_general`));
+      const accountRef = doc(FIRESTORE, "finance_accounts", accountId);
+      const ledgerId = `ledger_collection_${event.event_id}`;
+      const [accountSnap, ledgerSnap, periodSnap] = await Promise.all([
+        tx.get(accountRef),
+        tx.get(doc(FIRESTORE, "finance_ledger_entries", ledgerId)),
+        tx.get(doc(FIRESTORE, "finance_periods", financePeriodDocumentId(businessId, monthIdFromDateInput(occurredAt)))),
+      ]);
+      if (periodSnap.exists() && periodSnap.data()["status"] === "closed") {
+        throw new Error(`El periodo ${monthIdFromDateInput(occurredAt)} está cerrado.`);
+      }
+      if (!accountSnap.exists()) throw new Error("No existe la cuenta General para recibir el cobro.");
+      if (normalizeBusinessId(accountSnap.data()["business_id"]) !== businessId) throw new Error("La cuenta pertenece a otro negocio.");
+      const amount = Math.max(0, Number(eventSnap.data()["amount"] || 0));
+      tx.update(eventRef, {
+        account_id: accountId,
+        verification_status: "confirmed",
+        verified_by: this.currentActor(),
+        verified_at: serverTimestamp(),
+        cash_occurred_at: occurredAt,
+        ...(note ? { verification_note: note } : {}),
+      });
+      if (!ledgerSnap.exists() && amount > 0) {
+        const ledger = ledgerEntryPayload({
+          entry_id: ledgerId, business_id: businessId, account_id: accountId, kind: "collection",
+          cash_effect: amount, occurred_at: occurredAt, source: "order_collection", source_id: event.event_id,
+          order_id: String(eventSnap.data()["order_id"] || event.order_id), return_id: null,
+          reverses_entry_id: null, data_quality: "native", notes: note || null,
+          created_by: FIREBASE_AUTH.currentUser?.uid || null,
+        });
+        tx.set(doc(FIRESTORE, "finance_ledger_entries", ledgerId), { ...ledger, created_at: serverTimestamp() });
+        tx.update(accountRef, {
+          balance: Number((Number(accountSnap.data()["balance"] || 0) + amount).toFixed(2)),
+          updated_at: serverTimestamp(),
+        });
+      }
     });
     await this.markSettlement(event.order_id, "received", note || "Dinero recibido de Durango");
   }
@@ -1049,86 +1225,17 @@ export class OrdersService {
   }
 
   /** Cierra el pedido registrando el pago total o parcial. */
-  async closeWithPayment(orderId: string, paidAmount: number, totalAmount: number, discountAmount = 0): Promise<void> {
+  async closeWithPayment(orderId: string, paidAmount: number, _totalAmount: number, discountAmount = 0): Promise<void> {
     const currentOrder = this.getById(orderId);
-    const previousPaid = Math.max(0, Number(currentOrder?.totals?.paid_amount || 0));
-    const paymentReceived = Math.max(0, Number.isFinite(paidAmount) ? paidAmount : 0);
-    const safePaid = Number((previousPaid + paymentReceived).toFixed(2));
-    const safeDiscount = Math.max(0, Number.isFinite(discountAmount) ? discountAmount : 0);
-    const calculated = currentOrder
-      ? calculateOrderFinancials({ ...currentOrder, totals: { ...currentOrder.totals, discount_amount: safeDiscount, paid_amount: safePaid } })
-      : null;
-    const safeTotal = calculated?.netAmount ?? Math.max(0, Number.isFinite(totalAmount) ? totalAmount : 0);
-    const balanceDue = calculated?.balanceDue ?? Math.max(0, safeTotal - safePaid);
-    const persistedTotals = currentOrder
-      ? toPersistedOrderTotals({ ...currentOrder, totals: { ...currentOrder.totals, discount_amount: safeDiscount, paid_amount: safePaid } })
-      : {
-          total_amount: safeTotal,
-          net_amount: safeTotal,
-          paid_amount: safePaid,
-          balance_due: balanceDue,
-          discount_amount: safeDiscount,
-          overpayment_amount: Math.max(0, safePaid - safeTotal),
-        };
-
-    let nextStatus: OrderStatus;
-    if (safePaid <= 0) {
-      nextStatus = "pago_pendiente";
-    } else if (balanceDue <= 0) {
-      nextStatus = "pagado";
-    } else {
-      nextStatus = "pagado_parcial";
-    }
-    const customerPaymentStatus: OrderCustomerPaymentStatus =
-      safePaid <= 0 ? "pending" : balanceDue <= 0 ? "collected" : "partial";
-    const settlementStatus: OrderSettlementStatus =
-      paymentReceived > 0 ? "pending" : currentOrder?.settlement_status || "not_applicable";
-
-    const now = new Date().toISOString();
-    this.rows.update((current) =>
-      current.map((order) => {
-        if (order.order_id !== orderId) return order;
-        return {
-          ...order,
-          status: nextStatus,
-          updated_at: now,
-          paid_at: nextStatus === "pagado" ? now : order.paid_at || null,
-          customer_payment_status: customerPaymentStatus,
-          settlement_status: settlementStatus,
-          collection_status: nextStatus === "pagado" ? "paid" : (balanceDue > 0 ? "pending" : order.collection_status || "none"),
-          collection_reminder_at: nextStatus === "pagado" ? null : order.collection_reminder_at || null,
-          collection_note: nextStatus === "pagado" ? "Cobro liquidado; falta conciliación si el dinero no está en GDL." : order.collection_note || null,
-          totals: persistedTotals as unknown as OrderTotals,
-          timeline: [
-            ...order.timeline,
-            { id: `t-${Date.now()}`, label: `Pago registrado: $${paymentReceived}`, created_at: now },
-          ],
-        };
-      }),
+    if (!currentOrder) throw new Error("Pedido no encontrado.");
+    await this.registerCustomerCollection(
+      orderId,
+      paidAmount,
+      "otro",
+      null,
+      "Cobro registrado desde pedido.",
+      { discountAmount },
     );
-
-    await updateDoc(doc(this.colRef, orderId), {
-      status: nextStatus,
-      updated_at: serverTimestamp(),
-      totals: persistedTotals,
-      paid_at: nextStatus === "pagado" ? serverTimestamp() : currentOrder?.paid_at || null,
-      customer_payment_status: customerPaymentStatus,
-      settlement_status: settlementStatus,
-      collection_status: nextStatus === "pagado" ? "paid" : (balanceDue > 0 ? "pending" : currentOrder?.collection_status || "none"),
-      collection_reminder_at: nextStatus === "pagado" ? null : currentOrder?.collection_reminder_at || null,
-      collection_note: nextStatus === "pagado" ? "Cobro liquidado; falta conciliación si el dinero no está en GDL." : currentOrder?.collection_note || null,
-    });
-    await setDoc(doc(FIRESTORE, "order_collection_events", ulid()), {
-      order_id: orderId,
-      business_id: currentOrder?.business_id || "bm",
-      amount: paymentReceived,
-      method: "otro",
-      status_after: customerPaymentStatus,
-      settlement_status_after: settlementStatus,
-      collected_by: this.currentActor(),
-      note: "Cobro registrado desde pedido.",
-      created_at: serverTimestamp(),
-    });
   }
 
   async markSalesNoteGenerated(orderId: string): Promise<void> {
@@ -1460,6 +1567,31 @@ export class OrdersService {
     return url;
   }
 
+  async setShippingFee(orderId: string, shippingFee: number): Promise<void> {
+    const safeShippingFee = Math.max(0, Number.isFinite(shippingFee) ? shippingFee : 0);
+    const now = new Date().toISOString();
+    let persistedTotals: Record<string, number> | null = null;
+    this.rows.update((current) =>
+      current.map((order) => {
+        if (order.order_id !== orderId) return order;
+        persistedTotals = toPersistedOrderTotals({
+          ...order,
+          totals: { ...order.totals, shipping_fee: safeShippingFee },
+        });
+        return {
+          ...order,
+          updated_at: now,
+          totals: persistedTotals as unknown as OrderTotals,
+        };
+      }),
+    );
+
+    await updateDoc(doc(this.colRef, orderId), {
+      ...(persistedTotals ? { totals: persistedTotals } : { "totals.shipping_fee": safeShippingFee }),
+      updated_at: serverTimestamp(),
+    });
+  }
+
   async uploadOrderItemDraftImage(orderId: string, itemId: string, file: File): Promise<string> {
     const extension = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
     const path = `orders/${orderId}/items/${itemId}/draft-${Date.now()}.${extension}`;
@@ -1548,7 +1680,7 @@ export class OrdersService {
         `/api/admin/orders/${encodeURIComponent(orderId)}/items`,
         buildOrderItemMutationRequest(nextItem),
       ));
-      this.mergeAuthoritativeItems(orderId, result.order);
+      await this.mergeAuthoritativeItems(orderId, result.order);
     } catch (error) {
       if (!this.isIncrementalItemsEndpointUnavailable(error)) throw error;
       await this.persistItemsAuthoritatively(orderId, [...order.items, nextItem]);
@@ -1584,7 +1716,7 @@ export class OrdersService {
     const result = await lastValueFrom(this.adminApi.put<OrderItemsMutationResponse>(`/api/admin/orders/${encodeURIComponent(orderId)}/items`, {
       ...buildOrderItemsUpdateRequest(items),
     }));
-    this.mergeAuthoritativeItems(orderId, result.order);
+    await this.mergeAuthoritativeItems(orderId, result.order);
   }
 
   private async persistItemPatchAuthoritatively(
@@ -1597,7 +1729,7 @@ export class OrdersService {
         `/api/admin/orders/${encodeURIComponent(orderId)}/items/${encodeURIComponent(itemId)}`,
         buildOrderItemPatchRequest(patch),
       ));
-      this.mergeAuthoritativeItems(orderId, result.order);
+      await this.mergeAuthoritativeItems(orderId, result.order);
     } catch (error) {
       if (!this.isIncrementalItemsEndpointUnavailable(error)) throw error;
       const order = this.getById(orderId);
@@ -1607,8 +1739,20 @@ export class OrdersService {
     }
   }
 
-  private mergeAuthoritativeItems(orderId: string, authoritative: OrderItemsMutationResponse["order"]): void {
-    this.rows.update((current) => mergeAuthoritativeOrderItems(current, orderId, authoritative));
+  private async mergeAuthoritativeItems(orderId: string, authoritative: OrderItemsMutationResponse["order"]): Promise<void> {
+    const currentOrder = this.getById(orderId);
+    const shippingFee = Math.max(0, Number(currentOrder?.totals?.shipping_fee || 0));
+    const mergedTotals = shippingFee > 0
+      ? toPersistedOrderTotals({
+          items: authoritative.items,
+          totals: { ...authoritative.totals, shipping_fee: shippingFee },
+        }) as unknown as OrderTotals
+      : authoritative.totals;
+    const merged = { ...authoritative, totals: mergedTotals };
+    this.rows.update((current) => mergeAuthoritativeOrderItems(current, orderId, merged));
+    if (shippingFee > 0) {
+      await updateDoc(doc(this.colRef, orderId), { totals: mergedTotals }).catch(() => undefined);
+    }
   }
 
   private isIncrementalItemsEndpointUnavailable(error: unknown): boolean {
@@ -1709,7 +1853,6 @@ export class OrdersService {
         completed_at: now,
       },
       fulfillment_status: "packed_gdl" as OrderFulfillmentStatus,
-      custody_status: order.custody_status || "gdl" as OrderCustodyStatus,
       delivery_status: order.delivery_status || "pending" as OrderDeliveryStatus,
       current_holder_location: order.current_holder_location || "gdl" as OrderHolderLocation,
       dispatch_request: {
@@ -1729,7 +1872,6 @@ export class OrdersService {
         completed_at: serverTimestamp(),
       },
       fulfillment_status: "packed_gdl",
-      custody_status: order.custody_status || "gdl",
       delivery_status: order.delivery_status || "pending",
       current_holder_location: order.current_holder_location || "gdl",
       updated_at: serverTimestamp(),
@@ -1768,7 +1910,7 @@ export class OrdersService {
       business_id: normalizeBusinessId(data.business_id),
       customer_id: data.customer_id || "",
       route_id: data.route_id ?? null,
-      status: (data.status as OrderStatus) || "borrador",
+      status: normalizeOrderStatus(data.status),
       planned_packages: data.planned_packages ?? null,
       open_incidents_count: data.open_incidents_count ?? 0,
       has_high_incident: data.has_high_incident ?? false,
@@ -1777,7 +1919,7 @@ export class OrdersService {
       created_at: toIso(data.created_at),
       updated_at: toIso(data.updated_at),
       items: Array.isArray(data.items) ? data.items : [],
-      packages: Array.isArray(data.packages) ? data.packages : [],
+      packages: Array.isArray(data.packages) ? data.packages.map(normalizePackage) : [],
       timeline: Array.isArray(data.timeline) ? data.timeline : [],
       notes: data.notes || "",
       packing: {
@@ -1795,7 +1937,6 @@ export class OrdersService {
       route_stop_id: data.route_stop_id ?? null,
       shipment_id: data.shipment_id ?? null,
       fulfillment_status: this.normalizeFulfillmentStatus(data.fulfillment_status, data),
-      custody_status: this.normalizeCustodyStatus(data.custody_status, data),
       delivery_status: this.normalizeDeliveryStatus(data.delivery_status, data),
       customer_payment_status: this.normalizeCustomerPaymentStatus(data.customer_payment_status, data),
       settlement_status: this.normalizeSettlementStatus(data.settlement_status, data),
@@ -1815,6 +1956,7 @@ export class OrdersService {
         paid_amount: Number(data.totals?.paid_amount ?? 0),
         balance_due: Number(data.totals?.balance_due ?? 0),
         discount_amount: Number(data.totals?.discount_amount ?? 0),
+        shipping_fee: Number(data.totals?.shipping_fee ?? 0),
         gross_amount: Number(data.totals?.gross_amount ?? data.totals?.total_amount ?? 0),
         returns_amount: Number(data.totals?.returns_amount ?? 0),
         net_amount: Number(data.totals?.net_amount ?? data.totals?.total_amount ?? 0),
@@ -1841,14 +1983,6 @@ export class OrdersService {
     return "pending";
   }
 
-  private normalizeCustodyStatus(value: unknown, data: any): OrderCustodyStatus {
-    if (value === "gdl" || value === "shipment" || value === "durango" || value === "delivery_staff" || value === "customer") return value;
-    const status = String(data?.status || "");
-    if (data?.delivered_at || ["delivered", "entregado", "pagado", "closed"].includes(status)) return "customer";
-    if (data?.shipment_id) return "shipment";
-    if (data?.route_run_id || ["assigned_to_run", "in_transit", "en_ruta"].includes(status)) return "delivery_staff";
-    return "gdl";
-  }
 
   private normalizeDeliveryStatus(value: unknown, data: any): OrderDeliveryStatus {
     if (value === "pending" || value === "delivered" || value === "not_delivered" || value === "incident") return value;
@@ -1877,13 +2011,23 @@ export class OrdersService {
     return paid > 0 ? "pending" : "not_applicable";
   }
 
+  /**
+   * Quien tiene fisicamente el pedido. Unico campo de custodia: antes convivia
+   * con `custody_status`, que guardaba lo mismo salvo que decia `shipment`
+   * donde este dice `in_transit`. Se sigue leyendo el campo viejo para
+   * documentos que la migracion todavia no toca.
+   */
   private normalizeHolderLocation(value: unknown, data: any): OrderHolderLocation {
     if (value === "gdl" || value === "in_transit" || value === "durango" || value === "delivery_staff" || value === "customer" || value === "other") return value;
-    const custody = this.normalizeCustodyStatus(data?.custody_status, data);
-    if (custody === "shipment") return "in_transit";
-    if (custody === "delivery_staff") return "delivery_staff";
-    if (custody === "durango") return "durango";
-    if (custody === "customer") return "customer";
+
+    const legacy = data?.custody_status;
+    if (legacy === "shipment") return "in_transit";
+    if (legacy === "gdl" || legacy === "durango" || legacy === "delivery_staff" || legacy === "customer") return legacy;
+
+    const status = String(data?.status || "");
+    if (data?.delivered_at || ["delivered", "entregado", "pagado", "closed"].includes(status)) return "customer";
+    if (data?.shipment_id) return "in_transit";
+    if (data?.route_run_id || ["assigned_to_run", "in_transit", "en_ruta"].includes(status)) return "delivery_staff";
     return "gdl";
   }
 
@@ -1912,6 +2056,7 @@ export class OrdersService {
       event_id: String(data["event_id"] || id),
       order_id: String(data["order_id"] || ""),
       business_id: normalizeBusinessId(data["business_id"]),
+      account_id: data["account_id"] ? String(data["account_id"]) : null,
       amount: Number(data["amount"] || 0),
       method: method === "transferencia" || method === "tarjeta" || method === "otro" ? method : "efectivo",
       status_after: statusAfter === "partial" || statusAfter === "collected" ? statusAfter : "pending",
@@ -1925,6 +2070,7 @@ export class OrdersService {
       reported_by: data["reported_by"] || null,
       verified_by: data["verified_by"] || null,
       verified_at: toIso(data["verified_at"]),
+      cash_occurred_at: toIso(data["cash_occurred_at"]),
       note: data["note"] || null,
       rejected_reason: data["rejected_reason"] || null,
       created_at: toIso(data["created_at"]),
@@ -1942,6 +2088,7 @@ export interface OrderCollectionEvent {
   event_id: string;
   order_id: string;
   business_id: BusinessId;
+  account_id?: string | null;
   amount: number;
   method: CollectionMethod;
   status_after: OrderCustomerPaymentStatus;
@@ -1952,6 +2099,7 @@ export interface OrderCollectionEvent {
   reported_by?: { uid: string; name: string } | null;
   verified_by?: { uid: string; name: string } | null;
   verified_at?: string | null;
+  cash_occurred_at?: string | null;
   note?: string | null;
   rejected_reason?: string | null;
   created_at?: string | null;
@@ -1961,4 +2109,6 @@ export type RegisterCollectionOptions = {
   sourceLocation?: "gdl" | "durango" | "other";
   verificationStatus?: OrderCollectionVerificationStatus;
   reportedByName?: string | null;
+  accountId?: string | null;
+  discountAmount?: number | null;
 };

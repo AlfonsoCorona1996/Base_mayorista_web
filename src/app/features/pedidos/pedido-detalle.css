@@ -908,38 +908,101 @@
   padding-left: 0;
 }
 
-.discount-card-btn {
-  display: inline-flex;
+.products-more-wrap {
+  position: relative;
+}
+
+.products-more-btn {
+  width: var(--ui-touch-target-min, 44px);
+  min-width: var(--ui-touch-target-min, 44px);
+  height: var(--ui-touch-target-min, 44px);
+}
+
+.products-more-backdrop {
+  display: none;
+}
+
+.products-more-menu {
+  position: absolute;
+  z-index: var(--ui-z-overlay, 500);
+  top: calc(100% + var(--ui-space-8, 8px));
+  right: 0;
+  width: min(340px, calc(100vw - 24px));
+  padding: var(--ui-space-8, 8px);
+  border: 1px solid #dce7f5;
+  border-radius: var(--ui-radius-lg, 16px);
+  background: #ffffff;
+  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.18);
+}
+
+.products-more-title {
+  margin: 0;
+  padding: var(--ui-space-8, 8px) var(--ui-space-12, 12px);
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.products-more-menu > button:not(.products-more-backdrop) {
+  display: flex;
   align-items: center;
-  gap: 0.4rem;
-  border: 1px solid #fecdd3;
-  border-radius: 999px;
-  background: #fff1f2;
-  color: #be123c;
-  padding: 0.5rem 0.8rem;
-  font-size: 0.78rem;
+  gap: var(--ui-space-12, 12px);
+  width: 100%;
+  min-height: var(--ui-touch-target-min, 44px);
+  padding: var(--ui-space-12, 12px);
+  border: 0;
+  border-radius: var(--ui-radius-md, 12px);
+  background: transparent;
+  color: #1e293b;
+  font: inherit;
+  font-size: 0.88rem;
   font-weight: 700;
+  text-align: left;
   cursor: pointer;
 }
 
-.discount-card-btn:hover:not(:disabled) {
-  background: #ffe4e6;
-  border-color: #fda4af;
+.products-more-menu > button:not(.products-more-backdrop):hover,
+.products-more-menu > button:not(.products-more-backdrop):focus-visible {
+  background: #f1f5f9;
 }
 
-.discount-card-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+.products-more-menu .material-symbols-rounded {
+  flex: 0 0 auto;
+  color: #2563eb;
+  font-size: 21px;
 }
 
-.discount-card-btn.has-discount {
-  border-color: #bbf7d0;
-  background: #f0fdf4;
-  color: #166534;
-}
+@media (max-width: 640px) {
+  .products-more-backdrop {
+    position: fixed;
+    z-index: var(--ui-z-backdrop, 400);
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    background: rgba(15, 23, 42, 0.38);
+  }
 
-.discount-card-btn__icon {
-  font-size: 16px;
+  .products-more-menu {
+    position: fixed;
+    z-index: var(--ui-z-modal, 700);
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    padding: var(--ui-space-12, 12px) var(--ui-space-16, 16px) calc(var(--ui-space-16, 16px) + env(safe-area-inset-bottom));
+    border-width: 1px 0 0;
+    border-radius: var(--ui-radius-xl, 24px) var(--ui-radius-xl, 24px) 0 0;
+  }
+
+  .products-more-menu > button:not(.products-more-backdrop) {
+    min-height: 52px;
+  }
 }
 
 .items,
@@ -8368,8 +8431,43 @@ code {
   flex-wrap: wrap;
 }
 
-.return-sheet {
+.sheet.return-sheet {
+  width: min(620px, calc(100vw - 24px));
   max-width: 620px;
+  /* Usa la estructura header/body de .sheet.full sin llevar esa clase, asi que
+     necesita su propio tope de altura o crece fuera de la pantalla. */
+  max-height: min(92vh, 880px);
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+}
+
+.return-sheet .sheet-handle {
+  display: none;
+}
+
+.return-sheet .sheet-header {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+}
+
+.return-sheet .sheet-title-wrap {
+  min-width: 0;
+}
+
+.return-sheet .sheet-header h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.return-sheet .sheet-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .return-form {
@@ -8378,12 +8476,65 @@ code {
 }
 
 .return-toggle {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2px;
   width: 100%;
-  flex-wrap: wrap;
+  padding: 3px;
+  border: none;
+  border-radius: 12px;
+  background: #f1f5f9;
+}
+
+.return-payment-box .return-toggle {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  background: #ffedd5;
 }
 
 .return-toggle label {
-  flex: 1 1 130px;
+  position: relative;
+  display: inline-flex;
+  flex: initial;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: auto;
+  padding: 9px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  color: #6b7280;
+  font-size: 0.78rem;
+  font-weight: 620;
+  text-align: center;
+  cursor: pointer;
+}
+
+.return-toggle label input[type="radio"] {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.return-toggle label .material-symbols-rounded {
+  font-size: 15px;
+  color: inherit;
+}
+
+.return-toggle label:hover {
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.return-toggle label:has(input:checked) {
+  background: #ffffff;
+  color: #1e293b;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.1);
+}
+
+.return-toggle label:focus-within {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
 }
 
 .product-card.status--returned {
@@ -8424,6 +8575,32 @@ code {
   border: 1px solid #fdba74;
   border-radius: 14px;
   background: #fff7ed;
+}
+
+.shipping-fee-sheet-icon,
+.payment-summary-value--shipping {
+  color: #2563eb;
+}
+
+.shipping-fee-sheet-note {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: #1e40af;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.payment-summary-item--total {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid #dce7f5;
+}
+
+.summary-chip--shipping .material-symbols-rounded {
+  color: #2563eb;
 }
 
 .return-account-message {
@@ -8620,4 +8797,28 @@ code {
 
 .price-discount-badge .material-symbols-rounded {
   font-size: 13px;
+}
+
+.return-account-cta {
+  grid-column: 2;
+  justify-self: start;
+  margin-top: 6px;
+}
+
+.return-account-hint {
+  grid-column: 2;
+  color: #7f1d1d;
+  font-size: 0.75rem;
+}
+
+/* Con formularios largos los botones se iban fuera de la vista: se anclan al
+   pie del cuerpo scrolleable, sangrando el padding para tocar los bordes. */
+.return-sheet .sheet-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  margin: 6px -1rem -1rem;
+  padding: 12px 1rem;
+  border-top: 1px solid var(--border);
+  background: #ffffff;
 }

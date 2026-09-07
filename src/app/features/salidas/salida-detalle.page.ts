@@ -197,7 +197,7 @@ export default class SalidaDetallePage {
     try {
       await this.routeRuns.markStop(run.runId, stopId, status);
       if (stop && (status === "delivered" || status === "partial")) {
-        const orderStatus = status === "delivered" ? "delivered" : "delivered_partial";
+        const orderStatus = status === "delivered" ? "entregado" : "entregado_parcial";
         for (const orderId of stop.order_ids.length ? stop.order_ids : [stop.order_id]) {
           await this.orders.updateStatus(orderId, orderStatus);
         }

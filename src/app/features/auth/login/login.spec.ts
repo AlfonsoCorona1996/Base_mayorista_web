@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from "@angular/core/testing";
 import { ActivatedRoute, Router } from "@angular/router";
+import { AccessService } from "../../../core/access.service";
 import { AuthService } from "../../../core/auth.service";
 import LoginPage from "./login";
 
@@ -13,6 +14,13 @@ describe("LoginPage", () => {
       .createSpy("getAccessStatus")
       .and.resolveTo({ uid: "uid-1", roleId: "admin", isActive: true, invitePending: false, mustChangePassword: false }),
     logout: jasmine.createSpy("logout").and.resolveTo(undefined),
+  };
+
+  // LoginPage solo usa estas dos del AccessService. Inyectarlo de verdad
+  // arrastraba AuthzService -> UsersService -> HttpClient, que el TestBed no tiene.
+  const accessMock = {
+    refreshProfile: jasmine.createSpy("refreshProfile").and.resolveTo({ uid: "uid-1", roleId: "admin" }),
+    firstAllowedRoute: jasmine.createSpy("firstAllowedRoute").and.returnValue("/main"),
   };
 
   const routerMock = {
@@ -29,11 +37,14 @@ describe("LoginPage", () => {
     authMock.getAccessStatus.calls.reset();
     authMock.logout.calls.reset();
     routerMock.navigateByUrl.calls.reset();
+    accessMock.refreshProfile.calls.reset();
+    accessMock.firstAllowedRoute.calls.reset();
 
     await TestBed.configureTestingModule({
       imports: [LoginPage],
       providers: [
         { provide: AuthService, useValue: authMock },
+        { provide: AccessService, useValue: accessMock },
         { provide: Router, useValue: routerMock },
         { provide: ActivatedRoute, useValue: routeMock },
       ],

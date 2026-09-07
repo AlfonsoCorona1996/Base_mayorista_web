@@ -985,7 +985,7 @@ export default class RutaDetallePage {
   }
 
   private isDelivered(order: Order): boolean {
-    return Boolean(order.delivered_at) || ["delivered", "delivered_partial", "entregado", "pago_pendiente", "pagado_parcial", "pagado", "closed"].includes(String(order.status || ""));
+    return Boolean(order.delivered_at) || ["entregado", "entregado_parcial", "pago_pendiente", "pagado_parcial", "pagado", "closed"].includes(String(order.status || ""));
   }
 
   private toggleId(current: string[], id: string): string[] {

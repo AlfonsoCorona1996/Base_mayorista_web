@@ -503,8 +503,8 @@ export default class SalidasPage {
   private resolvePackingProcess(row: DispatchCard): { label: string; tone: "confirmar" | "espera" | "empaque" } | null {
     const status = (row.status || "").toLowerCase();
     const porConfirmar = ["borrador", "confirmando_proveedor", "reservado_inventario", "solicitado_proveedor"];
-    const enTransito = ["supplier_processing", "inbound_in_transit", "en_transito"];
-    const enEmpaque = ["recibido_qa", "packing", "empaque"];
+    const enTransito = ["supplier_processing", "en_transito"];
+    const enEmpaque = ["recibido_qa", "empaque"];
 
     if (porConfirmar.includes(status)) {
       return { label: "Levantando pedido", tone: "confirmar" };

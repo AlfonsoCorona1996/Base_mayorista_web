@@ -254,7 +254,6 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
         variant_name: "24",
         color_name: "Rosa",
         size_label: "24",
-        quantity_on_hand: available,
         on_hand_qty: available + reserved,
         reserved_qty: reserved,
         available_qty: available,
@@ -707,6 +706,37 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
       expect(component.catalogSearchResultMeta(result)).toBe("Coincidió por código de internet: 888900");
     }));
 
+    it("searches Catalogo products from the exceptional BM flow", fakeAsync(() => {
+      component.crossBusinessCatalogMode.set(true);
+      component.newItemSource.set("catalogo");
+
+      component.onNewItemSearchChange("sandalia");
+      tick(180);
+      flushMicrotasks();
+
+      expect(searchCatalogProducts).toHaveBeenCalledWith("sandalia", jasmine.objectContaining({
+        businessId: "catalogo",
+        sellableOnly: true,
+      }));
+    }));
+
+    it("marks exceptional Catalogo items with their source business", () => {
+      component.crossBusinessCatalogMode.set(true);
+      component.newItemSource.set("catalogo");
+      component.newItemTitle.set("Producto de Catálogo");
+      component.newItemProductId.set("catalog-product-1");
+      component.newItemPriceClienta.set(180);
+      component.newItemPriceCost.set(100);
+
+      const item = (component as unknown as {
+        buildOrderItemFromForm: (id: string, source: "catalogo", state: "confirmando_proveedor") => OrderItem;
+      }).buildOrderItemFromForm("item-cross", "catalogo", "confirmando_proveedor");
+
+      expect(item.business_id).toBe("bm");
+      expect(item.source_business_id).toBe("catalogo");
+      expect(item.product_ref_type).toBe("catalog_product");
+    });
+
     it("keeps provisional edits separate until they are explicitly confirmed", () => {
       component.newItemSource.set("catalogo");
       component.newItemVariant.set("24");
@@ -769,6 +799,14 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
       expect(component.newItemDiscount()).toBe(25);
       expect(component.catalogPriceTier()).toBe("manual");
     });
+
+    it("adds shipping after the global discount in the preview", () => {
+      spyOn(component, "orderSubtotalClienta").and.returnValue(500);
+      spyOn(component, "orderDiscountAmount").and.returnValue(50);
+      component.shippingFeeDraft.set("125");
+
+      expect(component.shippingFeeTotalPreview(null)).toBe(575);
+    });
   });
 
   describe("recepción masiva de proveedor", () => {
@@ -779,7 +817,7 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
         quantity: 1,
         confirmed_qty: 1,
         source: "catalogo",
-        state: "inbound_in_transit",
+        state: "en_transito",
         confirmation_state: "confirmed",
         supplier_id: "supplier-1",
         product_id: `product-${index + 1}`,
@@ -789,7 +827,7 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
         business_id: "bm",
         customer_id: "customer-1",
         route_id: null,
-        status: "inbound_in_transit",
+        status: "en_transito",
         created_at: "2026-08-13T00:00:00.000Z",
         updated_at: "2026-08-13T00:00:00.000Z",
         items,
@@ -871,7 +909,7 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
 
       const updatedItems = updateOrderItems.calls.mostRecent().args[1] as OrderItem[];
       expect(updatedItems.find((item) => item.item_id === "item-1")?.state).toBe("recibido_qa");
-      expect(updatedItems.find((item) => item.item_id === "item-2")?.state).toBe("inbound_in_transit");
+      expect(updatedItems.find((item) => item.item_id === "item-2")?.state).toBe("en_transito");
       expect(updatedItems.find((item) => item.item_id === "item-3")?.state).toBe("recibido_qa");
       expect(component.actionError()).toContain("1 de 3 producto(s) no se pudieron recibir");
       expect(component.actionError()).toContain("No se pudo apartar inventario");
@@ -888,7 +926,7 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
         business_id: "bm",
         customer_id: "customer-1",
         route_id: null,
-        status: "inbound_in_transit",
+        status: "en_transito",
         created_at: "2026-08-13T00:00:00.000Z",
         updated_at: "2026-08-13T00:00:00.000Z",
         items: [
@@ -908,7 +946,7 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
             quantity: 1,
             confirmed_qty: 1,
             source: "catalogo",
-            state: "inbound_in_transit",
+            state: "en_transito",
             confirmation_state: "confirmed",
             supplier_id: "supplier-1",
             product_id: "product-1",
@@ -951,7 +989,6 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
           sequence: 1,
           total_packages: 1,
           state: "closed",
-          status: "closed",
           amount_due: null,
           item_ids: ["inventory-ready"],
           items: [{ orderItemId: "inventory-ready", name: "Producto de inventario", qty: 1 }],

@@ -12,7 +12,7 @@ import { RoutesService } from "../../core/routes.service";
 import { InventoryItem, InventoryService } from "../../core/inventory.service";
 import { NormalizedListingsService, NormalizedListingDoc } from "../../core/normalized-listings.service";
 import { ActionChecklist, PrimaryAction, getActionChecklist, getPrimaryAction } from "./order-primary-action.mapper";
-import { SalesNoteRenderRow, SalesNoteRenderService } from "./sales-note-render.service";
+import { resolveSalesNoteDiscountPct, SalesNoteRenderRow, SalesNoteRenderService } from "./sales-note-render.service";
 import { BusinessScopeService } from "../../core/business-scope.service";
 import { BusinessId, normalizeBusinessId } from "../../core/rbac.constants";
 import { STORAGE } from "../../core/firebase.providers";
@@ -1179,13 +1179,13 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private canMarkAsReceivedFromBulk(status: string): boolean {
-    return ["borrador", "en_transito", "inbound_in_transit"].includes(status);
+    return ["borrador", "en_transito"].includes(status);
   }
 
   private canMarkDeliveredFromBulk(order: Order): boolean {
     if (!this.authz.canCap("cap.delivery.mark_delivered")) return false;
-    if (order.delivery_status === "delivered" || order.custody_status === "customer") return false;
-    return ["ready_for_route", "assigned_to_run", "in_transit", "en_ruta"].includes(order.status);
+    if (order.delivery_status === "delivered" || order.current_holder_location === "customer") return false;
+    return ["ready_for_route", "assigned_to_run", "en_ruta"].includes(order.status);
   }
 
   private canMarkAsReadyForRouteFromBulk(order: Order): boolean {
@@ -1193,7 +1193,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private isBulkDispatchStage(status: string): boolean {
-    return ["inbound_in_transit", "en_transito", "recibido_qa", "packing", "empaque"].includes(status);
+    return ["en_transito", "recibido_qa", "empaque"].includes(status);
   }
 
   private canFinishPackingFromBulk(order: Order): boolean {
@@ -1317,7 +1317,6 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
       borrador: "Capturando pedido",
       confirmando_proveedor: "Confirmando",
       supplier_processing: "En transito",
-      inbound_in_transit: "En transito",
       en_transito: "En transito",
       en_empaque: "Empaque",
       recibido_qa: "Empaque",
@@ -1382,11 +1381,11 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     const pills: TableStatusPill[] = [];
     const activeShipment = this.activeShipmentForOrder(order.order_id);
     const deliveryStatus = order.delivery_status || null;
-    const custodyStatus = order.custody_status || null;
+    const holderLocation = order.current_holder_location || null;
     const paymentStatus = order.customer_payment_status || null;
     const balanceDue = calculateOrderFinancials(order).balanceDue;
 
-    if (deliveryStatus === "delivered" || ["delivered", "entregado"].includes(order.status)) {
+    if (deliveryStatus === "delivered" || ["entregado", "entregado_parcial"].includes(order.status)) {
       pills.push({ label: "Entregado", className: "trow-status--paid" });
     } else if (deliveryStatus === "incident") {
       pills.push({ label: "Incidencia entrega", className: "trow-status--cancel" });
@@ -1394,11 +1393,11 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
       pills.push({ label: "No entregado", className: "trow-status--partial" });
     } else if (activeShipment) {
       pills.push(this.shipmentStatusPill(activeShipment));
-    } else if (custodyStatus === "shipment") {
+    } else if (holderLocation === "in_transit") {
       pills.push({ label: "En transito", className: "trow-status--transit" });
-    } else if (custodyStatus === "durango") {
+    } else if (holderLocation === "durango") {
       pills.push({ label: "En Durango", className: "trow-status--durango" });
-    } else if (custodyStatus === "delivery_staff") {
+    } else if (holderLocation === "delivery_staff") {
       pills.push({ label: "Con entrega", className: "trow-status--route" });
     } else {
       pills.push({
@@ -1830,11 +1829,11 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   private canCreateShipmentForOrder(order: Order): boolean {
     if (this.activeShipmentOrderIds().has(order.order_id)) return false;
     if (["cancelado", "devuelto", "closed"].includes(order.status)) return false;
-    if (order.delivery_status === "delivered" || order.custody_status === "customer") return false;
+    if (order.delivery_status === "delivered" || order.current_holder_location === "customer") return false;
     if ((order.packages || []).length > 0) return this.closedPackagesCount(order) > 0;
     if (order.packing?.status === "done") return true;
     if (["ready_for_route", "assigned_to_run"].includes(order.status)) return true;
-    if (["packing", "empaque"].includes(order.status)) return this.closedPackagesCount(order) > 0;
+    if (order.status === "empaque") return this.closedPackagesCount(order) > 0;
     return false;
   }
 
@@ -2004,7 +2003,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
       case "por_confirmar":
         return ["borrador", "confirmando_proveedor", "reservado_inventario", "solicitado_proveedor"].includes(order.status);
       case "en_transito":
-        return ["supplier_processing", "inbound_in_transit", "en_transito"].includes(order.status);
+        return ["supplier_processing", "en_transito"].includes(order.status);
       case "en_empaque":
         return this.isPackingStage(order);
       case "listos_ruta":
@@ -2089,7 +2088,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private isPackingStage(order: Order): boolean {
-    if (order.status === "recibido_qa" || order.status === "packing") return true;
+    if (order.status === "recibido_qa") return true;
     if (order.status !== "empaque") return false;
     return !this.isReadyForRoute(order);
   }
@@ -2199,7 +2198,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
       "reservado_inventario",
       "solicitado_proveedor",
       "supplier_processing",
-      "inbound_in_transit",
+      
       "en_transito",
       "recibido_qa",
       "empaque",
@@ -2406,18 +2405,14 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
       reservado_inventario: "Reservado",
       solicitado_proveedor: "Solicitado",
       supplier_processing: "En transito",
-      inbound_in_transit: "En transito",
       en_transito: "En transito",
-      packing: "Empacando",
       recibido_qa: "Empaque",
       empaque: "Empaque",
       ready_for_route: "Listo para ruta",
       assigned_to_run: "Asignado a salida",
-      in_transit: "En transito",
       en_ruta: "En ruta",
-      delivered: "Entregado",
-      delivered_partial: "Entrega parcial",
       entregado: "Entregado",
+      entregado_parcial: "Entrega parcial",
       closed: "Cerrado",
       pago_pendiente: "Pago pendiente",
       pagado_parcial: "Pago parcial",
@@ -2435,16 +2430,12 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
       case "reservado_inventario":
       case "confirmando_proveedor":
         return "chip info";
-      case "packing":
       case "empaque":
       case "ready_for_route":
       case "assigned_to_run":
-      case "in_transit":
       case "en_transito":
-      case "inbound_in_transit":
       case "en_ruta":
         return "chip accent";
-      case "delivered":
       case "closed":
       case "entregado":
       case "pagado":
@@ -3078,7 +3069,8 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
 
     const subtotal = rows.reduce((sum, row) => sum + row.lineTotal, 0);
     const discount = Math.min(subtotal, this.orderDiscountAmount(order));
-    const totalAmount = Math.max(0, subtotal - discount);
+    const shippingFee = this.orderShippingFee(order);
+    const totalAmount = Math.max(0, subtotal - discount + shippingFee);
     const balanceDue = this.salesNoteBalanceDue(order, totalAmount);
     return this.salesNoteRender.buildSalesNoteImage({
       orderId: order.order_id,
@@ -3097,16 +3089,14 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
         imageUrl: row.imageUrl || null,
       })),
       discountAmount: discount,
+      shippingFee,
       balanceDue,
       resolveRowImage: async (row) => imageByRowId.get(row.rowId) ?? null,
     });
   }
 
   private salesNoteDiscountPct(rawPct: unknown, finalPrice: number | null, clientaPrice: number): number | null {
-    const explicit = this.toSalesNotePositiveNumber(rawPct);
-    if (explicit !== null) return Math.round(explicit);
-    if (finalPrice === null || finalPrice <= clientaPrice || finalPrice <= 0) return null;
-    return Math.max(1, Math.round((1 - clientaPrice / finalPrice) * 100));
+    return resolveSalesNoteDiscountPct(rawPct, finalPrice, clientaPrice);
   }
 
   private toSalesNotePositiveNumber(value: unknown): number | null {
@@ -3169,8 +3159,8 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     const current = new Map(this.catalogById());
     try {
       if (!this.catalogLoaded()) {
-        const page = await this.catalog.listValidated(160);
-        for (const doc of page.docs) current.set(doc.normalized_id, doc as NormalizedListingDoc);
+        const docs = await this.catalog.loadAllValidated("bm");
+        for (const doc of docs) current.set(doc.normalized_id, doc as NormalizedListingDoc);
         this.catalogLoaded.set(true);
       }
 
@@ -3465,6 +3455,12 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
 
   private orderDiscountAmount(order: Order | null): number {
     const value = Number(order?.totals?.discount_amount ?? 0);
+    if (!Number.isFinite(value) || value <= 0) return 0;
+    return Number(value.toFixed(2));
+  }
+
+  private orderShippingFee(order: Order | null): number {
+    const value = Number(order?.totals?.shipping_fee ?? 0);
     if (!Number.isFinite(value) || value <= 0) return 0;
     return Number(value.toFixed(2));
   }

@@ -1,893 +1,732 @@
-
-<section class="finance-page">
-  <header class="page-head glass-card">
-    <div>
-      <p class="eyebrow">Finanzas operativas</p>
-      <h1>Administracion</h1>
-      <p class="muted">
-        Flujo de dinero por etapas, cuentas de dinero, egresos y cortes. Vista general o por ruta.
-      </p>
+<main class="finance-prototype">
+  <header class="page-header">
+    <div class="page-title">
+      <p class="eyebrow">Administración</p>
+      <h1>Centro financiero</h1>
+      <p>Decisiones del negocio, resultados mensuales y distribución entre socios.</p>
     </div>
-    <button type="button" class="btn ghost" [disabled]="loading()" (click)="reload()">
-      {{ loading() ? "Actualizando..." : "Actualizar" }}
-    </button>
+
+    <div class="header-actions">
+      <span class="updated-copy">
+        <span class="material-symbols-rounded" aria-hidden="true">sync</span>
+        {{ lastUpdatedLabel() }}
+      </span>
+      <button type="button" class="button button--secondary" [disabled]="loading()" (click)="reload()">
+        <span class="material-symbols-rounded" aria-hidden="true">refresh</span>
+        Actualizar
+      </button>
+      <button type="button" class="button button--primary" (click)="openMovementDialog()">
+        <span class="material-symbols-rounded" aria-hidden="true">add</span>
+        Registrar movimiento
+      </button>
+    </div>
   </header>
 
   @if (error()) {
-    <article class="alert alert-error">{{ error() }}</article>
+    <div class="admin-feedback admin-feedback--error" role="alert"><span class="material-symbols-rounded" aria-hidden="true">error</span><span>{{ error() }}</span><button type="button" aria-label="Cerrar mensaje" (click)="error.set(null)">×</button></div>
   }
-
   @if (success()) {
-    <article class="alert alert-success">{{ success() }}</article>
+    <div class="admin-feedback admin-feedback--success" role="status"><span class="material-symbols-rounded" aria-hidden="true">check_circle</span><span>{{ success() }}</span><button type="button" aria-label="Cerrar mensaje" (click)="success.set(null)">×</button></div>
   }
 
-  <section class="scope-shell glass-card">
-    <div class="scope-pills" role="tablist" aria-label="Ambito de analisis">
-      @for (scope of scopeOptions(); track trackScope($index, scope)) {
-        <button
-          type="button"
-          class="scope-pill"
-          [class.active]="routeScope() === scope.id"
-          [attr.aria-selected]="routeScope() === scope.id"
-          (click)="setRouteScope(scope.id)"
-        >
-          {{ scope.name }}
+  <nav class="section-nav" aria-label="Secciones del centro financiero">
+    <button type="button" [class.is-active]="activeView() === 'resumen'" [attr.aria-current]="activeView() === 'resumen' ? 'page' : null" (click)="setView('resumen')">
+      <span class="material-symbols-rounded" aria-hidden="true">space_dashboard</span>
+      <span class="nav-label">Resumen</span>
+    </button>
+    <button type="button" aria-label="Mes a mes" [class.is-active]="activeView() === 'mensual'" [attr.aria-current]="activeView() === 'mensual' ? 'page' : null" (click)="setView('mensual')">
+      <span class="material-symbols-rounded" aria-hidden="true">calendar_month</span>
+      <span class="nav-label nav-label--full">Mes a mes</span>
+      <span class="nav-label nav-label--short" aria-hidden="true">Meses</span>
+    </button>
+    <button type="button" aria-label="Inventario y capital" [class.is-active]="activeView() === 'inventario'" [attr.aria-current]="activeView() === 'inventario' ? 'page' : null" (click)="setView('inventario')">
+      <span class="material-symbols-rounded" aria-hidden="true">inventory_2</span>
+      <span class="nav-label nav-label--full">Inventario y capital</span>
+      <span class="nav-label nav-label--short" aria-hidden="true">Capital</span>
+    </button>
+    <button type="button" aria-label="Utilidades y socios" [class.is-active]="activeView() === 'socios'" [attr.aria-current]="activeView() === 'socios' ? 'page' : null" (click)="setView('socios')">
+      <span class="material-symbols-rounded" aria-hidden="true">handshake</span>
+      <span class="nav-label nav-label--full">Utilidades y socios</span>
+      <span class="nav-label nav-label--short" aria-hidden="true">Socios</span>
+    </button>
+  </nav>
+
+  <section class="filter-bar" aria-label="Filtros del reporte">
+    @if (!usesMonthScope()) {
+      <div class="period-summary-field">
+        <span>Periodo</span>
+        <strong><span class="material-symbols-rounded" aria-hidden="true">date_range</span>{{ periodRangeLabel() }}</strong>
+      </div>
+    } @else {
+      <div class="month-stepper">
+        <button type="button" aria-label="Mes anterior" [disabled]="isFirstMonth()" (click)="moveMonth(-1)">
+          <span class="material-symbols-rounded" aria-hidden="true">chevron_left</span>
         </button>
-      }
+        <label>
+          <span>Periodo</span>
+          <select [value]="selectedMonthId()" (change)="onMonthChange($event)">
+            @for (month of months; track month.id) {
+              <option [value]="month.id" [selected]="month.id === selectedMonthId()">{{ month.label }}</option>
+            }
+          </select>
+        </label>
+        <button type="button" aria-label="Mes siguiente" [disabled]="isLastMonth()" (click)="moveMonth(1)">
+          <span class="material-symbols-rounded" aria-hidden="true">chevron_right</span>
+        </button>
+      </div>
+    }
+
+    <div class="business-context-field">
+      <span>Negocio activo</span>
+      <strong><span class="material-symbols-rounded" aria-hidden="true">storefront</span>{{ activeBusinessLabel() }}</strong>
     </div>
 
-    <div class="scope-inputs">
-      <label>
-        Proyeccion (dias)
-        <input type="number" min="7" [ngModel]="projectionDays()" (ngModelChange)="setProjectionDays($event)" />
-      </label>
-      <label>
-        Ventana promedio (dias)
-        <input type="number" min="7" [ngModel]="averageWindowDays()" (ngModelChange)="setAverageWindowDays($event)" />
-      </label>
-      <label>
-        Inventario estancado (dias)
-        <input type="number" min="15" [ngModel]="stagnationDays()" (ngModelChange)="setStagnationDays($event)" />
-      </label>
-    </div>
+    <label class="filter-field">
+      <span>Ruta</span>
+      <select [value]="routeScope()" (change)="setRouteScope($any($event.target).value)">
+        @for (option of scopeOptions(); track option.id) {
+          <option [value]="option.id">{{ option.id === 'general' ? 'Todas las rutas' : option.name }}</option>
+        }
+      </select>
+    </label>
+
+    @if (!usesMonthScope()) {
+      <span class="comparison-chip"><span class="material-symbols-rounded" aria-hidden="true">verified</span>{{ includedClosuresCount() }} cierres incluidos</span>
+    } @else {
+      <span class="comparison-chip">
+        <span class="material-symbols-rounded" aria-hidden="true">compare_arrows</span>
+        Comparando con {{ previousMonth().label }}
+      </span>
+    }
   </section>
 
-  @if (loading()) {
-    <article class="glass-card loading-card">Cargando resumen financiero...</article>
-  } @else {
-    @if (businessSummaryRows().length > 0) {
-      <section class="business-finance-grid">
-        @for (row of businessSummaryRows(); track row.businessId) {
-          <article class="business-finance-card glass-card" [ngClass]="businessSummaryClass(row)">
-            <header>
-              <span>{{ row.label }}</span>
-              <strong>{{ formatCurrency(row.summary.cajaActual) }}</strong>
-            </header>
-            <div>
-              <p>Por cobrar <strong>{{ formatCurrency(row.summary.porCobrar) }}</strong></p>
-              <p>Pipeline <strong>{{ formatCurrency(row.summary.pipelineClienta) }}</strong></p>
-              <p>Utilidad neta <strong>{{ formatCurrency(row.summary.utilidadNeta) }}</strong></p>
-            </div>
-          </article>
-        }
-      </section>
-    }
-    @if (summary(); as m) {
-      <section class="kpi-grid">
-        <article class="kpi-card glass-card kpi-card-primary">
-          <p>Caja en cuentas</p>
-          <h2>{{ formatCurrency(m.cajaActual) }}</h2>
-          <small>Suma de saldos registrados en cuentas de dinero</small>
-        </article>
-        <article class="kpi-card glass-card">
-          <p>Por cobrar real</p>
-          <h2>{{ formatCurrency(m.porCobrar) }}</h2>
-          <small>{{ m.pendientesCobro }} pedidos entregados con saldo pendiente</small>
-        </article>
-        <article class="kpi-card glass-card">
-          <p>Saldos a favor</p>
-          <h2>{{ formatCurrency(customerCreditsTotal()) }}</h2>
-          <small>Crédito pendiente de aplicar a clientas</small>
-        </article>
-        <article class="kpi-card glass-card">
-          <p>Reembolsos efectuados</p>
-          <h2>{{ formatCurrency(refundsTotal()) }}</h2>
-          <small>Salidas de dinero registradas por devoluciones</small>
-        </article>
-        <article class="kpi-card glass-card">
-          <p>Pipeline por entregar</p>
-          <h2>{{ formatCurrency(m.pipelineClienta) }}</h2>
-          <small>Monto clienta en etapas 2 y 3</small>
-        </article>
-        <article class="kpi-card glass-card">
-          <p>Cobrado por repartidor</p>
-          <h2>{{ formatCurrency(m.cobradoConRepartidor) }}</h2>
-          <small>Etapa 7 pendiente de liquidacion</small>
-        </article>
-        <article class="kpi-card glass-card">
-          <p>Ganancia pendiente</p>
-          <h2>{{ formatCurrency(m.gananciaPendientePipeline) }}</h2>
-          <small>Ganancia potencial entre entregar y cobrar</small>
-        </article>
-        <article class="kpi-card glass-card">
-          <p>Proyeccion de caja</p>
-          <h2>{{ formatCurrency(m.proyeccionCaja) }}</h2>
-          <small>{{ projectionDays() }} dias con tendencia actual</small>
-        </article>
-      </section>
+  @if (activeView() === 'resumen') {
+    <section class="view-stack" aria-labelledby="summary-title">
+      <div class="section-heading section-heading--sr" id="summary-title">Resumen ejecutivo</div>
 
-      <section class="panel-grid">
-        <article class="panel glass-card">
-          <header>
-            <h3>7 bolsas de dinero</h3>
-            <p>Cada fila es clickeable para ver ruta, clienta y pedidos.</p>
-          </header>
-
-          <div class="metric-list-header metric-row-4">
-            <span>Bolsa</span>
-            <span>Cantidad</span>
-            <span>Monto clienta</span>
-            <span>Ganancia</span>
-          </div>
-
-          <div class="metric-list">
-            @for (bucket of m.buckets; track trackBucket($index, bucket)) {
-              <button type="button" class="metric-row metric-row-button metric-row-4" (click)="openBucketDrilldown(bucket)">
-                <span class="metric-main">
-                  <strong>{{ bucket.title }}</strong>
-                  <small>{{ bucket.description }}</small>
-                </span>
-                <span class="metric-count">{{ bucket.count }} {{ bucket.id === "stagnantInventory" ? "SKUs" : "pedidos" }}</span>
-                <strong class="metric-value">{{ formatCurrency(bucket.amountClienta) }}</strong>
-                <strong class="metric-value">{{ formatCurrency(bucket.margin) }}</strong>
-              </button>
-            }
-          </div>
-        </article>
-
-        <article class="panel glass-card">
-          <header>
-            <h3>Flujo principal</h3>
-            <p>Lectura de caja, capital requerido y cobranza.</p>
-          </header>
-          <div class="metric-list">
-            <div class="metric-row metric-row-2">
-              <span>Ventas brutas</span>
-              <strong>{{ formatCurrency(m.ventasBrutas) }}</strong>
-            </div>
-            <div class="metric-row metric-row-2">
-              <span>Descuentos</span>
-              <strong>-{{ formatCurrency(m.descuentos) }}</strong>
-            </div>
-            <div class="metric-row metric-row-2">
-              <span>Devoluciones</span>
-              <strong>-{{ formatCurrency(m.devolucionesMonto) }}</strong>
-            </div>
-            <div class="metric-row metric-row-2">
-              <span>Ventas netas</span>
-              <strong>{{ formatCurrency(m.ventasNetas) }}</strong>
-            </div>
-            <div class="metric-row metric-row-2">
-              <span>Ingresos cobrados</span>
-              <strong>{{ formatCurrency(m.ingresosCobrados) }}</strong>
-            </div>
-            <div class="metric-row metric-row-2">
-              <span>Egresos registrados</span>
-              <strong>{{ formatCurrency(m.egresos) }}</strong>
-            </div>
-            <div class="metric-row metric-row-2">
-              <span>Capital por invertir (etapa 2)</span>
-              <strong>{{ formatCurrency(m.capitalPorInvertir) }}</strong>
-            </div>
-            <div class="metric-row metric-row-2">
-              <span>Invertido no entregado (etapa 3)</span>
-              <strong>{{ formatCurrency(m.mercanciaTransito) }}</strong>
-            </div>
-            <div class="metric-row metric-row-2">
-              <span>Cobrado por conciliar (etapa 6)</span>
-              <strong>{{ formatCurrency(m.cobradoPorDepositar) }}</strong>
-            </div>
-            <div class="metric-row metric-row-2">
-              <span>Utilidad neta</span>
-              <strong>{{ formatCurrency(m.utilidadNeta) }}</strong>
-            </div>
-            <div class="metric-row metric-row-2">
-              <span>DSO estimado</span>
-              <strong>{{ formatNumber(m.dsoDias, 1) }} dias</strong>
-            </div>
-          </div>
-        </article>
-
-        <article class="panel glass-card">
-          <header>
-            <h3>Inventario, perdida y devolucion</h3>
-            <p>Capital inmovilizado y merma monetaria.</p>
-          </header>
-          <div class="metric-list">
-            <button type="button" class="metric-row metric-row-button metric-row-2" (click)="openBucketById('stagnantInventory')">
-              <span>Inventario estancado (potencial venta)</span>
-              <strong>{{ formatCurrency(m.estancadoPotencial) }}</strong>
-            </button>
-            <div class="metric-row metric-row-2">
-              <span>Valor inventario (costo)</span>
-              <strong>{{ formatCurrency(m.inventarioCosto) }}</strong>
-            </div>
-            <div class="metric-row metric-row-2">
-              <span>Ganancia potencial estancado</span>
-              <strong>{{ formatCurrency(m.estancadoGanancia) }}</strong>
-            </div>
-            <div class="metric-row metric-row-2">
-              <span>Rotacion inventario</span>
-              <strong>{{ formatNumber(m.inventoryTurnover, 2) }}x</strong>
-            </div>
-            <div class="metric-row metric-row-2">
-              <span>Dias de inventario</span>
-              <strong>{{ formatNumber(m.inventoryDays, 1) }} dias</strong>
-            </div>
-            <div class="metric-row metric-row-2">
-              <span>Perdido por no stock</span>
-              <strong>{{ formatCurrency(m.perdidoStock) }}</strong>
-            </div>
-            <div class="metric-row metric-row-2">
-              <span>Perdido por dano</span>
-              <strong>{{ formatCurrency(m.perdidoDano) }}</strong>
-            </div>
-            <div class="metric-row metric-row-2">
-              <span>Tasa de devolucion</span>
-              <strong>{{ formatPercent(m.devolucionRate) }}</strong>
-            </div>
-            <div class="metric-row metric-row-2">
-              <span>Devoluciones en dinero</span>
-              <strong>{{ formatCurrency(m.devolucionesMonto) }}</strong>
-            </div>
-            <div class="metric-row metric-row-2">
-              <span>Tasa por unidades</span>
-              <strong>{{ formatPercent(m.devolucionUnidadesRate) }}</strong>
-            </div>
-            <div class="metric-row metric-row-2">
-              <span>Impacto total devolucion</span>
-              <strong>{{ formatCurrency(m.devolucionImpacto) }}</strong>
-            </div>
-          </div>
-        </article>
-      </section>
-    }
-
-    <section class="panel glass-card">
-      <header class="panel-head">
+      <aside class="attention-banner" aria-labelledby="attention-title">
+        <span class="attention-icon material-symbols-rounded" aria-hidden="true">priority_high</span>
         <div>
-          <h3>Vista por ruta</h3>
-          <p>Cada fila abre detalle de pedidos y clientas que forman el monto.</p>
+          <strong id="attention-title">{{ attentionCount() }} situaciones requieren atención</strong>
+          <p>Prioridades ordenadas por impacto en caja y antigüedad.</p>
         </div>
-      </header>
-
-      @if (routeRows().length === 0) {
-        <p class="muted">Sin datos por ruta para mostrar.</p>
-      } @else {
-        <div class="route-table">
-          <div class="route-table-head">
-            <span>Ruta</span>
-            <span>Por cobrar real</span>
-            <span>Pipeline clienta</span>
-            <span>Capital por invertir</span>
-            <span>Cobrado repartidor</span>
-            <span>Ganancia pendiente</span>
-          </div>
-          @for (row of routeRows(); track trackRoute($index, row)) {
-            <button type="button" class="route-table-row route-row-button" (click)="openRouteDrilldown(row)">
-              <span class="route-main">
-                <strong>{{ row.routeName }}</strong>
-                <small>{{ row.ordersCount }} pedidos · {{ row.customerPreview }}</small>
-              </span>
-              <span>{{ formatCurrency(row.porCobrarReal) }}</span>
-              <span>{{ formatCurrency(row.pipelineClienta) }}</span>
-              <span>{{ formatCurrency(row.capitalRequerido) }}</span>
-              <span>{{ formatCurrency(row.cobradoConRepartidor) }}</span>
-              <span>{{ formatCurrency(row.gananciaPendiente) }}</span>
-            </button>
-          }
-        </div>
-      }
-    </section>
-
-    <section class="panel glass-card">
-      <header class="panel-head">
-        <div>
-          <h3>Retiro de ganancias</h3>
-          <p>Solo se reparte la utilidad respaldada por cobros recibidos. Se divide en 2 partes iguales: Socio 1 (Blanca) y Socio 2 (Andrea y Pepe).</p>
-        </div>
-      </header>
-
-      @if (!canViewMovements()) {
-        <p class="muted">Sin permiso: <code>cap.finance.movements.view</code></p>
-      } @else {
-        @if (withdrawalSummary(); as ws) {
-          <div class="kpi-grid withdrawal-kpi-grid">
-            <article
-              class="kpi-card glass-card kpi-card-primary kpi-card-clickable"
-              role="button"
-              tabindex="0"
-              (click)="goToWithdrawalBreakdownPage()"
-              (keydown.enter)="goToWithdrawalBreakdownPage()"
-              (keydown.space)="goToWithdrawalBreakdownPage(); $event.preventDefault()"
-            >
-              <p>Disponible para retirar</p>
-              <h2>{{ formatCurrency(ws.disponible) }}</h2>
-              <small>Cobros recibidos menos costo invertido, egresos y retiros. Click para abrir la página de detalle.</small>
-            </article>
-            <article class="kpi-card glass-card">
-              <p>Total retirado</p>
-              <h2>{{ formatCurrency(ws.totalRetirado) }}</h2>
-              <small>Acumulado en el ambito seleccionado</small>
-            </article>
-            <article class="kpi-card glass-card">
-              <p>Utilidad cobrada base</p>
-              <h2>{{ formatCurrency(ws.baseDisponible) }}</h2>
-              <small>Cobros recibidos menos costo total invertido y egresos</small>
-            </article>
-            <article class="kpi-card glass-card kpi-card-pending">
-              <p>Ganancia pendiente de cobro</p>
-              <h2>{{ formatCurrency(ws.gananciaPendienteCobro) }}</h2>
-              <small>Margen estimado dentro de {{ formatCurrency(ws.saldoPendienteCobro) }} aún por cobrar</small>
-            </article>
-            <article class="kpi-card glass-card">
-              <p>Retiros no socios</p>
-              <h2>{{ formatCurrency(withdrawalPartnerSummary().withdrawnNonPartner) }}</h2>
-              <small>Gastos, paqueteria u otros retiros que restan utilidad repartible</small>
-            </article>
-            <article class="kpi-card glass-card">
-              <p>Utilidad repartible</p>
-              <h2>{{ formatCurrency(withdrawalPartnerSummary().distributableBase) }}</h2>
-              <small>Utilidad cobrada base menos retiros no socios</small>
-            </article>
-            <article class="kpi-card glass-card">
-              <p>Parte por socio (50%)</p>
-              <h2>{{ formatCurrency(withdrawalPartnerSummary().perPartnerTarget) }}</h2>
-              <small>Meta individual sobre la utilidad ya cobrada</small>
-            </article>
-            <article class="kpi-card glass-card">
-              <p>Retirado socios</p>
-              <h2>{{ formatCurrency(withdrawalPartnerSummary().withdrawnBlanca + withdrawalPartnerSummary().withdrawnAndreaPepe) }}</h2>
-              <small>Suma de retiros de Blanca + Andrea y Pepe</small>
-            </article>
-            <article class="kpi-card glass-card">
-              <p>{{ partnerPendingLabel("socio_blanca") }}</p>
-              <h2>{{ formatCurrency(withdrawalPartnerSummary().pendingBlanca) }}</h2>
-              @if (withdrawalPartnerSummary().excessBlanca > 0) {
-                <small>Exceso retirado sobre utilidad cobrada: {{ formatCurrency(withdrawalPartnerSummary().excessBlanca) }}</small>
-              } @else {
-                <small>Disponible ahora. Retirado: {{ formatCurrency(withdrawalPartnerSummary().withdrawnBlanca) }}</small>
-              }
-            </article>
-            <article class="kpi-card glass-card">
-              <p>{{ partnerPendingLabel("socio_andrea_pepe") }}</p>
-              <h2>{{ formatCurrency(withdrawalPartnerSummary().pendingAndreaPepe) }}</h2>
-              @if (withdrawalPartnerSummary().excessAndreaPepe > 0) {
-                <small>Exceso retirado sobre utilidad cobrada: {{ formatCurrency(withdrawalPartnerSummary().excessAndreaPepe) }}</small>
-              } @else {
-                <small>Disponible ahora. Retirado: {{ formatCurrency(withdrawalPartnerSummary().withdrawnAndreaPepe) }}</small>
-              }
-            </article>
-          </div>
-        }
-
-        @if (canCreateMovements() || (withdrawalEditingId() && canEditMovements())) {
-          <form class="entry-form" (submit)="$event.preventDefault(); submitWithdrawal()">
-            <h4>{{ withdrawalEditingId() ? "Editar retiro" : "Registrar retiro" }}</h4>
-            <div class="entry-grid">
-              <label>
-                Monto
-                <input
-                  type="text"
-                  inputmode="decimal"
-                  [ngModel]="withdrawalAmountInput()"
-                  (ngModelChange)="setWithdrawalAmountInput($event)"
-                  name="withdrawal_amount"
-                  placeholder="1,250.00"
-                />
-              </label>
-
-              <label>
-                Fecha
-                <input type="date" [ngModel]="withdrawalDate()" (ngModelChange)="setWithdrawalDate($event)" name="withdrawal_date" />
-              </label>
-
-              <label>
-                Destino
-                <select [ngModel]="withdrawalPurpose()" (ngModelChange)="setWithdrawalPurpose($event)" name="withdrawal_purpose">
-                  <option value="socio_blanca">Socio 1 - Blanca Trejo</option>
-                  <option value="socio_andrea_pepe">Socio 2 - Andrea y Pepe</option>
-                  <option value="sueldo">Sueldo / nomina</option>
-                  <option value="gasto">Gasto</option>
-                  <option value="inversion">Inversion</option>
-                  <option value="ahorro">Ahorro</option>
-                  <option value="persona">Retiro a persona</option>
-                  <option value="otro">Paqueteria / gastos / otro</option>
-                </select>
-              </label>
-
-              <label>
-                Referencia (opcional)
-                <input
-                  type="text"
-                  [ngModel]="withdrawalRecipient()"
-                  (ngModelChange)="setWithdrawalRecipient($event)"
-                  name="withdrawal_recipient"
-                  placeholder="Ej: Transferencia / Folio"
-                />
-              </label>
-
-              <label>
-                Ruta
-                <select [ngModel]="withdrawalRouteId()" (ngModelChange)="setWithdrawalRouteId($event)" name="withdrawal_route">
-                  <option value="general">General</option>
-                  @for (route of routes(); track route.route_id) {
-                    <option [value]="route.route_id">{{ route.name }}</option>
-                  }
-                </select>
-              </label>
-
-              <label>
-                Cuenta
-                <select [ngModel]="withdrawalAccountId()" (ngModelChange)="setWithdrawalAccountId($event)" name="withdrawal_account">
-                  <option value="none">Sin cuenta</option>
-                  @for (account of accounts(); track account.account_id) {
-                    <option [value]="account.account_id">{{ account.name }}</option>
-                  }
-                </select>
-              </label>
-
-              <label class="entry-full">
-                Notas
-                <textarea rows="2" [ngModel]="withdrawalNotes()" (ngModelChange)="setWithdrawalNotes($event)" name="withdrawal_notes"></textarea>
-              </label>
-            </div>
-
-            <p class="muted">Disponible actual: <strong>{{ formatCurrency(withdrawalAvailableForForm()) }}</strong></p>
-            @if (withdrawalSelectedPartner()) {
-              <p class="muted">Disponible para este socio: <strong>{{ formatCurrency(withdrawalAvailableForSelectedPartner()) }}</strong></p>
-            } @else {
-              <p class="muted">Este retiro se toma como no-socio y reduce la utilidad a repartir.</p>
-            }
-
-            <div class="inline-actions">
-              <button type="submit" class="btn primary">{{ withdrawalEditingId() ? "Guardar cambios" : "Registrar retiro" }}</button>
-              @if (withdrawalEditingId()) {
-                <button type="button" class="btn ghost" (click)="resetWithdrawalForm()">Cancelar</button>
-              }
-            </div>
-          </form>
-        }
-
-        @if (filteredWithdrawals().length === 0) {
-          <p class="muted">Sin retiros registrados en este ambito.</p>
-        } @else {
-          <div class="movement-table">
-            <div class="movement-head">
-              <span>Fecha</span>
-              <span>Destino</span>
-              <span>Ruta</span>
-              <span>Monto</span>
-              <span>Cuenta</span>
-              <span>Acciones</span>
-            </div>
-            @for (row of filteredWithdrawals(); track trackWithdrawal($index, row)) {
-              <div class="movement-row">
-                <span>{{ formatDate(row.occurred_at) }}</span>
-                <span>{{ withdrawalDestinationLabel(row) }}</span>
-                <span>{{ routeName(row.route_id) }}</span>
-                <span>{{ formatCurrency(row.amount) }}</span>
-                <span>{{ accountLabel(row.account_id) }}</span>
-                <span class="inline-actions">
-                  @if (canEditMovements()) {
-                    <button type="button" class="btn ghost btn-small" (click)="startEditWithdrawal(row)">Editar</button>
-                  }
-                  @if (canDeleteMovements()) {
-                    <button type="button" class="btn danger btn-small" (click)="deleteWithdrawal(row)">Eliminar</button>
-                  }
-                </span>
-              </div>
-            }
-          </div>
-        }
-      }
-    </section>
-
-    <section class="panel glass-card">
-      <header class="panel-head">
-        <div>
-          <h3>Cuentas de dinero</h3>
-          <p>Control de saldo en caja, banco y fondos operativos.</p>
-        </div>
-      </header>
-
-      @if (!canViewAccounts()) {
-        <p class="muted">Sin permiso: <code>cap.finance.accounts.view</code></p>
-      } @else {
-        <div class="account-grid">
-          @for (row of accounts(); track trackAccount($index, row)) {
-            <article class="account-card">
-              <div>
-                <h4>{{ row.name }}</h4>
-                <p>{{ formatCurrency(row.balance) }}</p>
-                @if (row.notes) {
-                  <small>{{ row.notes }}</small>
-                }
-              </div>
-              <div class="inline-actions">
-                @if (canEditAccounts()) {
-                  <button type="button" class="btn ghost btn-small" (click)="startEditAccount(row)">Editar</button>
-                }
-                @if (canDeleteAccounts()) {
-                  <button type="button" class="btn danger btn-small" (click)="deleteAccount(row)">Eliminar</button>
-                }
-              </div>
-            </article>
-          }
-        </div>
-
-        @if (canCreateAccounts() || (accountEditingId() && canEditAccounts())) {
-          <form class="entry-form" (submit)="$event.preventDefault(); submitAccount()">
-            <h4>{{ accountEditingId() ? "Editar cuenta" : "Nueva cuenta" }}</h4>
-            <div class="entry-grid">
-              <label>
-                Nombre
-                <input type="text" [ngModel]="accountName()" (ngModelChange)="setAccountName($event)" name="account_name" />
-              </label>
-              <label>
-                Saldo
-                <input type="number" step="0.01" [ngModel]="accountBalance()" (ngModelChange)="setAccountBalance($event)" name="account_balance" />
-              </label>
-              <label class="entry-full">
-                Notas
-                <textarea rows="2" [ngModel]="accountNotes()" (ngModelChange)="setAccountNotes($event)" name="account_notes"></textarea>
-              </label>
-            </div>
-            <div class="inline-actions">
-              <button type="submit" class="btn primary">{{ accountEditingId() ? "Guardar cambios" : "Registrar cuenta" }}</button>
-              @if (accountEditingId()) {
-                <button type="button" class="btn ghost" (click)="resetAccountForm()">Cancelar</button>
-              }
-            </div>
-          </form>
-        }
-      }
-    </section>
-
-    <section class="panel glass-card">
-      <header class="panel-head">
-        <div>
-          <h3>Egresos y movimientos</h3>
-          <p>Registro de compras, perdida, paqueteria, consumibles y deudas.</p>
-        </div>
-      </header>
-
-      @if (!canViewMovements()) {
-        <p class="muted">Sin permiso: <code>cap.finance.movements.view</code></p>
-      } @else {
-        @if (canCreateMovements() || (expenseEditingId() && canEditMovements())) {
-          <form class="entry-form" (submit)="$event.preventDefault(); submitExpense()">
-            <h4>{{ expenseEditingId() ? "Editar egreso" : "Registrar egreso" }}</h4>
-            <div class="entry-grid">
-              <label>
-                Categoria
-                <select [ngModel]="expenseCategory()" (ngModelChange)="setExpenseCategory($event)" name="expense_category">
-                  <option value="compra_inversion">Compra por inversion</option>
-                  <option value="perdida">Perdida</option>
-                  <option value="paqueteria">Paqueteria</option>
-                  <option value="consumibles">Consumibles</option>
-                  <option value="deuda_fija">Deuda fija</option>
-                  <option value="deuda_meses">Deuda a meses</option>
-                </select>
-              </label>
-
-              <label>
-                Monto
-                <input type="number" step="0.01" min="0.01" [ngModel]="expenseAmount()" (ngModelChange)="setExpenseAmount($event)" name="expense_amount" />
-              </label>
-
-              <label>
-                Fecha
-                <input type="date" [ngModel]="expenseDate()" (ngModelChange)="setExpenseDate($event)" name="expense_date" />
-              </label>
-
-              <label>
-                Ruta
-                <select [ngModel]="expenseRouteId()" (ngModelChange)="setExpenseRouteId($event)" name="expense_route">
-                  <option value="general">General</option>
-                  @for (route of routes(); track route.route_id) {
-                    <option [value]="route.route_id">{{ route.name }}</option>
-                  }
-                </select>
-              </label>
-
-              <label>
-                Cuenta
-                <select [ngModel]="expenseAccountId()" (ngModelChange)="setExpenseAccountId($event)" name="expense_account">
-                  <option value="none">Sin cuenta</option>
-                  @for (account of accounts(); track account.account_id) {
-                    <option [value]="account.account_id">{{ account.name }}</option>
-                  }
-                </select>
-              </label>
-
-              <label>
-                Meses de deuda
-                <input
-                  type="number"
-                  min="1"
-                  [ngModel]="expenseInstallmentTotal()"
-                  (ngModelChange)="setExpenseInstallmentTotal($event)"
-                  name="expense_installments_total"
-                />
-              </label>
-
-              <label>
-                Mes actual
-                <input
-                  type="number"
-                  min="1"
-                  [ngModel]="expenseInstallmentIndex()"
-                  (ngModelChange)="setExpenseInstallmentIndex($event)"
-                  name="expense_installments_index"
-                />
-              </label>
-
-              <label class="entry-full">
-                Notas
-                <textarea rows="2" [ngModel]="expenseNotes()" (ngModelChange)="setExpenseNotes($event)" name="expense_notes"></textarea>
-              </label>
-            </div>
-
-            <div class="inline-actions">
-              <button type="submit" class="btn primary">{{ expenseEditingId() ? "Guardar cambios" : "Registrar egreso" }}</button>
-              @if (expenseEditingId()) {
-                <button type="button" class="btn ghost" (click)="resetExpenseForm()">Cancelar</button>
-              }
-            </div>
-          </form>
-        }
-
-        <div class="movement-table">
-          <div class="movement-head">
-            <span>Fecha</span>
-            <span>Categoria</span>
-            <span>Ruta</span>
-            <span>Monto</span>
-            <span>Cuenta</span>
-            <span>Acciones</span>
-          </div>
-          @for (row of filteredExpenses(); track trackExpense($index, row)) {
-            <div class="movement-row">
-              <span>{{ formatDate(row.occurred_at) }}</span>
-              <span>{{ expenseCategoryLabel(row.category) }}</span>
-              <span>{{ routeName(row.route_id) }}</span>
-              <span>{{ formatCurrency(row.amount) }}</span>
-              <span>{{ accountLabel(row.account_id) }}</span>
-              <span class="inline-actions">
-                @if (canEditMovements()) {
-                  <button type="button" class="btn ghost btn-small" (click)="startEditExpense(row)">Editar</button>
-                }
-                @if (canDeleteMovements()) {
-                  <button type="button" class="btn danger btn-small" (click)="deleteExpense(row)">Eliminar</button>
-                }
-              </span>
-            </div>
-          }
-        </div>
-      }
-    </section>
-
-    <section class="panel glass-card">
-      <header class="panel-head">
-        <div>
-          <h3>Cortes</h3>
-          <p>Snapshot de utilidad para cierres periodicos.</p>
-        </div>
-      </header>
-
-      @if (!canViewReports()) {
-        <p class="muted">Sin permiso: <code>cap.finance.reports.view</code></p>
-      } @else {
-        <form class="entry-form" (submit)="$event.preventDefault(); saveCut()">
-          <div class="entry-grid">
-            <label>
-              Nombre del corte
-              <input type="text" [ngModel]="cutLabel()" (ngModelChange)="cutLabel.set($event)" name="cut_label" />
-            </label>
-            <label>
-              Inicio
-              <input type="date" [ngModel]="cutStart()" (ngModelChange)="setCutStart($event)" name="cut_start" />
-            </label>
-            <label>
-              Fin
-              <input type="date" [ngModel]="cutEnd()" (ngModelChange)="setCutEnd($event)" name="cut_end" />
-            </label>
-          </div>
-          <div class="inline-actions">
-            <button type="submit" class="btn primary">Guardar corte</button>
-          </div>
-        </form>
-
-        <div class="cut-list">
-          @for (row of cuts(); track trackCut($index, row)) {
-            <article class="cut-card">
-              <div>
-                <h4>{{ row.label }}</h4>
-                <p>{{ row.start_at }} - {{ row.end_at }} · {{ routeName(row.route_id) }}</p>
-              </div>
-              <div class="cut-kpis">
-                <span>Ingresos {{ formatCurrency(row.snapshot.ingresos) }}</span>
-                <span>Egresos {{ formatCurrency(row.snapshot.egresos) }}</span>
-                <span>Utilidad neta {{ formatCurrency(row.snapshot.utilidad_neta) }}</span>
-              </div>
-            </article>
-          }
-        </div>
-      }
-    </section>
-  }
-
-  @if (drilldown(); as detail) {
-    <div class="sheet-backdrop" (click)="closeDrilldown()">
-      <aside class="detail-sheet glass-card" role="dialog" aria-modal="true" aria-labelledby="drilldown-title" (click)="$event.stopPropagation()">
-        <header class="detail-head">
-          <div>
-            <p class="eyebrow">Detalle</p>
-            <h3 id="drilldown-title">{{ detail.title }}</h3>
-            <p class="muted">{{ detail.subtitle }}</p>
-          </div>
-          <button type="button" class="btn ghost btn-small" (click)="closeDrilldown()">Cerrar</button>
-        </header>
-
-        <div class="detail-kpi-grid">
-          <article class="detail-kpi-card">
-            <span>Monto clienta</span>
-            <strong>{{ formatCurrency(detail.totalAmountClienta) }}</strong>
-          </article>
-          <article class="detail-kpi-card">
-            <span>Costo</span>
-            <strong>{{ formatCurrency(detail.totalCost) }}</strong>
-          </article>
-          <article class="detail-kpi-card">
-            <span>Ganancia</span>
-            <strong>{{ formatCurrency(detail.totalMargin) }}</strong>
-          </article>
-          <article class="detail-kpi-card">
-            <span>Cobrado</span>
-            <strong>{{ formatCurrency(detail.totalPaid) }}</strong>
-          </article>
-        </div>
-
-        @if (detail.rows.length === 0) {
-          <p class="muted">No hay filas para esta metrica.</p>
-        } @else {
-          <div class="detail-table">
-            <div class="detail-table-tools">
-              <p class="muted">Ordena por columna con flechas y filtra campos. En montos puedes usar operadores como &gt;500, &lt;=1000 o rango 500..1500.</p>
-              <button type="button" class="btn ghost btn-small" (click)="clearDrilldownFilters()">Limpiar filtros</button>
-            </div>
-            <div class="detail-head-row">
-              <button type="button" class="detail-head-cell detail-sort-btn" (click)="toggleDrilldownSort('primary')">
-                <span>Pedido / SKU</span>
-                <small class="sort-arrow">{{ drilldownSortArrow("primary") }}</small>
-              </button>
-              <button type="button" class="detail-head-cell detail-sort-btn" (click)="toggleDrilldownSort('status')">
-                <span>Estado</span>
-                <small class="sort-arrow">{{ drilldownSortArrow("status") }}</small>
-              </button>
-              <button type="button" class="detail-head-cell detail-sort-btn" (click)="toggleDrilldownSort('createdAt')">
-                <span>Fecha creacion</span>
-                <small class="sort-arrow">{{ drilldownSortArrow("createdAt") }}</small>
-              </button>
-              <button type="button" class="detail-head-cell detail-sort-btn" (click)="toggleDrilldownSort('amountClienta')">
-                <span>Monto clienta</span>
-                <small class="sort-arrow">{{ drilldownSortArrow("amountClienta") }}</small>
-              </button>
-              <button type="button" class="detail-head-cell detail-sort-btn" (click)="toggleDrilldownSort('cost')">
-                <span>Costo</span>
-                <small class="sort-arrow">{{ drilldownSortArrow("cost") }}</small>
-              </button>
-              <button type="button" class="detail-head-cell detail-sort-btn" (click)="toggleDrilldownSort('margin')">
-                <span>Ganancia</span>
-                <small class="sort-arrow">{{ drilldownSortArrow("margin") }}</small>
-              </button>
-              <button type="button" class="detail-head-cell detail-sort-btn" (click)="toggleDrilldownSort('paid')">
-                <span>Cobrado</span>
-                <small class="sort-arrow">{{ drilldownSortArrow("paid") }}</small>
-              </button>
-            </div>
-            <div class="detail-filter-row">
-              <input
-                type="text"
-                class="detail-filter-input"
-                placeholder="Buscar pedido o SKU"
-                [value]="drilldownFilters().primary"
-                (input)="setDrilldownFilter('primary', $any($event.target).value)"
-              />
-              <input
-                type="text"
-                class="detail-filter-input"
-                placeholder="Filtrar estado"
-                [value]="drilldownFilters().status"
-                (input)="setDrilldownFilter('status', $any($event.target).value)"
-              />
-              <div class="detail-date-filter">
-                <label>
-                  <span>Desde</span>
-                  <input
-                    type="date"
-                    class="detail-filter-input"
-                    [value]="drilldownDateRange().start"
-                    (input)="setDrilldownDateStart($any($event.target).value)"
-                  />
-                </label>
-                <label>
-                  <span>Hasta</span>
-                  <input
-                    type="date"
-                    class="detail-filter-input"
-                    [value]="drilldownDateRange().end"
-                    (input)="setDrilldownDateEnd($any($event.target).value)"
-                  />
-                </label>
-              </div>
-              <input
-                type="text"
-                class="detail-filter-input"
-                placeholder="Monto"
-                [value]="drilldownFilters().amountClienta"
-                (input)="setDrilldownFilter('amountClienta', $any($event.target).value)"
-              />
-              <input
-                type="text"
-                class="detail-filter-input"
-                placeholder="Costo"
-                [value]="drilldownFilters().cost"
-                (input)="setDrilldownFilter('cost', $any($event.target).value)"
-              />
-              <input
-                type="text"
-                class="detail-filter-input"
-                placeholder="Ganancia"
-                [value]="drilldownFilters().margin"
-                (input)="setDrilldownFilter('margin', $any($event.target).value)"
-              />
-              <input
-                type="text"
-                class="detail-filter-input"
-                placeholder="Cobrado"
-                [value]="drilldownFilters().paid"
-                (input)="setDrilldownFilter('paid', $any($event.target).value)"
-              />
-            </div>
-            @if (drilldownRows().length === 0) {
-              <p class="muted">No hay filas que coincidan con los filtros.</p>
-            } @else {
-              @for (row of drilldownRows(); track trackDrilldownRow($index, row)) {
-                <button
-                  type="button"
-                  class="detail-row detail-row-button"
-                  [class.is-disabled]="!row.orderId"
-                  (click)="row.orderId && openOrder(row.orderId)"
-                >
-                  <span class="detail-main">
-                    <strong>{{ row.primary }}</strong>
-                    <small>{{ row.secondary }}</small>
-                  </span>
-                  <span>{{ row.status }}</span>
-                  <span>{{ formatDate(row.createdAt) }}</span>
-                  <span>{{ formatCurrency(row.amountClienta) }}</span>
-                  <span>{{ formatCurrency(row.cost) }}</span>
-                  <span>{{ formatCurrency(row.margin) }}</span>
-                  <span>{{ formatCurrency(row.paid) }}</span>
-                </button>
-              }
-            }
-          </div>
-        }
+        <ul>
+          <li><strong>{{ formatMoney(summary().saldoPendienteCobro) }}</strong> por cobrar</li>
+          <li><strong>{{ formatMoney(courierCash()) }}</strong> con repartidores</li>
+          <li><strong>{{ stagnantSkuCount() }} SKUs</strong> estancados</li>
+        </ul>
+        <button type="button">Revisar prioridades</button>
       </aside>
-    </div>
+
+      <section class="kpi-grid" aria-label="Indicadores principales">
+        <article class="kpi-card">
+          <div class="kpi-label"><span>Caja calculada</span><span class="material-symbols-rounded" aria-hidden="true">account_balance_wallet</span></div>
+          <strong>{{ formatMoney(position().theoreticalCash) }}</strong>
+          @if (position().hasRegisteredAccounts) {
+            <p><span class="trend" [class.trend--positive]="position().unregisteredFunding === 0" [class.trend--warning]="position().unregisteredFunding !== 0">Cuentas dicen {{ formatMoney(position().declaredCash) }}</span></p>
+            <small>{{ accountCount() }} cuenta(s) · descuadre {{ formatSignedMoney(position().unregisteredFunding) }}</small>
+          } @else {
+            <p><span class="trend trend--warning">Sin cuentas para conciliar</span></p>
+            <small>Lo que debería haber según todos los movimientos</small>
+          }
+        </article>
+        <article class="kpi-card">
+          <div class="kpi-label"><span>Ventas netas</span><span class="material-symbols-rounded" aria-hidden="true">point_of_sale</span></div>
+          <strong>{{ formatMoney(summary().ventasNetas) }}</strong>
+          <p><span class="trend trend--positive">{{ periodRangeLabel() }}</span></p>
+          <small>Entregas menos descuentos y devoluciones</small>
+        </article>
+        <article class="kpi-card kpi-card--featured">
+          <div class="kpi-label"><span>Utilidad neta</span><span class="material-symbols-rounded" aria-hidden="true">trending_up</span></div>
+          <strong>{{ formatMoney(summary().utilidadNeta) }}</strong>
+          <p><span class="trend trend--positive">Margen {{ formatPercent(overallMargin()) }}</span></p>
+          <small>Después de mercancía y gastos, esté cobrada o no</small>
+        </article>
+        <article class="kpi-card">
+          <div class="kpi-label"><span>Por cobrar</span><span class="material-symbols-rounded" aria-hidden="true">pending_actions</span></div>
+          <strong>{{ formatMoney(receivableCapital()) }}</strong>
+          <p><span class="trend trend--warning">{{ formatNumber(summary().dsoDias, 0) }} días de antigüedad promedio</span></p>
+          <small>{{ pendingCollectionCount() }} pedidos entregados con saldo</small>
+        </article>
+        <article class="kpi-card">
+          <div class="kpi-label"><span>Capital en inventario</span><span class="material-symbols-rounded" aria-hidden="true">inventory_2</span></div>
+          <strong>{{ formatMoney(summary().inventarioRecuperable) }}</strong>
+          <p><span class="trend trend--warning">{{ formatMoney(summary().estancadoCosto) }}</span> lleva más de 45 días</p>
+          <small>Valuado al costo · {{ inventoryMissingCostQty() }} pieza(s) aún sin costo</small>
+        </article>
+      </section>
+
+      <section class="summary-grid">
+        <article class="panel performance-panel">
+          <header class="panel-header">
+            <div>
+              <p class="panel-kicker">Tendencia</p>
+              <h2>Rendimiento mes a mes</h2>
+              <p>Ventas, capital invertido y utilidad neta · {{ periodRangeLabel() }}.</p>
+            </div>
+            <button type="button" class="text-button" (click)="setView('mensual')">Abrir análisis mensual</button>
+          </header>
+
+          <div class="chart-legend" aria-hidden="true">
+            <span><i class="legend-sales"></i>Ventas netas</span>
+            <span><i class="legend-investment"></i>Inversión</span>
+            <span><i class="legend-profit"></i>Utilidad</span>
+          </div>
+
+          <div class="column-chart" role="img" aria-label="Comparativo de ventas netas, inversión y utilidad por mes.">
+            <div class="chart-scale" aria-hidden="true"><span>{{ formatCompactMoney(chartScaleMax()) }}</span><span>{{ formatCompactMoney(chartScaleMax() / 2) }}</span><span>$0</span></div>
+            <div class="chart-grid" aria-hidden="true">
+              @for (month of months; track month.id) {
+                <div class="month-column">
+                  <div class="bar-area">
+                    <span class="chart-bar chart-bar--sales" [style.height.%]="barHeight(month.netSales)"></span>
+                    <span class="chart-bar chart-bar--investment" [style.height.%]="barHeight(month.investment)"></span>
+                    <span class="chart-bar chart-bar--profit" [style.height.%]="barHeight(month.netProfit)"></span>
+                  </div>
+                  <span>{{ month.shortLabel }}</span>
+                </div>
+              }
+            </div>
+          </div>
+        </article>
+
+        <aside class="panel priority-panel">
+          <header class="panel-header">
+            <div><p class="panel-kicker">Acciones</p><h2>Prioridades de hoy</h2></div>
+            <span class="count-badge">{{ attentionCount() }}</span>
+          </header>
+          <ol class="priority-list">
+            <li>
+              <span class="priority-marker priority-marker--danger"></span>
+              <div><strong>Cobranza pendiente</strong><small>{{ pendingCollectionCount() }} pedidos con saldo</small></div>
+              <b>{{ formatMoney(summary().saldoPendienteCobro) }}</b>
+            </li>
+            <li>
+              <span class="priority-marker priority-marker--warning"></span>
+              <div><strong>Liquidar repartidores</strong><small>Movimientos pendientes de conciliación</small></div>
+              <b>{{ formatMoney(courierCash()) }}</b>
+            </li>
+            <li>
+              <span class="priority-marker priority-marker--warning"></span>
+              <div><strong>Capital por invertir</strong><small>{{ pendingInvestmentCount() }} pedidos confirmados</small></div>
+              <b>{{ formatMoney(capitalToInvest()) }}</b>
+            </li>
+            <li>
+              <span class="priority-marker priority-marker--neutral"></span>
+              <div><strong>Inventario estancado</strong><small>{{ stagnantSkuCount() }} SKUs · más de 45 días</small></div>
+              <b>{{ formatMoney(summary().estancadoCosto) }}</b>
+            </li>
+          </ol>
+        </aside>
+      </section>
+
+      <article class="panel money-flow-panel">
+        <header class="panel-header">
+          <div><p class="panel-kicker">Capital</p><h2>Dónde está el dinero</h2><p>Ordenado por qué tan cerca está de volverse efectivo. La cobranza va a precio de venta; la mercancía, a lo que costó.</p></div>
+          <button type="button" class="text-button" (click)="setView('inventario')">Ver inventario y capital</button>
+        </header>
+        <ol class="liquidity-ladder">
+          @for (rung of position().rungs; track rung.id) {
+            <li [attr.data-distance]="rung.distance">
+              <div class="rung-copy"><small>{{ rung.label }}</small><span>{{ rung.hint }}</span></div>
+              <strong>{{ formatMoney(rung.amount) }}</strong>
+              <i [style.--bar-size.%]="ratio(rung.amount, position().totalAssets) * 100"></i>
+            </li>
+          }
+        </ol>
+        @if (summary().inventarioCostoImputado > 0) {
+          <p class="balance-note"><span class="material-symbols-rounded" aria-hidden="true">info</span>{{ summary().inventarioPiezasSinCosto }} piezas no tienen costo capturado, así que se valúan al costo promedio: {{ formatMoney(summary().inventarioCostoImputado) }} del inventario es estimado, no un dato real.</p>
+        }
+        <div class="ladder-totals">
+          <div><span>Ya tiene comprador</span><strong>{{ formatMoney(position().committedToCash) }}</strong><small>Caja y cobranza a precio de venta, más la mercancía comprometida a su costo. Al entregarse dejará más que eso.</small></div>
+          <div><span>Sin comprador todavía</span><strong>{{ formatMoney(position().awaitingSale) }}</strong><small>Inventario libre en bodega, a costo. Solo se vuelve dinero cuando alguien lo compre.</small></div>
+        </div>
+      </article>
+
+      <article class="panel balance-panel">
+        <header class="panel-header">
+          <div><p class="panel-kicker">El cuadre</p><h2>{{ formatMoney(position().totalAssets) }} en manos del negocio</h2><p>Todo lo que hay está asignado a alguien. Las dos columnas suman igual.</p></div>
+        </header>
+        <div class="balance-grid">
+          <div class="balance-side">
+            <p class="balance-title">Lo que el negocio tiene</p>
+            <dl>
+              <div><dt>Caja</dt><dd>{{ formatMoney(position().effectiveCash) }}</dd></div>
+              <div><dt>Por cobrar</dt><dd>{{ formatMoney(summary().saldoPendienteCobro) }}</dd></div>
+              <div><dt>Mercancía</dt><dd>{{ formatMoney(position().merchandiseTotal) }}</dd></div>
+            </dl>
+            <p class="balance-sum">{{ formatMoney(position().totalAssets) }}</p>
+          </div>
+          <div class="balance-side">
+            <p class="balance-title">A quién le pertenece</p>
+            <dl>
+              <div><dt>Utilidad de los socios sin retirar</dt><dd>{{ formatMoney(position().partnerEquity) }}</dd></div>
+              <div><dt>Financiamiento no registrado</dt><dd>{{ formatMoney(position().unregisteredFunding) }}</dd></div>
+            </dl>
+            <p class="balance-sum">{{ formatMoney(position().partnerEquity + position().unregisteredFunding) }}</p>
+          </div>
+        </div>
+        @if (position().unregisteredFunding > 0) {
+          <p class="balance-note"><span class="material-symbols-rounded" aria-hidden="true">info</span>Los {{ formatMoney(position().unregisteredFunding) }} son dinero que entró y nunca se capturó: inversión inicial, tarjeta de crédito o crédito de proveedor. No es un faltante, es el dato que falta. Cada peso de bodega que registres sube esta cifra, porque esa mercancía también se compró con dinero sin registrar.</p>
+        }
+      </article>
+
+      <article class="panel accounts-panel">
+        <header class="panel-header">
+          <div><p class="panel-kicker">Cuentas</p><h2>Dónde cae el dinero</h2><p>Sin al menos una cuenta no se pueden registrar devoluciones ni conciliar la caja.</p></div>
+          <button type="button" class="text-button" (click)="openMovementDialog('account')" [disabled]="!canCreateAccounts()">Nueva cuenta</button>
+        </header>
+        @if (accounts().length === 0) {
+          <p class="expense-empty">No hay ninguna cuenta registrada. Crea al menos la cuenta General para poder hacer devoluciones y comparar contra la caja calculada.</p>
+        } @else {
+          <ul class="accounts-list">
+            @for (account of accounts(); track trackAccount($index, account)) {
+              <li [class.is-general]="isGeneralAccount(account)">
+                <div class="account-copy">
+                  <small>{{ account.name }}@if (isGeneralAccount(account)) {<span class="account-badge">Caja del negocio</span>}</small>
+                  <span>{{ account.notes || "Sin notas" }}</span>
+                </div>
+                <strong>{{ formatMoney(account.balance) }}</strong>
+                @if (isGeneralAccount(account) && generalAccountGap(account) !== 0) {
+                  <p class="account-gap">
+                    Según los movimientos aquí debería haber <strong>{{ formatMoney(position().theoreticalCash) }}</strong>.
+                    Faltan <strong>{{ formatMoney(absValue(generalAccountGap(account))) }}</strong> por capturar: la inversión inicial y la tarjeta de crédito.
+                  </p>
+                }
+                <div class="account-actions">
+                  @if (isGeneralAccount(account) && generalAccountGap(account) !== 0) {
+                    <button type="button" class="text-button" (click)="syncGeneralAccountBalance(account)" [disabled]="!canEditAccounts()">Ajustar al calculado</button>
+                  }
+                  <button type="button" class="text-button" (click)="editAccount(account)" [disabled]="!canEditAccounts()">Editar</button>
+                  <button type="button" class="text-button text-button--danger" (click)="deleteAccount(account)" [disabled]="!canDeleteAccounts()">Eliminar</button>
+                </div>
+              </li>
+            }
+          </ul>
+          <div class="expense-totals">
+            <div><span>Saldo declarado</span><strong>{{ formatMoney(position().declaredCash) }}</strong></div>
+            <div><span>Caja calculada</span><strong>{{ formatMoney(position().theoreticalCash) }}</strong></div>
+          </div>
+          @if (position().unregisteredFunding !== 0) {
+            <p class="balance-note"><span class="material-symbols-rounded" aria-hidden="true">info</span>Hay {{ formatMoney(absValue(position().unregisteredFunding)) }} de diferencia entre lo que dicen las cuentas y lo que arrojan los movimientos. Casi todo corresponde a la inversión inicial y la tarjeta de crédito, que todavía no están capturadas.</p>
+          }
+        }
+      </article>
+
+      <article class="panel expense-panel">
+        <header class="panel-header">
+          <div><p class="panel-kicker">Gastos</p><h2>En qué se va el dinero</h2><p>La compra de mercancía va aparte: regresa como inventario, no es gasto.</p></div>
+          <button type="button" class="text-button" (click)="openMovementDialog('expense')" [disabled]="!canCreateMovements()">Registrar gasto</button>
+        </header>
+        @if (expenseBreakdown().rows.length === 0) {
+          <p class="expense-empty">Todavía no hay gastos registrados. Sin ellos la utilidad se ve más alta de lo que realmente es.</p>
+        } @else {
+          <ul class="expense-breakdown">
+            @for (row of expenseBreakdown().rows; track row.category) {
+              <li [class.is-capital]="!row.operating">
+                <div class="expense-copy"><small>{{ row.label }}</small><span>{{ row.hint }}</span></div>
+                <strong>{{ formatMoney(row.amount) }}</strong>
+                <i [style.--bar-size.%]="ratio(row.amount, expenseBreakdown().operatingTotal + expenseBreakdown().capitalTotal) * 100"></i>
+              </li>
+            }
+          </ul>
+          <div class="expense-totals">
+            <div><span>Resta utilidad</span><strong>{{ formatMoney(expenseBreakdown().operatingTotal) }}</strong></div>
+            <div><span>Compra de mercancía</span><strong>{{ formatMoney(expenseBreakdown().capitalTotal) }}</strong></div>
+          </div>
+        }
+      </article>
+
+      <article class="partner-summary">
+        <div class="partner-summary__copy">
+          <span class="partner-icon material-symbols-rounded" aria-hidden="true">handshake</span>
+          <div><p class="panel-kicker">Utilidades y socios</p><h2>{{ formatMoney(totalAvailableNow()) }} se pueden retirar hoy</h2><p>De {{ formatMoney(totalDistributableProfit()) }} generados; {{ formatMoney(totalPendingProfit()) }} siguen por cobrar.</p></div>
+        </div>
+        <div class="partner-balance"><span>Blanca puede retirar</span><strong>{{ formatMoney(partnerOne().availableNow) }}</strong></div>
+        <div class="partner-balance"><span>Andrea y Pepe pueden retirar</span><strong>{{ formatMoney(partnerTwo().availableNow) }}</strong></div>
+        <button type="button" class="button button--dark" (click)="setView('socios')">Abrir distribución</button>
+      </article>
+    </section>
   }
 
-</section>
+  @if (activeView() === 'mensual') {
+    <section class="view-stack" aria-labelledby="monthly-title">
+      <header class="content-heading">
+        <div><p class="eyebrow">Análisis mensual</p><h2 id="monthly-title">Qué pasó en {{ selectedMonth().label }}</h2><p>Resultados reconocidos por fecha real de entrega, cobro y movimiento.</p></div>
+        <button type="button" class="button button--secondary" (click)="exportMonthlyReport()"><span class="material-symbols-rounded" aria-hidden="true">download</span>Exportar reporte</button>
+      </header>
+
+      <section class="kpi-grid kpi-grid--monthly" aria-label="Resultado del mes">
+        <article class="kpi-card"><div class="kpi-label"><span>Inversión pagada</span><span class="material-symbols-rounded" aria-hidden="true">payments</span></div><strong>{{ formatMoney(selectedMonth().investment) }}</strong><p>Compras registradas en el mes</p><small>No incluye capital solamente comprometido</small></article>
+        <article class="kpi-card"><div class="kpi-label"><span>Ventas netas</span><span class="material-symbols-rounded" aria-hidden="true">receipt_long</span></div><strong>{{ formatMoney(selectedMonth().netSales) }}</strong><p class="trend trend--positive">{{ formatDelta(netSalesDelta()) }} vs. mes anterior</p><small>Pedidos entregados</small></article>
+        <article class="kpi-card"><div class="kpi-label"><span>Cobrado</span><span class="material-symbols-rounded" aria-hidden="true">price_check</span></div><strong>{{ formatMoney(selectedMonth().collected) }}</strong><p>{{ formatPercent(ratio(selectedMonth().collected, selectedMonth().netSales)) }} de las ventas netas</p><small>Eventos de cobro del periodo</small></article>
+        <article class="kpi-card kpi-card--featured"><div class="kpi-label"><span>Utilidad neta</span><span class="material-symbols-rounded" aria-hidden="true">savings</span></div><strong>{{ formatMoney(selectedMonth().netProfit) }}</strong><p class="trend trend--positive">Margen {{ formatPercent(margin()) }}</p><small>Resultado después de gastos</small></article>
+      </section>
+
+      <section class="monthly-grid">
+        <article class="panel profit-bridge">
+          <header class="panel-header"><div><p class="panel-kicker">Resultado</p><h2>Cómo se formó la utilidad</h2><p>De las ventas netas al resultado del mes.</p></div></header>
+          <div class="bridge-list">
+            <div class="bridge-row bridge-row--base"><span>Ventas antes de devoluciones</span><strong>{{ formatMoney(selectedMonth().salesBeforeReturns) }}</strong><i style="--bar-size: 100%"></i></div>
+            <div class="bridge-row"><span>Devoluciones del mes</span><strong>{{ formatSignedMoney(-selectedMonth().returnsImpact) }}</strong><i [style.--bar-size.%]="ratio(selectedMonth().returnsImpact, selectedMonth().salesBeforeReturns) * 100"></i></div>
+            <div class="bridge-row"><span>Costo neto de mercancía vendida</span><strong>{{ formatSignedMoney(-selectedMonth().merchandiseCost) }}</strong><i [style.--bar-size.%]="ratio(absolute(selectedMonth().merchandiseCost), selectedMonth().salesBeforeReturns) * 100"></i></div>
+            <div class="bridge-row"><span>Gastos operativos</span><strong>{{ formatSignedMoney(-selectedMonth().expenses) }}</strong><i [style.--bar-size.%]="ratio(selectedMonth().expenses, selectedMonth().salesBeforeReturns) * 100"></i></div>
+            <div class="bridge-row bridge-row--result"><span>Utilidad neta</span><strong>{{ formatMoney(selectedMonth().netProfit) }}</strong><i [style.--bar-size.%]="ratio(absolute(selectedMonth().netProfit), selectedMonth().salesBeforeReturns) * 100"></i></div>
+          </div>
+        </article>
+
+        <article class="panel cash-comparison">
+          <header class="panel-header"><div><p class="panel-kicker">Liquidez</p><h2>Vendido vs. cobrado</h2><p>Una venta no se convierte inmediatamente en efectivo.</p></div></header>
+          <div class="comparison-visual" role="img" [attr.aria-label]="'Se vendieron ' + formatMoney(selectedMonth().netSales) + ' y se cobraron ' + formatMoney(selectedMonth().collected)">
+            <div><span>Ventas netas</span><i><b style="width: 100%"></b></i><strong>{{ formatMoney(selectedMonth().netSales) }}</strong></div>
+            <div><span>Cobrado</span><i><b [style.width.%]="boundedRatio(selectedMonth().collected, selectedMonth().netSales) * 100"></b></i><strong>{{ formatMoney(selectedMonth().collected) }}</strong></div>
+            <div><span>{{ monthlyCollectionGapLabel() }}</span><i><b class="is-warning" [style.width.%]="boundedRatio(monthlyCollectionGapMagnitude(), selectedMonth().netSales) * 100"></b></i><strong>{{ formatMoney(monthlyCollectionGapMagnitude()) }}</strong></div>
+          </div>
+          <aside class="insight-box"><span class="material-symbols-rounded" aria-hidden="true">info</span><p>Los cobros se muestran en la fecha en que ocurrieron y pueden corresponder a ventas de meses anteriores.</p></aside>
+        </article>
+      </section>
+
+      <article class="panel history-panel">
+        <header class="panel-header"><div><p class="panel-kicker">Historial</p><h2>Comparativo mensual</h2><p>Mismos criterios contables para todos los periodos.</p></div></header>
+        <div class="table-scroll" tabindex="0" aria-label="Tabla con desplazamiento horizontal">
+          <table>
+            <thead><tr><th scope="col">Mes</th><th scope="col">Inversión</th><th scope="col">Ventas netas</th><th scope="col">Cobrado</th><th scope="col">Gastos</th><th scope="col">Utilidad</th><th scope="col">Margen</th></tr></thead>
+            <tbody>
+              @for (month of months.slice().reverse(); track month.id) {
+                <tr [class.is-selected]="month.id === selectedMonthId()"><th scope="row">{{ month.label }}</th><td>{{ formatMoney(month.investment) }}</td><td>{{ formatMoney(month.netSales) }}</td><td>{{ formatMoney(month.collected) }}</td><td>{{ formatMoney(month.expenses) }}</td><td class="profit-cell">{{ formatMoney(month.netProfit) }}</td><td>{{ formatPercent(ratio(month.netProfit, month.netSales)) }}</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+  }
+
+  @if (activeView() === 'inventario') {
+    <section class="view-stack" aria-labelledby="inventory-capital-title">
+      <header class="content-heading">
+        <div>
+          <p class="eyebrow">Inventario y capital</p>
+          <h2 id="inventory-capital-title">Cómo se movió el capital en {{ selectedMonth().label }}</h2>
+          <p>Entradas y salidas valuadas al costo. Separa lo que salió del almacén de lo que ya regresó a caja.</p>
+        </div>
+        <button type="button" class="button button--secondary"><span class="material-symbols-rounded" aria-hidden="true">download</span>Exportar movimientos</button>
+      </header>
+
+      <aside class="capital-definition" aria-label="Definición de capital estancado">
+        <span class="material-symbols-rounded" aria-hidden="true">info</span>
+        <p><strong>Capital en inventario</strong> incluye mercancía disponible y reservada al costo. El <strong>capital estancado</strong> considera únicamente mercancía disponible, sin dueña, que lleva más de 45 días sin rotar.</p>
+      </aside>
+
+      <section class="kpi-grid" aria-label="Indicadores de capital en inventario">
+        <article class="kpi-card kpi-card--featured">
+          <div class="kpi-label"><span>Capital al cierre</span><span class="material-symbols-rounded" aria-hidden="true">inventory</span></div>
+          <strong>{{ formatMoney(selectedMonth().inventoryClosing) }}</strong>
+          <p><span class="trend trend--warning">+{{ formatMoney(inventoryCapitalDelta()) }}</span> durante el mes</p>
+          <small>Mercancía disponible, reservada y en revisión</small>
+        </article>
+        <article class="kpi-card">
+          <div class="kpi-label"><span>Reingresó por devoluciones</span><span class="material-symbols-rounded" aria-hidden="true">assignment_return</span></div>
+          <strong>{{ formatMoney(selectedMonth().returnedToInventory) }}</strong>
+          <p>{{ selectedMonthReturnCount() }} devolución(es) apta(s) para reventa</p>
+          <small>Las devoluciones dañadas no aumentan este capital</small>
+        </article>
+        <article class="kpi-card">
+          <div class="kpi-label"><span>Capital liberado</span><span class="material-symbols-rounded" aria-hidden="true">outbox</span></div>
+          <strong>{{ formatMoney(selectedMonth().inventoryReleased) }}</strong>
+          <p>Mercancía vendida y entregada</p>
+          <small>Salió del inventario, pero puede seguir por cobrar</small>
+        </article>
+        <article class="kpi-card">
+          <div class="kpi-label"><span>Capital recuperado</span><span class="material-symbols-rounded" aria-hidden="true">price_check</span></div>
+          <strong>{{ formatMoney(selectedMonth().inventoryRecovered) }}</strong>
+          <p><span class="trend trend--positive">{{ formatPercent(inventoryRecoveryRate()) }}</span> de los cobros recuperó principal</p>
+          <small>Principal recuperado; no debe confundirse con utilidad</small>
+        </article>
+      </section>
+
+      <section class="inventory-overview-grid">
+        <article class="panel capital-bridge-panel">
+          <header class="panel-header">
+            <div><p class="panel-kicker">Conciliación</p><h2>Puente del capital en inventario</h2><p>El saldo inicial más entradas, menos salidas, explica el cierre.</p></div>
+            <span class="balance-chip">Valuado al costo</span>
+          </header>
+          <ol class="capital-equation" aria-label="Conciliación del capital en inventario">
+            <li class="capital-equation__base"><span><b>Inicio</b><small>Capital inicial</small></span><strong>{{ formatMoney(selectedMonth().inventoryOpening) }}</strong></li>
+            <li class="capital-equation__in"><span><b>+</b><small>Compras recibidas</small></span><strong>{{ formatMoney(selectedMonth().inventoryReceipts) }}</strong></li>
+            <li class="capital-equation__in"><span><b>+</b><small>Devoluciones a stock</small></span><strong>{{ formatMoney(selectedMonth().returnedToInventory) }}</strong></li>
+            <li class="capital-equation__out"><span><b>−</b><small>Liberado por ventas</small></span><strong>{{ formatMoney(selectedMonth().inventoryReleased) }}</strong></li>
+            <li class="capital-equation__out"><span><b>−</b><small>Bajas y daño</small></span><strong>{{ formatMoney(selectedMonth().inventoryWriteOff) }}</strong></li>
+            <li class="capital-equation__result"><span><b>=</b><small>Capital al cierre</small></span><strong>{{ formatMoney(selectedMonth().inventoryClosing) }}</strong></li>
+          </ol>
+        </article>
+
+        <article class="panel recovery-panel">
+          <header class="panel-header"><div><p class="panel-kicker">Liquidez</p><h2>De inventario a efectivo</h2><p>Vender libera capital; cobrarlo lo recupera.</p></div></header>
+          <ol class="recovery-flow">
+            <li><span class="recovery-icon material-symbols-rounded" aria-hidden="true">inventory_2</span><div><small>Liberado al entregar</small><strong>{{ formatMoney(selectedMonth().inventoryReleased) }}</strong></div></li>
+            <li class="recovery-flow__arrow" aria-hidden="true"><span class="material-symbols-rounded">arrow_forward</span></li>
+            <li><span class="recovery-icon recovery-icon--success material-symbols-rounded" aria-hidden="true">account_balance_wallet</span><div><small>Recuperado en cobros</small><strong>{{ formatMoney(selectedMonth().inventoryRecovered) }}</strong></div></li>
+          </ol>
+          <div class="pending-recovery">
+            <div><span>Utilidad liberada en los cobros</span><strong>{{ formatMoney(inventoryPendingRecovery()) }}</strong></div>
+            <div class="recovery-progress" role="progressbar" aria-label="Porcentaje de los cobros que recuperó capital" aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="inventoryRecoveryRate() * 100"><span [style.width.%]="inventoryRecoveryRate() * 100"></span></div>
+          </div>
+          <aside class="insight-box"><span class="material-symbols-rounded" aria-hidden="true">info</span><p>El capital liberado corresponde a ventas del mes; el recuperado corresponde a cobros del mes y puede venir de ventas anteriores.</p></aside>
+        </article>
+      </section>
+
+      <section class="inventory-analysis-grid">
+        <article class="panel inventory-trend-panel">
+          <header class="panel-header"><div><p class="panel-kicker">Tendencia</p><h2>Capital al cierre vs. liberado</h2><p>Seguimiento mensual valuado al costo.</p></div></header>
+          <div class="chart-legend" aria-hidden="true"><span><i class="legend-inventory"></i>Capital al cierre</span><span><i class="legend-released"></i>Liberado en el mes</span></div>
+          <div class="column-chart inventory-chart" role="img" aria-label="Comparativo mensual del capital en inventario al cierre y del capital liberado mediante ventas.">
+            <div class="chart-scale" aria-hidden="true"><span>{{ formatCompactMoney(inventoryChartScaleMax()) }}</span><span>{{ formatCompactMoney(inventoryChartScaleMax() / 2) }}</span><span>$0</span></div>
+            <div class="chart-grid" aria-hidden="true">
+              @for (month of months; track month.id) {
+                <div class="month-column" [class.is-selected]="month.id === selectedMonthId()">
+                  <div class="bar-area">
+                    <span class="chart-bar chart-bar--inventory" [style.height.%]="inventoryBarHeight(month.inventoryClosing)"></span>
+                    <span class="chart-bar chart-bar--released" [style.height.%]="inventoryBarHeight(month.inventoryReleased)"></span>
+                  </div>
+                  <span>{{ month.shortLabel }}</span>
+                </div>
+              }
+            </div>
+          </div>
+        </article>
+
+        <article class="panel aging-panel">
+          <header class="panel-header"><div><p class="panel-kicker">Antigüedad</p><h2>Cuánto capital está estancado</h2><p>{{ formatMoney(selectedMonth().stagnantCapital) }} supera el umbral de 45 días.</p></div><span class="count-badge">{{ formatPercent(stagnantCapitalShare()) }}</span></header>
+          <div class="aging-stack" role="img" [attr.aria-label]="'Distribución del capital por antigüedad: ' + formatMoney(agingFreshCapital()) + ' entre cero y treinta días, ' + formatMoney(agingWatchCapital()) + ' entre treinta y uno y cuarenta y cinco, ' + formatMoney(agingStaleCapital()) + ' entre cuarenta y seis y noventa, y ' + formatMoney(agingCriticalCapital()) + ' con más de noventa días.'">
+            <span class="aging-stack__fresh" [style.width.%]="inventoryCapitalShare(agingFreshCapital())"></span><span class="aging-stack__watch" [style.width.%]="inventoryCapitalShare(agingWatchCapital())"></span><span class="aging-stack__stale" [style.width.%]="inventoryCapitalShare(agingStaleCapital())"></span><span class="aging-stack__critical" [style.width.%]="inventoryCapitalShare(agingCriticalCapital())"></span>
+          </div>
+          <dl class="aging-list">
+            <div><dt><i class="aging-dot aging-dot--fresh"></i>0–30 días</dt><dd>{{ formatMoney(agingFreshCapital()) }} <small>Rotación normal</small></dd></div>
+            <div><dt><i class="aging-dot aging-dot--watch"></i>31–45 días</dt><dd>{{ formatMoney(agingWatchCapital()) }} <small>Vigilar</small></dd></div>
+            <div><dt><i class="aging-dot aging-dot--stale"></i>46–90 días</dt><dd>{{ formatMoney(agingStaleCapital()) }} <small>Estancado</small></dd></div>
+            <div><dt><i class="aging-dot aging-dot--critical"></i>Más de 90 días</dt><dd>{{ formatMoney(agingCriticalCapital()) }} <small>Prioridad alta</small></dd></div>
+          </dl>
+        </article>
+      </section>
+
+      <article class="panel history-panel return-rotation-panel">
+        <header class="panel-header">
+          <div><p class="panel-kicker">Devoluciones</p><h2>Qué pasó con el capital que regresó</h2><p>Seguimiento de las devoluciones aptas para reventa registradas en {{ selectedMonth().label }}.</p></div>
+          <span class="return-summary"><strong>{{ formatMoney(returnCapitalResold()) }}</strong> de {{ formatMoney(selectedMonth().returnedToInventory) }} ya se volvió a vender</span>
+        </header>
+        <div class="table-scroll" tabindex="0" aria-label="Seguimiento de capital reingresado por devoluciones con desplazamiento horizontal">
+          <table>
+            <thead><tr><th scope="col">Producto</th><th scope="col">Capital reingresado</th><th scope="col">Vuelto a vender</th><th scope="col">Días para rotar</th><th scope="col">Estado</th></tr></thead>
+            <tbody>
+              @for (row of returnCapitalRows(); track row.id) {
+                <tr><th scope="row">{{ row.product }}</th><td>{{ formatMoney(row.capitalReturned) }}</td><td>{{ formatMoney(row.capitalResold) }}</td><td>{{ row.daysToRotate === null ? 'Aún sin rotar' : row.daysToRotate + ' días' }}</td><td><span class="table-status" [class.table-status--partial]="row.status === 'Parcial' || row.status === 'En seguimiento'" [class.table-status--danger]="row.status === 'Estancado'">{{ row.status }}</span></td></tr>
+              } @empty {
+                <tr><td colspan="5" class="empty-table-cell">No hay devoluciones aptas para reventa en este periodo.</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+  }
+
+  @if (activeView() === 'socios') {
+    <section class="view-stack" aria-labelledby="partners-title">
+      <header class="content-heading">
+        <div><p class="eyebrow">Distribución 50/50</p><h2 id="partners-title">Utilidades y socios</h2><p>Consulta la posición acumulada o entra al detalle de cada cierre mensual.</p></div>
+        @if (partnerScope() === 'general') {
+          <span class="status-chip status-chip--mixed"><span></span>{{ includedClosuresCount() }} cierres registrados</span>
+        } @else {
+          <span class="status-chip"><span></span>Mes preliminar</span>
+        }
+      </header>
+
+      <div class="scope-switch" role="group" aria-label="Nivel de análisis de utilidades y socios">
+        <button type="button" [class.is-active]="partnerScope() === 'general'" [attr.aria-pressed]="partnerScope() === 'general'" (click)="setPartnerScope('general')">
+          <span class="material-symbols-rounded" aria-hidden="true">donut_large</span>
+          Resumen acumulado
+        </button>
+        <button type="button" [class.is-active]="partnerScope() === 'mensual'" [attr.aria-pressed]="partnerScope() === 'mensual'" (click)="setPartnerScope('mensual')">
+          <span class="material-symbols-rounded" aria-hidden="true">calendar_month</span>
+          Análisis mensual
+        </button>
+      </div>
+
+      @if (partnerScope() === 'general') {
+        <section class="kpi-grid partner-overview-kpis" aria-label="Resumen acumulado de distribuciones">
+          <article class="kpi-card kpi-card--featured"><div class="kpi-label"><span>Utilidad generada</span><span class="material-symbols-rounded" aria-hidden="true">savings</span></div><strong>{{ formatMoney(totalDistributableProfit()) }}</strong><p>{{ periodRangeLabel() }}</p><small>Todo lo ganado, esté cobrado o no</small></article>
+          <article class="kpi-card"><div class="kpi-label"><span>Se puede retirar hoy</span><span class="material-symbols-rounded" aria-hidden="true">paid</span></div><strong>{{ formatMoney(totalAvailableNow()) }}</strong><p><span class="trend trend--positive">{{ formatMoney(totalCollectedProfit()) }}</span> cobrados</p><small>Menos {{ formatMoney(totalDistributed()) }} ya retirados</small></article>
+          <article class="kpi-card"><div class="kpi-label"><span>Por cobrar</span><span class="material-symbols-rounded" aria-hidden="true">pending_actions</span></div><strong>{{ formatMoney(totalPendingProfit()) }}</strong><p><span class="trend trend--warning">Es suyo, todavía no llega</span></p><small>Utilidad dentro de {{ formatMoney(summary().saldoPendienteCobro) }} sin liquidar</small></article>
+          <article class="kpi-card kpi-card--projection"><div class="kpi-label"><span>Utilidad proyectada</span><span class="material-symbols-rounded" aria-hidden="true">trending_up</span></div><strong>{{ formatMoney(totalProjectedProfit()) }}</strong><p><span class="trend trend--projection">+ {{ formatMoney(totalInProcessProfit()) }}</span> en {{ profitProjection().inProcessOrderCount }} pedidos en proceso</p><small>Generada más el margen estimado desde borrador hasta antes de entrega</small></article>
+          <article class="kpi-card"><div class="kpi-label"><span>Participación por socio</span><span class="material-symbols-rounded" aria-hidden="true">percent</span></div><strong>{{ formatMoney(totalSharePerPartner()) }}</strong><p>50% para cada parte</p><small>{{ formatMoney(totalCollectedSharePerPartner()) }} de eso ya está cobrado</small></article>
+        </section>
+
+        <article class="distribution-equation" aria-labelledby="distribution-general-title">
+          <header><div><p class="panel-kicker">Base acumulada</p><h2 id="distribution-general-title">De las ventas a la utilidad repartible</h2><p>El capital invertido no se descuenta: regresa como mercancía o como cobranza.</p></div><button type="button" class="text-button" (click)="goToWithdrawalBreakdownPage()">Ver movimientos incluidos</button></header>
+          <div class="equation-grid">
+            <div class="equation-item"><span>Ventas netas</span><strong>{{ formatMoney(summary().ventasNetas) }}</strong></div><span class="equation-operator">−</span>
+            <div class="equation-item"><span>Costo de la mercancía</span><strong>{{ formatMoney(summary().costoEntregado) }}</strong></div><span class="equation-operator">−</span>
+            <div class="equation-item"><span>Gastos del negocio</span><strong>{{ formatMoney(totalDistributionAdjustments()) }}</strong></div>
+            @if (totalUnclassifiedWithdrawals() > 0) {
+              <span class="equation-operator">−</span>
+              <div class="equation-item"><span>Salidas sin clasificar</span><strong>{{ formatMoney(totalUnclassifiedWithdrawals()) }}</strong></div>
+            }
+            <span class="equation-operator">=</span>
+            <div class="equation-item equation-item--result"><span>Utilidad repartible</span><strong>{{ formatMoney(totalDistributableProfit()) }}</strong></div>
+          </div>
+          <p class="equation-note"><span class="material-symbols-rounded" aria-hidden="true">info</span>De esa utilidad, {{ formatMoney(totalCollectedProfit()) }} ya están cobrados y {{ formatMoney(totalPendingProfit()) }} siguen por cobrar. “General” significa {{ periodRangeLabel() }}.</p>
+        </article>
+
+        <section class="partner-grid" aria-label="Saldos acumulados por socio">
+          <article class="partner-card partner-card--overall">
+            <header><span class="partner-avatar">BT</span><div><p>Socio 1 · acumulado</p><h2>Blanca Trejo</h2></div><span class="share-chip">50%</span></header>
+            <dl><div><dt>Le corresponde en total</dt><dd>{{ formatMoney(totalSharePerPartner()) }}</dd></div><div><dt>Total retirado</dt><dd>{{ formatMoney(totalPartnerOneWithdrawn()) }}</dd></div><div><dt>Pedidos pendientes de pago</dt><dd>{{ formatMoney(partnerOne().pendingShare) }}</dd></div><div class="partner-pending"><dt>Puede retirar hoy</dt><dd>{{ formatMoney(totalPartnerOneAvailable()) }}</dd></div><div><dt>Saldo pendiente total</dt><dd>{{ formatMoney(totalPartnerOnePending()) }}</dd></div></dl>
+            <div class="progress-copy"><span>Participación entregada</span><strong>{{ overallPartnerProgress(totalPartnerOneWithdrawn()).toFixed(0) }}%</strong></div>
+            <div class="progress-track" role="progressbar" aria-label="Participación acumulada entregada a Blanca Trejo" aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="overallPartnerProgress(totalPartnerOneWithdrawn())"><span [style.width.%]="overallPartnerProgress(totalPartnerOneWithdrawn())"></span></div>
+            <div class="partner-actions"><button type="button" class="button button--primary" (click)="openPartnerPayment('socio_blanca')">Registrar pago</button><button type="button" class="button button--secondary" (click)="setPartnerScope('mensual')">Analizar por mes</button></div>
+          </article>
+
+          <article class="partner-card partner-card--overall">
+            <header><span class="partner-avatar partner-avatar--green">AP</span><div><p>Socio 2 · acumulado</p><h2>Andrea y Pepe</h2></div><span class="share-chip">50%</span></header>
+            <dl><div><dt>Le corresponde en total</dt><dd>{{ formatMoney(totalSharePerPartner()) }}</dd></div><div><dt>Total retirado</dt><dd>{{ formatMoney(totalPartnerTwoWithdrawn()) }}</dd></div><div><dt>Pedidos pendientes de pago</dt><dd>{{ formatMoney(partnerTwo().pendingShare) }}</dd></div><div class="partner-pending" [class.is-settled]="totalPartnerTwoAvailable() <= 0"><dt>Puede retirar hoy</dt><dd>{{ formatMoney(totalPartnerTwoAvailable()) }}</dd></div><div><dt>Saldo pendiente total</dt><dd>{{ formatMoney(totalPartnerTwoPending()) }}</dd></div></dl>
+            <div class="progress-copy"><span>Participación entregada</span><strong>{{ overallPartnerProgress(totalPartnerTwoWithdrawn()).toFixed(0) }}%</strong></div>
+            <div class="progress-track progress-track--green" role="progressbar" aria-label="Participación acumulada entregada a Andrea y Pepe" aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="overallPartnerProgress(totalPartnerTwoWithdrawn())"><span [style.width.%]="overallPartnerProgress(totalPartnerTwoWithdrawn())"></span></div>
+            <div class="partner-actions"><button type="button" class="button button--primary" [disabled]="totalPartnerTwoAvailable() <= 0" (click)="openPartnerPayment('socio_andrea_pepe')">{{ totalPartnerTwoAvailable() <= 0 ? 'Sin efectivo disponible' : 'Registrar pago' }}</button><button type="button" class="button button--secondary" (click)="setPartnerScope('mensual')">Analizar por mes</button></div>
+          </article>
+        </section>
+      } @else {
+        <article class="distribution-equation" aria-labelledby="distribution-title">
+          <header><div><p class="panel-kicker">Base distribuible</p><h2 id="distribution-title">Cierre preliminar de {{ selectedMonth().label }}</h2></div><button type="button" class="text-button" (click)="goToWithdrawalBreakdownPage()">Ver movimientos incluidos</button></header>
+          <div class="equation-grid">
+            <div class="equation-item"><span>Ventas netas</span><strong>{{ formatMoney(selectedMonth().netSales) }}</strong></div><span class="equation-operator">−</span>
+            <div class="equation-item"><span>Costo de la mercancía</span><strong>{{ formatMoney(monthlyMerchandiseCost()) }}</strong></div><span class="equation-operator">−</span>
+            <div class="equation-item"><span>Gastos del negocio</span><strong>{{ formatMoney(monthlyDistributionAdjustments()) }}</strong></div><span class="equation-operator">=</span>
+            <div class="equation-item equation-item--result"><span>Utilidad del mes</span><strong>{{ formatMoney(distributableProfit()) }}</strong></div>
+          </div>
+          <p class="equation-note"><span class="material-symbols-rounded" aria-hidden="true">info</span>De esa utilidad, {{ formatMoney(monthlyCollectedProfit()) }} entraron en efectivo dentro del mes y {{ formatMoney(selectedMonth().pendingCollectionProfit) }} siguen pendientes de cobro.</p>
+        </article>
+
+        <article class="projection-callout" aria-labelledby="monthly-projection-title">
+          <span class="projection-callout__icon material-symbols-rounded" aria-hidden="true">monitoring</span>
+          <div><p class="panel-kicker">Escenario al completar pedidos</p><h2 id="monthly-projection-title">{{ formatMoney(selectedMonth().projectedProfit) }} de utilidad proyectada</h2><p>{{ formatMoney(selectedMonth().netProfit) }} ya generados + {{ formatMoney(selectedMonth().inProcessProfit) }} estimados en {{ selectedMonth().inProcessOrderCount }} pedido(s) todavía en proceso.</p></div>
+          <small>No es retirable todavía: precios, costos, cancelaciones y devoluciones pueden cambiar la proyección.</small>
+        </article>
+
+        <section class="partner-grid" aria-label="Saldos individuales de socios en el mes seleccionado">
+          <article class="partner-card">
+            <header><span class="partner-avatar">BT</span><div><p>Socio 1</p><h2>Blanca Trejo</h2></div><span class="share-chip">50%</span></header>
+            <dl><div><dt>Participación del mes</dt><dd>{{ formatMoney(sharePerPartner()) }}</dd></div><div><dt>Retirado</dt><dd>{{ formatMoney(selectedMonth().partnerOneWithdrawn) }}</dd></div><div class="partner-pending"><dt>Pendiente</dt><dd>{{ formatMoney(partnerOnePending()) }}</dd></div></dl>
+            <div class="progress-copy"><span>Distribución pagada</span><strong>{{ partnerProgress(selectedMonth().partnerOneWithdrawn).toFixed(0) }}%</strong></div>
+            <div class="progress-track" role="progressbar" aria-label="Distribución pagada a Blanca Trejo" aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="partnerProgress(selectedMonth().partnerOneWithdrawn)"><span [style.width.%]="partnerProgress(selectedMonth().partnerOneWithdrawn)"></span></div>
+            <div class="partner-actions"><button type="button" class="button button--primary" (click)="openPartnerPayment('socio_blanca')">Registrar pago</button><button type="button" class="button button--secondary" (click)="setPartnerScope('general')">Ver historial</button></div>
+          </article>
+
+          <article class="partner-card">
+            <header><span class="partner-avatar partner-avatar--green">AP</span><div><p>Socio 2</p><h2>Andrea y Pepe</h2></div><span class="share-chip">50%</span></header>
+            <dl><div><dt>Participación del mes</dt><dd>{{ formatMoney(sharePerPartner()) }}</dd></div><div><dt>Retirado</dt><dd>{{ formatMoney(selectedMonth().partnerTwoWithdrawn) }}</dd></div><div class="partner-pending is-settled"><dt>Pendiente</dt><dd>{{ formatMoney(partnerTwoPending()) }}</dd></div></dl>
+            <div class="progress-copy"><span>Distribución pagada</span><strong>{{ partnerProgress(selectedMonth().partnerTwoWithdrawn).toFixed(0) }}%</strong></div>
+            <div class="progress-track progress-track--green" role="progressbar" aria-label="Distribución pagada a Andrea y Pepe" aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="partnerProgress(selectedMonth().partnerTwoWithdrawn)"><span [style.width.%]="partnerProgress(selectedMonth().partnerTwoWithdrawn)"></span></div>
+            <div class="partner-actions"><button type="button" class="button button--primary" [disabled]="totalPartnerTwoAvailable() <= 0" (click)="openPartnerPayment('socio_andrea_pepe')">{{ totalPartnerTwoAvailable() <= 0 ? 'Sin efectivo disponible' : 'Registrar pago' }}</button><button type="button" class="button button--secondary" (click)="setPartnerScope('general')">Ver historial</button></div>
+          </article>
+        </section>
+      }
+
+      <article class="panel history-panel">
+        <header class="panel-header">
+          <div><p class="panel-kicker">Ventas, cobranza y reparto</p><h2>Historial mensual auditable</h2><p>Separa cuándo nació el pedido, cuándo se entregó y cuándo entró o salió el dinero.</p></div>
+          @if (partnerScope() === 'mensual') {
+            <button type="button" class="button button--dark" (click)="openCutDialog()"><span class="material-symbols-rounded" aria-hidden="true">lock</span>Cerrar periodo</button>
+          }
+        </header>
+        <div class="accounting-basis-grid" aria-label="Criterios usados en el historial">
+          <div><span class="material-symbols-rounded" aria-hidden="true">calendar_add_on</span><p><strong>Actividad comercial</strong><small>Los pedidos permanecen en el mes de <code>created_at</code>, aunque se cobren después.</small></p></div>
+          <div><span class="material-symbols-rounded" aria-hidden="true">inventory</span><p><strong>Resultado del periodo</strong><small>La entrega reconoce venta y costo. Una devolución afecta el mes en que ocurre.</small></p></div>
+          <div><span class="material-symbols-rounded" aria-hidden="true">account_balance_wallet</span><p><strong>Flujo de efectivo</strong><small>Los cobros y reembolsos se muestran en la fecha real de entrada o salida.</small></p></div>
+        </div>
+        @if (unallocatedHistoricalCollections() > 0) {
+          <div class="data-quality-warning" role="status"><span class="material-symbols-rounded" aria-hidden="true">history_toggle_off</span><p><strong>{{ formatMoney(unallocatedHistoricalCollections()) }} cobrados sin fecha comprobable</strong><small>El total sí existe en pedidos históricos, pero no se asigna artificialmente a un mes. Quedará como saldo inicial al migrar y requiere conciliación.</small></p></div>
+        }
+        <p class="table-scroll-hint"><span class="material-symbols-rounded" aria-hidden="true">swipe</span>Desliza para consultar ventas, cobranza, cartera y reparto.</p>
+        <div class="table-scroll" tabindex="0" aria-label="Historial mensual de ventas, cobranza, cartera y distribuciones con desplazamiento horizontal">
+          <table class="distribution-history-table">
+            <thead><tr><th scope="col">Periodo</th><th scope="col"><span class="table-heading">Pedidos creados<small>Actividad comercial</small></span></th><th scope="col"><span class="table-heading">Cobranza de esa cohorte<small>Seguimiento hasta hoy</small></span></th><th scope="col"><span class="table-heading">Efectivo del mes<small>Entradas y reembolsos</small></span></th><th scope="col"><span class="table-heading">Cartera arrastrada<small>Inicio → cierre</small></span></th><th scope="col"><span class="table-heading">Resultado del periodo<small>Entregas y ajustes ocurridos aquí</small></span></th><th scope="col"><span class="table-heading">Utilidad respaldada<small>Por cobros del periodo</small></span></th><th scope="col">Blanca</th><th scope="col">Andrea y Pepe</th><th scope="col">Estado</th></tr></thead>
+            <tbody>
+              @for (month of months.slice().reverse(); track month.id) {
+                <tr [class.is-selected]="partnerScope() === 'mensual' && month.id === selectedMonthId()">
+                  <th scope="row">{{ month.label }}</th>
+                  <td class="metric-cell"><strong>{{ formatMoney(month.generatedSales) }}</strong><small>{{ month.generatedOrderCount }} pedidos creados</small><small>{{ formatMoney(month.cohortCurrentSales) }} vigentes hoy</small>@if (month.cohortReturnsToDate > 0) {<small class="has-pending">−{{ formatMoney(month.cohortReturnsToDate) }} devuelto después</small>}</td>
+                  <td class="metric-cell cohort-cell"><strong>{{ formatMoney(month.cohortCollectedToDate) }} cobrados</strong><small [class.has-pending]="month.cohortPendingToday > 0">{{ formatMoney(month.cohortPendingToday) }} pendientes hoy</small><span class="cohort-progress" role="progressbar" aria-label="Porcentaje cobrado de las ventas de este periodo" aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="boundedRatio(month.cohortCollectedToDate, month.cohortCollectedToDate + month.cohortPendingToday) * 100"><i [style.width.%]="boundedRatio(month.cohortCollectedToDate, month.cohortCollectedToDate + month.cohortPendingToday) * 100"></i></span></td>
+                  <td class="metric-cell cashflow-cell"><strong>{{ formatMoney(month.netCashCollections) }} netos</strong><small>+{{ formatMoney(month.collected) }} cobrados</small><small>−{{ formatMoney(month.cashRefunds) }} reembolsados</small><small>{{ formatMoney(month.collectedFromPriorPeriods) }} cobrados de meses anteriores</small></td>
+                  <td class="metric-cell portfolio-cell"><span><small>Inicio</small><strong>{{ formatMoney(month.receivablesOpening) }}</strong></span><i class="material-symbols-rounded" aria-hidden="true">arrow_forward</i><span><small>Cierre</small><strong>{{ formatMoney(month.receivablesClosing) }}</strong></span></td>
+                  <td class="metric-cell profit-cell"><strong>{{ formatMoney(month.netProfit) }}</strong><small>{{ formatMoney(month.deliveredSales) }} entregado</small>@if (month.returnsImpact > 0) {<small>−{{ formatMoney(month.returnsImpact) }} devoluciones del mes</small>}<small>−{{ formatMoney(month.merchandiseCost) }} costo neto</small><small>−{{ formatMoney(month.expenses) }} gastos</small>@if (month.returnedInventoryCost > 0) {<small class="is-positive">{{ formatMoney(month.returnedInventoryCost) }} regresó a inventario</small>}@if (month.damagedWriteOff > 0) {<small class="has-pending">{{ formatMoney(month.damagedWriteOff) }} de costo dañado</small>}<small>{{ formatMoney(month.inProcessProfit) }} proyectados en proceso</small></td>
+                  <td class="metric-cell"><strong>{{ formatMoney(month.collectedProfit) }}</strong><small>{{ formatMoney(month.pendingCollectionProfit) }} de utilidad sigue por cobrar</small><small>No incluye la proyección en proceso</small></td>
+                  <td>{{ formatMoney(month.partnerOneWithdrawn) }}</td><td>{{ formatMoney(month.partnerTwoWithdrawn) }}</td>
+                  <td><span class="table-status" [class.table-status--open]="monthlyDistributionStatus(month) === 'Preliminar'" [class.table-status--partial]="monthlyDistributionStatus(month) === 'Seguimiento'" [class.table-status--late]="monthlyDistributionStatus(month) === 'Cobrado después'">{{ monthlyDistributionStatus(month) }}</span></td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+  }
+</main>
+
+@if (movementDialogOpen()) {
+  <div class="admin-dialog-backdrop" (click)="closeMovementDialog()">
+    <section class="admin-dialog" role="dialog" aria-modal="true" aria-labelledby="movement-dialog-title" (click)="$event.stopPropagation()">
+      <header class="admin-dialog__header">
+        <div><p class="panel-kicker">{{ activeBusinessLabel() }}</p><h2 id="movement-dialog-title">Registrar movimiento</h2><p>El movimiento se guardará únicamente en el negocio activo.</p></div>
+        <button type="button" class="icon-button" aria-label="Cerrar" (click)="closeMovementDialog()"><span class="material-symbols-rounded" aria-hidden="true">close</span></button>
+      </header>
+      <div class="dialog-tabs" role="tablist" aria-label="Tipo de movimiento">
+        <button type="button" role="tab" [attr.aria-selected]="movementDialogKind() === 'expense'" [class.is-active]="movementDialogKind() === 'expense'" (click)="openMovementDialog('expense')">Egreso</button>
+        <button type="button" role="tab" [attr.aria-selected]="movementDialogKind() === 'withdrawal'" [class.is-active]="movementDialogKind() === 'withdrawal'" (click)="openMovementDialog('withdrawal')">Retiro de socio</button>
+        <button type="button" role="tab" [attr.aria-selected]="movementDialogKind() === 'account'" [class.is-active]="movementDialogKind() === 'account'" (click)="openMovementDialog('account')">Cuenta</button>
+      </div>
+      @if (movementDialogKind() === 'expense') {
+        <form class="admin-form" (ngSubmit)="submitExpense()">
+          <label class="admin-form__wide"><span>Categoría</span><select name="expenseCategory" [ngModel]="expenseCategory()" (ngModelChange)="setExpenseCategory($event)">@for (option of expenseCategoryOptions; track option.id) {<option [value]="option.id">{{ option.label }}</option>}</select><small class="field-hint">{{ expenseCategoryHint(expenseCategory()) }}</small></label>
+          <label><span>Monto</span><input name="expenseAmount" type="number" min="0.01" step="0.01" [ngModel]="expenseAmount()" (ngModelChange)="setExpenseAmount($event)" required /></label>
+          <label><span>Fecha</span><input name="expenseDate" type="date" [ngModel]="expenseDate()" (ngModelChange)="setExpenseDate($event)" required /></label>
+          <label><span>Cuenta de salida</span><select name="expenseAccount" [ngModel]="expenseAccountId()" (ngModelChange)="setExpenseAccountId($event)" required><option value="none" disabled>Selecciona una cuenta</option>@for (account of accounts(); track account.account_id) {<option [value]="account.account_id">{{ account.name }} · {{ formatMoney(account.balance) }}</option>}</select><small class="field-hint">El saldo y el libro se actualizarán juntos.</small></label>
+          <label><span>Ruta</span><select name="expenseRoute" [ngModel]="expenseRouteId()" (ngModelChange)="setExpenseRouteId($event)">@for (option of scopeOptions(); track option.id) { <option [value]="option.id">{{ option.name }}</option> }</select></label>
+          <label class="admin-form__wide"><span>Notas</span><textarea name="expenseNotes" rows="3" [ngModel]="expenseNotes()" (ngModelChange)="setExpenseNotes($event)"></textarea></label>
+          <div class="admin-dialog__actions"><button type="button" class="button button--secondary" (click)="closeMovementDialog()">Cancelar</button><button type="submit" class="button button--primary" [disabled]="!canCreateMovements()">Guardar egreso</button></div>
+        </form>
+      } @else if (movementDialogKind() === 'withdrawal') {
+        <form class="admin-form" (ngSubmit)="submitWithdrawal()">
+          <label><span>Socio o destino</span><select name="withdrawalPurpose" [ngModel]="withdrawalPurpose()" (ngModelChange)="setWithdrawalPurpose($event)"><option value="socio_blanca">Blanca Trejo</option><option value="socio_andrea_pepe">Andrea y Pepe</option><option value="persona">Persona</option><option value="sueldo">Sueldo</option><option value="gasto">Gasto</option><option value="inversion">Inversión</option><option value="ahorro">Ahorro</option><option value="otro">Otro</option></select></label>
+          <label><span>Monto</span><input name="withdrawalAmount" inputmode="decimal" [ngModel]="withdrawalAmountInput()" (ngModelChange)="setWithdrawalAmountInput($event)" required /></label>
+          <label><span>Fecha</span><input name="withdrawalDate" type="date" [ngModel]="withdrawalDate()" (ngModelChange)="setWithdrawalDate($event)" required /></label>
+          <label><span>Cuenta de salida</span><select name="withdrawalAccount" [ngModel]="withdrawalAccountId()" (ngModelChange)="setWithdrawalAccountId($event)" required><option value="none" disabled>Selecciona una cuenta</option>@for (account of accounts(); track account.account_id) {<option [value]="account.account_id">{{ account.name }} · {{ formatMoney(account.balance) }}</option>}</select><small class="field-hint">Un retiro de socio no se mezcla con gastos operativos.</small></label>
+          <label><span>Disponible para esta parte</span><input [value]="formatMoney(withdrawalAvailableForSelectedPartner())" readonly /></label>
+          <label class="admin-form__wide"><span>Notas</span><textarea name="withdrawalNotes" rows="3" [ngModel]="withdrawalNotes()" (ngModelChange)="setWithdrawalNotes($event)"></textarea></label>
+          <div class="admin-dialog__actions"><button type="button" class="button button--secondary" (click)="closeMovementDialog()">Cancelar</button><button type="submit" class="button button--primary" [disabled]="!canCreateMovements()">Registrar retiro</button></div>
+        </form>
+      } @else {
+        <form class="admin-form" (ngSubmit)="submitAccount()">
+          <label><span>Nombre de la cuenta</span><input name="accountName" [ngModel]="accountName()" (ngModelChange)="setAccountName($event)" required /></label>
+          <label><span>Saldo conciliado</span><input name="accountBalance" type="number" step="0.01" [ngModel]="accountBalance()" (ngModelChange)="setAccountBalance($event)" /></label>
+          <label class="admin-form__wide"><span>Notas</span><textarea name="accountNotes" rows="3" [ngModel]="accountNotes()" (ngModelChange)="setAccountNotes($event)"></textarea></label>
+          <div class="admin-dialog__actions"><button type="button" class="button button--secondary" (click)="closeMovementDialog()">Cancelar</button><button type="submit" class="button button--primary" [disabled]="!canCreateAccounts()">Guardar cuenta</button></div>
+        </form>
+      }
+    </section>
+  </div>
+}
+
+@if (cutDialogOpen()) {
+  <div class="admin-dialog-backdrop" (click)="closeCutDialog()">
+    <section class="admin-dialog admin-dialog--compact" role="dialog" aria-modal="true" aria-labelledby="cut-dialog-title" (click)="$event.stopPropagation()">
+      <header class="admin-dialog__header"><div><p class="panel-kicker">Cierre financiero</p><h2 id="cut-dialog-title">Cerrar {{ selectedMonth().label }}</h2><p>Se guardará una fotografía de los indicadores del negocio activo.</p></div><button type="button" class="icon-button" aria-label="Cerrar" (click)="closeCutDialog()"><span class="material-symbols-rounded" aria-hidden="true">close</span></button></header>
+      <form class="admin-form" (ngSubmit)="saveCut()">
+        <label class="admin-form__wide"><span>Nombre del corte</span><input name="cutLabel" [ngModel]="cutLabel()" (ngModelChange)="cutLabel.set($event)" /></label>
+        <label><span>Inicio</span><input name="cutStart" type="date" [ngModel]="cutStart()" (ngModelChange)="setCutStart($event)" /></label>
+        <label><span>Fin</span><input name="cutEnd" type="date" [ngModel]="cutEnd()" (ngModelChange)="setCutEnd($event)" /></label>
+        <div class="admin-dialog__actions"><button type="button" class="button button--secondary" (click)="closeCutDialog()">Cancelar</button><button type="submit" class="button button--dark">Guardar cierre</button></div>
+      </form>
+    </section>
+  </div>
+}

@@ -1,5 +1,4 @@
 
-import { NgClass } from "@angular/common";
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from "@angular/core";
 import { FormsModule } from "@angular/forms";
 import { ActivatedRoute, Router } from "@angular/router";
@@ -12,14 +11,22 @@ import {
   FinanceService,
   FinanceWithdrawal,
   FinanceWithdrawalPurpose,
+  isOperatingExpense,
+  EXPENSE_CATEGORY_LABEL,
+  EXPENSE_CATEGORY_HINT,
+  EXPENSE_CATEGORY_ORDER,
 } from "../../core/finance.service";
-import { InventoryItem, InventoryService } from "../../core/inventory.service";
-import { Order, OrderItem, OrderStatus, OrdersService } from "../../core/orders.service";
+import { InventoryItem, InventoryMovement, InventoryService } from "../../core/inventory.service";
+import { Order, OrderCollectionEvent, OrderItem, OrderStatus, OrdersService } from "../../core/orders.service";
 import { RoutesService } from "../../core/routes.service";
+import { ReturnRecord, ReturnsService } from "../../core/returns.service";
 import { BusinessScopeService } from "../../core/business-scope.service";
 import { BusinessId } from "../../core/rbac.constants";
 import { calculateOrderFinancials, calculateItemFinancials } from "../../core/order-financials";
+import { calculateOrderProfitProjection } from "../../core/order-profit-projection";
 import { calculatePartnerWithdrawalSummary, calculateWithdrawalProfit } from "../../core/withdrawal-profit";
+import { BusinessPosition, calculateBusinessPosition } from "../../core/business-position";
+import { calculateAccountingPeriodOutcome, originalOrderFinancials } from "../../core/accounting-period";
 
 type MoneyBucketId =
   | "openDrafts"
@@ -135,12 +142,19 @@ type FinanceSummary = {
   utilidadNeta: number;
   utilidadCobradaBase: number;
   gananciaPendienteCobro: number;
+  capitalPendienteCobro: number;
   saldoPendienteCobro: number;
+  costoEntregado: number;
   dsoDias: number;
   cajaActual: number;
   porCobrar: number;
   mercanciaTransito: number;
   inventarioCosto: number;
+  inventarioReservado: number;
+  inventarioRecuperable: number;
+  inventarioCostoImputado: number;
+  inventarioPiezasSinCosto: number;
+  position: BusinessPosition;
   inventoryTurnover: number;
   inventoryDays: number;
   potencialBorradores: number;
@@ -170,12 +184,6 @@ type FinanceSummary = {
   orderBucketRows: BucketOrderRow[];
 };
 
-type BusinessFinanceSummaryRow = {
-  businessId: BusinessId;
-  label: string;
-  summary: FinanceSummary;
-};
-
 type OrderFinancialSnapshot = {
   order: Order;
   status: OrderStatus;
@@ -193,15 +201,6 @@ type OrderFinancialSnapshot = {
   remainingRatio: number;
 };
 
-const EXPENSE_CATEGORY_LABEL: Record<FinanceExpenseCategory, string> = {
-  compra_inversion: "Compra por inversion",
-  perdida: "Perdida",
-  paqueteria: "Paqueteria",
-  consumibles: "Consumibles",
-  deuda_fija: "Deuda fija",
-  deuda_meses: "Deuda a meses",
-};
-
 const WITHDRAWAL_PURPOSE_LABEL: Record<FinanceWithdrawalPurpose, string> = {
   socio_blanca: "Socio 1 - Blanca Trejo",
   socio_andrea_pepe: "Socio 2 - Andrea y Pepe",
@@ -214,6 +213,72 @@ const WITHDRAWAL_PURPOSE_LABEL: Record<FinanceWithdrawalPurpose, string> = {
 };
 
 type PartnerWithdrawalPurpose = "socio_blanca" | "socio_andrea_pepe";
+
+type AdministrationView = "resumen" | "mensual" | "inventario" | "socios";
+type PartnerViewScope = "general" | "mensual";
+
+type MonthlyFinanceSnapshot = {
+  id: string;
+  label: string;
+  shortLabel: string;
+  start: Date;
+  end: Date;
+  investment: number;
+  generatedSales: number;
+  cohortCurrentSales: number;
+  cohortReturnsToDate: number;
+  generatedOrderCount: number;
+  netSales: number;
+  salesBeforeReturns: number;
+  deliveredSales: number;
+  deliveredCost: number;
+  returnedInventoryCost: number;
+  damagedWriteOff: number;
+  cashRefunds: number;
+  netCashCollections: number;
+  periodStatus: "open" | "in_review" | "closed" | "reopened";
+  collected: number;
+  merchandiseCost: number;
+  expenses: number;
+  returnsImpact: number;
+  distributionAdjustments: number;
+  netProfit: number;
+  collectedProfit: number;
+  inProcessProfit: number;
+  pendingCollectionProfit: number;
+  projectedProfit: number;
+  inProcessOrderCount: number;
+  pendingCollectionOrderCount: number;
+  cohortCollectedToDate: number;
+  cohortPendingToday: number;
+  cohortCollectedAfterPeriod: number;
+  collectedFromCurrentPeriod: number;
+  collectedFromPriorPeriods: number;
+  receivablesOpening: number;
+  receivablesClosing: number;
+  distributableProfit: number;
+  overdue: number;
+  dso: number;
+  partnerOneWithdrawn: number;
+  partnerTwoWithdrawn: number;
+  inventoryOpening: number;
+  inventoryReceipts: number;
+  returnedToInventory: number;
+  inventoryReleased: number;
+  inventoryRecovered: number;
+  inventoryWriteOff: number;
+  inventoryClosing: number;
+  stagnantCapital: number;
+};
+
+type ReturnCapitalRow = {
+  id: string;
+  product: string;
+  capitalReturned: number;
+  capitalResold: number;
+  daysToRotate: number | null;
+  status: "Liberado" | "Parcial" | "Estancado" | "En seguimiento";
+};
 
 const MONEY_BUCKET_ORDER: MoneyBucketId[] = [
   "openDrafts",
@@ -280,22 +345,22 @@ const STATUS_LABELS: Record<string, string> = {
   devuelto: "Devuelto",
 };
 
-const DELIVERED_STATUSES = new Set<OrderStatus>(["entregado", "delivered", "delivered_partial", "pago_pendiente", "pagado_parcial", "pagado", "closed"]);
+const DELIVERED_STATUSES = new Set<OrderStatus>(["entregado", "entregado_parcial", "pago_pendiente", "pagado_parcial", "pagado", "closed"]);
 const RETURNED_STATUSES = new Set<OrderStatus>(["devuelto"]);
 const CANCELLED_STATUSES = new Set<OrderStatus>(["cancelado"]);
 const NEED_INVEST_STATUSES = new Set<OrderStatus>(["confirmando_proveedor", "reservado_inventario", "solicitado_proveedor", "supplier_processing"]);
 const INVESTED_NOT_DELIVERED_STATUSES = new Set<OrderStatus>([
-  "inbound_in_transit",
+  
   "en_transito",
   "recibido_qa",
-  "packing",
+  
   "empaque",
   "ready_for_route",
   "assigned_to_run",
-  "in_transit",
+  
   "en_ruta",
 ]);
-const COURIER_COLLECTION_STATUSES = new Set<OrderStatus>(["in_transit", "en_ruta", "assigned_to_run"]);
+const COURIER_COLLECTION_STATUSES = new Set<OrderStatus>(["en_ruta", "assigned_to_run"]);
 
 const DRILLDOWN_DEFAULT_SORT: DrilldownSortState = {
   column: "amountClienta",
@@ -316,13 +381,14 @@ const DRILLDOWN_COLUMN_DEFAULT_DIRECTION: Record<DrilldownColumn, "asc" | "desc"
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   selector: "app-administracion",
-  imports: [FormsModule, NgClass],
+  imports: [FormsModule],
   templateUrl: "./administracion.html",
-  styleUrl: "./administracion.css",
+  styleUrls: ["./administracion-redesign-prototype.component.css", "./administracion.css"],
 })
 export default class AdministracionPage {
   private ordersService = inject(OrdersService);
   private inventoryService = inject(InventoryService);
+  private returnsService = inject(ReturnsService);
   private routesService = inject(RoutesService);
   private financeService = inject(FinanceService);
   private customersService = inject(CustomersService);
@@ -347,6 +413,15 @@ export default class AdministracionPage {
   projectionDays = signal(30);
   averageWindowDays = signal(30);
   stagnationDays = signal(45);
+
+  activeView = signal<AdministrationView>("resumen");
+  partnerScope = signal<PartnerViewScope>("general");
+  selectedMonthId = signal(this.monthId(new Date()));
+  lastUpdatedAt = signal<Date | null>(null);
+  movementDialogOpen = signal(false);
+  movementDialogKind = signal<"expense" | "withdrawal" | "account">("expense");
+  cutDialogOpen = signal(false);
+  collectionEventRows = signal<OrderCollectionEvent[]>([]);
 
   cutLabel = signal("");
   cutStart = signal(this.offsetDate(-30));
@@ -377,15 +452,38 @@ export default class AdministracionPage {
   withdrawalAccountId = signal("none");
   withdrawalNotes = signal("");
 
-  orders = computed(() => this.ordersService.list());
-  inventoryItems = computed(() => this.inventoryService.items());
+  activeBusinessId = computed<BusinessId>(() => this.businessScope.scope() === "catalogo" ? "catalogo" : "bm");
+  activeBusinessLabel = computed(() => this.businessScope.businessLabel(this.activeBusinessId()));
+
+  orders = computed(() => this.ordersService.list().filter((row) => (row.business_id || "bm") === this.activeBusinessId()));
+  inventoryItems = computed(() => this.inventoryService.items().filter((row) => (row.business_id || "bm") === this.activeBusinessId()));
+  inventoryMovements = computed(() => this.inventoryService.movements().filter((row) => (row.business_id || "bm") === this.activeBusinessId()));
+  returnRecords = computed(() => {
+    const orderIds = new Set(this.filteredOrders().map((order) => order.order_id));
+    return this.returnsService.returns().filter(
+      (row) => (row.business_id || "bm") === this.activeBusinessId() && orderIds.has(row.order_id),
+    );
+  });
+  collectionEvents = computed(() => this.collectionEventRows().filter((row) => (row.business_id || "bm") === this.activeBusinessId()));
+  unallocatedHistoricalCollections = computed(() => this.filteredOrders().reduce((total, order) => {
+    if (order.paid_at) return total;
+    const represented = this.collectionEvents()
+      .filter((event) => event.order_id === order.order_id && event.verification_status !== "rejected")
+      .reduce((sum, event) => sum + Math.max(0, this.toSafeNumber(event.amount)), 0);
+    const paid = Math.min(
+      calculateOrderFinancials(order).netAmount,
+      Math.max(0, calculateOrderFinancials(order).paidAmount),
+    );
+    return total + Math.max(0, paid - represented);
+  }, 0));
   routes = computed(() => this.routesService.routes());
-  accounts = computed(() => this.financeService.accounts());
-  expenses = computed(() => this.financeService.expenses());
-  withdrawals = computed(() => this.financeService.withdrawals());
-  cuts = computed(() => this.financeService.cuts());
-  refunds = computed(() => this.financeService.refunds());
-  customers = computed(() => this.customersService.customers());
+  accounts = computed(() => this.financeService.accounts().filter((row) => (row.business_id || "bm") === this.activeBusinessId()));
+  expenses = computed(() => this.financeService.expenses().filter((row) => (row.business_id || "bm") === this.activeBusinessId()));
+  withdrawals = computed(() => this.financeService.withdrawals().filter((row) => (row.business_id || "bm") === this.activeBusinessId()));
+  cuts = computed(() => this.financeService.cuts().filter((row) => (row.business_id || "bm") === this.activeBusinessId()));
+  refunds = computed(() => this.financeService.refunds().filter((row) => (row.business_id || "bm") === this.activeBusinessId()));
+  periods = computed(() => this.financeService.periods().filter((row) => (row.business_id || "bm") === this.activeBusinessId()));
+  customers = computed(() => this.customersService.customers().filter((row) => (row.business_id || "bm") === this.activeBusinessId()));
   refundsTotal = computed(() => this.refunds().reduce((sum, row) => sum + Number(row.amount || 0), 0));
   customerCreditsTotal = computed(() => this.customers().reduce((sum, row) => sum + Number(row.credit_balance || 0), 0));
 
@@ -434,6 +532,7 @@ export default class AdministracionPage {
     this.buildSummary({
       orders: this.filteredOrders(),
       expenses: this.filteredExpenses(),
+      withdrawals: this.filteredWithdrawals(),
       inventory: this.inventoryItems(),
       accounts: this.accounts(),
       projectionDays: this.projectionDays(),
@@ -442,42 +541,8 @@ export default class AdministracionPage {
     }),
   );
 
-  businessSummaryRows = computed<BusinessFinanceSummaryRow[]>(() => {
-    if (!this.businessScope.isBothMode()) return [];
-    return this.businessScope.activeBusinessIds().map((businessId) => ({
-      businessId,
-      label: this.businessScope.businessShortLabel(businessId),
-      summary: this.buildSummary({
-        orders: this.filteredOrders().filter((order) => (order.business_id || "bm") === businessId),
-        expenses: this.filteredExpenses().filter((row) => (row.business_id || "bm") === businessId),
-        inventory: this.inventoryItems().filter((item) => (item.business_id || "bm") === businessId),
-        accounts: this.accounts().filter((account) => (account.business_id || "bm") === businessId),
-        projectionDays: this.projectionDays(),
-        averageWindowDays: this.averageWindowDays(),
-        stagnationDays: this.stagnationDays(),
-      }),
-    }));
-  });
-
-  businessSummaryClass(row: BusinessFinanceSummaryRow): string {
-    return row.businessId === "catalogo" ? "business-catalogo" : "business-bm";
-  }
-
-  withdrawalSummary = computed(() => {
-    const summary = this.summary();
-    const baseDisponible = Math.max(0, summary.utilidadCobradaBase);
-    const totalRetirado = this.filteredWithdrawals().reduce((sum, row) => sum + this.toSafeNumber(row.amount), 0);
-    const disponible = Math.max(0, baseDisponible - totalRetirado);
-    return {
-      baseDisponible: this.toSafeNumber(baseDisponible),
-      totalRetirado: this.toSafeNumber(totalRetirado),
-      disponible: this.toSafeNumber(disponible),
-      gananciaPendienteCobro: this.toSafeNumber(summary.gananciaPendienteCobro),
-      saldoPendienteCobro: this.toSafeNumber(summary.saldoPendienteCobro),
-    };
-  });
-
   withdrawalPartnerSummary = computed(() => {
+    const summary = this.summary();
     let withdrawnBlanca = 0;
     let withdrawnAndreaPepe = 0;
     let withdrawnNonPartner = 0;
@@ -493,25 +558,389 @@ export default class AdministracionPage {
       }
     }
 
-    const partnerAmounts = calculatePartnerWithdrawalSummary(
-      this.withdrawalSummary().baseDisponible,
+    return calculatePartnerWithdrawalSummary(
+      summary.utilidadNeta,
+      summary.utilidadCobradaBase,
       withdrawnBlanca,
       withdrawnAndreaPepe,
       withdrawnNonPartner,
     );
+  });
 
+  withdrawalSummary = computed(() => {
+    const summary = this.summary();
+    const partners = this.withdrawalPartnerSummary();
+    const totalRetirado = this.filteredWithdrawals().reduce((sum, row) => sum + this.toSafeNumber(row.amount), 0);
     return {
-      distributableBase: this.toSafeNumber(partnerAmounts.distributableBase),
-      perPartnerTarget: this.toSafeNumber(partnerAmounts.perPartnerTarget),
-      withdrawnBlanca: this.toSafeNumber(withdrawnBlanca),
-      withdrawnAndreaPepe: this.toSafeNumber(withdrawnAndreaPepe),
-      withdrawnNonPartner: this.toSafeNumber(withdrawnNonPartner),
-      pendingBlanca: this.toSafeNumber(partnerAmounts.pendingBlanca),
-      pendingAndreaPepe: this.toSafeNumber(partnerAmounts.pendingAndreaPepe),
-      excessBlanca: this.toSafeNumber(partnerAmounts.excessBlanca),
-      excessAndreaPepe: this.toSafeNumber(partnerAmounts.excessAndreaPepe),
+      baseDisponible: partners.collectedBase,
+      totalRetirado: this.toSafeNumber(totalRetirado),
+      disponible: partners.totalAvailableNow,
+      gananciaPendienteCobro: this.toSafeNumber(summary.gananciaPendienteCobro),
+      saldoPendienteCobro: this.toSafeNumber(summary.saldoPendienteCobro),
     };
   });
+
+  monthlySnapshots = computed<MonthlyFinanceSnapshot[]>(() => {
+    const months = this.buildMonthWindows();
+    const orders = this.filteredOrders();
+    const deliveredOrders = orders.filter(
+      (order) => DELIVERED_STATUSES.has(order.status) || Boolean(order.delivered_at),
+    );
+    const expenses = this.filteredExpenses();
+    const withdrawals = this.filteredWithdrawals();
+    const movements = this.inventoryMovements();
+    const collectionEvents = this.collectionEvents();
+    const returns = this.returnRecords().filter((row) => this.isFinancialReturn(row));
+    const inventory = this.inventoryItems();
+    const currentInventoryCapital = inventory.reduce(
+      (sum, row) => sum + this.inventoryRecoverableQty(row) * this.resolveInventoryCostUnit(row, 0),
+      0,
+    );
+    const projections = orders.map((order) => ({
+      order,
+      projection: calculateOrderProfitProjection(order),
+    }));
+
+    return months.map((month) => {
+      const cohortOrders = orders.filter((order) =>
+        !CANCELLED_STATUSES.has(order.status)
+        && this.isWithinMonth(this.orderRecognitionDate(order), month.start, month.end));
+      const monthOrders = deliveredOrders.filter((order) =>
+        this.isWithinMonth(this.orderDeliveryDate(order), month.start, month.end));
+      const monthExpenses = expenses.filter((row) => this.isWithinMonth(row.occurred_at, month.start, month.end));
+      const monthWithdrawals = withdrawals.filter((row) => this.isWithinMonth(row.occurred_at, month.start, month.end));
+      const monthMovements = movements.filter((row) => this.isWithinMonth(row.created_at, month.start, month.end));
+      const monthReturns = returns.filter((row) => this.isWithinMonth(row.occurred_at || row.created_at, month.start, month.end));
+      const collected = this.collectedAmountForMonth(month.start, month.end, orders, collectionEvents);
+      const cashRefunds = this.refunds()
+        .filter((row) => this.isWithinMonth(row.occurred_at, month.start, month.end))
+        .reduce((sum, row) => sum + this.toSafeNumber(row.amount), 0);
+      const laterMovementDelta = movements
+        .filter((row) => {
+          const date = this.toDate(row.created_at);
+          return Boolean(date && date > month.end);
+        })
+        .reduce((sum, row) => sum + this.inventoryMovementCapitalDelta(row), 0);
+      const laterLegacyReturnDelta = returns
+        .filter((row) => !movements.some((movement) => movement.return_id === row.return_id))
+        .filter((row) => {
+          const date = this.toDate(row.created_at);
+          return Boolean(date && date > month.end);
+        })
+        .reduce((sum, row) => sum + this.returnRecoverableCost(row), 0);
+      const inventoryClosing = Math.max(0, currentInventoryCapital - laterMovementDelta - laterLegacyReturnDelta);
+      const monthLegacyReturnDelta = monthReturns
+        .filter((row) => !movements.some((movement) => movement.return_id === row.return_id))
+        .reduce((sum, row) => sum + this.returnRecoverableCost(row), 0);
+      const monthMovementDelta = monthMovements.reduce(
+        (sum, row) => sum + this.inventoryMovementCapitalDelta(row),
+        monthLegacyReturnDelta,
+      );
+      const inventoryOpening = Math.max(0, inventoryClosing - monthMovementDelta);
+      const operatingExpenses = this.operatingExpenseTotal(monthExpenses);
+      const outcome = calculateAccountingPeriodOutcome({
+        deliveredOrders: monthOrders,
+        returns: monthReturns.map((row) => ({
+          ...row,
+          net_return_amount: this.returnRevenueAmount(row),
+          returned_cost_amount: this.returnRecoverableCost(row),
+        })),
+        operatingExpenses,
+      });
+      const salesBeforeReturns = outcome.deliveredSales;
+      const returnsImpact = outcome.returnRevenueAdjustment;
+      const returnedCost = outcome.returnedInventoryCost;
+      const merchandiseCost = outcome.netCost;
+      const netSales = outcome.netSales;
+      const generatedSales = this.toSafeNumber(cohortOrders.reduce(
+        (sum, order) => sum + originalOrderFinancials(order).netAmount,
+        0,
+      ));
+      const cohortCurrentSales = this.toSafeNumber(cohortOrders.reduce(
+        (sum, order) => sum + calculateOrderFinancials(order).netAmount,
+        0,
+      ));
+      const netProfit = outcome.netProfit;
+      const inProcessRows = projections.filter(({ order, projection }) =>
+        projection.stage === "in_process"
+        && this.isWithinMonth(order.created_at || order.updated_at, month.start, month.end));
+      const pendingCollectionRows = projections.filter(({ order, projection }) =>
+        projection.stage === "pending_collection"
+        && this.isWithinMonth(this.orderRecognitionDate(order), month.start, month.end));
+      const inProcessProfit = this.toSafeNumber(
+        inProcessRows.reduce((sum, row) => sum + row.projection.projectedProfit, 0),
+      );
+      const pendingCollectionProfit = this.toSafeNumber(
+        pendingCollectionRows.reduce((sum, row) => sum + row.projection.projectedProfit, 0),
+      );
+      const cohortCollectedToDate = this.cohortCollectedToDate(cohortOrders, collectionEvents);
+      const cohortPendingToday = this.toSafeNumber(cohortOrders.reduce((sum, order) => {
+        const netAmount = calculateOrderFinancials(order).netAmount;
+        const collectedToDate = this.appliedCollectionsUntil(order, collectionEvents, new Date(), netAmount);
+        return sum + Math.max(0, netAmount - collectedToDate);
+      }, 0));
+      const cohortCollectedAfterPeriod = this.toSafeNumber(cohortOrders.reduce((sum, order) => {
+        const netAmount = calculateOrderFinancials(order).netAmount;
+        const collectedAtClose = this.appliedCollectionsUntil(order, collectionEvents, month.end, netAmount);
+        const collectedToDate = this.appliedCollectionsUntil(order, collectionEvents, new Date(), netAmount);
+        return sum + Math.max(0, collectedToDate - collectedAtClose);
+      }, 0));
+      const collectionFlow = this.collectionFlowForMonth(month.start, month.end, orders, collectionEvents);
+      const receivablesOpening = this.receivablesAt(
+        new Date(month.start.getTime() - 1),
+        deliveredOrders,
+        collectionEvents,
+        returns,
+      );
+      const receivablesClosing = this.receivablesAt(month.end, deliveredOrders, collectionEvents, returns);
+      // Lo pendiente de cobro ya forma parte de netProfit porque el pedido fue
+      // entregado. Solo el margen de pedidos aun no entregados se suma para
+      // construir el escenario proyectado y evitar contar utilidad dos veces.
+      const projectedProfit = this.toSafeNumber(netProfit + inProcessProfit);
+      // La utilidad del mes es la que se genero, no la que sobrevivio a una
+      // barrera de costo por pedido: esa barrera dejaba meses enteros en cero
+      // cuando los pedidos se pagaban en abonos. Las devoluciones ya vienen
+      // descontadas dentro de netProfit, restarlas otra vez las contaba doble.
+      const collectedProfit = this.collectedProfitForMonth(
+        month.start,
+        month.end,
+        deliveredOrders,
+        collectionEvents,
+        monthReturns,
+      ) - operatingExpenses;
+      const distributionAdjustments = operatingExpenses;
+      const distributableProfit = netProfit;
+      const overdue = monthOrders.reduce((sum, order) => sum + calculateOrderFinancials(order).balanceDue, 0);
+      const receivableAge = this.averageReceivableAge(monthOrders);
+      let partnerOneWithdrawn = 0;
+      let partnerTwoWithdrawn = 0;
+      for (const row of monthWithdrawals) {
+        const partner = this.resolveWithdrawalPartner(row);
+        if (partner === "socio_blanca") partnerOneWithdrawn += this.toSafeNumber(row.amount);
+        if (partner === "socio_andrea_pepe") partnerTwoWithdrawn += this.toSafeNumber(row.amount);
+      }
+
+      const received = this.movementCapitalByType(monthMovements, "receipt");
+      const returned = monthReturns.reduce((sum, row) => sum + this.returnRecoverableCost(row), 0);
+      const released = Math.abs(this.movementCapitalByType(monthMovements, "sale"));
+      const writtenOff = Math.abs(
+        monthMovements
+          .filter((row) => row.type === "damage" || row.type === "scrap")
+          .reduce((sum, row) => {
+            const explicit = Math.max(0, this.toSafeNumber(row.write_off_amount));
+            return sum + (explicit > 0 ? explicit : Math.abs(Math.min(0, this.inventoryMovementCapitalDelta(row))));
+          }, 0),
+      );
+      const recovered = this.recoveredCapitalForMonth(month.start, month.end, deliveredOrders, collectionEvents);
+      const investment = monthExpenses
+        .filter((row) => row.category === "compra_inversion")
+        .reduce((sum, row) => sum + this.toSafeNumber(row.amount), 0);
+
+      return {
+        ...month,
+        investment,
+        generatedSales,
+        cohortCurrentSales,
+        cohortReturnsToDate: this.toSafeNumber(Math.max(0, generatedSales - cohortCurrentSales)),
+        generatedOrderCount: cohortOrders.length,
+        netSales,
+        salesBeforeReturns,
+        deliveredSales: outcome.deliveredSales,
+        deliveredCost: outcome.deliveredCost,
+        returnedInventoryCost: returnedCost,
+        damagedWriteOff: outcome.damagedWriteOff,
+        cashRefunds: this.toSafeNumber(cashRefunds),
+        netCashCollections: this.toSafeNumber(collected - cashRefunds),
+        periodStatus: this.periods().find((row) => row.month_id === month.id)?.status || "open",
+        collected,
+        merchandiseCost,
+        expenses: operatingExpenses,
+        returnsImpact,
+        distributionAdjustments,
+        netProfit,
+        collectedProfit,
+        inProcessProfit,
+        pendingCollectionProfit,
+        projectedProfit,
+        inProcessOrderCount: inProcessRows.length,
+        pendingCollectionOrderCount: pendingCollectionRows.length,
+        cohortCollectedToDate,
+        cohortPendingToday,
+        cohortCollectedAfterPeriod,
+        collectedFromCurrentPeriod: collectionFlow.currentPeriod,
+        collectedFromPriorPeriods: collectionFlow.priorPeriods,
+        receivablesOpening,
+        receivablesClosing,
+        distributableProfit,
+        overdue,
+        dso: receivableAge,
+        partnerOneWithdrawn,
+        partnerTwoWithdrawn,
+        inventoryOpening,
+        inventoryReceipts: Math.max(0, received),
+        returnedToInventory: Math.max(0, returned),
+        inventoryReleased: released,
+        inventoryRecovered: Math.max(0, recovered),
+        inventoryWriteOff: writtenOff,
+        inventoryClosing,
+        stagnantCapital: this.inventoryStagnantCapitalAt(month.end),
+      };
+    });
+  });
+
+  get months(): readonly MonthlyFinanceSnapshot[] {
+    return this.monthlySnapshots();
+  }
+
+  selectedMonth = computed(() => {
+    const months = this.monthlySnapshots();
+    return months.find((month) => month.id === this.selectedMonthId()) ?? months[months.length - 1] ?? this.emptyMonthSnapshot();
+  });
+
+  previousMonth = computed(() => {
+    const months = this.monthlySnapshots();
+    const index = months.findIndex((month) => month.id === this.selectedMonthId());
+    return months[Math.max(0, index - 1)] ?? this.selectedMonth();
+  });
+
+  netSalesDelta = computed(() => this.percentageDelta(this.selectedMonth().netSales, this.previousMonth().netSales));
+  netProfitDelta = computed(() => this.percentageDelta(this.selectedMonth().netProfit, this.previousMonth().netProfit));
+  margin = computed(() => this.safeRatio(this.selectedMonth().netProfit, this.selectedMonth().netSales));
+  /** Margen de todo el historico. El resumen no depende del mes seleccionado. */
+  overallMargin = computed(() => this.safeRatio(this.summary().utilidadNeta, this.summary().ventasNetas));
+  /**
+   * Solo algunas vistas dependen del mes elegido. Resumen y el acumulado de
+   * socios son historicos: mostrarles un selector de mes hacia creer que sus
+   * cifras cambiaban al moverlo.
+   */
+  usesMonthScope = computed(() => {
+    const view = this.activeView();
+    if (view === "mensual" || view === "inventario") return true;
+    return view === "socios" && this.partnerScope() === "mensual";
+  });
+  distributableProfit = computed(() => this.selectedMonth().distributableProfit);
+  monthlyCollectedProfit = computed(() => this.selectedMonth().collectedProfit);
+  monthlyPendingProfit = computed(() => this.distributableProfit() - this.monthlyCollectedProfit());
+  sharePerPartner = computed(() => this.distributableProfit() / 2);
+  partnerOnePending = computed(() => this.sharePerPartner() - this.selectedMonth().partnerOneWithdrawn);
+  partnerTwoPending = computed(() => this.sharePerPartner() - this.selectedMonth().partnerTwoWithdrawn);
+  monthlyDistributionAdjustments = computed(() => this.selectedMonth().distributionAdjustments);
+  monthlyMerchandiseCost = computed(() => this.selectedMonth().merchandiseCost);
+  partnerOne = computed(() => this.withdrawalPartnerSummary().blanca);
+  partnerTwo = computed(() => this.withdrawalPartnerSummary().andreaPepe);
+  totalDistributableProfit = computed(() => this.withdrawalPartnerSummary().accruedBase);
+  totalCollectedProfit = computed(() => this.withdrawalPartnerSummary().collectedBase);
+  totalPendingProfit = computed(() => this.withdrawalPartnerSummary().pendingBase);
+  profitProjection = computed(() => {
+    let inProcessProfit = 0;
+    let pendingCollectionProfit = 0;
+    let inProcessOrderCount = 0;
+    let pendingCollectionOrderCount = 0;
+
+    for (const order of this.filteredOrders()) {
+      const projection = calculateOrderProfitProjection(order);
+      if (projection.stage === "in_process") {
+        inProcessProfit += projection.projectedProfit;
+        inProcessOrderCount += 1;
+      } else if (projection.stage === "pending_collection") {
+        pendingCollectionProfit += projection.projectedProfit;
+        pendingCollectionOrderCount += 1;
+      }
+    }
+
+    return {
+      inProcessProfit: this.toSafeNumber(inProcessProfit),
+      pendingCollectionProfit: this.toSafeNumber(pendingCollectionProfit),
+      inProcessOrderCount,
+      pendingCollectionOrderCount,
+    };
+  });
+  totalInProcessProfit = computed(() => this.profitProjection().inProcessProfit);
+  totalProjectedProfit = computed(() => this.toSafeNumber(this.totalDistributableProfit() + this.totalInProcessProfit()));
+  totalUnclassifiedWithdrawals = computed(() => this.withdrawalPartnerSummary().unclassifiedWithdrawals);
+  totalCollected = computed(() => this.summary().ingresosCobrados);
+  totalDistributionAdjustments = computed(() => this.summary().egresos);
+  totalSharePerPartner = computed(() => this.withdrawalPartnerSummary().blanca.share);
+  totalCollectedSharePerPartner = computed(() => this.withdrawalPartnerSummary().blanca.collectedShare);
+  totalPartnerOneWithdrawn = computed(() => this.partnerOne().withdrawn);
+  totalPartnerTwoWithdrawn = computed(() => this.partnerTwo().withdrawn);
+  totalPartnerOnePending = computed(() => this.partnerOne().pendingTotal);
+  totalPartnerTwoPending = computed(() => this.partnerTwo().pendingTotal);
+  totalPartnerOneAvailable = computed(() => this.partnerOne().availableNow);
+  totalPartnerTwoAvailable = computed(() => this.partnerTwo().availableNow);
+  totalDistributed = computed(() => this.withdrawalPartnerSummary().totalWithdrawn);
+  totalPendingDistribution = computed(() => this.withdrawalPartnerSummary().totalPending);
+  totalAvailableNow = computed(() => this.withdrawalPartnerSummary().totalAvailableNow);
+  position = computed(() => this.summary().position);
+  expenseBreakdown = computed(() => {
+    const totals = new Map<FinanceExpenseCategory, number>();
+    for (const row of this.filteredExpenses()) {
+      totals.set(row.category, (totals.get(row.category) || 0) + Math.max(0, this.toSafeNumber(row.amount)));
+    }
+    const rows = EXPENSE_CATEGORY_ORDER.filter((category) => totals.has(category)).map((category) => ({
+      category,
+      label: EXPENSE_CATEGORY_LABEL[category],
+      hint: EXPENSE_CATEGORY_HINT[category],
+      amount: this.toSafeNumber(totals.get(category) || 0),
+      operating: isOperatingExpense(category),
+    }));
+    const operatingTotal = rows.filter((row) => row.operating).reduce((sum, row) => sum + row.amount, 0);
+    const capitalTotal = rows.filter((row) => !row.operating).reduce((sum, row) => sum + row.amount, 0);
+    return { rows, operatingTotal: this.toSafeNumber(operatingTotal), capitalTotal: this.toSafeNumber(capitalTotal) };
+  });
+  expenseCategoryOptions = EXPENSE_CATEGORY_ORDER.map((category) => ({
+    id: category,
+    label: EXPENSE_CATEGORY_LABEL[category],
+    hint: EXPENSE_CATEGORY_HINT[category],
+    operating: isOperatingExpense(category),
+  }));
+  inventoryCapitalDelta = computed(() => this.selectedMonth().inventoryClosing - this.selectedMonth().inventoryOpening);
+  inventoryRecoveryRate = computed(() => this.safeRatio(this.selectedMonth().inventoryRecovered, this.selectedMonth().collected));
+  inventoryPendingRecovery = computed(() => Math.max(0, this.selectedMonth().collected - this.selectedMonth().inventoryRecovered));
+  stagnantCapitalShare = computed(() => this.safeRatio(this.selectedMonth().stagnantCapital, this.availableInventoryCapital()));
+  agingCriticalCapital = computed(() => this.inventoryAgingCapital(91, Number.POSITIVE_INFINITY));
+  agingStaleCapital = computed(() => this.inventoryAgingCapital(46, 90));
+  agingWatchCapital = computed(() => this.inventoryAgingCapital(31, 45));
+  agingFreshCapital = computed(() => this.inventoryAgingCapital(0, 30));
+  returnCapitalRows = computed<ReturnCapitalRow[]>(() => {
+    const month = this.selectedMonth();
+    return this.returnRecords()
+      .filter((row) => this.isFinancialReturn(row) && row.disposition !== "damaged" && this.isWithinMonth(row.created_at, month.start, month.end))
+      .map((row) => {
+        const returnedAt = this.toDate(row.created_at) ?? month.start;
+        const returnedQty = Math.max(0, this.toSafeNumber(row.qty));
+        const capitalReturned = this.returnRecoverableCost(row);
+        const cost = returnedQty > 0 ? capitalReturned / returnedQty : 0;
+        const sales = this.inventoryMovements()
+          .filter((candidate) => candidate.inventory_id === row.inventory_id && candidate.type === "sale")
+          .map((candidate) => ({ movement: candidate, date: this.toDate(candidate.created_at) }))
+          .filter((candidate) => Boolean(candidate.date && candidate.date >= returnedAt))
+          .sort((a, b) => a.date!.getTime() - b.date!.getTime());
+        const soldQty = Math.min(returnedQty, sales.reduce((sum, sale) => sum + Math.abs(this.toSafeNumber(sale.movement.delta_on_hand)), 0));
+        const firstSaleAt = sales[0]?.date ?? null;
+        const elapsedDays = Math.max(0, this.daysSince(returnedAt, new Date()));
+        const status: ReturnCapitalRow["status"] = soldQty >= returnedQty && returnedQty > 0
+          ? "Liberado"
+          : soldQty > 0
+            ? "Parcial"
+            : elapsedDays > this.stagnationDays()
+              ? "Estancado"
+              : "En seguimiento";
+        const inventory = this.inventoryItems().find((item) => item.inventory_id === row.inventory_id);
+        const snapshotTitle = String(row.product_snapshot?.["title"] || row.product_snapshot?.["name"] || "").trim();
+        return {
+          id: row.return_id,
+          product: snapshotTitle || inventory?.title || row.reason || "Producto devuelto",
+          capitalReturned,
+          capitalResold: soldQty * cost,
+          daysToRotate: firstSaleAt ? Math.max(0, this.daysSince(returnedAt, firstSaleAt)) : null,
+          status,
+        };
+      })
+      .sort((a, b) => b.capitalReturned - a.capitalReturned);
+  });
+
+  returnCapitalResold = computed(() => this.returnCapitalRows().reduce((sum, row) => sum + row.capitalResold, 0));
 
   withdrawalSelectedPartner = computed(() => this.asPartnerPurpose(this.withdrawalPurpose()));
 
@@ -527,12 +956,13 @@ export default class AdministracionPage {
     if (!selectedPartner) return this.withdrawalAvailableForForm();
     const summary = this.withdrawalPartnerSummary();
     const editingId = this.withdrawalEditingId();
-    const baseWithdrawn = selectedPartner === "socio_blanca" ? summary.withdrawnBlanca : summary.withdrawnAndreaPepe;
+    const account = selectedPartner === "socio_blanca" ? summary.blanca : summary.andreaPepe;
     const current = editingId ? this.filteredWithdrawals().find((row) => row.withdrawal_id === editingId) : null;
     const currentPartner = current ? this.resolveWithdrawalPartner(current) : null;
     const restoredCurrentAmount = current && currentPartner === selectedPartner ? this.toSafeNumber(current.amount) : 0;
-    const available = Math.max(0, summary.perPartnerTarget - baseWithdrawn + restoredCurrentAmount);
-    return this.toSafeNumber(available);
+    // Solo se puede retirar utilidad ya cobrada; lo que sigue por cobrar es
+    // suyo pero todavia no es efectivo.
+    return this.toSafeNumber(Math.max(0, account.availableNow + restoredCurrentAmount));
   });
 
   routeRows = computed(() => this.buildRouteRows(this.summary().orderBucketRows));
@@ -548,8 +978,280 @@ export default class AdministracionPage {
   });
 
   constructor() {
+    this.returnsService.watch();
     this.restoreReturnContextFromQuery();
     this.reload().catch(() => null);
+  }
+
+  setView(view: AdministrationView): void {
+    this.activeView.set(view);
+  }
+
+  setPartnerScope(scope: PartnerViewScope): void {
+    this.partnerScope.set(scope);
+  }
+
+  onMonthChange(event: Event): void {
+    const select = event.target;
+    if (select instanceof HTMLSelectElement) this.selectedMonthId.set(select.value);
+  }
+
+  moveMonth(direction: -1 | 1): void {
+    const months = this.monthlySnapshots();
+    const index = months.findIndex((month) => month.id === this.selectedMonthId());
+    const next = Math.min(months.length - 1, Math.max(0, index + direction));
+    if (months[next]) this.selectedMonthId.set(months[next].id);
+  }
+
+  isFirstMonth(): boolean {
+    return this.monthlySnapshots()[0]?.id === this.selectedMonthId();
+  }
+
+  isLastMonth(): boolean {
+    const months = this.monthlySnapshots();
+    return months[months.length - 1]?.id === this.selectedMonthId();
+  }
+
+  barHeight(value: number): number {
+    if (value <= 0) return 0;
+    const max = this.chartScaleMax();
+    return Math.max(4, (Math.max(0, value) / max) * 100);
+  }
+
+  inventoryBarHeight(value: number): number {
+    const max = this.inventoryChartScaleMax();
+    return Math.max(4, (Math.max(0, value) / max) * 100);
+  }
+
+  inventoryCapitalShare(value: number): number {
+    return this.safeRatio(value, this.availableInventoryCapital()) * 100;
+  }
+
+  partnerProgress(withdrawn: number): number {
+    return Math.min(100, Math.max(0, this.safeRatio(withdrawn, this.sharePerPartner()) * 100));
+  }
+
+  overallPartnerProgress(withdrawn: number): number {
+    return Math.min(100, Math.max(0, this.safeRatio(withdrawn, this.totalSharePerPartner()) * 100));
+  }
+
+  formatMoney(value: number): string {
+    return this.formatCurrency(value);
+  }
+
+  /** La cuenta que representa la caja del negocio, no una cuenta cualquiera. */
+  isGeneralAccount(account: FinanceAccount): boolean {
+    const name = String(account.name || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+      .toLocaleLowerCase("es-MX");
+    return name === "general" || String(account.account_id || "").includes("caja_general");
+  }
+
+  private defaultFinanceAccountId(): string {
+    const rows = this.accounts();
+    return rows.find((account) => this.isGeneralAccount(account))?.account_id
+      || rows[0]?.account_id
+      || "none";
+  }
+
+  /** Lo que le falta o le sobra a la General contra lo que arrojan los movimientos. */
+  generalAccountGap(account: FinanceAccount): number {
+    if (!this.isGeneralAccount(account)) return 0;
+    return this.toSafeNumber(this.position().theoreticalCash - this.toSafeNumber(account.balance));
+  }
+
+  async syncGeneralAccountBalance(account: FinanceAccount): Promise<void> {
+    if (!this.canEditAccounts() || !this.isGeneralAccount(account)) return;
+    try {
+      await this.financeService.saveAccount({
+        account_id: account.account_id,
+        business_id: account.business_id,
+        name: account.name,
+        balance: this.position().theoreticalCash,
+        notes: account.notes,
+      });
+      this.success.set("Saldo de General ajustado a la caja calculada.");
+    } catch (error: unknown) {
+      this.error.set(error instanceof Error ? error.message : "No se pudo ajustar el saldo.");
+    }
+  }
+
+  absValue(value: number): number {
+    return Math.abs(this.toSafeNumber(value));
+  }
+
+  formatSignedMoney(value: number): string {
+    if (value === 0) return this.formatMoney(0);
+    return `${value > 0 ? "+" : "−"}${this.formatMoney(Math.abs(value))}`;
+  }
+
+  chartScaleMax(): number {
+    return this.roundChartMax(Math.max(1, ...this.monthlySnapshots().flatMap((month) => [month.netSales, month.investment, month.netProfit])));
+  }
+
+  inventoryChartScaleMax(): number {
+    return this.roundChartMax(Math.max(1, ...this.monthlySnapshots().flatMap((month) => [month.inventoryClosing, month.inventoryReleased])));
+  }
+
+  formatCompactMoney(value: number): string {
+    return new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", notation: "compact", maximumFractionDigits: 0 }).format(value);
+  }
+
+  formatDelta(value: number): string {
+    const prefix = value > 0 ? "+" : "";
+    return `${prefix}${new Intl.NumberFormat("es-MX", { maximumFractionDigits: 1 }).format(value)}%`;
+  }
+
+  ratio(value: number, total: number): number {
+    return this.safeRatio(value, total);
+  }
+
+  boundedRatio(value: number, total: number): number {
+    return Math.min(1, Math.max(0, this.safeRatio(value, total)));
+  }
+
+  absolute(value: number): number {
+    return Math.abs(value);
+  }
+
+  monthlyCollectionGapMagnitude(): number {
+    return Math.abs(this.selectedMonth().netSales - this.selectedMonth().collected);
+  }
+
+  monthlyCollectionGapLabel(): string {
+    return this.selectedMonth().netSales >= this.selectedMonth().collected
+      ? "Ventas por encima de cobros del periodo"
+      : "Cobros por encima de ventas del periodo";
+  }
+
+  monthlyDistributionStatus(month: MonthlyFinanceSnapshot): "Preliminar" | "Seguimiento" | "Cobrado después" | "Cerrado" {
+    if (month.periodStatus === "closed") return "Cerrado";
+    if (month.id === this.months[this.months.length - 1]?.id) return "Preliminar";
+    if (month.cohortPendingToday > 0 || month.inProcessOrderCount > 0) return "Seguimiento";
+    if (month.cohortCollectedAfterPeriod > 0) return "Cobrado después";
+    return "Cerrado";
+  }
+
+  lastUpdatedLabel(): string {
+    const value = this.lastUpdatedAt();
+    if (!value) return "Sincronizando datos…";
+    return `Actualizado hoy, ${new Intl.DateTimeFormat("es-MX", { hour: "2-digit", minute: "2-digit" }).format(value)}`;
+  }
+
+  periodRangeLabel(): string {
+    const dates = [
+      ...this.orders().map((row) => this.toDate(row.created_at)),
+      ...this.expenses().map((row) => this.toDate(row.occurred_at)),
+      ...this.withdrawals().map((row) => this.toDate(row.occurred_at)),
+      ...this.cuts().map((row) => this.toDate(row.start_at)),
+    ].filter((value): value is Date => value !== null);
+    if (dates.length === 0) return "Sin movimientos registrados";
+    const first = new Date(Math.min(...dates.map((date) => date.getTime())));
+    const formatter = new Intl.DateTimeFormat("es-MX", { month: "long", year: "numeric" });
+    return `${formatter.format(first)} – hoy`;
+  }
+
+  cashAvailable(): number { return this.summary().cajaActual; }
+  accountCount(): number { return this.accounts().length; }
+  selectedMonthReturnCount(): number {
+    const month = this.selectedMonth();
+    return this.returnRecords().filter(
+      (row) => this.isFinancialReturn(row) && row.disposition !== "damaged" && this.isWithinMonth(row.created_at, month.start, month.end),
+    ).length;
+  }
+  availableInventoryCapital(): number {
+    return this.inventoryItems().reduce(
+      (sum, item) => sum + this.inventoryAvailableQty(item) * this.resolveInventoryCostUnit(item, 0),
+      0,
+    );
+  }
+  reservedInventoryCapital(): number {
+    return this.inventoryItems().reduce((sum, item) => {
+      const reservedQty = Math.max(0, this.inventoryRecoverableQty(item) - this.inventoryAvailableQty(item));
+      return sum + reservedQty * this.resolveInventoryCostUnit(item, 0);
+    }, 0);
+  }
+  inventoryMissingCostQty(): number {
+    return this.inventoryItems().reduce((sum, item) => {
+      if (this.resolveInventoryCostUnit(item, 0) > 0) return sum;
+      return sum + this.inventoryRecoverableQty(item);
+    }, 0);
+  }
+  receivableCapital(): number { return this.summary().porCobrar; }
+  courierCash(): number { return this.summary().cobradoConRepartidor; }
+  capitalToInvest(): number { return this.summary().capitalPorInvertir; }
+  transitCapital(): number { return this.summary().mercanciaTransito; }
+  reconciledThisMonth(): number { return this.selectedMonth().collected; }
+  stagnantSkuCount(): number { return this.summary().buckets.find((row) => row.id === "stagnantInventory")?.count ?? 0; }
+  pendingCollectionCount(): number { return this.summary().pendientesCobro; }
+  pendingInvestmentCount(): number { return this.summary().buckets.find((row) => row.id === "confirmedNeedInvestment")?.count ?? 0; }
+  transitOrderCount(): number { return this.summary().buckets.find((row) => row.id === "investedNotDelivered")?.count ?? 0; }
+  attentionCount(): number {
+    return [
+      this.summary().saldoPendienteCobro,
+      this.courierCash(),
+      this.capitalToInvest(),
+      this.summary().estancadoCosto,
+    ].filter((value) => value > 0).length;
+  }
+
+  includedClosuresCount(): number {
+    return this.cuts().length;
+  }
+
+  openMovementDialog(kind: "expense" | "withdrawal" | "account" = "expense"): void {
+    this.movementDialogKind.set(kind);
+    if (kind === "expense") this.resetExpenseForm();
+    if (kind === "withdrawal") this.resetWithdrawalForm();
+    if (kind === "account") this.resetAccountForm();
+    this.movementDialogOpen.set(true);
+  }
+
+  closeMovementDialog(): void {
+    this.movementDialogOpen.set(false);
+  }
+
+  openPartnerPayment(partner: PartnerWithdrawalPurpose): void {
+    this.resetWithdrawalForm();
+    this.withdrawalPurpose.set(partner);
+    this.movementDialogKind.set("withdrawal");
+    this.movementDialogOpen.set(true);
+  }
+
+  openCutDialog(): void {
+    this.cutLabel.set(`Cierre ${this.selectedMonth().label}`);
+    this.cutStart.set(this.localDateKey(this.selectedMonth().start));
+    this.cutEnd.set(this.localDateKey(this.selectedMonth().end));
+    this.cutDialogOpen.set(true);
+  }
+
+  closeCutDialog(): void {
+    this.cutDialogOpen.set(false);
+  }
+
+  exportMonthlyReport(): void {
+    const month = this.selectedMonth();
+    const rows = [
+      ["Indicador", "Monto MXN"],
+      ["Inversión pagada", month.investment],
+      ["Ventas netas", month.netSales],
+      ["Cobrado", month.collected],
+      ["Costo de mercancía", month.merchandiseCost],
+      ["Gastos", month.expenses],
+      ["Devoluciones y ajustes", month.returnsImpact],
+      ["Utilidad neta", month.netProfit],
+      ["Utilidad distribuible", month.distributableProfit],
+      ["Capital en inventario al cierre", month.inventoryClosing],
+    ];
+    const csv = rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\r\n");
+    const url = URL.createObjectURL(new Blob(["\ufeff", csv], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `administracion-${this.activeBusinessId()}-${month.id}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   async reload() {
@@ -559,11 +1261,13 @@ export default class AdministracionPage {
     try {
       await Promise.all([
         this.ordersService.loadFromFirestore(),
+        this.ordersService.listCollectionEventsForAvailableBusinesses().then((rows) => this.collectionEventRows.set(rows)),
         this.inventoryService.loadFromFirestore().catch(() => null),
         this.routesService.loadFromFirestore().catch(() => null),
         this.customersService.loadFromFirestore().catch(() => null),
         this.financeService.loadAll(),
       ]);
+      this.lastUpdatedAt.set(new Date());
       const pending = this.pendingDrilldownRestore();
       if (pending) {
         this.tryRestoreDrilldown(pending);
@@ -613,25 +1317,27 @@ export default class AdministracionPage {
       this.error.set("El inicio del corte no puede ser mayor que la fecha final.");
       return;
     }
-    const summary = this.summary();
+    const month = this.selectedMonth();
     try {
       await this.financeService.saveCut({
+        business_id: this.activeBusinessId(),
         label: this.cutLabel().trim() || `Corte ${start} a ${end}`,
         route_id: this.selectedRouteId(),
         start_at: start,
         end_at: end,
         snapshot: {
-          ingresos: summary.ingresosCobrados,
-          egresos: summary.egresos,
-          utilidad_bruta: summary.utilidadBruta,
-          utilidad_neta: summary.utilidadNeta,
-          por_cobrar: summary.porCobrar,
-          caja: summary.cajaActual,
-          mercancia_transito: summary.mercanciaTransito,
-          inventario: summary.inventarioCosto,
+          ingresos: month.collected,
+          egresos: month.expenses + month.cashRefunds,
+          utilidad_bruta: month.netSales - month.merchandiseCost,
+          utilidad_neta: month.netProfit,
+          por_cobrar: month.receivablesClosing,
+          caja: this.summary().cajaActual,
+          mercancia_transito: this.summary().mercanciaTransito,
+          inventario: month.inventoryClosing,
         },
       });
       this.cutLabel.set("");
+      this.cutDialogOpen.set(false);
       this.success.set("Corte guardado.");
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "No se pudo guardar el corte.";
@@ -645,6 +1351,13 @@ export default class AdministracionPage {
     this.accountName.set(row.name);
     this.accountBalance.set(row.balance);
     this.accountNotes.set(row.notes || "");
+  }
+
+  editAccount(row: FinanceAccount) {
+    if (!this.canEditAccounts()) return;
+    this.startEditAccount(row);
+    this.movementDialogKind.set("account");
+    this.movementDialogOpen.set(true);
   }
 
   resetAccountForm() {
@@ -669,12 +1382,14 @@ export default class AdministracionPage {
     this.success.set(null);
     try {
       await this.financeService.saveAccount({
+        business_id: this.activeBusinessId(),
         account_id: editingId || undefined,
         name,
         balance: this.accountBalance(),
         notes: this.accountNotes().trim() || null,
       });
       this.resetAccountForm();
+      this.movementDialogOpen.set(false);
       this.success.set(isEditing ? "Cuenta actualizada." : "Cuenta registrada.");
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "No se pudo guardar la cuenta.";
@@ -729,7 +1444,7 @@ export default class AdministracionPage {
     this.expenseAmount.set(0);
     this.expenseDate.set(this.offsetDate(0));
     this.expenseRouteId.set(this.selectedRouteId() || "general");
-    this.expenseAccountId.set("none");
+    this.expenseAccountId.set(this.defaultFinanceAccountId());
     this.expenseInstallmentTotal.set(null);
     this.expenseInstallmentIndex.set(null);
     this.expenseNotes.set("");
@@ -737,8 +1452,8 @@ export default class AdministracionPage {
 
   setExpenseCategory(value: unknown) {
     const raw = String(value || "").trim();
-    if (raw === "compra_inversion" || raw === "perdida" || raw === "paqueteria" || raw === "consumibles" || raw === "deuda_fija" || raw === "deuda_meses") {
-      this.expenseCategory.set(raw);
+    if (EXPENSE_CATEGORY_ORDER.includes(raw as FinanceExpenseCategory)) {
+      this.expenseCategory.set(raw as FinanceExpenseCategory);
     }
   }
 
@@ -781,11 +1496,16 @@ export default class AdministracionPage {
       this.error.set("El monto del egreso debe ser mayor a 0.");
       return;
     }
+    if (this.expenseAccountId() === "none") {
+      this.error.set("Selecciona la cuenta de donde salió el dinero.");
+      return;
+    }
 
     this.error.set(null);
     this.success.set(null);
     try {
       await this.financeService.saveExpense({
+        business_id: this.activeBusinessId(),
         expense_id: editingId || undefined,
         category: this.expenseCategory(),
         amount: this.expenseAmount(),
@@ -797,6 +1517,7 @@ export default class AdministracionPage {
         notes: this.expenseNotes().trim() || null,
       });
       this.resetExpenseForm();
+      this.movementDialogOpen.set(false);
       this.success.set(isEditing ? "Egreso actualizado." : "Egreso registrado.");
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "No se pudo guardar el egreso.";
@@ -841,7 +1562,7 @@ export default class AdministracionPage {
     this.withdrawalPurpose.set("socio_blanca");
     this.withdrawalRecipient.set("");
     this.withdrawalRouteId.set(this.selectedRouteId() || "general");
-    this.withdrawalAccountId.set("none");
+    this.withdrawalAccountId.set(this.defaultFinanceAccountId());
     this.withdrawalNotes.set("");
   }
 
@@ -903,6 +1624,10 @@ export default class AdministracionPage {
       this.error.set("El monto del retiro debe ser mayor a 0.");
       return;
     }
+    if (this.withdrawalAccountId() === "none") {
+      this.error.set("Selecciona la cuenta de donde salió el dinero.");
+      return;
+    }
 
     const available = this.withdrawalAvailableForForm();
     if (this.withdrawalAmount() > available + 0.001) {
@@ -924,6 +1649,7 @@ export default class AdministracionPage {
     this.success.set(null);
     try {
       await this.financeService.saveWithdrawal({
+        business_id: this.activeBusinessId(),
         withdrawal_id: editingId || undefined,
         amount: this.withdrawalAmount(),
         occurred_at: this.withdrawalDate(),
@@ -934,6 +1660,7 @@ export default class AdministracionPage {
         notes: this.withdrawalNotes().trim() || null,
       });
       this.resetWithdrawalForm();
+      this.movementDialogOpen.set(false);
       this.success.set(isEditing ? "Retiro actualizado." : "Retiro registrado.");
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "No se pudo guardar el retiro.";
@@ -1097,6 +1824,10 @@ export default class AdministracionPage {
     return EXPENSE_CATEGORY_LABEL[key];
   }
 
+  expenseCategoryHint(key: FinanceExpenseCategory): string {
+    return EXPENSE_CATEGORY_HINT[key] || "";
+  }
+
   withdrawalPurposeLabel(key: FinanceWithdrawalPurpose): string {
     return WITHDRAWAL_PURPOSE_LABEL[key];
   }
@@ -1140,7 +1871,7 @@ export default class AdministracionPage {
     return new Intl.NumberFormat("es-MX", {
       style: "currency",
       currency: "MXN",
-      minimumFractionDigits: 0,
+      minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(this.toSafeNumber(value));
   }
@@ -1286,13 +2017,14 @@ export default class AdministracionPage {
   private buildSummary(input: {
     orders: Order[];
     expenses: FinanceExpense[];
+    withdrawals: FinanceWithdrawal[];
     inventory: InventoryItem[];
     accounts: FinanceAccount[];
     projectionDays: number;
     averageWindowDays: number;
     stagnationDays: number;
   }): FinanceSummary {
-    const expensesTotal = input.expenses.reduce((sum, row) => sum + Math.max(0, this.toSafeNumber(row.amount)), 0);
+    const expensesTotal = this.operatingExpenseTotal(input.expenses);
     const withdrawalProfit = calculateWithdrawalProfit(input.orders, expensesTotal);
     const { avgCostUnit, avgSaleUnit, markupMultiplier } = this.estimateMargins(input.orders);
     const bucketMap = this.createBucketMap();
@@ -1323,7 +2055,6 @@ export default class AdministracionPage {
       if (!isCancelled) {
         perdidoDano += financials.items.reduce((sum, item) => sum + item.damagedReturnedQty * item.unitCost, 0);
       }
-
       if (isDelivered) {
         ventasBrutas += snapshot.grossSales;
         devolucionesMonto += snapshot.returnsAmount;
@@ -1388,9 +2119,27 @@ export default class AdministracionPage {
     const averageWindowDays = Math.max(1, input.averageWindowDays);
     const promedioVentaDiaria = recentSales / averageWindowDays;
     const recentExpenses = input.expenses
+      .filter((row) => row.category !== "compra_inversion")
       .filter((row) => this.isDateWithinWindow(row.occurred_at, averageWindowDays))
       .reduce((sum, row) => sum + this.toSafeNumber(row.amount), 0);
     const promedioEgresoDiario = recentExpenses / averageWindowDays;
+
+    const inventarioRecuperable = input.inventory.reduce(
+      (sum, row) => sum + this.inventoryRecoverableQty(row) * this.resolveInventoryCostUnit(row, avgCostUnit),
+      0,
+    );
+
+    // Un producto sin costo capturado toma el costo promedio de los pedidos.
+    // Es mejor que valuarlo en cero, pero es un estimado y tiene que verse.
+    let inventarioCostoImputado = 0;
+    let inventarioPiezasSinCosto = 0;
+    for (const row of input.inventory) {
+      if (this.toSafeNumber(row.unit_price) > 0) continue;
+      const qty = this.inventoryRecoverableQty(row);
+      if (qty <= 0) continue;
+      inventarioPiezasSinCosto += qty;
+      inventarioCostoImputado += qty * this.resolveInventoryCostUnit(row, avgCostUnit);
+    }
 
     let inventarioCosto = 0;
     let estancadoPiezas = 0;
@@ -1462,6 +2211,32 @@ export default class AdministracionPage {
       cobradoPorDepositar +
       (promedioVentaDiaria - promedioEgresoDiario) * Math.max(1, input.projectionDays);
 
+    // Lo que ya tiene comprador apartado no se puede vender otra vez: separarlo
+    // del stock libre es la diferencia entre dinero que llega pronto y dinero
+    // que solo llega si se vende.
+    const inventarioReservado = Math.max(0, inventarioRecuperable - inventarioCosto);
+    const retirosSocios = input.withdrawals
+      .filter((row) => this.resolveWithdrawalPartner(row) !== null)
+      .reduce((sum, row) => sum + this.toSafeNumber(row.amount), 0);
+    const retirosSinClasificar = input.withdrawals
+      .filter((row) => this.resolveWithdrawalPartner(row) === null)
+      .reduce((sum, row) => sum + this.toSafeNumber(row.amount), 0);
+
+    const position = calculateBusinessPosition({
+      collectedRevenue: withdrawalProfit.collectedRevenue,
+      pendingCollection: withdrawalProfit.pendingCollection,
+      deliveredNetCost: withdrawalProfit.deliveredNetCost,
+      inventoryReservedAtCost: inventarioReservado,
+      inventoryAvailableAtCost: inventarioCosto,
+      merchandiseInTransitAtCost: mercanciaTransito,
+      expensesTotal,
+      partnerWithdrawals: retirosSocios,
+      unclassifiedWithdrawals: retirosSinClasificar,
+      accruedNetProfit: withdrawalProfit.accruedNetProfit,
+      declaredAccountsBalance: cajaActual,
+      accountCount: input.accounts.length,
+    });
+
     const devolucionRate = baseVentasDevolucion > 0 ? devolucionesMonto / baseVentasDevolucion : 0;
     const devolucionUnidadesRate = unidadesBrutas > 0 ? unidadesDevueltas / unidadesBrutas : 0;
     const ventasNetas = ventasBrutas - descuentos - devolucionesMonto;
@@ -1478,14 +2253,21 @@ export default class AdministracionPage {
       egresos,
       utilidadBruta,
       utilidadNeta,
-      utilidadCobradaBase: withdrawalProfit.collectedProfitBase,
+      utilidadCobradaBase: withdrawalProfit.collectedNetProfit,
       gananciaPendienteCobro: withdrawalProfit.pendingProfit,
+      capitalPendienteCobro: withdrawalProfit.pendingPrincipal,
       saldoPendienteCobro: withdrawalProfit.pendingCollection,
+      costoEntregado: withdrawalProfit.deliveredNetCost,
       dsoDias,
       cajaActual,
       porCobrar,
       mercanciaTransito,
       inventarioCosto,
+      inventarioReservado,
+      inventarioRecuperable: this.toSafeNumber(inventarioRecuperable),
+      inventarioCostoImputado: this.toSafeNumber(inventarioCostoImputado),
+      inventarioPiezasSinCosto,
+      position,
       inventoryTurnover,
       inventoryDays,
       potencialBorradores,
@@ -1814,12 +2596,6 @@ export default class AdministracionPage {
       return Math.max(0, Math.trunc(this.toSafeNumber(item.available_qty)));
     }
 
-    const hasOnHand = item.on_hand_qty !== null && item.on_hand_qty !== undefined;
-    if (!hasOnHand) {
-      // Legacy docs may only have quantity_on_hand as already-available stock.
-      return Math.max(0, Math.trunc(this.toSafeNumber(item.quantity_on_hand)));
-    }
-
     const onHand = this.toSafeNumber(item.on_hand_qty);
     const reservedDirect = this.toSafeNumber(item.reserved_qty ?? 0);
     const reservedFromMap = Object.values(item.reservations || {}).reduce((sum, row) => {
@@ -2084,10 +2860,395 @@ export default class AdministracionPage {
     return Math.max(1, Math.trunc(n));
   }
 
+  /**
+   * Todos los meses con actividad, no una ventana fija: recortar a los ultimos
+   * seis escondia el arranque del negocio y dejaba meses en blanco sin motivo.
+   */
+  private monthWindowCount(): number {
+    let earliest: Date | null = null;
+    for (const order of this.filteredOrders()) {
+      const date = this.toDate(this.orderRecognitionDate(order));
+      if (date && (!earliest || date < earliest)) earliest = date;
+    }
+    if (!earliest) return 6;
+    const now = new Date();
+    const months = (now.getFullYear() - earliest.getFullYear()) * 12 + (now.getMonth() - earliest.getMonth()) + 1;
+    return Math.min(60, Math.max(1, months));
+  }
+
+  private buildMonthWindows(count = this.monthWindowCount()): Array<Pick<MonthlyFinanceSnapshot, "id" | "label" | "shortLabel" | "start" | "end">> {
+    const formatter = new Intl.DateTimeFormat("es-MX", { month: "long", year: "numeric" });
+    const shortFormatter = new Intl.DateTimeFormat("es-MX", { month: "short" });
+    const now = new Date();
+    const rows = [];
+    for (let offset = count - 1; offset >= 0; offset -= 1) {
+      const start = new Date(now.getFullYear(), now.getMonth() - offset, 1, 0, 0, 0, 0);
+      const end = new Date(start.getFullYear(), start.getMonth() + 1, 0, 23, 59, 59, 999);
+      const label = formatter.format(start);
+      rows.push({
+        id: this.monthId(start),
+        label: label.charAt(0).toUpperCase() + label.slice(1),
+        shortLabel: shortFormatter.format(start).replace(".", "").replace(/^./, (letter) => letter.toUpperCase()),
+        start,
+        end,
+      });
+    }
+    return rows;
+  }
+
+  private monthId(value: Date): string {
+    return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}`;
+  }
+
+  private localDateKey(value: Date): string {
+    return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+  }
+
+  private orderRecognitionDate(order: Order): unknown {
+    // El mes comercial del pedido siempre es el mes en que se creó. Entrega y
+    // cobranza son relojes distintos y no deben mover la venta de su origen.
+    return order.created_at || order.updated_at;
+  }
+
+  private orderDeliveryDate(order: Order): unknown {
+    // Para cartera y liberación de utilidad sí importa cuándo se entregó. Los
+    // históricos sin marca de entrega conservan created_at como último recurso.
+    return order.delivered_at || order.closed_at || order.created_at || order.updated_at;
+  }
+
+  private collectedAmountForMonth(
+    start: Date,
+    end: Date,
+    orders: Order[],
+    events: OrderCollectionEvent[],
+  ): number {
+    return this.toSafeNumber(
+      orders.reduce(
+        (sum, order) => sum + this.collectionEntriesForOrder(order, events)
+          .filter((entry) => entry.date >= start && entry.date <= end)
+          .reduce((entrySum, entry) => entrySum + entry.amount, 0),
+        0,
+      ),
+    );
+  }
+
+  private collectionEntriesForOrder(
+    order: Order,
+    events: OrderCollectionEvent[],
+  ): Array<{ date: Date; amount: number }> {
+    const orderEvents = events.filter(
+      (event) => event.order_id === order.order_id && event.verification_status !== "rejected",
+    );
+    const entries = orderEvents
+      .filter((event) => event.verification_status === "confirmed")
+      .map((event) => ({
+        date: this.toDate(this.collectionRecognitionDate(event)),
+        amount: Math.max(0, this.toSafeNumber(event.amount)),
+      }))
+      .filter((entry): entry is { date: Date; amount: number } => Boolean(entry.date && entry.amount > 0));
+
+    // Un evento pendiente ya representa ese dinero, pero no se reconoce como
+    // cobrado hasta confirmarse. Así tampoco reaparece como cobro histórico.
+    const representedByEvents = orderEvents.reduce(
+      (sum, event) => sum + Math.max(0, this.toSafeNumber(event.amount)),
+      0,
+    );
+    const financials = calculateOrderFinancials(order);
+    const paid = Math.min(financials.netAmount, Math.max(0, financials.paidAmount));
+    const historicalRemainder = Math.max(0, paid - representedByEvents);
+    const legacyDate = this.toDate(order.paid_at);
+    if (historicalRemainder > 0 && legacyDate) {
+      entries.push({ date: legacyDate, amount: historicalRemainder });
+    }
+
+    return entries.sort((a, b) => a.date.getTime() - b.date.getTime());
+  }
+
+  private appliedCollectionsUntil(
+    order: Order,
+    events: OrderCollectionEvent[],
+    cutoff: Date,
+    collectibleAmount = calculateOrderFinancials(order).netAmount,
+  ): number {
+    const received = this.collectionEntriesForOrder(order, events)
+      .filter((entry) => entry.date <= cutoff)
+      .reduce((sum, entry) => sum + entry.amount, 0);
+    return this.toSafeNumber(Math.min(Math.max(0, collectibleAmount), Math.max(0, received)));
+  }
+
+  private cohortCollectedToDate(orders: Order[], events: OrderCollectionEvent[]): number {
+    const now = new Date();
+    return this.toSafeNumber(orders.reduce((sum, order) => {
+      const netAmount = calculateOrderFinancials(order).netAmount;
+      return sum + this.appliedCollectionsUntil(order, events, now, netAmount);
+    }, 0));
+  }
+
+  private collectionFlowForMonth(
+    start: Date,
+    end: Date,
+    orders: Order[],
+    events: OrderCollectionEvent[],
+  ): { currentPeriod: number; priorPeriods: number } {
+    let currentPeriod = 0;
+    let priorPeriods = 0;
+
+    for (const order of orders) {
+      const createdAt = this.toDate(this.orderRecognitionDate(order));
+      const amount = this.collectionEntriesForOrder(order, events)
+        .filter((entry) => entry.date >= start && entry.date <= end)
+        .reduce((sum, entry) => sum + entry.amount, 0);
+      if (amount <= 0) continue;
+
+      if (createdAt && createdAt < start) priorPeriods += amount;
+      else currentPeriod += amount;
+    }
+
+    return {
+      currentPeriod: this.toSafeNumber(currentPeriod),
+      priorPeriods: this.toSafeNumber(priorPeriods),
+    };
+  }
+
+  private receivablesAt(
+    cutoff: Date,
+    orders: Order[],
+    events: OrderCollectionEvent[],
+    returns: ReturnRecord[],
+  ): number {
+    return this.toSafeNumber(orders.reduce((sum, order) => {
+      const recognizedAt = this.toDate(this.orderDeliveryDate(order));
+      if (!recognizedAt || recognizedAt > cutoff) return sum;
+
+      // El pedido guarda el neto actual. Para reconstruir un cierre anterior,
+      // se reincorporan las devoluciones que ocurrieron despues de ese corte.
+      const laterReturnAdjustments = returns
+        .filter((row) => row.order_id === order.order_id)
+        .filter((row) => {
+          const returnedAt = this.toDate(row.created_at);
+          return Boolean(returnedAt && returnedAt > cutoff);
+        })
+        .reduce((returnSum, row) => returnSum + this.returnRevenueAmount(row), 0);
+      const collectibleAtCutoff = this.toSafeNumber(
+        calculateOrderFinancials(order).netAmount + laterReturnAdjustments,
+      );
+      const collectedAtCutoff = this.appliedCollectionsUntil(order, events, cutoff, collectibleAtCutoff);
+      return sum + Math.max(0, collectibleAtCutoff - collectedAtCutoff);
+    }, 0));
+  }
+
+  /**
+   * Cada abono libera la misma proporcion de utilidad que representa dentro del
+   * pedido. Es aditivo: la suma de todos los meses da la utilidad total.
+   */
+  private collectedProfitForMonth(
+    start: Date,
+    end: Date,
+    orders: Order[],
+    events: OrderCollectionEvent[],
+    returns: ReturnRecord[],
+  ): number {
+    const released = orders.reduce((sum, order) => {
+      const financials = originalOrderFinancials(order);
+      if (financials.netAmount <= 0) return sum;
+      const profitRatio = financials.grossProfit / financials.netAmount;
+      const recognizedAt = this.toDate(this.orderDeliveryDate(order));
+      if (!recognizedAt) return sum;
+      let collectibleRemaining = financials.netAmount;
+      let collected = 0;
+      for (const entry of this.collectionEntriesForOrder(order, events)) {
+        if (collectibleRemaining <= 0) break;
+        const applied = Math.min(collectibleRemaining, entry.amount);
+        collectibleRemaining -= applied;
+        // Un cobro registrado antes de la entrega es efectivo, pero no libera
+        // utilidad hasta que la venta se reconoce al entregar el pedido.
+        const profitReleaseDate = entry.date > recognizedAt ? entry.date : recognizedAt;
+        if (profitReleaseDate >= start && profitReleaseDate <= end) collected += applied;
+      }
+      return sum + collected * profitRatio;
+    }, 0);
+    const returnProfitReversal = returns.reduce((sum, row) => sum + this.returnProfitImpact(row), 0);
+    return this.toSafeNumber(released - returnProfitReversal);
+  }
+
+  private recoveredCapitalForMonth(
+    start: Date,
+    end: Date,
+    orders: Order[],
+    events: OrderCollectionEvent[],
+  ): number {
+    return this.toSafeNumber(orders.reduce((sum, order) => {
+      const financials = calculateOrderFinancials(order);
+      if (financials.netAmount <= 0) return sum;
+      const costRatio = financials.netCost / financials.netAmount;
+      const collected = this.collectionEntriesForOrder(order, events)
+        .filter((entry) => entry.date >= start && entry.date <= end)
+        .reduce((entrySum, entry) => entrySum + entry.amount, 0);
+      return sum + collected * costRatio;
+    }, 0));
+  }
+
+  private operatingExpenseTotal(rows: FinanceExpense[]): number {
+    return this.toSafeNumber(rows
+      .filter((row) => isOperatingExpense(row.category))
+      .reduce((sum, row) => sum + Math.max(0, this.toSafeNumber(row.amount)), 0));
+  }
+
+  private returnOrderItem(row: ReturnRecord): OrderItem | null {
+    const order = this.filteredOrders().find((candidate) => candidate.order_id === row.order_id)
+      ?? this.orders().find((candidate) => candidate.order_id === row.order_id);
+    return order?.items?.find((item) => item.item_id === row.order_item_id || item.inventory_id === row.inventory_id) ?? null;
+  }
+
+  private isFinancialReturn(row: ReturnRecord): boolean {
+    const stage = String(row.stage_at_return || "").trim().toLowerCase();
+    if (!stage) return true;
+    return new Set([
+      "entregado", "pago_pendiente",
+      "pagado_parcial", "pagado", "closed",
+    ]).has(stage);
+  }
+
+  private returnRevenueAmount(row: ReturnRecord): number {
+    const direct = Math.max(0, this.toSafeNumber(row.net_return_amount));
+    if (direct > 0) return direct;
+    const item = this.returnOrderItem(row);
+    const priceCandidates = [
+      row.unit_price_customer,
+      item?.price_clienta,
+      row.unit_price_public,
+      item?.price_public,
+    ].map((value) => Math.max(0, this.toSafeNumber(value)));
+    const unitPrice = priceCandidates.find((value) => value > 0) || 0;
+    const gross = Math.max(0, this.toSafeNumber(row.qty)) * unitPrice;
+    return Math.max(0, this.toSafeNumber(gross - this.toSafeNumber(row.discount_share)));
+  }
+
+  private returnRecoverableCost(row: ReturnRecord): number {
+    if (row.disposition === "damaged" || row.status === "damaged") return 0;
+    const direct = Math.max(0, this.toSafeNumber(row.returned_cost_amount));
+    if (direct > 0) return direct;
+    const item = this.returnOrderItem(row);
+    const unitCost = Math.max(0, this.toSafeNumber(row.unit_cost))
+      || Math.max(0, this.toSafeNumber(item?.price_cost));
+    return this.toSafeNumber(Math.max(0, this.toSafeNumber(row.qty)) * unitCost);
+  }
+
+  private returnProfitImpact(row: ReturnRecord): number {
+    const direct = this.toSafeNumber(row.profit_impact);
+    if (direct !== 0) return Math.max(0, direct);
+    return Math.max(0, this.returnRevenueAmount(row) - this.returnRecoverableCost(row));
+  }
+
+  private averageReceivableAge(orders: Order[]): number {
+    const now = new Date();
+    let weightedDays = 0;
+    let balanceTotal = 0;
+    for (const order of orders) {
+      const balance = Math.max(0, calculateOrderFinancials(order).balanceDue);
+      if (balance <= 0) continue;
+      const recognizedAt = this.toDate(this.orderDeliveryDate(order));
+      if (!recognizedAt) continue;
+      weightedDays += balance * Math.max(0, this.daysSince(recognizedAt, now));
+      balanceTotal += balance;
+    }
+    return balanceTotal > 0 ? Math.round(weightedDays / balanceTotal) : 0;
+  }
+
+  private collectionRecognitionDate(event: OrderCollectionEvent): unknown {
+    return event.cash_occurred_at
+      || (event.source_location === "durango" ? event.verified_at || event.created_at : event.created_at);
+  }
+
+  private isWithinMonth(value: unknown, start: Date, end: Date): boolean {
+    const date = this.toDate(value);
+    return Boolean(date && date >= start && date <= end);
+  }
+
+  private inventoryRecoverableQty(item: InventoryItem): number {
+    const onHand = item.on_hand_qty;
+    return Math.max(0, this.toSafeNumber(onHand) - this.toSafeNumber(item.damaged_qty));
+  }
+
+  private inventoryMovementCapitalDelta(movement: InventoryMovement): number {
+    const recoverableDelta = this.toSafeNumber(movement.delta_on_hand) - this.toSafeNumber(movement.delta_damaged);
+    return recoverableDelta * this.inventoryMovementCost(movement);
+  }
+
+  private inventoryMovementCost(movement: InventoryMovement): number {
+    const order = movement.order_id ? this.orders().find((row) => row.order_id === movement.order_id) : null;
+    const orderItem = order?.items?.find((row) => row.item_id === movement.order_item_id || row.inventory_id === movement.inventory_id);
+    const orderCost = this.toSafeNumber(orderItem?.price_cost);
+    if (orderCost > 0) return orderCost;
+    const inventory = this.inventoryItems().find((row) => row.inventory_id === movement.inventory_id);
+    return Math.max(0, this.toSafeNumber(inventory?.unit_price));
+  }
+
+  private movementCapitalByType(movements: InventoryMovement[], type: InventoryMovement["type"]): number {
+    return movements
+      .filter((row) => row.type === type)
+      .reduce((sum, row) => sum + this.inventoryMovementCapitalDelta(row), 0);
+  }
+
+  private inventoryStagnantCapitalAt(end: Date): number {
+    return this.inventoryItems().reduce((sum, item) => {
+      const reference = this.pickBestDate(item.updated_at, item.created_at);
+      if (!reference || reference > end) return sum;
+      const age = Math.max(0, Math.floor((end.getTime() - reference.getTime()) / 86_400_000));
+      if (age < this.stagnationDays()) return sum;
+      return sum + this.inventoryAvailableQty(item) * this.resolveInventoryCostUnit(item, 0);
+    }, 0);
+  }
+
+  private inventoryAgingCapital(minDays: number, maxDays: number): number {
+    const end = this.selectedMonth().end;
+    return this.inventoryItems().reduce((sum, item) => {
+      const reference = this.pickBestDate(item.updated_at, item.created_at);
+      if (!reference || reference > end) return sum;
+      const age = Math.max(0, Math.floor((end.getTime() - reference.getTime()) / 86_400_000));
+      if (age < minDays || age > maxDays) return sum;
+      return sum + this.inventoryAvailableQty(item) * this.resolveInventoryCostUnit(item, 0);
+    }, 0);
+  }
+
+  private emptyMonthSnapshot(): MonthlyFinanceSnapshot {
+    const now = new Date();
+    return {
+      id: this.monthId(now), label: "Mes actual", shortLabel: "Mes", start: now, end: now,
+      investment: 0, generatedSales: 0, cohortCurrentSales: 0, cohortReturnsToDate: 0,
+      generatedOrderCount: 0, netSales: 0, salesBeforeReturns: 0,
+      deliveredSales: 0, deliveredCost: 0, returnedInventoryCost: 0, damagedWriteOff: 0,
+      cashRefunds: 0, netCashCollections: 0, periodStatus: "open",
+      collected: 0, merchandiseCost: 0, expenses: 0,
+      returnsImpact: 0, distributionAdjustments: 0,
+      netProfit: 0, collectedProfit: 0, inProcessProfit: 0, pendingCollectionProfit: 0, projectedProfit: 0,
+      inProcessOrderCount: 0, pendingCollectionOrderCount: 0, cohortCollectedToDate: 0, cohortPendingToday: 0,
+      cohortCollectedAfterPeriod: 0, collectedFromCurrentPeriod: 0, collectedFromPriorPeriods: 0,
+      receivablesOpening: 0, receivablesClosing: 0,
+      distributableProfit: 0, overdue: 0, dso: 0, partnerOneWithdrawn: 0,
+      partnerTwoWithdrawn: 0, inventoryOpening: 0, inventoryReceipts: 0, returnedToInventory: 0,
+      inventoryReleased: 0, inventoryRecovered: 0, inventoryWriteOff: 0, inventoryClosing: 0,
+      stagnantCapital: 0,
+    };
+  }
+
+  private percentageDelta(current: number, previous: number): number {
+    return previous > 0 ? ((current - previous) / previous) * 100 : 0;
+  }
+
+  private safeRatio(value: number, total: number): number {
+    return total > 0 ? value / total : 0;
+  }
+
+  private roundChartMax(value: number): number {
+    const magnitude = 10 ** Math.floor(Math.log10(Math.max(1, value)));
+    const step = magnitude >= 10_000 ? 10_000 : magnitude;
+    return Math.ceil(value / step) * step;
+  }
+
   private offsetDate(offsetDays: number): string {
     const date = new Date();
     date.setDate(date.getDate() + offsetDays);
     return date.toISOString().slice(0, 10);
   }
 }
-

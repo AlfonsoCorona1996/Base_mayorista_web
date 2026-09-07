@@ -4,11 +4,9 @@ import { calculateOrderFinancials } from "../../core/order-financials";
 const TABLE_PAYABLE_ORDER_STATUSES = new Set([
   "ready_for_route",
   "assigned_to_run",
-  "in_transit",
   "en_ruta",
-  "delivered",
-  "delivered_partial",
   "entregado",
+  "entregado_parcial",
   "pago_pendiente",
   "pagado_parcial",
 ]);

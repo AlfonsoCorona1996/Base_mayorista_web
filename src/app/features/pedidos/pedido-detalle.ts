@@ -52,7 +52,7 @@ import { BarcodeScannerComponent } from "../../shared/barcode-scanner/barcode-sc
 import { AuthzService } from "../../core/authz.service";
 import { AuthService } from "../../core/auth.service";
 import { DispatchOrderRow, RouteRunDoc, RouteRunsService } from "../../services/route-runs.service";
-import { SalesNoteRenderService } from "./sales-note-render.service";
+import { computeDiscountPctFromPrices, resolveSalesNoteDiscountPct, SalesNoteRenderService } from "./sales-note-render.service";
 import { CustomerFollowupsService } from "../../core/customer-followups.service";
 import { ShipmentBusinessSummary, ShipmentItem, ShipmentsService } from "../../core/shipments.service";
 import { OperationalExpenseReport, OperationalExpenseReportsService } from "../../core/operational-expense-reports.service";
@@ -302,6 +302,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   private businessScope = inject(BusinessScopeService);
   private authz = inject(AuthzService);
   canRefundReturn = computed(() => this.authz.canCap("cap.payments.refund"));
+  canCreateFinanceAccounts = computed(() => this.authz.canCap("cap.finance.accounts.create"));
   private auth = inject(AuthService);
   private salesNoteRender = inject(SalesNoteRenderService);
   private routeRuns = inject(RouteRunsService);
@@ -399,6 +400,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   imagePreviewUrl = signal<string | null>(null);
   imagePreviewLoading = signal(false);
   openProductMenuId = signal<string | null>(null);
+  productsMenuOpen = signal(false);
   generatingSalesNote = signal(false);
   sendingWaNote       = signal(false);
   waNoteSent          = signal<{ ok: boolean; msg?: string } | null>(null);
@@ -491,6 +493,10 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   discountDraft = signal("");
   discountSaving = signal(false);
   discountError = signal<string | null>(null);
+  shippingFeeModalOpen = signal(false);
+  shippingFeeDraft = signal("");
+  shippingFeeSaving = signal(false);
+  shippingFeeError = signal<string | null>(null);
   // ─────────────────────────────────────────────────────────────────────────
 
   addItemModalOpen = signal(false);
@@ -506,6 +512,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   officialItemImage = signal<string | null>(null);
   officialItemVariantId = signal<string | null>(null);
   addItemMode = signal<"add" | "convert" | "edit">("add");
+  crossBusinessCatalogMode = signal(false);
   convertTargetItemId = signal<string | null>(null);
   editTargetItemId = signal<string | null>(null);
   newItemSupplierId = signal<string | null>(null);
@@ -619,6 +626,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   inventorySourceLoading = signal(false);
   inventorySourceError = signal<string | null>(null);
   catalogLoaded = signal(false);
+  catalogSourceError = signal<string | null>(null);
   showProductList = signal(false);
   returnModalOpen = signal(false);
   returnTargetItem = signal<OrderItem | null>(null);
@@ -631,6 +639,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   returnRefundReference = signal("");
   returnSaving = signal(false);
   financeAccountsLoadError = signal<string | null>(null);
+  creatingGeneralAccount = signal(false);
   financeAccounts = computed(() => {
     const currentOrder = this.order();
     if (!currentOrder) return [];
@@ -642,6 +651,42 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     return accounts.find((account) => this.isGeneralFinanceAccount(account))
       || (accounts.length === 1 ? accounts[0] : null);
   });
+  async createGeneralAccount(): Promise<void> {
+    if (!this.canCreateFinanceAccounts() || this.creatingGeneralAccount()) return;
+    const currentOrder = this.order();
+    if (!currentOrder) return;
+    const businessId = normalizeBusinessId(currentOrder.business_id);
+
+    // Si la General ya existe hay que usar esa, no crear una segunda: duplicar
+    // la caja del negocio parte el saldo en dos cuentas que nadie concilia.
+    const existing = this.finance.accounts().find(
+      (account) => normalizeBusinessId(account.business_id) === businessId && this.isGeneralFinanceAccount(account),
+    );
+    if (existing) {
+      this.returnRefundAccountId.set(existing.account_id);
+      return;
+    }
+
+    this.creatingGeneralAccount.set(true);
+    try {
+      // Id determinista: aunque dos personas toquen el boton a la vez, escriben
+      // sobre el mismo documento en vez de crear dos cuentas General.
+      const accountId = await this.finance.saveAccount({
+        account_id: businessId === "bm" ? "acc_caja_general" : `acc_${businessId}_general`,
+        business_id: businessId,
+        name: "General",
+        balance: 0,
+        notes: "Caja del negocio. Concilia el saldo desde Administracion.",
+      });
+      this.financeAccountsLoadError.set(null);
+      this.returnRefundAccountId.set(accountId);
+    } catch {
+      this.financeAccountsLoadError.set("No se pudo crear la cuenta General.");
+    } finally {
+      this.creatingGeneralAccount.set(false);
+    }
+  }
+
   selectedReturnRefundAccount = computed(() => {
     const accountId = this.returnRefundAccountId();
     return this.financeAccounts().find((account) => account.account_id === accountId) || null;
@@ -769,10 +814,12 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   });
   catalogSuggestions = computed(() => {
     if (this.newItemSource() !== "catalogo") return [];
-    if (this.isCatalogoOrder()) return [];
+    if (this.isCatalogoOrder() || this.crossBusinessCatalogMode()) return [];
     const terms = this.buildCatalogSearchTerms(this.newItemSearch());
     if (terms.length === 0) return [];
-    const matches: { doc: NormalizedListingDoc; variant: any; color: string; image: string | null }[] = [];
+    const tokens = this.catalogQueryTokens(this.newItemSearch());
+    const phrase = this.compactSearchText(this.newItemSearch());
+    const matches: { doc: NormalizedListingDoc; variant: any; color: string; image: string | null; score: number }[] = [];
     for (const doc of this.catalogRows()) {
       const listing: any = doc.listing || { items: [] };
       const title = this.compactSearchText(listing.title || "");
@@ -788,7 +835,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         const colorHit = colors.find((c) => this.catalogBlobMatches(this.compactSearchText(c), terms)) || colors[0] || "";
         const colorImage = this.resolveColorImage(doc, colorHit);
         const image = colorImage || v?.image_url || doc.cover_images?.[0] || doc.preview_image_url || null;
-        matches.push({ doc, variant: v, color: colorHit, image });
+        matches.push({ doc, variant: v, color: colorHit, image, score: this.scoreCatalogMatch(title, blob, tokens, phrase) });
         matched = true;
         break; // first variant hit is enough per doc for now
       }
@@ -800,9 +847,16 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       const fallbackColor = fallbackColors.find((c) => this.catalogBlobMatches(this.compactSearchText(c), terms)) || fallbackColors[0] || "";
       const fallbackColorImage = this.resolveColorImage(doc, fallbackColor);
       const fallbackImage = fallbackColorImage || fallbackVariant?.image_url || doc.cover_images?.[0] || doc.preview_image_url || null;
-      matches.push({ doc, variant: fallbackVariant, color: fallbackColor, image: fallbackImage });
+      matches.push({ doc, variant: fallbackVariant, color: fallbackColor, image: fallbackImage, score: this.scoreCatalogMatch(title, docBlob, tokens, phrase) });
     }
-    return matches.slice(0, 6);
+    // Ordenar por relevancia y no por fecha. Con un termino generico como "playera"
+    // hay decenas de coincidencias, y el corte a 6 dejaba fuera al producto que
+    // coincidia en todas las palabras.
+    return matches
+      .map((match, index) => ({ match, index }))
+      .sort((left, right) => (right.match.score - left.match.score) || (left.index - right.index))
+      .slice(0, 6)
+      .map((entry) => entry.match);
   });
 
   private catalogRows = signal<NormalizedListingDoc[]>([]);
@@ -1397,6 +1451,31 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     return terms.some((term) => blob.includes(term));
   }
 
+  /** Tokens tal cual los escribio el usuario, sin expandir sinonimos: sirven para puntuar. */
+  private catalogQueryTokens(value: string): string[] {
+    const normalized = this.compactSearchText(value);
+    if (normalized.length < 2) return [];
+    return normalized.split(" ").filter((token) => token.length >= 2);
+  }
+
+  /**
+   * Puntua que tan bien coincide un producto con lo que se escribio.
+   *
+   * Un acierto en el titulo vale mas que uno en alias o colores, porque las reglas de
+   * familia meten terminos genericos ("playera" acaba en toda camisa y blusa). Sin esto,
+   * el corte a 6 resultados se llenaba con productos que coincidian en una sola palabra.
+   */
+  private scoreCatalogMatch(titleBlob: string, fullBlob: string, tokens: string[], phrase: string): number {
+    if (tokens.length === 0) return 0;
+    let score = 0;
+    for (const token of tokens) {
+      if (titleBlob.includes(token)) score += 3;
+      else if (fullBlob.includes(token)) score += 1;
+    }
+    if (phrase.length >= 2 && titleBlob.includes(phrase)) score += 25;
+    return score;
+  }
+
   private getListingSemanticValues(listing: any): string[] {
     const semanticTags = Array.isArray(listing?.semantic_tags) ? listing.semantic_tags : [];
     const searchAliases = Array.isArray(listing?.search_aliases) ? listing.search_aliases : [];
@@ -1416,6 +1495,11 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
   isCatalogoOrder(order: Order | null = this.order()): boolean {
     return this.orderBusinessId(order) === "catalogo";
+  }
+
+  isCrossBusinessCatalogItem(item: OrderItem, order: Order | null = this.order()): boolean {
+    if (this.orderBusinessId(order) !== "bm" || item.source !== "catalogo") return false;
+    return normalizeBusinessId(item.source_business_id || item.business_id || "bm") === "catalogo";
   }
 
   orderBusinessLabel(order: Order | null = this.order()): string {
@@ -1457,13 +1541,13 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
   isOrderClosed(order: Order | null): boolean {
     if (!order) return true;
-    return ["entregado", "pagado", "cancelado", "devuelto", "closed", "delivered"].includes(order.status);
+    return ["entregado", "entregado_parcial", "pagado", "cancelado", "devuelto", "closed"].includes(order.status);
   }
 
   hasPackingStarted(order: Order): boolean {
     if ((order.packages || []).length > 0) return true;
     if (order.packing?.status === "done") return true;
-    return ["ready_for_route", "assigned_to_run", "in_transit", "en_ruta", "delivered", "entregado", "closed", "pagado"].includes(order.status);
+    return ["ready_for_route", "assigned_to_run", "en_ruta", "entregado", "entregado_parcial", "closed", "pagado"].includes(order.status);
   }
 
   canAddProducts(order: Order): boolean {
@@ -1477,18 +1561,14 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       reservado_inventario: "Reservado",
       solicitado_proveedor: "Solicitado",
       supplier_processing: "Proveedor",
-      inbound_in_transit: "En transito proveedor",
       en_transito: "En transito proveedor",
-      packing: "Empacando",
       recibido_qa: "En transito proveedor",
       empaque: "Empaque",
       ready_for_route: "Listo para ruta",
       assigned_to_run: "Asignado a salida",
-      in_transit: "En transito",
       en_ruta: "En ruta",
-      delivered: "Entregado",
-      delivered_partial: "Entrega parcial",
       entregado: "Entregado",
+      entregado_parcial: "Entrega parcial",
       closed: "Cerrado",
       pago_pendiente: "Pago pendiente",
       pagado_parcial: "Pago parcial",
@@ -1506,18 +1586,14 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       reservado_inventario: "inventory_2",
       solicitado_proveedor: "send",
       supplier_processing: "storefront",
-      inbound_in_transit: "local_shipping",
       en_transito: "local_shipping",
       recibido_qa: "local_shipping",
-      packing: "inventory_2",
       empaque: "inventory_2",
       ready_for_route: "local_shipping",
       assigned_to_run: "route",
-      in_transit: "local_shipping",
       en_ruta: "local_shipping",
-      delivered: "task_alt",
-      delivered_partial: "task_alt",
       entregado: "task_alt",
+      entregado_parcial: "task_alt",
       closed: "check_circle",
       pago_pendiente: "schedule",
       pagado_parcial: "payments",
@@ -1531,7 +1607,6 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   statusClass(status: OrderStatus): string {
     switch (status) {
       case "entregado":
-      case "delivered":
       case "closed":
       case "pagado":
         return "chip success";
@@ -1543,13 +1618,10 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       case "pago_pendiente":
         return "chip warning";
       case "empaque":
-      case "packing":
       case "ready_for_route":
       case "assigned_to_run":
-      case "in_transit":
       case "en_ruta":
       case "en_transito":
-      case "inbound_in_transit":
         return "chip accent";
       default:
         return "chip info";
@@ -1568,7 +1640,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         icon: "move_down",
         title: "Custodia",
         label: this.custodyLabel(order),
-        tone: order.custody_status === "customer" ? "ok" : order.custody_status === "shipment" ? "warn" : "info",
+        tone: order.current_holder_location === "customer" ? "ok" : order.current_holder_location === "in_transit" ? "warn" : "info",
       },
       {
         icon: "local_shipping",
@@ -1607,8 +1679,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   custodyLabel(order: Order): string {
-    switch (order.custody_status) {
-      case "shipment":
+    switch (order.current_holder_location) {
+      case "in_transit":
         return "En embarque";
       case "durango":
         return "Durango";
@@ -1849,14 +1921,14 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   canMarkDelivered(order: Order | null): boolean {
     if (!order) return false;
     if (["cancelado", "devuelto", "closed"].includes(order.status)) return false;
-    if (order.delivery_status === "delivered" || order.status === "delivered" || order.status === "entregado") return false;
+    if (order.delivery_status === "delivered" || order.status === "entregado") return false;
     return this.authz.canCap("cap.delivery.mark_delivered");
   }
 
   canCreateShipmentFromOrder(order: Order | null): boolean {
     if (!order) return false;
     if (["cancelado", "devuelto", "closed"].includes(order.status)) return false;
-    if (order.delivery_status === "delivered" || order.custody_status === "customer") return false;
+    if (order.delivery_status === "delivered" || order.current_holder_location === "customer") return false;
     if (this.activeShipmentForOrder(order)) return false;
     if ((order.items || []).length === 0) return false;
     return this.authz.canCap("cap.shipments.create") || this.authz.canSection("sections.embarques");
@@ -1964,7 +2036,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   private shipmentItemsForOrder(order: Order, customerName: string): ShipmentItem[] {
-    const closedPackages = (order.packages || []).filter((pkg) => pkg.status === "closed" || pkg.state === "armado" || pkg.state === "closed");
+    const closedPackages = (order.packages || []).filter((pkg) => pkg.state === "closed");
     if (!closedPackages.length && (order.packages || []).length > 0) return [];
     const packages = closedPackages;
     if (!packages.length) {
@@ -2115,7 +2187,6 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       case "reservado_inventario":
       case "solicitado_proveedor":
       case "supplier_processing":
-      case "inbound_in_transit":
       case "en_transito":
         return {
           canEditItems: true,
@@ -2130,7 +2201,6 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
           limitedEdit: true,
         };
       case "recibido_qa":
-      case "packing":
       case "empaque":
         return {
           canEditItems: false,
@@ -2145,7 +2215,6 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
           limitedEdit: false,
         };
       case "en_ruta":
-      case "in_transit":
         return {
           canEditItems: false,
           canConfirmItems: false,
@@ -2174,8 +2243,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       case "pago_pendiente":
       case "ready_for_route":
       case "assigned_to_run":
-      case "delivered":
-      case "delivered_partial":
+      case "entregado":
+      case "entregado_parcial":
       case "closed":
         return {
           canEditItems: false,
@@ -2189,7 +2258,6 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
           canPack: false,
           limitedEdit: false,
         };
-      case "entregado":
       default:
         return {
           canEditItems: false,
@@ -2216,23 +2284,19 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         return { actionId: "confirm_items", label: "Confirmar existencias" };
       case "supplier_processing":
         return { actionId: "supplier_followup", label: "Marcar en transito proveedor" };
-      case "inbound_in_transit":
       case "en_transito":
       case "recibido_qa":
-      case "packing":
+      case "empaque":
         if (this.canFinishPacking(order)) {
           return { actionId: "dispatch", label: "Terminar empaquetado" };
         }
         return { actionId: "pack", label: this.hasPackingStarted(order) ? "Terminar empaquetado" : "Empacar" };
-      case "empaque":
-        return { actionId: "dispatch", label: "Terminar empaquetado" };
       case "ready_for_route":
       case "assigned_to_run":
         return null;
       case "en_ruta":
-      case "in_transit":
         return { actionId: "deliver", label: "Registrar entrega" };
-      case "delivered_partial":
+      case "entregado_parcial":
       case "pago_pendiente":
         return { actionId: "register_payment", label: "Registrar pago/conciliar" };
       default:
@@ -2358,7 +2422,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
   availableStock(item: OrderItem): number | null {
     if (item.source !== "inventario" || !item.inventory_id) return null;
-    return this.inventoryById().get(item.inventory_id)?.quantity_on_hand ?? null;
+    return this.inventoryById().get(item.inventory_id)?.available_qty ?? null;
   }
 
   hasInsufficientStock(item: OrderItem): boolean {
@@ -3036,7 +3100,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   inventoryAvailableQty(item: InventoryItem): number {
-    const value = Number(item.available_qty ?? item.quantity_on_hand ?? 0);
+    const value = Number(item.available_qty ?? 0);
     return Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 0;
   }
 
@@ -3065,7 +3129,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       "reservado_inventario",
       "solicitado_proveedor",
       "supplier_processing",
-      "inbound_in_transit",
+      
       "en_transito",
       "recibido_qa",
       "empaque",
@@ -3846,11 +3910,10 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         label: "Caja abierta",
         sequence: 0,
         total_packages: 0,
-        state: "open" as any,
+        state: "open",
         amount_due: null,
         item_ids: [],
         created_at: new Date().toISOString(),
-        status: "open",
         items: [],
       } as PackageRecord;
       await this.orders.addPackage(order.order_id, pkg);
@@ -4229,7 +4292,6 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       const packages = (order.packages || []).map((row) =>
         row.package_id === pkg.package_id
           ? this.patchPackage(row, {
-              status: "closed",
               state: "closed",
               closed_at: closedAt,
               label_qr: qr,
@@ -4254,7 +4316,6 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       const packages = (order.packages || []).map((row) =>
         row.package_id === pkg.package_id
           ? this.patchPackage(row, {
-              status: "open",
               state: "open",
               closed_at: null,
             })
@@ -4357,7 +4418,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       "reservado_inventario",
       "solicitado_proveedor",
       "supplier_processing",
-      "inbound_in_transit",
+      
       "en_transito",
       "recibido_qa",
       "empaque",
@@ -4530,7 +4591,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.barcodeOcrFallbackAvailable.set(false);
     this.barcodeAliasSourceCode.set(aliasSourceCode);
     try {
-      const matches = await this.barcodeLookup.findMatches(cleanCode, this.orderBusinessId(current));
+      const matches = await this.barcodeLookup.findMatches(cleanCode, this.addProductLookupBusinessId(current));
       if (matches.length === 0) {
         this.barcodeScannerMessage.set(`No encontramos producto con numero ${cleanCode}.`);
         this.showActionToast(`No encontramos producto con numero ${cleanCode}.`);
@@ -4602,7 +4663,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   private async handleAddProductBarcode(order: Order, code: string) {
-    const matches = await this.barcodeLookup.findMatches(code, this.orderBusinessId(order));
+    const matches = await this.barcodeLookup.findMatches(code, this.addProductLookupBusinessId(order));
     if (matches.length === 0) {
       const canReadPrintedCode = this.enablePrintedCodeFallback(order, code);
       this.barcodeScannerMessage.set(
@@ -4627,8 +4688,10 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   private async addBarcodeMatchToOrder(order: Order, match: BarcodeProductMatch, code: string) {
+    const crossBusinessCatalog = this.crossBusinessCatalogMode();
     this.resetAddItemForm();
     this.addItemMode.set("add");
+    this.crossBusinessCatalogMode.set(crossBusinessCatalog);
     this.error.set(null);
     await this.applyBarcodeMatchToForm(match, code);
     if (!this.selectedPreview()) {
@@ -4696,12 +4759,18 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   private enablePrintedCodeFallback(order: Order, code: string): boolean {
-    if (!this.barcodeScannerOpen() || this.orderBusinessId(order) !== "catalogo") return false;
+    if (!this.barcodeScannerOpen() || this.addProductLookupBusinessId(order) !== "catalogo") return false;
     const cleanCode = this.barcodeLookup.cleanCode(code);
     if (!cleanCode) return false;
     this.barcodePendingCode.set(cleanCode);
     this.barcodeOcrFallbackAvailable.set(true);
     return true;
+  }
+
+  private addProductLookupBusinessId(order: Order): BusinessId {
+    return this.barcodeScannerMode() === "add" && this.crossBusinessCatalogMode()
+      ? "catalogo"
+      : this.orderBusinessId(order);
   }
 
   private async saveOcrAliasForMatch(match: BarcodeProductMatch, aliasSourceCode: string): Promise<void> {
@@ -4815,6 +4884,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     if (this.addItemSourcesRefreshPromise) return this.addItemSourcesRefreshPromise;
 
     this.inventorySourceLoading.set(true);
+    this.catalogSourceError.set(null);
     this.inventorySourceError.set(null);
     let inventoryRefreshed = false;
     this.addItemSourcesRefreshPromise = (async () => {
@@ -4840,10 +4910,15 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       if (orderBusiness === "bm") {
         tasks.push(
           this.catalog
-            .listValidated(120)
-            .then((page) => {
-              this.catalogRows.set(page.docs);
+            .loadAllValidated("bm")
+            .then((docs) => {
+              this.catalogRows.set(docs);
               this.catalogLoaded.set(true);
+              this.catalogSourceError.set(null);
+            })
+            .catch((error: unknown) => {
+              this.catalogSourceError.set("No se pudo cargar el catalogo. Intenta nuevamente.");
+              throw error;
             }),
         );
       } else {
@@ -4864,11 +4939,28 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     void this.refreshAddItemSources({ force: true });
   }
 
+  retryAddItemCatalog(): void {
+    this.catalog.invalidateAllValidated("bm");
+    void this.refreshAddItemSources({ force: true });
+  }
+
   openAddItemModal() {
     this.resetAddItemForm();
     this.addItemMode.set("add");
     this.addItemModalOpen.set(true);
     void this.refreshAddItemSources({ force: true });
+    this.focusProductSearchInput();
+  }
+
+  openCrossBusinessCatalogModal() {
+    const current = this.order();
+    if (!current || this.orderBusinessId(current) !== "bm" || !this.canEditItems(current)) return;
+    this.closeProductsMenu();
+    this.resetAddItemForm();
+    this.addItemMode.set("add");
+    this.crossBusinessCatalogMode.set(true);
+    this.newItemSource.set("catalogo");
+    this.addItemModalOpen.set(true);
     this.focusProductSearchInput();
   }
 
@@ -4897,6 +4989,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.closeProductMenus();
     this.resetAddItemForm();
     this.addItemMode.set("edit");
+    this.crossBusinessCatalogMode.set(this.isCrossBusinessCatalogItem(item, currentOrder));
     this.editTargetItemId.set(item.item_id);
     this.newItemSource.set(item.source);
     this.newItemTitle.set(item.title || "");
@@ -4932,7 +5025,10 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.addItemModalOpen.set(true);
     if (item.product_ref_type === "catalog_product" && item.product_id) {
       const requestedItemId = item.item_id;
-      void this.catalogProducts.getById(item.product_id, this.orderBusinessId(currentOrder))
+      void this.catalogProducts.getById(
+        item.product_id,
+        normalizeBusinessId(item.source_business_id || item.business_id || this.orderBusinessId(currentOrder)),
+      )
         .then((product) => {
           if (!product || this.editTargetItemId() !== requestedItemId || !this.addItemModalOpen()) return;
           this.selectedCatalogProduct.set(product);
@@ -4954,6 +5050,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       this.catalogProductSearchTimer = null;
     }
     this.addItemMode.set("add");
+    this.crossBusinessCatalogMode.set(false);
     this.convertTargetItemId.set(null);
     this.editTargetItemId.set(null);
     this.newItemSource.set("catalogo");
@@ -5032,7 +5129,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
   onNewItemSearchChange(value: string): void {
     this.newItemSearch.set(value);
-    if (!this.isCatalogoOrder() || this.newItemSource() !== "catalogo") return;
+    if ((!this.isCatalogoOrder() && !this.crossBusinessCatalogMode()) || this.newItemSource() !== "catalogo") return;
     if (this.catalogProductSearchTimer) clearTimeout(this.catalogProductSearchTimer);
     const term = value.trim();
     if (term.length < 2) {
@@ -5255,11 +5352,13 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       }
       const subtotal = rows.reduce((sum, row) => sum + row.lineTotal, 0);
       const discount = Math.min(subtotal, this.orderDiscountAmount(order));
-      const total = Math.max(0, subtotal - discount);
+      const shippingFee = this.orderShippingFee(order);
+      const total = Math.max(0, subtotal - discount + shippingFee);
       await this.orders.logEvent(order.order_id, "SALES_NOTE_GENERATED", "Nota de venta generada", {
         rows: rows.length,
         subtotal,
         discount_amount: discount,
+        shipping_fee: shippingFee,
         total,
         shared,
       }).catch(() => null);
@@ -5291,12 +5390,15 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     if (!this.catalogLoaded() || this.catalogRows().length === 0) {
       tasks.push(
         this.catalog
-          .listValidated(120)
-          .then((page) => {
-            this.catalogRows.set(page.docs);
+          .loadAllValidated("bm")
+          .then((docs) => {
+            this.catalogRows.set(docs);
             this.catalogLoaded.set(true);
+            this.catalogSourceError.set(null);
           })
-          .catch(() => undefined),
+          .catch(() => {
+            this.catalogSourceError.set("No se pudo cargar el catalogo. Intenta nuevamente.");
+          }),
       );
     }
 
@@ -5321,7 +5423,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
     const subtotal = rows.reduce((s, r) => s + r.lineTotal, 0);
     const discount = Math.min(subtotal, this.orderDiscountAmount(order));
-    const total = Math.max(0, subtotal - discount);
+    const shippingFee = this.orderShippingFee(order);
+    const total = Math.max(0, subtotal - discount + shippingFee);
     const balanceDue = this.salesNoteBalanceDue(order, total);
 
     const imageByItemId = new Map<string, HTMLImageElement | null>();
@@ -5346,16 +5449,28 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         imageUrl: row.imageUrl || null,
       })),
       discountAmount: discount,
+      shippingFee,
       balanceDue,
       resolveRowImage: async (row) => imageByItemId.get(row.rowId) ?? null,
     });
   }
 
+  /**
+   * Descuento que se persiste junto al articulo. Sale de los precios que se
+   * estan guardando, asi el campo no puede quedar viejo cuando se represia por
+   * cualquiera de las rutas de edicion. El valor del formulario solo sobrevive
+   * cuando no hay precio publico del cual derivar.
+   */
+  private resolveItemDiscountPct(): number | null {
+    const publico = this.newItemPricePublic();
+    if (Number(publico) > 0) {
+      return computeDiscountPctFromPrices(publico, this.newItemPriceClienta());
+    }
+    return this.newItemDiscount();
+  }
+
   private salesNoteDiscountPct(rawPct: unknown, finalPrice: number | null, clientaPrice: number): number | null {
-    const explicit = this.toSalesNotePositiveNumber(rawPct);
-    if (explicit !== null) return Math.round(explicit);
-    if (finalPrice === null || finalPrice <= clientaPrice || finalPrice <= 0) return null;
-    return Math.max(1, Math.round((1 - clientaPrice / finalPrice) * 100));
+    return resolveSalesNoteDiscountPct(rawPct, finalPrice, clientaPrice);
   }
 
   private toSalesNotePositiveNumber(value: unknown): number | null {
@@ -6326,7 +6441,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     // Disponible desde que se tiene algo empacado hasta estados de pago pendiente.
     // Excluimos borrador/confirmando (aún no hay productos listos) y terminales (pagado/cancelado).
     const TERMINAL = new Set(["pagado", "cancelado", "devuelto", "closed"]);
-    const TOO_EARLY = new Set(["borrador", "confirmando_proveedor", "reservado_inventario", "solicitado_proveedor", "supplier_processing", "inbound_in_transit"]);
+    const TOO_EARLY = new Set(["borrador", "confirmando_proveedor", "reservado_inventario", "solicitado_proveedor", "supplier_processing"]);
     return !TERMINAL.has(order.status) && !TOO_EARLY.has(order.status);
   }
 
@@ -6499,6 +6614,12 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     return Number(value.toFixed(2));
   }
 
+  orderShippingFee(order: Order | null): number {
+    const value = Number(order?.totals?.shipping_fee ?? 0);
+    if (!Number.isFinite(value) || value <= 0) return 0;
+    return Number(value.toFixed(2));
+  }
+
   orderSubtotalClienta(): number {
     return Math.max(0, Number(this.totals().totalClienta || 0));
   }
@@ -6517,7 +6638,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   discountTotalPreview(order: Order | null): number {
     const subtotal = this.orderSubtotalClienta();
     const discount = this.discountDraftValue(order);
-    return Number(Math.max(0, subtotal - discount).toFixed(2));
+    return Number(Math.max(0, subtotal - discount + this.orderShippingFee(order)).toFixed(2));
   }
 
   openDiscountModal() {
@@ -6582,6 +6703,77 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   clearOrderDiscount(order: Order) {
     this.discountDraft.set("0");
     void this.saveOrderDiscount(order);
+  }
+
+  shippingFeeDraftValue(): number {
+    const parsed = this.parseMoneyInput(this.shippingFeeDraft());
+    return parsed === null ? 0 : Number(Math.max(0, parsed).toFixed(2));
+  }
+
+  shippingFeeTotalPreview(order: Order | null): number {
+    const subtotal = this.orderSubtotalClienta();
+    const discount = this.orderDiscountAmount(order);
+    return Number(Math.max(0, subtotal - discount + this.shippingFeeDraftValue()).toFixed(2));
+  }
+
+  openShippingFeeModal() {
+    const order = this.order();
+    if (!order || this.isOrderClosed(order)) return;
+    this.closeProductsMenu();
+    const shippingFee = this.orderShippingFee(order);
+    this.shippingFeeDraft.set(shippingFee > 0 ? String(shippingFee) : "");
+    this.shippingFeeError.set(null);
+    this.shippingFeeModalOpen.set(true);
+  }
+
+  closeShippingFeeModal() {
+    if (this.shippingFeeSaving()) return;
+    this.shippingFeeModalOpen.set(false);
+    this.shippingFeeError.set(null);
+  }
+
+  async saveOrderShippingFee(order: Order) {
+    if (this.shippingFeeSaving()) return;
+    const parsed = this.parseMoneyInput(this.shippingFeeDraft());
+    if (parsed === null || parsed < 0) {
+      this.shippingFeeError.set("Ingresa un cargo válido.");
+      return;
+    }
+    const shippingFee = Number(parsed.toFixed(2));
+    const previous = this.orderShippingFee(order);
+    if (shippingFee === previous) {
+      this.closeShippingFeeModal();
+      return;
+    }
+
+    this.shippingFeeSaving.set(true);
+    this.shippingFeeError.set(null);
+    try {
+      await this.orders.setShippingFee(order.order_id, shippingFee);
+      await this.orders.logEvent(
+        order.order_id,
+        "ORDER_SHIPPING_FEE_SET",
+        shippingFee > 0
+          ? `Cargo de paquetería aplicado: $${shippingFee.toFixed(2)}`
+          : "Cargo de paquetería eliminado",
+        { shipping_fee: shippingFee, previous_shipping_fee: previous },
+      );
+      this.shippingFeeModalOpen.set(false);
+      this.showActionToast(
+        shippingFee > 0
+          ? `Cargo de paquetería aplicado: $${shippingFee.toFixed(2)}`
+          : "Cargo de paquetería eliminado.",
+      );
+    } catch (error) {
+      this.shippingFeeError.set(error instanceof Error ? error.message : "No se pudo guardar el cargo de paquetería.");
+    } finally {
+      this.shippingFeeSaving.set(false);
+    }
+  }
+
+  clearOrderShippingFee(order: Order) {
+    this.shippingFeeDraft.set("0");
+    void this.saveOrderShippingFee(order);
   }
 
   paymentDiscountValue(order: Order | null): number {
@@ -6866,7 +7058,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     const rows = this.salesNoteRows(order);
     const subtotal = rows.reduce((s, r) => s + r.lineTotal, 0);
     const discountAmount = Math.min(subtotal, this.orderDiscountAmount(order));
-    const computedTotal = Math.max(0, subtotal - discountAmount);
+    const shippingFee = this.orderShippingFee(order);
+    const computedTotal = Math.max(0, subtotal - discountAmount + shippingFee);
     const totalAmount = rows.length > 0 ? computedTotal : Number(order.totals?.total_amount ?? 0);
     const balanceDue = this.salesNoteBalanceDue(order, totalAmount);
     const lastInboundCustomerMessageAt = this.resolveLastInboundCustomerMessageAt(order);
@@ -6927,6 +7120,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
             total_amount: totalAmount,
             balance_due: balanceDue,
             discount_amount: discountAmount,
+            shipping_fee: shippingFee,
           },
           items: waOrderItems,
         },
@@ -7951,6 +8145,9 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     if (this.orderHeadMenuOpen() && !target?.closest(".order-head-menu")) {
       this.orderHeadMenuOpen.set(false);
     }
+    if (this.productsMenuOpen() && !target?.closest(".products-more-wrap")) {
+      this.productsMenuOpen.set(false);
+    }
     if (this.clientaDiscountOpen()
       && !target?.closest(".field-clienta-price")
       && !target?.closest(".add-item-discount-dialog")) {
@@ -8197,6 +8394,20 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.openProductMenuId.set(null);
   }
 
+  @HostListener("document:keydown.escape")
+  onDocumentEscape() {
+    if (this.productsMenuOpen()) this.closeProductsMenu();
+  }
+
+  toggleProductsMenu(event?: Event) {
+    event?.stopPropagation();
+    this.productsMenuOpen.update((current) => !current);
+  }
+
+  closeProductsMenu() {
+    this.productsMenuOpen.set(false);
+  }
+
   async markItemAvailableFromMenu(order: Order, item: OrderItem) {
     if (!this.canUseStockMenuActions(order)) return;
     const qty = this.itemQuantity(item);
@@ -8391,8 +8602,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     if (!order) return false;
     if (!this.canCap("cap.returns.create")) return false;
     const allowed = new Set([
-      "packing", "empaque", "ready_for_route", "assigned_to_run", "in_transit", "en_ruta",
-      "delivered", "delivered_partial", "entregado", "pago_pendiente", "pagado_parcial", "pagado", "closed",
+      "empaque", "ready_for_route", "assigned_to_run", "en_ruta",
+      "entregado", "entregado_parcial", "pago_pendiente", "pagado_parcial", "pagado", "closed",
     ]);
     return allowed.has(String(order.status || "")) && availableReturnQty(item) > 0;
   }
@@ -8731,6 +8942,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     }
     const qty = this.normalizedNewItemQty();
     const source = this.newItemSource();
+    const crossBusinessCatalog = this.crossBusinessCatalogMode();
     if (source === "inventario" && this.newItemInventoryQuantityError()) {
       this.error.set(this.newItemInventoryQuantityError());
       return;
@@ -8808,9 +9020,10 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
           orderStatus: order.status,
         });
       } else {
-        await this.logOrderEventBestEffort(order.order_id, "ITEM_ADDED", `Item agregado: ${item.title}`, {
+        await this.logOrderEventBestEffort(order.order_id, crossBusinessCatalog ? "CROSS_BUSINESS_ITEM_ADDED" : "ITEM_ADDED", `Item agregado: ${item.title}`, {
           itemId: item.item_id,
           source: item.source,
+          sourceBusinessId: item.source_business_id || item.business_id || order.business_id,
           ...this.orderItemPriceAuditMeta(item),
         });
       }
@@ -8836,10 +9049,11 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     }
 
     this.resetAddItemForm();
-    if (lateNote) {
+    if (lateNote || crossBusinessCatalog) {
       this.addItemModalOpen.set(false);
     }
     await this.refreshEvents().catch(() => undefined);
+    if (crossBusinessCatalog) this.showActionToast("Producto de Catálogo agregado al pedido BM.");
   }
 
   async convertManualItem(order: Order | null) {
@@ -8986,7 +9200,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       price_warning_ack_at: this.priceWarningAckReason() ? new Date().toISOString() : target.price_warning_ack_at || null,
       price_warning_reason: this.priceWarningAckReason() || target.price_warning_reason || null,
       ...priceAudit,
-      discount_pct: this.newItemDiscount(),
+      discount_pct: this.resolveItemDiscountPct(),
       confirmed_qty: nextConfirmedQty,
       image_url: this.selectedPreview()?.image || target.image_url || null,
       ...(this.newItemSource() === "catalogo"
@@ -9085,6 +9299,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     extra?: Partial<OrderItem>,
   ): OrderItem {
     const businessId = this.orderBusinessId();
+    const sourceBusinessId: BusinessId = this.crossBusinessCatalogMode() ? "catalogo" : businessId;
     const selectedImportedProduct = source === "catalogo" ? this.selectedCatalogProduct() : null;
     const warningReason = selectedImportedProduct ? this.priceWarningAckReason() : null;
     const priceAudit = selectedImportedProduct ? this.catalogPriceAudit() : null;
@@ -9093,12 +9308,13 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         ? "manual"
         : source === "inventario"
           ? "inventory_item"
-          : businessId === "catalogo"
+          : sourceBusinessId === "catalogo"
             ? "catalog_product"
             : "normalized_listing";
     const base: OrderItem = {
       item_id: itemId,
       business_id: businessId,
+      source_business_id: this.crossBusinessCatalogMode() ? "catalogo" : null,
       title: this.newItemTitle().trim(),
       variant: this.newItemVariant().trim() || null,
       color: this.newItemColor().trim() || null,
@@ -9120,7 +9336,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       price_warning_ack_at: warningReason ? new Date().toISOString() : null,
       price_warning_reason: warningReason,
       ...(priceAudit || {}),
-      discount_pct: this.newItemDiscount(),
+      discount_pct: this.resolveItemDiscountPct(),
       inventory_id: source === "inventario" ? this.newItemInventoryId() : null,
       image_url: this.selectedPreview()?.image || null,
       ...(source === "catalogo"
@@ -9244,6 +9460,9 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     if (existing.catalog_option_status === "pending_review" || incoming.catalog_option_status === "pending_review") {
       return false;
     }
+    const existingBusiness = normalizeBusinessId(existing.source_business_id || existing.business_id || this.orderBusinessId());
+    const incomingBusiness = normalizeBusinessId(incoming.source_business_id || incoming.business_id || this.orderBusinessId());
+    if (existingBusiness !== incomingBusiness) return false;
     if (existing.inventory_id && incoming.inventory_id) {
       return existing.inventory_id === incoming.inventory_id;
     }
@@ -9595,7 +9814,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.newItemPricePublic.set(final);
     this.newItemPriceClienta.set(this.computeClientaPrice(final));
     this.newItemPriceCost.set(costo);
-    this.newItemDiscount.set(final === null ? null : 25);
+    this.newItemDiscount.set(computeDiscountPctFromPrices(final, this.newItemPriceClienta()));
     this.updatePriceDraftFromSignals();
     this.newItemSource.set("inventario");
     this.newItemSearch.set("");
@@ -9642,7 +9861,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.newItemPricePublic.set(prices.final);
     this.newItemPriceClienta.set(this.computeClientaPrice(prices.final));
     this.newItemPriceCost.set(prices.costo);
-    this.newItemDiscount.set(prices.final === null ? null : 25);
+    this.newItemDiscount.set(computeDiscountPctFromPrices(prices.final, this.newItemPriceClienta()));
     this.updatePriceDraftFromSignals();
     this.newItemSource.set("catalogo");
     this.newItemSearch.set("");
@@ -9967,7 +10186,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   priceOverrideNeedsReason(): boolean {
-    return !!this.selectedCatalogProduct() && (this.catalogPriceTier() === "manual" || this.isClientaBelowCosto());
+    return !!this.selectedCatalogProduct()
+      && ((!this.crossBusinessCatalogMode() && this.catalogPriceTier() === "manual") || this.isClientaBelowCosto());
   }
 
   canAuthorizeBelowCost(): boolean {
@@ -10000,7 +10220,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     }
 
     const reason = this.priceOverrideReason().trim();
-    if (this.catalogPriceTier() === "manual" && reason.length < 8) {
+    if (!this.crossBusinessCatalogMode() && this.catalogPriceTier() === "manual" && reason.length < 8) {
       const message = "Explica el ajuste manual (mínimo 8 caracteres).";
       this.priceOverrideError.set(message);
       this.error.set(message);
@@ -10219,7 +10439,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     if (value === null) return;
     const base = this.clientaDiscountBasePrice();
     this.setPriceValue("clienta", value);
-    this.newItemDiscount.set(base && base > 0 ? Number((((base - value) / base) * 100).toFixed(2)) : null);
+    this.newItemDiscount.set(computeDiscountPctFromPrices(base, value));
     this.updatePriceDraftFromSignals();
     this.closeClientaDiscount();
   }

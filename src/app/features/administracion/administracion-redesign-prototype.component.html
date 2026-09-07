@@ -1,0 +1,546 @@
+<main class="finance-prototype">
+  <header class="page-header">
+    <div class="page-title">
+      <p class="eyebrow">Administración</p>
+      <h1>Centro financiero</h1>
+      <p>Decisiones del negocio, resultados mensuales y distribución entre socios.</p>
+    </div>
+
+    <div class="header-actions">
+      <span class="updated-copy">
+        <span class="material-symbols-rounded" aria-hidden="true">sync</span>
+        {{ lastUpdatedLabel() }}
+      </span>
+      <button type="button" class="button button--secondary" [disabled]="loading()" (click)="reload()">
+        <span class="material-symbols-rounded" aria-hidden="true">refresh</span>
+        Actualizar
+      </button>
+      <button type="button" class="button button--primary" (click)="openMovementDialog()">
+        <span class="material-symbols-rounded" aria-hidden="true">add</span>
+        Registrar movimiento
+      </button>
+    </div>
+  </header>
+
+  <nav class="section-nav" aria-label="Secciones del centro financiero">
+    <button type="button" [class.is-active]="activeView() === 'resumen'" [attr.aria-current]="activeView() === 'resumen' ? 'page' : null" (click)="setView('resumen')">
+      <span class="material-symbols-rounded" aria-hidden="true">space_dashboard</span>
+      <span class="nav-label">Resumen</span>
+    </button>
+    <button type="button" aria-label="Mes a mes" [class.is-active]="activeView() === 'mensual'" [attr.aria-current]="activeView() === 'mensual' ? 'page' : null" (click)="setView('mensual')">
+      <span class="material-symbols-rounded" aria-hidden="true">calendar_month</span>
+      <span class="nav-label nav-label--full">Mes a mes</span>
+      <span class="nav-label nav-label--short" aria-hidden="true">Meses</span>
+    </button>
+    <button type="button" aria-label="Inventario y capital" [class.is-active]="activeView() === 'inventario'" [attr.aria-current]="activeView() === 'inventario' ? 'page' : null" (click)="setView('inventario')">
+      <span class="material-symbols-rounded" aria-hidden="true">inventory_2</span>
+      <span class="nav-label nav-label--full">Inventario y capital</span>
+      <span class="nav-label nav-label--short" aria-hidden="true">Capital</span>
+    </button>
+    <button type="button" aria-label="Utilidades y socios" [class.is-active]="activeView() === 'socios'" [attr.aria-current]="activeView() === 'socios' ? 'page' : null" (click)="setView('socios')">
+      <span class="material-symbols-rounded" aria-hidden="true">handshake</span>
+      <span class="nav-label nav-label--full">Utilidades y socios</span>
+      <span class="nav-label nav-label--short" aria-hidden="true">Socios</span>
+    </button>
+  </nav>
+
+  <section class="filter-bar" aria-label="Filtros del reporte">
+    @if (activeView() === 'socios' && partnerScope() === 'general') {
+      <div class="period-summary-field">
+        <span>Periodo</span>
+        <strong><span class="material-symbols-rounded" aria-hidden="true">date_range</span>{{ periodRangeLabel() }}</strong>
+      </div>
+    } @else {
+      <div class="month-stepper">
+        <button type="button" aria-label="Mes anterior" [disabled]="isFirstMonth()" (click)="moveMonth(-1)">
+          <span class="material-symbols-rounded" aria-hidden="true">chevron_left</span>
+        </button>
+        <label>
+          <span>Periodo</span>
+          <select [value]="selectedMonthId()" (change)="onMonthChange($event)">
+            @for (month of months; track month.id) {
+              <option [value]="month.id" [selected]="month.id === selectedMonthId()">{{ month.label }}</option>
+            }
+          </select>
+        </label>
+        <button type="button" aria-label="Mes siguiente" [disabled]="isLastMonth()" (click)="moveMonth(1)">
+          <span class="material-symbols-rounded" aria-hidden="true">chevron_right</span>
+        </button>
+      </div>
+    }
+
+    <div class="business-context-field">
+      <span>Negocio activo</span>
+      <strong><span class="material-symbols-rounded" aria-hidden="true">storefront</span>{{ activeBusinessLabel() }}</strong>
+    </div>
+
+    <label class="filter-field">
+      <span>Ruta</span>
+      <select [value]="routeScope()" (change)="setRouteScope($any($event.target).value)">
+        @for (option of scopeOptions(); track option.id) {
+          <option [value]="option.id">{{ option.id === 'general' ? 'Todas las rutas' : option.name }}</option>
+        }
+      </select>
+    </label>
+
+    @if (activeView() === 'socios' && partnerScope() === 'general') {
+      <span class="comparison-chip"><span class="material-symbols-rounded" aria-hidden="true">verified</span>{{ includedClosuresCount() }} cierres incluidos</span>
+    } @else {
+      <span class="comparison-chip">
+        <span class="material-symbols-rounded" aria-hidden="true">compare_arrows</span>
+        Comparando con {{ previousMonth().label }}
+      </span>
+    }
+  </section>
+
+  @if (activeView() === 'resumen') {
+    <section class="view-stack" aria-labelledby="summary-title">
+      <div class="section-heading section-heading--sr" id="summary-title">Resumen ejecutivo</div>
+
+      <aside class="attention-banner" aria-labelledby="attention-title">
+        <span class="attention-icon material-symbols-rounded" aria-hidden="true">priority_high</span>
+        <div>
+          <strong id="attention-title">{{ attentionCount() }} situaciones requieren atención</strong>
+          <p>Prioridades ordenadas por impacto en caja y antigüedad.</p>
+        </div>
+        <ul>
+          <li><strong>{{ formatMoney(selectedMonth().overdue) }}</strong> vencidos</li>
+          <li><strong>{{ formatMoney(courierCash()) }}</strong> con repartidores</li>
+          <li><strong>{{ stagnantSkuCount() }} SKUs</strong> estancados</li>
+        </ul>
+        <button type="button">Revisar prioridades</button>
+      </aside>
+
+      <section class="kpi-grid" aria-label="Indicadores principales">
+        <article class="kpi-card">
+          <div class="kpi-label"><span>Caja disponible</span><span class="material-symbols-rounded" aria-hidden="true">account_balance_wallet</span></div>
+          <strong>{{ formatMoney(cashAvailable()) }}</strong>
+          <p><span class="trend trend--positive">Saldo conciliado</span></p>
+          <small>Cuentas conciliadas</small>
+        </article>
+        <article class="kpi-card">
+          <div class="kpi-label"><span>Ventas netas</span><span class="material-symbols-rounded" aria-hidden="true">point_of_sale</span></div>
+          <strong>{{ formatMoney(selectedMonth().netSales) }}</strong>
+          <p><span class="trend trend--positive">{{ formatDelta(netSalesDelta()) }}</span> vs. {{ previousMonth().shortLabel }}</p>
+          <small>Entregas menos descuentos y devoluciones</small>
+        </article>
+        <article class="kpi-card kpi-card--featured">
+          <div class="kpi-label"><span>Utilidad neta</span><span class="material-symbols-rounded" aria-hidden="true">trending_up</span></div>
+          <strong>{{ formatMoney(selectedMonth().netProfit) }}</strong>
+          <p><span class="trend trend--positive">{{ formatDelta(netProfitDelta()) }}</span> · margen {{ formatPercent(margin()) }}</p>
+          <small>Después de mercancía, gastos y ajustes</small>
+        </article>
+        <article class="kpi-card">
+          <div class="kpi-label"><span>Por cobrar</span><span class="material-symbols-rounded" aria-hidden="true">pending_actions</span></div>
+          <strong>$31,860</strong>
+          <p><span class="trend trend--warning">{{ selectedMonth().dso }} días DSO</span></p>
+          <small>{{ formatMoney(selectedMonth().overdue) }} ya están vencidos</small>
+        </article>
+        <article class="kpi-card">
+          <div class="kpi-label"><span>Capital en inventario</span><span class="material-symbols-rounded" aria-hidden="true">inventory_2</span></div>
+          <strong>{{ formatMoney(selectedMonth().inventoryClosing) }}</strong>
+          <p><span class="trend trend--warning">{{ formatMoney(selectedMonth().stagnantCapital) }}</span> lleva más de 45 días</p>
+          <small>Valuado al costo, no al precio de venta</small>
+        </article>
+      </section>
+
+      <section class="summary-grid">
+        <article class="panel performance-panel">
+          <header class="panel-header">
+            <div>
+              <p class="panel-kicker">Tendencia</p>
+              <h2>Rendimiento de los últimos 6 meses</h2>
+              <p>Ventas, capital invertido y utilidad neta.</p>
+            </div>
+            <button type="button" class="text-button" (click)="setView('mensual')">Abrir análisis mensual</button>
+          </header>
+
+          <div class="chart-legend" aria-hidden="true">
+            <span><i class="legend-sales"></i>Ventas netas</span>
+            <span><i class="legend-investment"></i>Inversión</span>
+            <span><i class="legend-profit"></i>Utilidad</span>
+          </div>
+
+          <div class="column-chart" role="img" aria-label="Las ventas y la utilidad muestran una tendencia creciente de marzo a agosto; agosto registra 78,240 pesos en ventas, 48,260 de inversión y 18,420 de utilidad.">
+            <div class="chart-scale" aria-hidden="true"><span>$80k</span><span>$40k</span><span>$0</span></div>
+            <div class="chart-grid" aria-hidden="true">
+              @for (month of months; track month.id) {
+                <div class="month-column" [class.is-selected]="month.id === selectedMonthId()">
+                  <div class="bar-area">
+                    <span class="chart-bar chart-bar--sales" [style.height.%]="barHeight(month.netSales)"></span>
+                    <span class="chart-bar chart-bar--investment" [style.height.%]="barHeight(month.investment)"></span>
+                    <span class="chart-bar chart-bar--profit" [style.height.%]="barHeight(month.netProfit)"></span>
+                  </div>
+                  <span>{{ month.shortLabel }}</span>
+                </div>
+              }
+            </div>
+          </div>
+        </article>
+
+        <aside class="panel priority-panel">
+          <header class="panel-header">
+            <div><p class="panel-kicker">Acciones</p><h2>Prioridades de hoy</h2></div>
+            <span class="count-badge">{{ attentionCount() }}</span>
+          </header>
+          <ol class="priority-list">
+            <li>
+              <span class="priority-marker priority-marker--danger"></span>
+              <div><strong>Cobranza vencida</strong><small>{{ pendingCollectionCount() }} pedidos pendientes</small></div>
+              <b>{{ formatMoney(selectedMonth().overdue) }}</b>
+            </li>
+            <li>
+              <span class="priority-marker priority-marker--warning"></span>
+              <div><strong>Liquidar repartidores</strong><small>Movimientos pendientes de conciliación</small></div>
+              <b>{{ formatMoney(courierCash()) }}</b>
+            </li>
+            <li>
+              <span class="priority-marker priority-marker--warning"></span>
+              <div><strong>Capital por invertir</strong><small>{{ pendingInvestmentCount() }} pedidos confirmados</small></div>
+              <b>{{ formatMoney(capitalToInvest()) }}</b>
+            </li>
+            <li>
+              <span class="priority-marker priority-marker--neutral"></span>
+              <div><strong>Inventario estancado</strong><small>{{ stagnantSkuCount() }} SKUs · más de 45 días</small></div>
+              <b>{{ formatMoney(selectedMonth().stagnantCapital) }}</b>
+            </li>
+          </ol>
+        </aside>
+      </section>
+
+      <article class="panel money-flow-panel">
+        <header class="panel-header">
+          <div><p class="panel-kicker">Capital</p><h2>Dónde está el dinero</h2><p>Del pedido confirmado hasta la cuenta conciliada.</p></div>
+          <button type="button" class="text-button" (click)="setView('inventario')">Ver inventario y capital</button>
+        </header>
+        <ol class="money-flow">
+          <li><span class="flow-index">1</span><div><small>Por invertir</small><strong>{{ formatMoney(capitalToInvest()) }}</strong><span>{{ pendingInvestmentCount() }} pedidos</span></div></li>
+          <li><span class="flow-index">2</span><div><small>Con proveedor</small><strong>{{ formatMoney(transitCapital()) }}</strong><span>{{ transitOrderCount() }} pedidos</span></div></li>
+          <li><span class="flow-index">3</span><div><small>En tránsito</small><strong>{{ formatMoney(transitCapital()) }}</strong><span>{{ transitOrderCount() }} pedidos</span></div></li>
+          <li><span class="flow-index">4</span><div><small>Por cobrar</small><strong>{{ formatMoney(receivableCapital()) }}</strong><span>{{ pendingCollectionCount() }} pedidos</span></div></li>
+          <li><span class="flow-index">5</span><div><small>Con repartidor</small><strong>{{ formatMoney(courierCash()) }}</strong><span>Pendiente de liquidar</span></div></li>
+          <li class="is-complete"><span class="flow-index material-symbols-rounded" aria-hidden="true">check</span><div><small>Conciliado</small><strong>{{ formatMoney(reconciledThisMonth()) }}</strong><span>Este mes</span></div></li>
+        </ol>
+      </article>
+
+      <article class="partner-summary">
+        <div class="partner-summary__copy">
+          <span class="partner-icon material-symbols-rounded" aria-hidden="true">handshake</span>
+          <div><p class="panel-kicker">Utilidades y socios</p><h2>{{ formatMoney(distributableProfit()) }} disponibles para distribuir</h2><p>{{ formatMoney(sharePerPartner()) }} corresponde a cada socio en {{ selectedMonth().label }}.</p></div>
+        </div>
+        <div class="partner-balance"><span>Blanca pendiente</span><strong>{{ formatMoney(partnerOnePending()) }}</strong></div>
+        <div class="partner-balance"><span>Andrea y Pepe pendiente</span><strong>{{ formatMoney(partnerTwoPending()) }}</strong></div>
+        <button type="button" class="button button--dark" (click)="setView('socios')">Abrir distribución</button>
+      </article>
+    </section>
+  }
+
+  @if (activeView() === 'mensual') {
+    <section class="view-stack" aria-labelledby="monthly-title">
+      <header class="content-heading">
+        <div><p class="eyebrow">Análisis mensual</p><h2 id="monthly-title">Qué pasó en {{ selectedMonth().label }}</h2><p>Resultados reconocidos por fecha real de entrega, cobro y movimiento.</p></div>
+        <button type="button" class="button button--secondary" (click)="exportMonthlyReport()"><span class="material-symbols-rounded" aria-hidden="true">download</span>Exportar reporte</button>
+      </header>
+
+      <section class="kpi-grid kpi-grid--monthly" aria-label="Resultado del mes">
+        <article class="kpi-card"><div class="kpi-label"><span>Inversión pagada</span><span class="material-symbols-rounded" aria-hidden="true">payments</span></div><strong>{{ formatMoney(selectedMonth().investment) }}</strong><p>Compras registradas en el mes</p><small>No incluye capital solamente comprometido</small></article>
+        <article class="kpi-card"><div class="kpi-label"><span>Ventas netas</span><span class="material-symbols-rounded" aria-hidden="true">receipt_long</span></div><strong>{{ formatMoney(selectedMonth().netSales) }}</strong><p class="trend trend--positive">{{ formatDelta(netSalesDelta()) }} vs. mes anterior</p><small>Pedidos entregados</small></article>
+        <article class="kpi-card"><div class="kpi-label"><span>Cobrado</span><span class="material-symbols-rounded" aria-hidden="true">price_check</span></div><strong>{{ formatMoney(selectedMonth().collected) }}</strong><p>{{ formatPercent(selectedMonth().collected / selectedMonth().netSales) }} de las ventas netas</p><small>Eventos de cobro del periodo</small></article>
+        <article class="kpi-card kpi-card--featured"><div class="kpi-label"><span>Utilidad neta</span><span class="material-symbols-rounded" aria-hidden="true">savings</span></div><strong>{{ formatMoney(selectedMonth().netProfit) }}</strong><p class="trend trend--positive">Margen {{ formatPercent(margin()) }}</p><small>Resultado después de gastos</small></article>
+      </section>
+
+      <section class="monthly-grid">
+        <article class="panel profit-bridge">
+          <header class="panel-header"><div><p class="panel-kicker">Resultado</p><h2>Cómo se formó la utilidad</h2><p>De las ventas netas al resultado del mes.</p></div></header>
+          <div class="bridge-list">
+            <div class="bridge-row bridge-row--base"><span>Ventas netas</span><strong>{{ formatMoney(selectedMonth().netSales) }}</strong><i style="--bar-size: 100%"></i></div>
+            <div class="bridge-row"><span>Costo de mercancía vendida</span><strong>−{{ formatMoney(selectedMonth().merchandiseCost) }}</strong><i [style.--bar-size.%]="selectedMonth().merchandiseCost / selectedMonth().netSales * 100"></i></div>
+            <div class="bridge-row"><span>Gastos operativos</span><strong>−{{ formatMoney(selectedMonth().expenses) }}</strong><i [style.--bar-size.%]="selectedMonth().expenses / selectedMonth().netSales * 100"></i></div>
+            <div class="bridge-row"><span>Devoluciones y ajustes</span><strong>−{{ formatMoney(selectedMonth().returnsImpact) }}</strong><i [style.--bar-size.%]="selectedMonth().returnsImpact / selectedMonth().netSales * 100"></i></div>
+            <div class="bridge-row bridge-row--result"><span>Utilidad neta</span><strong>{{ formatMoney(selectedMonth().netProfit) }}</strong><i [style.--bar-size.%]="selectedMonth().netProfit / selectedMonth().netSales * 100"></i></div>
+          </div>
+        </article>
+
+        <article class="panel cash-comparison">
+          <header class="panel-header"><div><p class="panel-kicker">Liquidez</p><h2>Vendido vs. cobrado</h2><p>Una venta no se convierte inmediatamente en efectivo.</p></div></header>
+          <div class="comparison-visual" role="img" [attr.aria-label]="'Se vendieron ' + formatMoney(selectedMonth().netSales) + ' y se cobraron ' + formatMoney(selectedMonth().collected)">
+            <div><span>Ventas netas</span><i><b style="width: 100%"></b></i><strong>{{ formatMoney(selectedMonth().netSales) }}</strong></div>
+            <div><span>Cobrado</span><i><b [style.width.%]="selectedMonth().collected / selectedMonth().netSales * 100"></b></i><strong>{{ formatMoney(selectedMonth().collected) }}</strong></div>
+            <div><span>Pendiente asociado</span><i><b class="is-warning" [style.width.%]="(selectedMonth().netSales - selectedMonth().collected) / selectedMonth().netSales * 100"></b></i><strong>{{ formatMoney(selectedMonth().netSales - selectedMonth().collected) }}</strong></div>
+          </div>
+          <aside class="insight-box"><span class="material-symbols-rounded" aria-hidden="true">lightbulb</span><p>La cobranza mejoró <strong>1.5 días</strong> frente a julio. Ocho clientas concentran el saldo vencido.</p></aside>
+        </article>
+      </section>
+
+      <article class="panel history-panel">
+        <header class="panel-header"><div><p class="panel-kicker">Historial</p><h2>Comparativo mensual</h2><p>Mismos criterios contables para todos los periodos.</p></div></header>
+        <div class="table-scroll" tabindex="0" aria-label="Tabla con desplazamiento horizontal">
+          <table>
+            <thead><tr><th scope="col">Mes</th><th scope="col">Inversión</th><th scope="col">Ventas netas</th><th scope="col">Cobrado</th><th scope="col">Gastos</th><th scope="col">Utilidad</th><th scope="col">Margen</th></tr></thead>
+            <tbody>
+              @for (month of months.slice().reverse(); track month.id) {
+                <tr [class.is-selected]="month.id === selectedMonthId()"><th scope="row">{{ month.label }}</th><td>{{ formatMoney(month.investment) }}</td><td>{{ formatMoney(month.netSales) }}</td><td>{{ formatMoney(month.collected) }}</td><td>{{ formatMoney(month.expenses) }}</td><td class="profit-cell">{{ formatMoney(month.netProfit) }}</td><td>{{ formatPercent(month.netProfit / month.netSales) }}</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+  }
+
+  @if (activeView() === 'inventario') {
+    <section class="view-stack" aria-labelledby="inventory-capital-title">
+      <header class="content-heading">
+        <div>
+          <p class="eyebrow">Inventario y capital</p>
+          <h2 id="inventory-capital-title">Cómo se movió el capital en {{ selectedMonth().label }}</h2>
+          <p>Entradas y salidas valuadas al costo. Separa lo que salió del almacén de lo que ya regresó a caja.</p>
+        </div>
+        <button type="button" class="button button--secondary"><span class="material-symbols-rounded" aria-hidden="true">download</span>Exportar movimientos</button>
+      </header>
+
+      <aside class="capital-definition" aria-label="Definición de capital estancado">
+        <span class="material-symbols-rounded" aria-hidden="true">info</span>
+        <p><strong>Capital en inventario</strong> es toda la mercancía recuperable al costo. Solo llamamos <strong>capital estancado</strong> a la parte que lleva más de 45 días sin rotar.</p>
+      </aside>
+
+      <section class="kpi-grid" aria-label="Indicadores de capital en inventario">
+        <article class="kpi-card kpi-card--featured">
+          <div class="kpi-label"><span>Capital al cierre</span><span class="material-symbols-rounded" aria-hidden="true">inventory</span></div>
+          <strong>{{ formatMoney(selectedMonth().inventoryClosing) }}</strong>
+          <p><span class="trend trend--warning">+{{ formatMoney(inventoryCapitalDelta()) }}</span> durante el mes</p>
+          <small>Mercancía disponible, reservada y en revisión</small>
+        </article>
+        <article class="kpi-card">
+          <div class="kpi-label"><span>Reingresó por devoluciones</span><span class="material-symbols-rounded" aria-hidden="true">assignment_return</span></div>
+          <strong>{{ formatMoney(selectedMonth().returnedToInventory) }}</strong>
+          <p>8 devoluciones aptas para reventa</p>
+          <small>Las devoluciones dañadas no aumentan este capital</small>
+        </article>
+        <article class="kpi-card">
+          <div class="kpi-label"><span>Capital liberado</span><span class="material-symbols-rounded" aria-hidden="true">outbox</span></div>
+          <strong>{{ formatMoney(selectedMonth().inventoryReleased) }}</strong>
+          <p>Mercancía vendida y entregada</p>
+          <small>Salió del inventario, pero puede seguir por cobrar</small>
+        </article>
+        <article class="kpi-card">
+          <div class="kpi-label"><span>Capital recuperado</span><span class="material-symbols-rounded" aria-hidden="true">price_check</span></div>
+          <strong>{{ formatMoney(selectedMonth().inventoryRecovered) }}</strong>
+          <p><span class="trend trend--positive">{{ formatPercent(inventoryRecoveryRate()) }}</span> de lo liberado ya se cobró</p>
+          <small>Principal recuperado; no debe confundirse con utilidad</small>
+        </article>
+      </section>
+
+      <section class="inventory-overview-grid">
+        <article class="panel capital-bridge-panel">
+          <header class="panel-header">
+            <div><p class="panel-kicker">Conciliación</p><h2>Puente del capital en inventario</h2><p>El saldo inicial más entradas, menos salidas, explica el cierre.</p></div>
+            <span class="balance-chip">Cuadra al 100%</span>
+          </header>
+          <ol class="capital-equation" aria-label="Conciliación del capital en inventario">
+            <li class="capital-equation__base"><span><b>Inicio</b><small>Capital inicial</small></span><strong>{{ formatMoney(selectedMonth().inventoryOpening) }}</strong></li>
+            <li class="capital-equation__in"><span><b>+</b><small>Compras recibidas</small></span><strong>{{ formatMoney(selectedMonth().inventoryReceipts) }}</strong></li>
+            <li class="capital-equation__in"><span><b>+</b><small>Devoluciones a stock</small></span><strong>{{ formatMoney(selectedMonth().returnedToInventory) }}</strong></li>
+            <li class="capital-equation__out"><span><b>−</b><small>Liberado por ventas</small></span><strong>{{ formatMoney(selectedMonth().inventoryReleased) }}</strong></li>
+            <li class="capital-equation__out"><span><b>−</b><small>Bajas y daño</small></span><strong>{{ formatMoney(selectedMonth().inventoryWriteOff) }}</strong></li>
+            <li class="capital-equation__result"><span><b>=</b><small>Capital al cierre</small></span><strong>{{ formatMoney(selectedMonth().inventoryClosing) }}</strong></li>
+          </ol>
+        </article>
+
+        <article class="panel recovery-panel">
+          <header class="panel-header"><div><p class="panel-kicker">Liquidez</p><h2>De inventario a efectivo</h2><p>Vender libera capital; cobrarlo lo recupera.</p></div></header>
+          <ol class="recovery-flow">
+            <li><span class="recovery-icon material-symbols-rounded" aria-hidden="true">inventory_2</span><div><small>Liberado al entregar</small><strong>{{ formatMoney(selectedMonth().inventoryReleased) }}</strong></div></li>
+            <li class="recovery-flow__arrow" aria-hidden="true"><span class="material-symbols-rounded">arrow_forward</span></li>
+            <li><span class="recovery-icon recovery-icon--success material-symbols-rounded" aria-hidden="true">account_balance_wallet</span><div><small>Recuperado en cobros</small><strong>{{ formatMoney(selectedMonth().inventoryRecovered) }}</strong></div></li>
+          </ol>
+          <div class="pending-recovery">
+            <div><span>Pendiente de recuperar</span><strong>{{ formatMoney(inventoryPendingRecovery()) }}</strong></div>
+            <div class="recovery-progress" role="progressbar" aria-label="Porcentaje de capital liberado ya recuperado" aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="inventoryRecoveryRate() * 100"><span [style.width.%]="inventoryRecoveryRate() * 100"></span></div>
+          </div>
+          <aside class="insight-box"><span class="material-symbols-rounded" aria-hidden="true">lightbulb</span><p>El capital pendiente está en cuentas por cobrar. No se considera efectivo disponible ni utilidad para repartir.</p></aside>
+        </article>
+      </section>
+
+      <section class="inventory-analysis-grid">
+        <article class="panel inventory-trend-panel">
+          <header class="panel-header"><div><p class="panel-kicker">Tendencia</p><h2>Capital al cierre vs. liberado</h2><p>Seguimiento mensual valuado al costo.</p></div></header>
+          <div class="chart-legend" aria-hidden="true"><span><i class="legend-inventory"></i>Capital al cierre</span><span><i class="legend-released"></i>Liberado en el mes</span></div>
+          <div class="column-chart inventory-chart" role="img" aria-label="El capital al cierre creció de 32,400 pesos en marzo a 46,520 en agosto; en agosto se liberaron 17,920 pesos mediante ventas.">
+            <div class="chart-scale" aria-hidden="true"><span>$50k</span><span>$25k</span><span>$0</span></div>
+            <div class="chart-grid" aria-hidden="true">
+              @for (month of months; track month.id) {
+                <div class="month-column" [class.is-selected]="month.id === selectedMonthId()">
+                  <div class="bar-area">
+                    <span class="chart-bar chart-bar--inventory" [style.height.%]="inventoryBarHeight(month.inventoryClosing)"></span>
+                    <span class="chart-bar chart-bar--released" [style.height.%]="inventoryBarHeight(month.inventoryReleased)"></span>
+                  </div>
+                  <span>{{ month.shortLabel }}</span>
+                </div>
+              }
+            </div>
+          </div>
+        </article>
+
+        <article class="panel aging-panel">
+          <header class="panel-header"><div><p class="panel-kicker">Antigüedad</p><h2>Cuánto capital está estancado</h2><p>{{ formatMoney(selectedMonth().stagnantCapital) }} supera el umbral de 45 días.</p></div><span class="count-badge">{{ formatPercent(stagnantCapitalShare()) }}</span></header>
+          <div class="aging-stack" role="img" [attr.aria-label]="'Distribución del capital por antigüedad: ' + formatMoney(agingFreshCapital()) + ' entre cero y treinta días, ' + formatMoney(agingWatchCapital()) + ' entre treinta y uno y cuarenta y cinco, ' + formatMoney(agingStaleCapital()) + ' entre cuarenta y seis y noventa, y ' + formatMoney(agingCriticalCapital()) + ' con más de noventa días.'">
+            <span class="aging-stack__fresh" [style.width.%]="inventoryCapitalShare(agingFreshCapital())"></span><span class="aging-stack__watch" [style.width.%]="inventoryCapitalShare(agingWatchCapital())"></span><span class="aging-stack__stale" [style.width.%]="inventoryCapitalShare(agingStaleCapital())"></span><span class="aging-stack__critical" [style.width.%]="inventoryCapitalShare(agingCriticalCapital())"></span>
+          </div>
+          <dl class="aging-list">
+            <div><dt><i class="aging-dot aging-dot--fresh"></i>0–30 días</dt><dd>{{ formatMoney(agingFreshCapital()) }} <small>Rotación normal</small></dd></div>
+            <div><dt><i class="aging-dot aging-dot--watch"></i>31–45 días</dt><dd>{{ formatMoney(agingWatchCapital()) }} <small>Vigilar</small></dd></div>
+            <div><dt><i class="aging-dot aging-dot--stale"></i>46–90 días</dt><dd>{{ formatMoney(agingStaleCapital()) }} <small>Estancado</small></dd></div>
+            <div><dt><i class="aging-dot aging-dot--critical"></i>Más de 90 días</dt><dd>{{ formatMoney(agingCriticalCapital()) }} <small>Prioridad alta</small></dd></div>
+          </dl>
+        </article>
+      </section>
+
+      <article class="panel history-panel return-rotation-panel">
+        <header class="panel-header">
+          <div><p class="panel-kicker">Devoluciones</p><h2>Qué pasó con el capital que regresó</h2><p>Seguimiento de las devoluciones aptas para reventa registradas en {{ selectedMonth().label }}.</p></div>
+          <span class="return-summary"><strong>{{ formatMoney(selectedMonth().returnedToInventory * 0.5) }}</strong> de {{ formatMoney(selectedMonth().returnedToInventory) }} ya se volvió a vender</span>
+        </header>
+        <div class="table-scroll" tabindex="0" aria-label="Seguimiento de capital reingresado por devoluciones con desplazamiento horizontal">
+          <table>
+            <thead><tr><th scope="col">Producto</th><th scope="col">Capital reingresado</th><th scope="col">Vuelto a vender</th><th scope="col">Días para rotar</th><th scope="col">Estado</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Blusa lino arena · CH</th><td>{{ formatMoney(selectedMonth().returnedToInventory * 0.2727) }}</td><td>{{ formatMoney(selectedMonth().returnedToInventory * 0.1818) }}</td><td>9 días</td><td><span class="table-status table-status--partial">Parcial</span></td></tr>
+              <tr><th scope="row">Bolsa Milán · Negro</th><td>{{ formatMoney(selectedMonth().returnedToInventory * 0.3182) }}</td><td>{{ formatMoney(0) }}</td><td>48 días</td><td><span class="table-status table-status--danger">Estancado</span></td></tr>
+              <tr><th scope="row">Sandalia Roma · 24</th><td>{{ formatMoney(selectedMonth().returnedToInventory * 0.2273) }}</td><td>{{ formatMoney(selectedMonth().returnedToInventory * 0.2273) }}</td><td>4 días</td><td><span class="table-status">Liberado</span></td></tr>
+              <tr><th scope="row">Pantalón Siena · M</th><td>{{ formatMoney(selectedMonth().returnedToInventory * 0.1818) }}</td><td>{{ formatMoney(selectedMonth().returnedToInventory * 0.0909) }}</td><td>18 días</td><td><span class="table-status table-status--partial">Parcial</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+  }
+
+  @if (activeView() === 'socios') {
+    <section class="view-stack" aria-labelledby="partners-title">
+      <header class="content-heading">
+        <div><p class="eyebrow">Distribución 50/50</p><h2 id="partners-title">Utilidades y socios</h2><p>Consulta la posición acumulada o entra al detalle de cada cierre mensual.</p></div>
+        @if (partnerScope() === 'general') {
+          <span class="status-chip status-chip--mixed"><span></span>5 cerrados · 1 preliminar</span>
+        } @else {
+          <span class="status-chip"><span></span>Mes preliminar</span>
+        }
+      </header>
+
+      <div class="scope-switch" role="group" aria-label="Nivel de análisis de utilidades y socios">
+        <button type="button" [class.is-active]="partnerScope() === 'general'" [attr.aria-pressed]="partnerScope() === 'general'" (click)="setPartnerScope('general')">
+          <span class="material-symbols-rounded" aria-hidden="true">donut_large</span>
+          Resumen acumulado
+        </button>
+        <button type="button" [class.is-active]="partnerScope() === 'mensual'" [attr.aria-pressed]="partnerScope() === 'mensual'" (click)="setPartnerScope('mensual')">
+          <span class="material-symbols-rounded" aria-hidden="true">calendar_month</span>
+          Análisis mensual
+        </button>
+      </div>
+
+      @if (partnerScope() === 'general') {
+        <section class="kpi-grid partner-overview-kpis" aria-label="Resumen acumulado de distribuciones">
+          <article class="kpi-card kpi-card--featured"><div class="kpi-label"><span>Utilidad distribuible</span><span class="material-symbols-rounded" aria-hidden="true">savings</span></div><strong>{{ formatMoney(totalDistributableProfit()) }}</strong><p>Generada entre marzo y agosto</p><small>Solo cierres respaldados por cobros conciliados</small></article>
+          <article class="kpi-card"><div class="kpi-label"><span>Ya distribuido</span><span class="material-symbols-rounded" aria-hidden="true">paid</span></div><strong>{{ formatMoney(totalDistributed()) }}</strong><p><span class="trend trend--positive">{{ formatPercent(totalDistributed() / totalDistributableProfit()) }}</span> del total</p><small>Suma de retiros registrados de ambos socios</small></article>
+          <article class="kpi-card"><div class="kpi-label"><span>Pendiente de distribuir</span><span class="material-symbols-rounded" aria-hidden="true">pending_actions</span></div><strong>{{ formatMoney(totalPendingDistribution()) }}</strong><p><span class="trend trend--warning">Saldos individuales actualizados</span></p><small>No incluye utilidad generada que todavía no se ha cobrado</small></article>
+          <article class="kpi-card kpi-card--projection"><div class="kpi-label"><span>Utilidad proyectada</span><span class="material-symbols-rounded" aria-hidden="true">trending_up</span></div><strong>{{ formatMoney(totalProjectedProfit()) }}</strong><p><span class="trend trend--projection">+ {{ formatMoney(totalInProcessProfit()) }}</span> en {{ totalInProcessOrderCount() }} pedidos en proceso</p><small>De lo ya generado, {{ formatMoney(totalPendingCollectionProfit()) }} siguen por cobrar</small></article>
+          <article class="kpi-card"><div class="kpi-label"><span>Participación por socio</span><span class="material-symbols-rounded" aria-hidden="true">percent</span></div><strong>{{ formatMoney(totalSharePerPartner()) }}</strong><p>50% para cada parte</p><small>Acumulado del periodo disponible</small></article>
+        </section>
+
+        <article class="distribution-equation" aria-labelledby="distribution-general-title">
+          <header><div><p class="panel-kicker">Base acumulada</p><h2 id="distribution-general-title">De los cobros a la utilidad distribuible</h2><p>Conciliación de los cierres disponibles.</p></div><button type="button" class="text-button" (click)="goToWithdrawalBreakdownPage()">Ver movimientos incluidos</button></header>
+          <div class="equation-grid">
+            <div class="equation-item"><span>Cobros conciliados</span><strong>{{ formatMoney(totalCollected()) }}</strong></div><span class="equation-operator">−</span>
+            <div class="equation-item"><span>Capital recuperado</span><strong>{{ formatMoney(totalRecoveredPrincipal()) }}</strong></div><span class="equation-operator">−</span>
+            <div class="equation-item"><span>Gastos y ajustes</span><strong>{{ formatMoney(totalDistributionAdjustments()) }}</strong></div><span class="equation-operator">=</span>
+            <div class="equation-item equation-item--result"><span>Utilidad distribuible acumulada</span><strong>{{ formatMoney(totalDistributableProfit()) }}</strong></div>
+          </div>
+          <p class="equation-note"><span class="material-symbols-rounded" aria-hidden="true">info</span>“General” significa {{ periodRangeLabel() }}; no mezcla información de otros negocios.</p>
+        </article>
+
+        <section class="partner-grid" aria-label="Saldos acumulados por socio">
+          <article class="partner-card partner-card--overall">
+            <header><span class="partner-avatar">BT</span><div><p>Socio 1 · acumulado</p><h2>Blanca Trejo</h2></div><span class="share-chip">50%</span></header>
+            <dl><div><dt>Participación acumulada</dt><dd>{{ formatMoney(totalSharePerPartner()) }}</dd></div><div><dt>Total retirado</dt><dd>{{ formatMoney(totalPartnerOneWithdrawn()) }}</dd></div><div class="partner-pending"><dt>Saldo pendiente</dt><dd>{{ formatMoney(totalPartnerOnePending()) }}</dd></div></dl>
+            <div class="progress-copy"><span>Participación entregada</span><strong>{{ overallPartnerProgress(totalPartnerOneWithdrawn()).toFixed(0) }}%</strong></div>
+            <div class="progress-track" role="progressbar" aria-label="Participación acumulada entregada a Blanca Trejo" aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="overallPartnerProgress(totalPartnerOneWithdrawn())"><span [style.width.%]="overallPartnerProgress(totalPartnerOneWithdrawn())"></span></div>
+            <div class="partner-actions"><button type="button" class="button button--primary" (click)="openPartnerPayment('socio_blanca')">Registrar pago</button><button type="button" class="button button--secondary" (click)="setPartnerScope('mensual')">Analizar por mes</button></div>
+          </article>
+
+          <article class="partner-card partner-card--overall">
+            <header><span class="partner-avatar partner-avatar--green">AP</span><div><p>Socio 2 · acumulado</p><h2>Andrea y Pepe</h2></div><span class="share-chip">50%</span></header>
+            <dl><div><dt>Participación acumulada</dt><dd>{{ formatMoney(totalSharePerPartner()) }}</dd></div><div><dt>Total retirado</dt><dd>{{ formatMoney(totalPartnerTwoWithdrawn()) }}</dd></div><div class="partner-pending is-settled"><dt>Saldo pendiente</dt><dd>{{ formatMoney(totalPartnerTwoPending()) }}</dd></div></dl>
+            <div class="progress-copy"><span>Participación entregada</span><strong>{{ overallPartnerProgress(totalPartnerTwoWithdrawn()).toFixed(0) }}%</strong></div>
+            <div class="progress-track progress-track--green" role="progressbar" aria-label="Participación acumulada entregada a Andrea y Pepe" aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="overallPartnerProgress(totalPartnerTwoWithdrawn())"><span [style.width.%]="overallPartnerProgress(totalPartnerTwoWithdrawn())"></span></div>
+            <div class="partner-actions"><button type="button" class="button button--primary" [disabled]="totalPartnerTwoPending() <= 0" (click)="openPartnerPayment('socio_andrea_pepe')">{{ totalPartnerTwoPending() <= 0 ? 'Parte cubierta' : 'Registrar pago' }}</button><button type="button" class="button button--secondary" (click)="setPartnerScope('mensual')">Analizar por mes</button></div>
+          </article>
+        </section>
+      } @else {
+        <article class="distribution-equation" aria-labelledby="distribution-title">
+          <header><div><p class="panel-kicker">Base distribuible</p><h2 id="distribution-title">Cierre preliminar de {{ selectedMonth().label }}</h2></div><button type="button" class="text-button" (click)="goToWithdrawalBreakdownPage()">Ver movimientos incluidos</button></header>
+          <div class="equation-grid">
+            <div class="equation-item"><span>Cobros conciliados</span><strong>{{ formatMoney(selectedMonth().collected) }}</strong></div><span class="equation-operator">−</span>
+            <div class="equation-item"><span>Capital recuperado</span><strong>{{ formatMoney(monthlyRecoveredPrincipal()) }}</strong></div><span class="equation-operator">−</span>
+            <div class="equation-item"><span>Gastos y ajustes</span><strong>{{ formatMoney(monthlyDistributionAdjustments()) }}</strong></div><span class="equation-operator">=</span>
+            <div class="equation-item equation-item--result"><span>Utilidad distribuible</span><strong>{{ formatMoney(distributableProfit()) }}</strong></div>
+          </div>
+          <p class="equation-note"><span class="material-symbols-rounded" aria-hidden="true">info</span>De lo generado, {{ formatMoney(selectedMonth().pendingCollectionProfit) }} todavía siguen por cobrar y no se reparten como efectivo disponible.</p>
+        </article>
+
+        <article class="projection-callout" aria-labelledby="monthly-projection-title">
+          <span class="projection-callout__icon material-symbols-rounded" aria-hidden="true">monitoring</span>
+          <div><p class="panel-kicker">Escenario al completar pedidos</p><h2 id="monthly-projection-title">{{ formatMoney(selectedMonth().projectedProfit) }} de utilidad proyectada</h2><p>{{ formatMoney(selectedMonth().netProfit) }} ya generados + {{ formatMoney(selectedMonth().inProcessProfit) }} estimados en {{ selectedMonth().inProcessOrderCount }} pedido(s) todavía en proceso.</p></div>
+          <small>No es retirable todavía: precios, costos, cancelaciones y devoluciones pueden cambiar la proyección.</small>
+        </article>
+
+        <section class="partner-grid" aria-label="Saldos individuales de socios en el mes seleccionado">
+          <article class="partner-card">
+            <header><span class="partner-avatar">BT</span><div><p>Socio 1</p><h2>Blanca Trejo</h2></div><span class="share-chip">50%</span></header>
+            <dl><div><dt>Participación del mes</dt><dd>{{ formatMoney(sharePerPartner()) }}</dd></div><div><dt>Retirado</dt><dd>{{ formatMoney(selectedMonth().partnerOneWithdrawn) }}</dd></div><div class="partner-pending"><dt>Pendiente</dt><dd>{{ formatMoney(partnerOnePending()) }}</dd></div></dl>
+            <div class="progress-copy"><span>Distribución pagada</span><strong>{{ partnerProgress(selectedMonth().partnerOneWithdrawn).toFixed(0) }}%</strong></div>
+            <div class="progress-track" role="progressbar" aria-label="Distribución pagada a Blanca Trejo" aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="partnerProgress(selectedMonth().partnerOneWithdrawn)"><span [style.width.%]="partnerProgress(selectedMonth().partnerOneWithdrawn)"></span></div>
+            <div class="partner-actions"><button type="button" class="button button--primary" (click)="openPartnerPayment('socio_blanca')">Registrar pago</button><button type="button" class="button button--secondary" (click)="setPartnerScope('general')">Ver historial</button></div>
+          </article>
+
+          <article class="partner-card">
+            <header><span class="partner-avatar partner-avatar--green">AP</span><div><p>Socio 2</p><h2>Andrea y Pepe</h2></div><span class="share-chip">50%</span></header>
+            <dl><div><dt>Participación del mes</dt><dd>{{ formatMoney(sharePerPartner()) }}</dd></div><div><dt>Retirado</dt><dd>{{ formatMoney(selectedMonth().partnerTwoWithdrawn) }}</dd></div><div class="partner-pending is-settled"><dt>Pendiente</dt><dd>{{ formatMoney(partnerTwoPending()) }}</dd></div></dl>
+            <div class="progress-copy"><span>Distribución pagada</span><strong>{{ partnerProgress(selectedMonth().partnerTwoWithdrawn).toFixed(0) }}%</strong></div>
+            <div class="progress-track progress-track--green" role="progressbar" aria-label="Distribución pagada a Andrea y Pepe" aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="partnerProgress(selectedMonth().partnerTwoWithdrawn)"><span [style.width.%]="partnerProgress(selectedMonth().partnerTwoWithdrawn)"></span></div>
+            <div class="partner-actions"><button type="button" class="button button--primary" [disabled]="partnerTwoPending() <= 0" (click)="openPartnerPayment('socio_andrea_pepe')">{{ partnerTwoPending() <= 0 ? 'Parte cubierta' : 'Registrar pago' }}</button><button type="button" class="button button--secondary" (click)="setPartnerScope('general')">Ver historial</button></div>
+          </article>
+        </section>
+      }
+
+      <article class="panel history-panel">
+        <header class="panel-header">
+          <div><p class="panel-kicker">Ventas, cobranza y reparto</p><h2>Historial de distribuciones</h2><p>Cada venta permanece en su mes de origen; los cobros aparecen también en el mes en que realmente entraron.</p></div>
+          @if (partnerScope() === 'mensual') {
+            <button type="button" class="button button--dark" (click)="openCutDialog()"><span class="material-symbols-rounded" aria-hidden="true">lock</span>Cerrar periodo</button>
+          }
+        </header>
+        <p class="table-scroll-hint"><span class="material-symbols-rounded" aria-hidden="true">swipe</span>Desliza para consultar todas las columnas</p>
+        <div class="table-scroll" tabindex="0" aria-label="Historial de distribuciones con desplazamiento horizontal">
+          <table class="distribution-history-table">
+            <thead><tr><th scope="col">Periodo</th><th scope="col"><span class="table-heading">Ventas generadas<small>Por fecha de creación</small></span></th><th scope="col"><span class="table-heading">Cobranza de esas ventas<small>Seguimiento de la cohorte</small></span></th><th scope="col"><span class="table-heading">Cobros del mes<small>Cuándo entró el dinero</small></span></th><th scope="col"><span class="table-heading">Cartera arrastrada<small>Inicio → cierre</small></span></th><th scope="col"><span class="table-heading">Utilidad generada<small>Entregada o en proceso</small></span></th><th scope="col"><span class="table-heading">Utilidad cobrada<small>Liberada por cobranza</small></span></th><th scope="col">Blanca</th><th scope="col">Andrea y Pepe</th><th scope="col">Estado</th></tr></thead>
+            <tbody>
+              @for (month of months.slice().reverse(); track month.id) {
+                <tr [class.is-selected]="partnerScope() === 'mensual' && month.id === selectedMonthId()">
+                  <th scope="row">{{ month.label }}</th>
+                  <td class="metric-cell"><strong>{{ formatMoney(month.generatedSales) }}</strong><small>{{ month.generatedOrderCount }} pedidos creados</small></td>
+                  <td class="metric-cell cohort-cell"><strong>{{ formatMoney(month.cohortCollectedToDate) }} cobrados</strong><small [class.has-pending]="month.cohortPendingToday > 0">{{ formatMoney(month.cohortPendingToday) }} pendientes hoy</small><span class="cohort-progress" role="progressbar" aria-label="Porcentaje cobrado de las ventas de este periodo" aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="boundedRatio(month.cohortCollectedToDate, month.cohortCollectedToDate + month.cohortPendingToday) * 100"><i [style.width.%]="boundedRatio(month.cohortCollectedToDate, month.cohortCollectedToDate + month.cohortPendingToday) * 100"></i></span></td>
+                  <td class="metric-cell cashflow-cell"><strong>{{ formatMoney(month.collected) }}</strong><small>{{ formatMoney(month.collectedFromCurrentPeriod) }} de pedidos creados este mes</small><small>{{ formatMoney(month.collectedFromPriorPeriods) }} de pedidos de meses anteriores</small></td>
+                  <td class="metric-cell portfolio-cell"><strong>{{ formatMoney(month.receivablesOpening) }} → {{ formatMoney(month.receivablesClosing) }}</strong><small [class.has-pending]="month.receivablesClosing > month.receivablesOpening">{{ month.receivablesClosing > month.receivablesOpening ? 'La cartera creció' : 'La cartera bajó' }}</small></td>
+                  <td class="projection-cell"><strong>{{ formatMoney(month.projectedProfit) }}</strong><small>{{ formatMoney(month.distributableProfit) }} de pedidos entregados</small><small>{{ formatMoney(month.inProcessProfit) }} de pedidos en proceso</small></td>
+                  <td class="metric-cell"><strong>{{ formatMoney(month.collectedProfit) }}</strong><small>{{ formatMoney(month.pendingCollectionProfit) }} de utilidad sigue por cobrar</small></td>
+                  <td>{{ formatMoney(month.partnerOneWithdrawn) }}</td><td>{{ formatMoney(month.partnerTwoWithdrawn) }}</td>
+                  <td><span class="table-status" [class.table-status--open]="monthlyDistributionStatus(month) === 'Preliminar'" [class.table-status--partial]="monthlyDistributionStatus(month) === 'Seguimiento'" [class.table-status--late]="monthlyDistributionStatus(month) === 'Cobrado después'">{{ monthlyDistributionStatus(month) }}</span></td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+  }
+</main>

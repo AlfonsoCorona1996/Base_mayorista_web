@@ -65,7 +65,7 @@ export default class DurangoPage {
     this.orders
       .list()
       .filter((order) => !["cancelado", "devuelto", "closed"].includes(order.status))
-      .filter((order) => order.current_holder_location === "durango" || order.custody_status === "durango" || order.current_holder_location === "delivery_staff" || order.custody_status === "delivery_staff"),
+      .filter((order) => order.current_holder_location === "durango" || order.current_holder_location === "delivery_staff"),
   );
 
   readonly packRows = computed(() =>
@@ -78,7 +78,7 @@ export default class DurangoPage {
 
   readonly deliveryRowsFiltered = computed(() => {
     const filter = this.deliveryFilter();
-    const rows = this.durangoOrders().filter((order) => order.fulfillment_status === "packed_durango" || order.custody_status === "delivery_staff");
+    const rows = this.durangoOrders().filter((order) => order.fulfillment_status === "packed_durango" || order.current_holder_location === "delivery_staff");
     return rows.filter((order) => {
       if (filter === "todos") return order.delivery_status !== "delivered";
       if (filter === "lupita") return order.delivery_status !== "delivered" && this.currentHolderName(order) !== "Briselda";
@@ -102,7 +102,7 @@ export default class DurangoPage {
       .list()
       .filter((order) => Number(order.totals?.paid_amount || 0) > 0)
       .filter((order) => order.settlement_status === "pending" || order.settlement_status === "difference")
-      .filter((order) => ["durango", "delivery_staff", "customer"].includes(order.current_holder_location || "") || order.custody_status === "customer"),
+      .filter((order) => ["durango", "delivery_staff", "customer"].includes(order.current_holder_location || "")),
   );
 
   readonly historyRows = computed(() =>
@@ -155,7 +155,6 @@ export default class DurangoPage {
       await this.orders.updateOperationalState(
         row.item.order_id,
         {
-          custody_status: "durango",
           current_holder_location: "durango",
           current_holder_name: "Lupita",
           shipment_id: row.shipment.shipment_id,
@@ -173,7 +172,6 @@ export default class DurangoPage {
   async markPacked(order: Order) {
     await this.updateOrderState(order, {
       fulfillment_status: "packed_durango",
-      custody_status: "durango",
       current_holder_location: "durango",
       current_holder_name: "Lupita",
     }, "Pedido empacado en Durango", "Pedido marcado como empacado.");
@@ -181,7 +179,6 @@ export default class DurangoPage {
 
   async assignDelivery(order: Order) {
     await this.updateOrderState(order, {
-      custody_status: "delivery_staff",
       current_holder_location: "delivery_staff",
       current_holder_name: "Briselda",
     }, "Pedido entregado a Briselda", "Pedido en custodia de Briselda.");
@@ -189,7 +186,6 @@ export default class DurangoPage {
 
   async returnToLupita(order: Order) {
     await this.updateOrderState(order, {
-      custody_status: "durango",
       current_holder_location: "durango",
       current_holder_name: "Lupita",
     }, "Pedido regresó a Lupita", "Pedido regresó a custodia de Lupita.");
@@ -404,14 +400,14 @@ export default class DurangoPage {
   }
 
   currentHolderName(order: Order): string {
-    return (order.current_holder_name || (order.custody_status === "durango" ? "Lupita" : "")).trim();
+    return (order.current_holder_name || (order.current_holder_location === "durango" ? "Lupita" : "")).trim();
   }
 
   holderLabel(order: Order): string {
     if (order.delivery_status === "delivered") return "Clienta recibió";
     const holder = this.currentHolderName(order);
     if (holder === "Briselda") return "Con Briselda";
-    if (holder === "Lupita" || order.custody_status === "durango") return "En Durango / Lupita";
+    if (holder === "Lupita" || order.current_holder_location === "durango") return "En Durango / Lupita";
     return holder ? `Con ${holder}` : "En Durango";
   }
 

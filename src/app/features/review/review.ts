@@ -187,12 +187,7 @@ export default class ReviewPage {
     let newVariants = 0;
 
     source.listing.items.forEach((item) => {
-      const key = this.variantMatchKey(item);
-      if (!key) {
-        newVariants += 1;
-        return;
-      }
-      if (targetIndex.has(key)) {
+      if (this.findVariantMatch(targetIndex, item) !== undefined) {
         matchedVariants += 1;
       } else {
         newVariants += 1;
@@ -314,21 +309,14 @@ export default class ReviewPage {
     this.mergeTargetsLoading.set(true);
     try {
       const rows: NormalizedListingDocV3[] = [];
-      let cursor: any = null;
-      const maxPages = 4;
+      const docs = await this.svc.loadAllValidated("bm");
 
-      for (let pageIndex = 0; pageIndex < maxPages; pageIndex += 1) {
-        const page = await this.svc.listValidated(100, cursor);
-        (page.docs as unknown[]).forEach((entry) => {
-          if (!this.isRequiredSchema(entry)) return;
-          if (entry.normalized_id !== this.id) {
-            rows.push(entry);
-          }
-        });
-
-        if (!page.nextCursor) break;
-        cursor = page.nextCursor;
-      }
+      (docs as unknown[]).forEach((entry) => {
+        if (!this.isRequiredSchema(entry)) return;
+        if (entry.normalized_id !== this.id) {
+          rows.push(entry);
+        }
+      });
 
       this.mergeTargets.set(rows);
     } catch (error) {
@@ -486,20 +474,14 @@ export default class ReviewPage {
 
     const targetIndex = this.buildVariantIndex(merged.listing.items);
     incoming.listing.items.forEach((sourceItem) => {
-      const key = this.variantMatchKey(sourceItem);
-      const targetItemIndex = key ? targetIndex.get(key) : undefined;
+      const targetItemIndex = this.findVariantMatch(targetIndex, sourceItem);
 
       if (targetItemIndex === undefined) {
         if (!options.appendVariants) return;
 
         const appended = this.cloneVariantForMerge(sourceItem);
         merged.listing.items.push(appended);
-
-        const appendedIndex = merged.listing.items.length - 1;
-        const appendedKey = this.variantMatchKey(appended);
-        if (appendedKey && !targetIndex.has(appendedKey)) {
-          targetIndex.set(appendedKey, appendedIndex);
-        }
+        this.registerVariantKeys(targetIndex, appended, merged.listing.items.length - 1);
         return;
       }
 
@@ -703,24 +685,41 @@ export default class ReviewPage {
   private buildVariantIndex(items: NormalizedItemV3[]): Map<string, number> {
     const map = new Map<string, number>();
     items.forEach((item, index) => {
-      const key = this.variantMatchKey(item);
-      if (!key || map.has(key)) return;
-      map.set(key, index);
+      this.registerVariantKeys(map, item, index);
     });
     return map;
   }
 
-  private variantMatchKey(item: NormalizedItemV3): string | null {
+  private registerVariantKeys(index: Map<string, number>, item: NormalizedItemV3, position: number) {
+    this.variantMatchKeys(item).forEach((key) => {
+      if (index.has(key)) return;
+      index.set(key, position);
+    });
+  }
+
+  private findVariantMatch(index: Map<string, number>, item: NormalizedItemV3): number | undefined {
+    for (const key of this.variantMatchKeys(item)) {
+      const position = index.get(key);
+      if (position !== undefined) return position;
+    }
+    return undefined;
+  }
+
+  // Un mismo modelo casi nunca comparte SKU entre documentos (el SKU se genera con el
+  // normalized_id), asi que la variante se compara por todas sus claves, no solo por la primera.
+  private variantMatchKeys(item: NormalizedItemV3): string[] {
+    const keys: string[] = [];
+
     const sku = (item.sku || "").trim().toUpperCase();
-    if (sku) return `sku:${sku}`;
+    if (sku) keys.push(`sku:${sku}`);
 
     const name = (item.variant_name || "").trim().toLowerCase();
-    if (name) return `name:${name}`;
+    if (name) keys.push(`name:${name}`);
 
     const variantId = (item.variant_id || "").trim().toLowerCase();
-    if (variantId) return `id:${variantId}`;
+    if (variantId) keys.push(`id:${variantId}`);
 
-    return null;
+    return keys;
   }
 
   private normalizeImageArray(values: Array<string | null | undefined>): string[] {

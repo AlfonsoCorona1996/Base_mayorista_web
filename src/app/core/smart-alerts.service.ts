@@ -59,15 +59,15 @@ const THRESHOLDS = {
 // Estados terminales que NO deben generar alertas de pedido olvidado
 const TERMINAL_STATUSES = new Set<OrderStatus>([
   "pagado", "pagado_parcial", "cancelado", "devuelto", "closed",
-  "entregado", "delivered", "delivered_partial",
+  "entregado", "entregado_parcial",
 ]);
 
 // Estados operativos que se consideran "en progreso"
 const IN_PROGRESS_STATUSES = new Set<OrderStatus>([
   "borrador", "confirmando_proveedor", "reservado_inventario",
-  "solicitado_proveedor", "supplier_processing", "inbound_in_transit",
-  "en_transito", "recibido_qa", "packing", "empaque",
-  "ready_for_route", "assigned_to_run", "in_transit", "en_ruta",
+  "solicitado_proveedor", "supplier_processing", 
+  "en_transito", "recibido_qa", "empaque",
+  "ready_for_route", "assigned_to_run", "en_ruta",
   "pago_pendiente",
 ]);
 
@@ -79,10 +79,10 @@ const PENDING_COLLECTION_STATUSES = new Set<OrderStatus>([
   "reservado_inventario",
   "solicitado_proveedor",
   "supplier_processing",
-  "inbound_in_transit",
+  
   "en_transito",
   "recibido_qa",
-  "packing",
+  
   "empaque",
   "ready_for_route",
   "assigned_to_run",
@@ -377,7 +377,7 @@ export class SmartAlertsService {
   /** Pedidos por empaque sin movimiento > 24h */
   readonly packingStuckAlerts = computed<SmartAlert[]>(() => {
     const stuck = this.orders.list().filter(
-      (o) => ["packing", "empaque"].includes(o.status) && hoursSince(o.updated_at) > 24
+      (o) => ["empaque"].includes(o.status) && hoursSince(o.updated_at) > 24
     );
     if (stuck.length === 0) return [];
 
@@ -401,9 +401,9 @@ export class SmartAlertsService {
     const orders = this.orders.list();
     const now = Date.now();
 
-    const byPacking = orders.filter(o => ["packing", "empaque"].includes(o.status)).length;
+    const byPacking = orders.filter(o => ["empaque"].includes(o.status)).length;
     const readyForRoute = orders.filter(o => ["ready_for_route", "assigned_to_run"].includes(o.status)).length;
-    const inRoute = orders.filter(o => ["in_transit", "en_ruta"].includes(o.status)).length;
+    const inRoute = orders.filter(o => ["en_ruta"].includes(o.status)).length;
     const pendingPayment = orders.filter((o) => {
       if (!PENDING_COLLECTION_STATUSES.has(o.status)) return false;
       return pendingAmountForOrder(o) > 0;

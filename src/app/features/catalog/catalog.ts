@@ -618,7 +618,7 @@ export default class CatalogPage {
 
   private calculateProductStats(product: NormalizedListingDocV3) {
     const skus = new Set(product.listing.items.map((item) => (item.sku || "").trim().toLowerCase()).filter(Boolean));
-    const completed = new Set(["delivered", "delivered_partial", "entregado", "closed", "pagado", "pago_pendiente", "pagado_parcial"]);
+    const completed = new Set(["entregado", "entregado_parcial", "closed", "pagado", "pago_pendiente", "pagado_parcial"]);
     let units = 0;
     let returned = 0;
     let sales = 0;
@@ -638,7 +638,7 @@ export default class CatalogPage {
       }
     }
     const stock = this.inventory.items().filter((item) => item.product_id === product.normalized_id || skus.has((item.sku || "").trim().toLowerCase()));
-    const available = stock.reduce((sum, item) => sum + Number(item.available_qty ?? item.quantity_on_hand ?? 0), 0);
+    const available = stock.reduce((sum, item) => sum + Number(item.available_qty ?? 0), 0);
     const min = stock.reduce((sum, item) => sum + Number(item.min_stock || 0), 0);
     const max = stock.reduce((sum, item) => sum + Number(item.max_stock || 0), 0);
     return {

@@ -12,10 +12,11 @@ import {
 import { FIRESTORE } from "./firebase.providers";
 import { BusinessId, normalizeBusinessId } from "./rbac.constants";
 import { BusinessScopeService } from "./business-scope.service";
-import { InventoryService } from "./inventory.service";
+import { InventoryService, readInventoryQuantities } from "./inventory.service";
 import { Order, OrderItem } from "./orders.service";
 import { availableReturnQty, calculateOrderFinancials, money, toPersistedOrderTotals } from "./order-financials";
 import { FeatureFlagsService } from "./feature-flags.service";
+import { financePeriodDocumentId, ledgerEntryPayload, monthIdFromDateInput } from "./finance-ledger";
 
 export type ReturnDisposition = "available" | "review" | "damaged";
 export type ReturnStatus = "restocked" | "pending_review" | "damaged";
@@ -49,6 +50,7 @@ export interface ReturnRecord {
   refund_account_id: string | null;
   refund_method: string | null;
   refund_reference: string | null;
+  occurred_at: string;
   created_at?: any;
   updated_at?: any;
   restocked_at?: any;
@@ -110,6 +112,7 @@ export class ReturnsService {
     const requestedInventoryId = String(input.item.inventory_id || "").trim() || this.buildInventoryId(businessId, input.item);
     const ref = doc(this.colRef, returnId);
     const orderRef = doc(FIRESTORE, "orders", input.order.order_id);
+    const occurredAt = new Date().toISOString().slice(0, 10);
     let savedRecord: ReturnRecord | null = null;
 
     await runTransaction(FIRESTORE, async (tx) => {
@@ -118,8 +121,8 @@ export class ReturnsService {
       const rawOrder = orderSnap.data() as Record<string, any>;
       const liveOrder = { ...rawOrder, order_id: orderSnap.id } as Order;
       const allowedStages = new Set([
-        "packing", "empaque", "ready_for_route", "assigned_to_run", "in_transit", "en_ruta",
-        "delivered", "delivered_partial", "entregado", "pago_pendiente", "pagado_parcial", "pagado", "closed",
+        "empaque", "ready_for_route", "assigned_to_run", "en_ruta",
+        "entregado", "entregado_parcial", "pago_pendiente", "pagado_parcial", "pagado", "closed",
       ]);
       if (!allowedStages.has(String(liveOrder.status || ""))) {
         throw new Error("Las devoluciones sólo se permiten desde empaque en adelante.");
@@ -133,7 +136,7 @@ export class ReturnsService {
         throw new Error(`Sólo quedan ${remaining} pieza(s) disponibles para devolver.`);
       }
 
-      const deliveredStages = new Set(["delivered", "delivered_partial", "entregado", "pago_pendiente", "pagado_parcial", "pagado", "closed"]);
+      const deliveredStages = new Set(["entregado", "entregado_parcial", "pago_pendiente", "pagado_parcial", "pagado", "closed"]);
       const afterDelivery = deliveredStages.has(String(liveOrder.status || ""));
       const inventoryId = String(liveItem.inventory_id || "").trim() || requestedInventoryId;
       const inventoryRef = doc(FIRESTORE, "inventory_items", inventoryId);
@@ -145,14 +148,19 @@ export class ReturnsService {
       const accountRef = input.paymentResolution === "refund" && input.refundAccountId
         ? doc(FIRESTORE, "finance_accounts", input.refundAccountId)
         : null;
+      const periodRef = doc(FIRESTORE, "finance_periods", financePeriodDocumentId(businessId, monthIdFromDateInput(occurredAt)));
 
-      const [inventorySnap, stopSnap, runSnap, customerSnap, accountSnap] = await Promise.all([
+      const [inventorySnap, stopSnap, runSnap, customerSnap, accountSnap, periodSnap] = await Promise.all([
         tx.get(inventoryRef),
         stopRef ? tx.get(stopRef) : Promise.resolve(null),
         runRef ? tx.get(runRef) : Promise.resolve(null),
         tx.get(customerRef),
         accountRef ? tx.get(accountRef) : Promise.resolve(null),
+        tx.get(periodRef),
       ]);
+      if (periodSnap.exists() && periodSnap.data()["status"] === "closed") {
+        throw new Error(`El periodo ${monthIdFromDateInput(occurredAt)} está cerrado. Reábrelo antes de registrar la devolución.`);
+      }
 
       const currentReturned = Math.max(0, Math.trunc(Number(liveItem.returned_qty || 0)));
       const currentRestockable = Math.max(0, Math.trunc(Number(liveItem.returned_restockable_qty || 0)));
@@ -226,14 +234,11 @@ export class ReturnsService {
         refund_account_id: input.refundAccountId || null,
         refund_method: input.refundMethod?.trim() || null,
         refund_reference: input.refundReference?.trim() || null,
+        occurred_at: occurredAt,
       };
 
       const inventoryData = inventorySnap.exists() ? inventorySnap.data() as Record<string, any> : {};
-      const onHand = Math.max(0, Math.trunc(Number(inventoryData["on_hand_qty"] ?? inventoryData["quantity_on_hand"] ?? 0)));
-      const reserved = Math.max(0, Math.trunc(Number(inventoryData["reserved_qty"] || 0)));
-      const available = Math.max(0, Math.trunc(Number(inventoryData["available_qty"] ?? inventoryData["quantity_on_hand"] ?? Math.max(0, onHand - reserved))));
-      const inReview = Math.max(0, Math.trunc(Number(inventoryData["in_review_qty"] || 0)));
-      const damaged = Math.max(0, Math.trunc(Number(inventoryData["damaged_qty"] || 0)));
+      const { onHand, reserved, available, inReview, damaged } = readInventoryQuantities(inventoryData);
       const reservations = { ...(inventoryData["reservations"] || {}) } as Record<string, any>;
       const reservationKeys = Object.keys(reservations).filter((key) =>
         (key === liveOrder.order_id || key.startsWith(`${liveOrder.order_id}:`))
@@ -272,7 +277,6 @@ export class ReturnsService {
         on_hand_qty: nextOnHand,
         reserved_qty: nextReserved,
         available_qty: nextAvailable,
-        quantity_on_hand: nextAvailable,
         in_review_qty: nextInReview,
         damaged_qty: nextDamaged,
         unit_price: liveItem.price_cost ?? inventoryData["unit_price"] ?? null,
@@ -300,6 +304,7 @@ export class ReturnsService {
         reason: input.reason?.trim() || null,
         actor: input.createdBy || null,
         idempotency_key: movementId,
+        write_off_amount: isDamaged ? money((liveItem.price_cost || 0) * requestedQty) : 0,
         created_at: serverTimestamp(),
       });
 
@@ -387,7 +392,7 @@ export class ReturnsService {
           account_id: input.refundAccountId,
           method: input.refundMethod?.trim() || null,
           reference: input.refundReference?.trim() || null,
-          occurred_at: new Date().toISOString().slice(0, 10),
+          occurred_at: occurredAt,
           created_by: input.createdBy || null,
           created_at: serverTimestamp(),
         });
@@ -395,6 +400,24 @@ export class ReturnsService {
           balance: money(Number(accountSnap.data()["balance"] || 0) - resolutionAmount),
           updated_at: serverTimestamp(),
         });
+        const ledgerId = `ledger_refund_${refundId}`;
+        const ledger = ledgerEntryPayload({
+          entry_id: ledgerId,
+          business_id: businessId,
+          account_id: input.refundAccountId || null,
+          kind: "refund",
+          cash_effect: -resolutionAmount,
+          occurred_at: occurredAt,
+          source: "finance_refund",
+          source_id: refundId,
+          order_id: liveOrder.order_id,
+          return_id: returnId,
+          reverses_entry_id: null,
+          data_quality: "native",
+          notes: input.reason?.trim() || null,
+          created_by: input.createdBy || null,
+        });
+        tx.set(doc(FIRESTORE, "finance_ledger_entries", ledgerId), { ...ledger, created_at: serverTimestamp() });
       }
       savedRecord = record;
     });
@@ -415,11 +438,9 @@ export class ReturnsService {
       ]);
       if (!returnSnap.exists() || returnSnap.data()["status"] !== "pending_review") return;
       const data = inventorySnap.exists() ? inventorySnap.data() as Record<string, any> : {};
-      const reviewQty = Math.max(0, Math.trunc(Number(data["in_review_qty"] || 0)));
+      const { onHand, available, inReview: reviewQty } = readInventoryQuantities(data);
       const moved = Math.min(row.qty, reviewQty);
       const missingLegacyQty = Math.max(0, row.qty - moved);
-      const onHand = Math.max(0, Math.trunc(Number(data["on_hand_qty"] ?? data["quantity_on_hand"] ?? 0)));
-      const available = Math.max(0, Math.trunc(Number(data["available_qty"] ?? data["quantity_on_hand"] ?? 0)));
       tx.set(inventoryRef, {
         inventory_id: inventoryId,
         business_id: row.business_id,
@@ -427,7 +448,6 @@ export class ReturnsService {
         sku: String(row.product_snapshot["product_id"] || row.product_snapshot["inventory_id"] || inventoryId),
         on_hand_qty: onHand + missingLegacyQty,
         available_qty: available + row.qty,
-        quantity_on_hand: available + row.qty,
         in_review_qty: Math.max(0, reviewQty - moved),
         updated_at: serverTimestamp(),
         created_at: inventorySnap.exists() ? data["created_at"] || serverTimestamp() : serverTimestamp(),
@@ -449,6 +469,7 @@ export class ReturnsService {
         reason: row.reason,
         actor: null,
         idempotency_key: movementId,
+        write_off_amount: money(row.unit_cost * row.qty),
         created_at: serverTimestamp(),
       });
       tx.update(doc(this.colRef, row.return_id), {
@@ -555,6 +576,7 @@ export class ReturnsService {
       refund_account_id: this.nullableText(data["refund_account_id"]),
       refund_method: this.nullableText(data["refund_method"]),
       refund_reference: this.nullableText(data["refund_reference"]),
+      occurred_at: this.normalizeOccurredAt(data["occurred_at"] || data["created_at"]),
       created_at: data["created_at"] ?? null,
       updated_at: data["updated_at"] ?? null,
       restocked_at: data["restocked_at"] ?? null,
@@ -666,6 +688,14 @@ export class ReturnsService {
     if (value === null || value === undefined || value === "") return null;
     const number = Number(value);
     return Number.isFinite(number) ? Math.max(0, Number(number.toFixed(2))) : null;
+  }
+
+  private normalizeOccurredAt(value: unknown): string {
+    if (typeof value === "string" && value.trim()) return value.slice(0, 10);
+    if (typeof value === "object" && value !== null && typeof (value as { toDate?: unknown }).toDate === "function") {
+      return (value as { toDate: () => Date }).toDate().toISOString().slice(0, 10);
+    }
+    return new Date().toISOString().slice(0, 10);
   }
 
   private toMillis(value: unknown): number {

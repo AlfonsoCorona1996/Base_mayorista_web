@@ -575,7 +575,7 @@ export default class RutasPage {
   }
 
   private isDelivered(order: Order): boolean {
-    return Boolean(order.delivered_at) || ["delivered", "delivered_partial", "entregado", "pago_pendiente", "pagado_parcial", "pagado", "closed"].includes(String(order.status || ""));
+    return Boolean(order.delivered_at) || ["entregado", "entregado_parcial", "pago_pendiente", "pagado_parcial", "pagado", "closed"].includes(String(order.status || ""));
   }
 
   private toNullableAmount(value: number | string | null): number | null {

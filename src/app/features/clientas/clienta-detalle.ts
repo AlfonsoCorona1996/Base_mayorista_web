@@ -71,7 +71,7 @@ function daysSince(iso: string | null | undefined): number {
 
 function computeRfmSegment(orders: Order[]): RfmSegment {
   const paid = orders.filter(o =>
-    ["pagado", "pagado_parcial", "entregado", "delivered", "delivered_partial", "pago_pendiente", "closed"].includes(o.status)
+    ["pagado", "pagado_parcial", "entregado", "entregado_parcial", "pago_pendiente", "closed"].includes(o.status)
   );
   const totalOrders = paid.length;
   if (totalOrders === 0) return "dormant";
@@ -144,7 +144,7 @@ export default class ClientaDetallePage implements OnInit {
   // ── Computed de análisis ─────────────────────────────────────────────
 
   paidOrders = computed(() =>
-    this.orders().filter(o => ["pagado", "pagado_parcial", "entregado", "delivered", "delivered_partial", "pago_pendiente", "closed"].includes(o.status) && calculateOrderFinancials(o).netUnits > 0)
+    this.orders().filter(o => ["pagado", "pagado_parcial", "entregado", "entregado_parcial", "pago_pendiente", "closed"].includes(o.status) && calculateOrderFinancials(o).netUnits > 0)
   );
 
   activeOrders = computed(() =>
@@ -155,7 +155,7 @@ export default class ClientaDetallePage implements OnInit {
     this.paidOrders().reduce((s, o) => s + calculateOrderFinancials(o).netAmount, 0)
   );
   deliveredHistory = computed(() => this.orders().filter((order) =>
-    (Boolean(order.delivered_at) || ["pagado", "pagado_parcial", "entregado", "delivered", "delivered_partial", "pago_pendiente", "closed"].includes(order.status))
+    (Boolean(order.delivered_at) || ["pagado", "pagado_parcial", "entregado", "entregado_parcial", "pago_pendiente", "closed"].includes(order.status))
     && order.status !== "cancelado",
   ));
   unpaidOrders = computed(() => this.orders().filter((order) =>
@@ -739,7 +739,7 @@ export default class ClientaDetallePage implements OnInit {
   private relativeRfmSegment(): RfmSegment {
     const current = this.customer();
     if (!current) return "dormant";
-    const completed = new Set(["pagado", "pagado_parcial", "entregado", "delivered", "delivered_partial", "pago_pendiente", "closed"]);
+    const completed = new Set(["pagado", "pagado_parcial", "entregado", "entregado_parcial", "pago_pendiente", "closed"]);
     const metrics = this.customers.customers()
       .filter((customer) => customer.business_id === current.business_id)
       .map((customer) => {

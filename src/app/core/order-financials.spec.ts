@@ -48,4 +48,17 @@ describe("order financials", () => {
     expect(result.netCost).toBe(0);
     expect(result.grossProfit).toBe(200);
   });
+
+  it("suma paquetería después del descuento sin convertirla en mercancía", () => {
+    const result = calculateOrderFinancials({
+      items: [{ quantity: 2, price_clienta: 100, price_cost: 60 }],
+      totals: { discount_amount: 20, shipping_fee: 75, paid_amount: 0 },
+    });
+
+    expect(result.discountAmount).toBe(20);
+    expect(result.shippingFee).toBe(75);
+    expect(result.netAmount).toBe(255);
+    expect(result.grossProfit).toBe(135);
+    expect(result.orderedUnits).toBe(2);
+  });
 });

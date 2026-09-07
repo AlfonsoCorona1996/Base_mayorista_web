@@ -25,8 +25,16 @@
     "firebase:migrate-normalized-listings-sku-index:apply": "tsx scripts/migrate-normalized-listings-sku-index.ts --apply",
     "firebase:migrate-manual-history:dry": "tsx scripts/migrate-manual-product-history.ts",
     "firebase:migrate-manual-history:apply": "tsx scripts/migrate-manual-product-history.ts --apply",
+    "firebase:migrate-withdrawals-to-expenses:dry": "tsx scripts/migrate-withdrawals-to-expenses.ts",
+    "firebase:migrate-withdrawals-to-expenses:apply": "tsx scripts/migrate-withdrawals-to-expenses.ts --apply",
+    "firebase:migrate-finance-ledger:dry": "tsx scripts/migrate-finance-ledger.ts",
+    "firebase:migrate-finance-ledger:apply": "tsx scripts/migrate-finance-ledger.ts --apply",
     "firebase:migrate-returns-crm:dry": "tsx scripts/migrate-returns-inventory-crm.ts",
-    "firebase:migrate-returns-crm:apply": "tsx scripts/migrate-returns-inventory-crm.ts --apply"
+    "firebase:migrate-returns-crm:apply": "tsx scripts/migrate-returns-inventory-crm.ts --apply",
+    "firebase:migrate-inventory-qty:dry": "tsx scripts/migrate-inventory-qty-canonical.ts",
+    "firebase:migrate-inventory-qty:apply": "tsx scripts/migrate-inventory-qty-canonical.ts --apply",
+    "firebase:migrate-order-fields:dry": "tsx scripts/migrate-order-custody-packages.ts",
+    "firebase:migrate-order-fields:apply": "tsx scripts/migrate-order-custody-packages.ts --apply"
   },
   "prettier": {
     "printWidth": 100,

@@ -15,6 +15,7 @@ export interface FinancialOrderLike {
   items?: FinancialOrderItem[] | null;
   totals?: {
     discount_amount?: number | null;
+    shipping_fee?: number | null;
     paid_amount?: number | null;
   } | null;
 }
@@ -52,6 +53,7 @@ export interface OrderFinancials {
   netClientBeforeDiscount: number;
   discountAmount: number;
   remainingDiscount: number;
+  shippingFee: number;
   netAmount: number;
   grossCost: number;
   returnedCost: number;
@@ -161,7 +163,8 @@ export function calculateOrderFinancials(order: FinancialOrderLike): OrderFinanc
   const remainingDiscount = money(discountAmount - returnsDiscount);
   const returnsAmount = money(returnsClientGross - returnsDiscount);
   const netClientBeforeDiscount = money(grossClient - returnsClientGross);
-  const netAmount = Math.max(0, money(netClientBeforeDiscount - remainingDiscount));
+  const shippingFee = Math.max(0, money(order.totals?.shipping_fee));
+  const netAmount = Math.max(0, money(netClientBeforeDiscount - remainingDiscount + shippingFee));
   const grossCost = sum((row) => row.grossCost);
   const returnedCost = sum((row) => row.returnedCost);
   const netCost = money(grossCost - returnedCost);
@@ -179,6 +182,7 @@ export function calculateOrderFinancials(order: FinancialOrderLike): OrderFinanc
     netClientBeforeDiscount,
     discountAmount,
     remainingDiscount,
+    shippingFee,
     netAmount,
     grossCost,
     returnedCost,
@@ -207,5 +211,6 @@ export function toPersistedOrderTotals(order: FinancialOrderLike): Record<string
     balance_due: result.balanceDue,
     overpayment_amount: result.overpaymentAmount,
     discount_amount: result.discountAmount,
+    shipping_fee: result.shippingFee,
   };
 }

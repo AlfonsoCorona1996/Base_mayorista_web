@@ -944,7 +944,7 @@ export default class ClientasPage {
   private calculateCustomerMetrics(customer: Customer): CustomerMetrics {
     const rows = this.ordersService.list().filter((order) => order.customer_id === customer.customer_id && order.business_id === customer.business_id);
     const billable = rows.filter((order) => !["cancelado", "devuelto"].includes(order.status));
-    const delivered = rows.filter((order) => Boolean(order.delivered_at) || ["delivered", "delivered_partial", "entregado", "pago_pendiente", "pagado_parcial", "pagado", "closed"].includes(order.status));
+    const delivered = rows.filter((order) => Boolean(order.delivered_at) || ["entregado", "entregado_parcial", "pago_pendiente", "pagado_parcial", "pagado", "closed"].includes(order.status));
     const completed = delivered.filter((order) => calculateOrderFinancials(order).netUnits > 0);
     let netSales = 0;
     let balanceDue = 0;

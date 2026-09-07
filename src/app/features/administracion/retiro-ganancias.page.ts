@@ -14,6 +14,10 @@ import {
   FinanceService,
   FinanceWithdrawal,
   FinanceWithdrawalPurpose,
+  isOperatingExpense,
+  EXPENSE_CATEGORY_LABEL,
+  EXPENSE_CATEGORY_ORDER,
+  EXPENSE_CATEGORY_TINT,
 } from "../../core/finance.service";
 
 type WithdrawalOrderRow = {
@@ -30,15 +34,6 @@ type SortColumn = "customerName" | "routeName" | "createdAt" | "totalClienta" | 
 type TableMenuColumn = "customerName" | "routeName" | "createdAt" | "totalClienta" | "investment" | "profit";
 type TableMenuOption = { value: string; label: string; count: number };
 type PartnerWithdrawalPurpose = "socio_blanca" | "socio_andrea_pepe";
-
-const EXPENSE_CATEGORY_LABEL: Record<string, string> = {
-  compra_inversion: "Compra por inversion",
-  perdida: "Perdida",
-  paqueteria: "Paqueteria",
-  consumibles: "Consumibles",
-  deuda_fija: "Deuda fija",
-  deuda_meses: "Deuda a meses",
-};
 
 const WITHDRAWAL_PURPOSE_LABEL: Record<FinanceWithdrawalPurpose, string> = {
   socio_blanca: "Socio 1 - Blanca Trejo",
@@ -206,20 +201,25 @@ export default class RetiroGananciasPage {
   });
 
   financialBreakdown = computed(() => {
-    const expensesTotal = this.filteredExpenses().reduce((sum, row) => sum + Math.max(0, this.toSafeNumber(row.amount)), 0);
+    // La compra de mercancia no es gasto: regresa como inventario y se cobra
+    // como costo hasta que se vende.
+    const expensesTotal = this.filteredExpenses()
+      .filter((row) => isOperatingExpense(row.category))
+      .reduce((sum, row) => sum + Math.max(0, this.toSafeNumber(row.amount)), 0);
     const profit = calculateWithdrawalProfit(this.filteredOrders(), expensesTotal);
-    const collectedProfitBase = Math.max(0, profit.collectedProfitBase);
     const totalWithdrawn = this.filteredWithdrawals().reduce((sum, row) => sum + Math.max(0, this.toSafeNumber(row.amount)), 0);
-    const available = Math.max(0, collectedProfitBase - totalWithdrawn);
     return {
       expensesTotal: this.toSafeNumber(profit.expensesTotal),
+      netSales: this.toSafeNumber(profit.netSales),
       collectedRevenue: this.toSafeNumber(profit.collectedRevenue),
-      deliveredGrossCost: this.toSafeNumber(profit.deliveredGrossCost),
-      collectedProfitBase: this.toSafeNumber(collectedProfitBase),
+      deliveredNetCost: this.toSafeNumber(profit.deliveredNetCost),
+      accruedNetProfit: this.toSafeNumber(profit.accruedNetProfit),
+      collectedNetProfit: this.toSafeNumber(profit.collectedNetProfit),
       pendingCollection: this.toSafeNumber(profit.pendingCollection),
       pendingProfit: this.toSafeNumber(profit.pendingProfit),
+      pendingPrincipal: this.toSafeNumber(profit.pendingPrincipal),
       totalWithdrawn: this.toSafeNumber(totalWithdrawn),
-      available: this.toSafeNumber(available),
+      available: this.toSafeNumber(profit.collectedNetProfit - totalWithdrawn),
     };
   });
 
@@ -233,23 +233,14 @@ export default class RetiroGananciasPage {
       else if (partner === "socio_andrea_pepe") withdrawnAndreaPepe += this.toSafeNumber(row.amount);
       else withdrawnNonPartner += this.toSafeNumber(row.amount);
     }
-    const partnerAmounts = calculatePartnerWithdrawalSummary(
-      this.financialBreakdown().collectedProfitBase,
+    const breakdown = this.financialBreakdown();
+    return calculatePartnerWithdrawalSummary(
+      breakdown.accruedNetProfit,
+      breakdown.collectedNetProfit,
       withdrawnBlanca,
       withdrawnAndreaPepe,
       withdrawnNonPartner,
     );
-    return {
-      distributableBase: this.toSafeNumber(partnerAmounts.distributableBase),
-      perPartnerTarget: this.toSafeNumber(partnerAmounts.perPartnerTarget),
-      withdrawnBlanca: this.toSafeNumber(withdrawnBlanca),
-      withdrawnAndreaPepe: this.toSafeNumber(withdrawnAndreaPepe),
-      withdrawnNonPartner: this.toSafeNumber(withdrawnNonPartner),
-      pendingBlanca: this.toSafeNumber(partnerAmounts.pendingBlanca),
-      pendingAndreaPepe: this.toSafeNumber(partnerAmounts.pendingAndreaPepe),
-      excessBlanca: this.toSafeNumber(partnerAmounts.excessBlanca),
-      excessAndreaPepe: this.toSafeNumber(partnerAmounts.excessAndreaPepe),
-    };
   });
 
   expenseRows = computed(() =>
@@ -260,13 +251,124 @@ export default class RetiroGananciasPage {
   );
 
   partnerSplit = computed(() => {
-    const totalProfit = this.toSafeNumber(this.withdrawalPartnerSummary().distributableBase);
-    const perPartner = this.toSafeNumber(totalProfit / 2);
+    const summary = this.withdrawalPartnerSummary();
     return {
-      totalProfit,
-      socioBlanca: perPartner,
-      socioAndreaPepe: perPartner,
+      totalProfit: summary.accruedBase,
+      socioBlanca: summary.blanca.share,
+      socioAndreaPepe: summary.andreaPepe.share,
     };
+  });
+
+  movementTab = signal<"gastos" | "retiros">("gastos");
+
+  setMovementTab(tab: "gastos" | "retiros"): void {
+    this.movementTab.set(tab);
+  }
+
+  /** De la venta a la utilidad, con la barra proporcional a la venta neta. */
+  profitWaterfall = computed(() => {
+    const b = this.financialBreakdown();
+    const base = Math.max(1, b.netSales);
+    const bar = (value: number) => `${Math.min(100, (Math.abs(value) / base) * 100).toFixed(1)}%`;
+    return [
+      { label: "Ventas netas", value: b.netSales, bar: bar(b.netSales), tone: "base" },
+      { label: "− Costo de la mercancía vendida", value: -b.deliveredNetCost, bar: bar(b.deliveredNetCost), tone: "out" },
+      { label: "− Gastos del negocio", value: -b.expensesTotal, bar: bar(b.expensesTotal), tone: "out" },
+      { label: "= Utilidad generada", value: b.accruedNetProfit, bar: bar(b.accruedNetProfit), tone: "result" },
+    ];
+  });
+
+  collectedSharePct = computed(() => {
+    const b = this.financialBreakdown();
+    return b.accruedNetProfit > 0 ? (b.collectedNetProfit / b.accruedNetProfit) * 100 : 0;
+  });
+
+  partnerCards = computed(() => {
+    const summary = this.withdrawalPartnerSummary();
+    return [
+      { id: "socio_blanca" as PartnerWithdrawalPurpose, initials: "BT", name: "Blanca Trejo", role: "Socio 1", account: summary.blanca },
+      { id: "socio_andrea_pepe" as PartnerWithdrawalPurpose, initials: "AP", name: "Andrea y Pepe", role: "Socio 2", account: summary.andreaPepe },
+    ];
+  });
+
+  partnerProgress(account: { withdrawn: number; share: number }): number {
+    if (account.share <= 0) return 0;
+    return Math.min(100, Math.max(0, (account.withdrawn / account.share) * 100));
+  }
+
+  movementTabs = computed(() => [
+    { id: "gastos" as const, label: "Gastos", count: this.expenseRows().length },
+    { id: "retiros" as const, label: "Retiros", count: this.withdrawalRows().length },
+  ]);
+
+  movementRows = computed(() => {
+    if (this.movementTab() === "gastos") {
+      return this.expenseRows().map((row) => {
+        const tint = EXPENSE_CATEGORY_TINT[row.category] || ["#f1f5f9", "#475467"];
+        return {
+          key: row.expense_id,
+          date: this.formatDate(row.occurred_at),
+          chipLabel: this.expenseCategoryLabel(row.category),
+          chipBg: tint[0],
+          chipInk: tint[1],
+          note: row.notes || "Sin nota",
+          account: this.accountName(row.account_id),
+          amount: this.toSafeNumber(row.amount),
+        };
+      });
+    }
+    return this.withdrawalRows().map((row) => {
+      const partner = this.resolveWithdrawalPartner(row);
+      return {
+        key: row.withdrawal_id,
+        date: this.formatDate(row.occurred_at),
+        chipLabel: this.withdrawalDestinationLabel(row),
+        chipBg: partner ? "#ecfdf5" : "#fef3e2",
+        chipInk: partner ? "#067647" : "#b54708",
+        note: row.notes || "Reparto de utilidad",
+        account: this.accountName(row.account_id),
+        amount: this.toSafeNumber(row.amount),
+      };
+    });
+  });
+
+  movementTotal = computed(() => this.movementRows().reduce((sum, row) => sum + row.amount, 0));
+
+  movementCopy = computed(() => {
+    const gastos = this.movementTab() === "gastos";
+    return {
+      title: gastos ? "Gastos que bajaron la utilidad" : "Retiros de los socios",
+      columnTwo: gastos ? "Categoría" : "Destino",
+      totalLabel: gastos ? "Total de gastos del negocio" : "Total retirado por los socios",
+      empty: gastos ? "Sin gastos registrados en este ámbito." : "Sin retiros registrados en este ámbito.",
+    };
+  });
+
+  /** Cuántos pedidos no logran resolver el nombre de la clienta. */
+  unnamedOrderCount = computed(() =>
+    this.orderRows().filter((row) => !row.customerName || row.customerName === "Sin clienta").length,
+  );
+
+  periodLabel = computed(() => {
+    const dates = this.orderRows()
+      .map((row) => row.createdAt)
+      .filter((value): value is string => Boolean(value))
+      .sort();
+    if (dates.length === 0) return "Sin pedidos entregados";
+    if (dates.length === 1 || dates[0] === dates[dates.length - 1]) return this.formatDate(dates[0]);
+    return `${this.formatDate(dates[0])} – ${this.formatDate(dates[dates.length - 1])}`;
+  });
+
+  accountName(accountId: string | null): string {
+    const target = (accountId || "").trim();
+    if (!target) return "Sin cuenta";
+    return this.accounts().find((row) => row.account_id === target)?.name || target;
+  }
+
+  scopeLabel = computed(() => {
+    const current = this.routeScope();
+    if (!current || current === "general") return "Todas las rutas";
+    return this.routeName(current);
   });
 
   constructor() {
@@ -458,7 +560,8 @@ export default class RetiroGananciasPage {
     const selectedPartner = this.asPartnerPurpose(this.withdrawalPurpose());
     if (selectedPartner) {
       const partnerSummary = this.withdrawalPartnerSummary();
-      const partnerAvailable = selectedPartner === "socio_blanca" ? partnerSummary.pendingBlanca : partnerSummary.pendingAndreaPepe;
+      const account = selectedPartner === "socio_blanca" ? partnerSummary.blanca : partnerSummary.andreaPepe;
+      const partnerAvailable = Math.max(0, account.availableNow);
       if (this.withdrawalAmount() > partnerAvailable + 0.001) {
         this.error.set(`Ese retiro excede la parte disponible de ${this.withdrawalPurposeLabel(this.withdrawalPurpose())}: ${this.formatCurrency(partnerAvailable)}.`);
         return;
@@ -590,7 +693,7 @@ export default class RetiroGananciasPage {
     return this.routes().find((row) => row.route_id === routeId)?.name || routeId;
   }
 
-  expenseCategoryLabel(key: string): string {
+  expenseCategoryLabel(key: FinanceExpenseCategory): string {
     return EXPENSE_CATEGORY_LABEL[key] || key;
   }
 
@@ -616,6 +719,17 @@ export default class RetiroGananciasPage {
     const customer = this.customersService.getById(customerId);
     if (!customer) return "Clienta sin nombre";
     return [customer.first_name, customer.last_name].filter(Boolean).join(" ").trim() || "Clienta sin nombre";
+  }
+
+  expenseCategoryOptions = EXPENSE_CATEGORY_ORDER.map((id) => ({ id, label: EXPENSE_CATEGORY_LABEL[id] }));
+
+  openPartnerWithdrawal(partner: PartnerWithdrawalPurpose): void {
+    this.setWithdrawalPurpose(partner);
+    this.openWithdrawalModal();
+  }
+
+  formatPercent(value: number): string {
+    return `${Math.round(this.toSafeNumber(value))}%`;
   }
 
   formatCurrency(value: number): string {

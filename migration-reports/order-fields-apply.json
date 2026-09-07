@@ -1,0 +1,16 @@
+{
+  "ordersScanned": 365,
+  "ordersUnchanged": 0,
+  "custodyFieldRemoved": 110,
+  "holderDerivedFromCustody": 0,
+  "holderDerivedFromStatus": 255,
+  "packagesNormalized": 347,
+  "packageStatusRemoved": 364,
+  "packageArmadoRenamed": 0,
+  "statusRenamed": 53,
+  "statusRenamesByPair": {
+    "delivered -> entregado": 53
+  },
+  "custodyDisagreements": [],
+  "unknownStatuses": []
+}

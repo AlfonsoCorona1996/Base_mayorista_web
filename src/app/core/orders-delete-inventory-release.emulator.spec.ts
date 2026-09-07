@@ -97,7 +97,6 @@ describe("OrdersService.deleteOrder — liberacion de inventario (emulador)", ()
       baseInventoryDoc({
         inventory_id: invIdDirect,
         title: "Producto directo",
-        quantity_on_hand: 10,
         on_hand_qty: 10,
         reserved_qty: 0,
         available_qty: 10,
@@ -110,7 +109,6 @@ describe("OrdersService.deleteOrder — liberacion de inventario (emulador)", ()
       baseInventoryDoc({
         inventory_id: invIdSupplier,
         title: "Producto proveedor",
-        quantity_on_hand: 5,
         on_hand_qty: 5,
         reserved_qty: 0,
         available_qty: 5,
@@ -135,7 +133,6 @@ describe("OrdersService.deleteOrder — liberacion de inventario (emulador)", ()
       {
         reserved_qty: 2,
         available_qty: 3,
-        quantity_on_hand: 3,
         reservations: {
           [orderId]: { qty: 2, order_number: orderId, status: "reserved", updated_at: new Date().toISOString() },
         },
