@@ -3344,8 +3344,17 @@
       calc(env(safe-area-inset-left, 0px) + var(--add-popup-gutter-x));
     align-items: flex-start;
     justify-content: center;
-    height: 100dvh;
-    min-height: 100dvh;
+    /*
+     * 100dvh no se reduce cuando aparece el teclado en pantalla (eso solo
+     * encoge el visualViewport, no el layout viewport). Sin restar
+     * --add-item-keyboard-inset, esta hoja seguia "creyendo" que tenia toda
+     * la pantalla libre y el teclado tapaba el input, la lista de
+     * sugerencias y el boton de guardar sin que nada se reacomodara.
+     * pedido-detalle.ts mide ese inset con la API visualViewport mientras el
+     * modal esta abierto (ver attachAddItemKeyboardInset).
+     */
+    height: calc(100dvh - var(--add-item-keyboard-inset, 0px));
+    min-height: calc(100dvh - var(--add-item-keyboard-inset, 0px));
     overflow: hidden;
   }
 

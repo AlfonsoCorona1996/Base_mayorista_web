@@ -1,4 +1,4 @@
-import { Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild, computed, inject, signal, ChangeDetectionStrategy, DestroyRef } from "@angular/core";
+import { Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild, computed, effect, inject, signal, ChangeDetectionStrategy, DestroyRef } from "@angular/core";
 import { DatePipe, DecimalPipe, NgStyle, UpperCasePipe } from "@angular/common";
 import { HttpErrorResponse } from "@angular/common/http";
 import { FormsModule } from "@angular/forms";
@@ -500,6 +500,28 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   // ─────────────────────────────────────────────────────────────────────────
 
   addItemModalOpen = signal(false);
+  /**
+   * En mobile, `100dvh`/`100vh` no se encogen cuando aparece el teclado
+   * (el navegador solo reduce el `visualViewport`, no el layout viewport).
+   * Por eso la hoja de "agregar producto" -dimensionada con esas unidades-
+   * seguia ocupando toda la pantalla "de papel" mientras el teclado tapaba
+   * su mitad inferior: ahi vivian el input, la lista de sugerencias y el
+   * boton de guardar, todos invisibles o inalcanzables aunque el scroll
+   * interno funcionara bien. Este effect mide cuanto tapa el teclado con
+   * `visualViewport` y expone ese alto como variable CSS para que la hoja
+   * se encoja de verdad y todo quede arriba del teclado.
+   */
+  private readonly addItemKeyboardInsetEffect = effect(() => {
+    if (this.addItemModalOpen()) this.attachAddItemKeyboardInset();
+    else this.detachAddItemKeyboardInset();
+  });
+  private addItemKeyboardInsetAttached = false;
+  private readonly updateAddItemKeyboardInset = (): void => {
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    const inset = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
+    document.documentElement.style.setProperty("--add-item-keyboard-inset", `${inset}px`);
+  };
   addItemSaving = signal(false);
   addItemSuccessMessage = signal<string | null>(null);
   addItemError = signal<string | null>(null);
@@ -1211,6 +1233,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.catalogImportJobs.stop();
     this.stopPhysicalBarcodeScanner();
     this.businessScope.unlockScope();
+    this.detachAddItemKeyboardInset();
   }
 
   async loadIncidents() {
@@ -5042,6 +5065,22 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     if (this.addItemSaving()) return;
     this.resetAddItemForm();
     this.addItemModalOpen.set(false);
+  }
+
+  private attachAddItemKeyboardInset(): void {
+    if (this.addItemKeyboardInsetAttached || typeof window === "undefined" || !window.visualViewport) return;
+    this.addItemKeyboardInsetAttached = true;
+    window.visualViewport.addEventListener("resize", this.updateAddItemKeyboardInset);
+    window.visualViewport.addEventListener("scroll", this.updateAddItemKeyboardInset);
+    this.updateAddItemKeyboardInset();
+  }
+
+  private detachAddItemKeyboardInset(): void {
+    if (!this.addItemKeyboardInsetAttached) return;
+    this.addItemKeyboardInsetAttached = false;
+    window.visualViewport?.removeEventListener("resize", this.updateAddItemKeyboardInset);
+    window.visualViewport?.removeEventListener("scroll", this.updateAddItemKeyboardInset);
+    document.documentElement.style.setProperty("--add-item-keyboard-inset", "0px");
   }
 
   private resetAddItemForm() {
