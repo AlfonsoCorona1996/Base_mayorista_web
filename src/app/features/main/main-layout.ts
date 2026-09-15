@@ -23,6 +23,7 @@ import { AppVersionService } from "../../core/app-version.service";
 export default class MainLayoutPage {
   menuOpen = signal(false);
   openGroups = signal<Record<string, boolean>>(this.loadGroupState());
+  currentUrl = signal("");
 
   private auth = inject(AuthService);
   private router = inject(Router);
@@ -37,11 +38,20 @@ export default class MainLayoutPage {
 
   isImpersonating = computed(() => this.authz.isRealSuperAdmin() && this.impersonation.snapshotSig() !== null);
   impersonatedName = computed(() => this.impersonation.snapshotSig()?.displayName || "Usuario");
+  allowsCombinedBusinessScope = computed(() => !this.currentUrl().includes("/administracion"));
 
   ngOnInit() {
+    this.currentUrl.set(this.router.url);
+    this.ensureSingleAdministrationBusiness();
     this.syncMenuForViewport();
     this.versionInfo.load();
-    this.access.refreshProfile().finally(() => this.importJobs.watch()).catch(() => null);
+    this.access
+      .refreshProfile()
+      .finally(() => {
+        this.ensureSingleAdministrationBusiness();
+        this.importJobs.watch();
+      })
+      .catch(() => null);
     this.router.events
       .pipe(
         filter((event) => event instanceof NavigationEnd),
@@ -49,6 +59,8 @@ export default class MainLayoutPage {
       )
       .subscribe((event) => {
         const nav = event as NavigationEnd;
+        this.currentUrl.set(nav.urlAfterRedirects);
+        this.ensureSingleAdministrationBusiness();
         this.audit.log("VIEW_ROUTE", { url: nav.urlAfterRedirects }).catch(() => null);
       });
   }
@@ -114,7 +126,13 @@ export default class MainLayoutPage {
   }
 
   setBusinessScope(scope: BusinessScope): void {
+    if (scope === "both" && !this.allowsCombinedBusinessScope()) return;
     this.businessScope.setScope(scope);
+  }
+
+  private ensureSingleAdministrationBusiness(): void {
+    if (this.allowsCombinedBusinessScope() || this.businessScope.scope() !== "both") return;
+    this.businessScope.setScope(this.businessScope.availableBusinessIds()[0] || "bm");
   }
 
   private syncMenuForViewport() {

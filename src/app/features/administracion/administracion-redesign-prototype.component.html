@@ -514,25 +514,24 @@
 
       <article class="panel history-panel">
         <header class="panel-header">
-          <div><p class="panel-kicker">Ventas, cobranza y reparto</p><h2>Historial de distribuciones</h2><p>Cada venta permanece en su mes de origen; los cobros aparecen también en el mes en que realmente entraron.</p></div>
+          <div><p class="panel-kicker">Ventas, cobranza y reparto</p><h2>Historial mensual</h2><p>Cada fila sigue los pedidos nacidos en ese mes y cuánto se ha cobrado de ellos hasta hoy.</p></div>
           @if (partnerScope() === 'mensual') {
             <button type="button" class="button button--dark" (click)="openCutDialog()"><span class="material-symbols-rounded" aria-hidden="true">lock</span>Cerrar periodo</button>
           }
         </header>
-        <p class="table-scroll-hint"><span class="material-symbols-rounded" aria-hidden="true">swipe</span>Desliza para consultar todas las columnas</p>
-        <div class="table-scroll" tabindex="0" aria-label="Historial de distribuciones con desplazamiento horizontal">
+        <p class="table-scroll-hint"><span class="material-symbols-rounded" aria-hidden="true">swipe</span>Desliza para consultar ventas, cobranza, utilidad y reparto.</p>
+        <div class="table-scroll" tabindex="0" aria-label="Historial mensual de ventas, cobranza, utilidad y reparto con desplazamiento horizontal">
           <table class="distribution-history-table">
-            <thead><tr><th scope="col">Periodo</th><th scope="col"><span class="table-heading">Ventas generadas<small>Por fecha de creación</small></span></th><th scope="col"><span class="table-heading">Cobranza de esas ventas<small>Seguimiento de la cohorte</small></span></th><th scope="col"><span class="table-heading">Cobros del mes<small>Cuándo entró el dinero</small></span></th><th scope="col"><span class="table-heading">Cartera arrastrada<small>Inicio → cierre</small></span></th><th scope="col"><span class="table-heading">Utilidad generada<small>Entregada o en proceso</small></span></th><th scope="col"><span class="table-heading">Utilidad cobrada<small>Liberada por cobranza</small></span></th><th scope="col">Blanca</th><th scope="col">Andrea y Pepe</th><th scope="col">Estado</th></tr></thead>
+            <thead><tr><th scope="col">Periodo</th><th scope="col"><span class="table-heading">Pedidos creados<small>Venta por fecha de creación</small></span></th><th scope="col"><span class="table-heading">Cobranza acumulada<small>De esos pedidos, hasta hoy</small></span></th><th scope="col"><span class="table-heading">Utilidad de las ventas<small>Venta menos costo</small></span></th><th scope="col"><span class="table-heading">Utilidad cobrada<small>Respaldada por cobranza</small></span></th><th scope="col"><span class="table-heading">Utilidad por cobrar<small>Pendiente de esas ventas</small></span></th><th scope="col">Blanca</th><th scope="col">Andrea y Pepe</th><th scope="col">Estado</th></tr></thead>
             <tbody>
               @for (month of months.slice().reverse(); track month.id) {
                 <tr [class.is-selected]="partnerScope() === 'mensual' && month.id === selectedMonthId()">
                   <th scope="row">{{ month.label }}</th>
                   <td class="metric-cell"><strong>{{ formatMoney(month.generatedSales) }}</strong><small>{{ month.generatedOrderCount }} pedidos creados</small></td>
                   <td class="metric-cell cohort-cell"><strong>{{ formatMoney(month.cohortCollectedToDate) }} cobrados</strong><small [class.has-pending]="month.cohortPendingToday > 0">{{ formatMoney(month.cohortPendingToday) }} pendientes hoy</small><span class="cohort-progress" role="progressbar" aria-label="Porcentaje cobrado de las ventas de este periodo" aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="boundedRatio(month.cohortCollectedToDate, month.cohortCollectedToDate + month.cohortPendingToday) * 100"><i [style.width.%]="boundedRatio(month.cohortCollectedToDate, month.cohortCollectedToDate + month.cohortPendingToday) * 100"></i></span></td>
-                  <td class="metric-cell cashflow-cell"><strong>{{ formatMoney(month.collected) }}</strong><small>{{ formatMoney(month.collectedFromCurrentPeriod) }} de pedidos creados este mes</small><small>{{ formatMoney(month.collectedFromPriorPeriods) }} de pedidos de meses anteriores</small></td>
-                  <td class="metric-cell portfolio-cell"><strong>{{ formatMoney(month.receivablesOpening) }} → {{ formatMoney(month.receivablesClosing) }}</strong><small [class.has-pending]="month.receivablesClosing > month.receivablesOpening">{{ month.receivablesClosing > month.receivablesOpening ? 'La cartera creció' : 'La cartera bajó' }}</small></td>
-                  <td class="projection-cell"><strong>{{ formatMoney(month.projectedProfit) }}</strong><small>{{ formatMoney(month.distributableProfit) }} de pedidos entregados</small><small>{{ formatMoney(month.inProcessProfit) }} de pedidos en proceso</small></td>
-                  <td class="metric-cell"><strong>{{ formatMoney(month.collectedProfit) }}</strong><small>{{ formatMoney(month.pendingCollectionProfit) }} de utilidad sigue por cobrar</small></td>
+                  <td class="metric-cell"><strong>{{ formatMoney(month.projectedProfit) }}</strong><small>Margen de los pedidos vigentes</small><small>Antes de gastos generales</small></td>
+                  <td class="metric-cell"><strong>{{ formatMoney(month.collectedProfit) }}</strong><small>{{ formatPercent(boundedRatio(month.collectedProfit, month.projectedProfit)) }} de la utilidad</small></td>
+                  <td class="metric-cell"><strong>{{ formatMoney(cohortPendingProfit(month)) }}</strong><small [class.has-pending]="cohortPendingProfit(month) > 0">Falta respaldar con cobranza</small></td>
                   <td>{{ formatMoney(month.partnerOneWithdrawn) }}</td><td>{{ formatMoney(month.partnerTwoWithdrawn) }}</td>
                   <td><span class="table-status" [class.table-status--open]="monthlyDistributionStatus(month) === 'Preliminar'" [class.table-status--partial]="monthlyDistributionStatus(month) === 'Seguimiento'" [class.table-status--late]="monthlyDistributionStatus(month) === 'Cobrado después'">{{ monthlyDistributionStatus(month) }}</span></td>
                 </tr>

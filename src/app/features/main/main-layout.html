@@ -258,15 +258,17 @@
         >
           Catalogo
         </button>
-        <button
-          type="button"
-          class="business-switcher-btn"
-          [class.active]="businessScope.scope() === 'both'"
-          [disabled]="businessScope.isScopeLocked()"
-          (click)="setBusinessScope('both')"
-        >
-          Ambos
-        </button>
+        @if (allowsCombinedBusinessScope()) {
+          <button
+            type="button"
+            class="business-switcher-btn"
+            [class.active]="businessScope.scope() === 'both'"
+            [disabled]="businessScope.isScopeLocked()"
+            (click)="setBusinessScope('both')"
+          >
+            Ambos
+          </button>
+        }
       </div>
       }
       @if (isImpersonating()) {

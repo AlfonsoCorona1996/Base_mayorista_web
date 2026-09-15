@@ -468,6 +468,10 @@ export class AdministracionRedesignPrototypeComponent {
     return Math.min(1, Math.max(0, value / total));
   }
 
+  cohortPendingProfit(month: MonthlyFinanceSnapshot): number {
+    return Math.max(0, month.projectedProfit - month.collectedProfit);
+  }
+
   monthlyDistributionStatus(month: MonthlyFinanceSnapshot): 'Preliminar' | 'Seguimiento' | 'Cobrado después' | 'Cerrado' {
     if (month.id === MONTHS[MONTHS.length - 1].id) return 'Preliminar';
     if (month.cohortPendingToday > 0 || month.inProcessOrderCount > 0) return 'Seguimiento';

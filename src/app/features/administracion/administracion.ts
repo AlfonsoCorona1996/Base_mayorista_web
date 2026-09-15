@@ -251,6 +251,9 @@ type MonthlyFinanceSnapshot = {
   pendingCollectionOrderCount: number;
   cohortCollectedToDate: number;
   cohortPendingToday: number;
+  cohortProfit: number;
+  cohortCollectedProfit: number;
+  cohortPendingProfit: number;
   cohortCollectedAfterPeriod: number;
   collectedFromCurrentPeriod: number;
   collectedFromPriorPeriods: number;
@@ -676,9 +679,20 @@ export default class AdministracionPage {
       const cohortCollectedToDate = this.cohortCollectedToDate(cohortOrders, collectionEvents);
       const cohortPendingToday = this.toSafeNumber(cohortOrders.reduce((sum, order) => {
         const netAmount = calculateOrderFinancials(order).netAmount;
-        const collectedToDate = this.appliedCollectionsUntil(order, collectionEvents, new Date(), netAmount);
+        const collectedToDate = this.knownCollectedToDate(order, collectionEvents);
         return sum + Math.max(0, netAmount - collectedToDate);
       }, 0));
+      const cohortProfit = this.toSafeNumber(cohortOrders.reduce(
+        (sum, order) => sum + calculateOrderFinancials(order).grossProfit,
+        0,
+      ));
+      const cohortCollectedProfit = this.toSafeNumber(cohortOrders.reduce((sum, order) => {
+        const financials = calculateOrderFinancials(order);
+        if (financials.netAmount <= 0) return sum;
+        const collectedRatio = Math.min(1, this.knownCollectedToDate(order, collectionEvents) / financials.netAmount);
+        return sum + financials.grossProfit * collectedRatio;
+      }, 0));
+      const cohortPendingProfit = this.toSafeNumber(cohortProfit - cohortCollectedProfit);
       const cohortCollectedAfterPeriod = this.toSafeNumber(cohortOrders.reduce((sum, order) => {
         const netAmount = calculateOrderFinancials(order).netAmount;
         const collectedAtClose = this.appliedCollectionsUntil(order, collectionEvents, month.end, netAmount);
@@ -766,6 +780,9 @@ export default class AdministracionPage {
         pendingCollectionOrderCount: pendingCollectionRows.length,
         cohortCollectedToDate,
         cohortPendingToday,
+        cohortProfit,
+        cohortCollectedProfit,
+        cohortPendingProfit,
         cohortCollectedAfterPeriod,
         collectedFromCurrentPeriod: collectionFlow.currentPeriod,
         collectedFromPriorPeriods: collectionFlow.priorPeriods,
@@ -2912,8 +2929,19 @@ export default class AdministracionPage {
 
   private orderDeliveryDate(order: Order): unknown {
     // Para cartera y liberación de utilidad sí importa cuándo se entregó. Los
-    // históricos sin marca de entrega conservan created_at como último recurso.
-    return order.delivered_at || order.closed_at || order.created_at || order.updated_at;
+    // históricos sin marca de entrega usan la fecha en que quedaron cobrados,
+    // tal como opera el negocio. created_at queda solo como último recurso.
+    const confirmedCollectionDate = this.collectionEvents()
+      .filter((event) => event.order_id === order.order_id && event.verification_status === "confirmed")
+      .map((event) => this.toDate(this.collectionRecognitionDate(event)))
+      .filter((date): date is Date => date !== null)
+      .sort((a, b) => a.getTime() - b.getTime())[0];
+    return order.delivered_at
+      || order.closed_at
+      || order.paid_at
+      || confirmedCollectionDate
+      || order.created_at
+      || order.updated_at;
   }
 
   private collectedAmountForMonth(
@@ -2977,11 +3005,32 @@ export default class AdministracionPage {
   }
 
   private cohortCollectedToDate(orders: Order[], events: OrderCollectionEvent[]): number {
-    const now = new Date();
-    return this.toSafeNumber(orders.reduce((sum, order) => {
-      const netAmount = calculateOrderFinancials(order).netAmount;
-      return sum + this.appliedCollectionsUntil(order, events, now, netAmount);
-    }, 0));
+    return this.toSafeNumber(orders.reduce(
+      (sum, order) => sum + this.knownCollectedToDate(order, events),
+      0,
+    ));
+  }
+
+  /**
+   * El acumulado por cohorte puede usar paid_amount aunque el histórico no
+   * conserve el día exacto. Los eventos reportados, todavía sin confirmar, no
+   * se consideran dinero cobrado.
+   */
+  private knownCollectedToDate(order: Order, events: OrderCollectionEvent[]): number {
+    const financials = calculateOrderFinancials(order);
+    const orderEvents = events.filter(
+      (event) => event.order_id === order.order_id && event.verification_status !== "rejected",
+    );
+    const representedByEvents = orderEvents.reduce(
+      (sum, event) => sum + Math.max(0, this.toSafeNumber(event.amount)),
+      0,
+    );
+    const confirmedByEvents = orderEvents
+      .filter((event) => event.verification_status === "confirmed")
+      .reduce((sum, event) => sum + Math.max(0, this.toSafeNumber(event.amount)), 0);
+    const persistedPaid = Math.min(financials.netAmount, Math.max(0, financials.paidAmount));
+    const undatedHistoricalPaid = Math.max(0, persistedPaid - representedByEvents);
+    return this.toSafeNumber(Math.min(financials.netAmount, confirmedByEvents + undatedHistoricalPaid));
   }
 
   private collectionFlowForMonth(
@@ -3223,6 +3272,7 @@ export default class AdministracionPage {
       returnsImpact: 0, distributionAdjustments: 0,
       netProfit: 0, collectedProfit: 0, inProcessProfit: 0, pendingCollectionProfit: 0, projectedProfit: 0,
       inProcessOrderCount: 0, pendingCollectionOrderCount: 0, cohortCollectedToDate: 0, cohortPendingToday: 0,
+      cohortProfit: 0, cohortCollectedProfit: 0, cohortPendingProfit: 0,
       cohortCollectedAfterPeriod: 0, collectedFromCurrentPeriod: 0, collectedFromPriorPeriods: 0,
       receivablesOpening: 0, receivablesClosing: 0,
       distributableProfit: 0, overdue: 0, dso: 0, partnerOneWithdrawn: 0,
