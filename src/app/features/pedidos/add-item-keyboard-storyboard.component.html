@@ -1,0 +1,68 @@
+<div class="device-frame" [class.keyboard-aware]="keyboardAware()" [style]="frameStyle()">
+  <div class="status-banner" role="status">{{ statusLabel() }}</div>
+
+  <div class="app-shell-mock">
+    <div class="app-shell-header">Pedido #4821 · Productos</div>
+    @for (i of [1, 2, 3]; track i) {
+      <div class="app-shell-row"></div>
+    }
+  </div>
+
+  <div class="sheet-backdrop">
+    <div class="sheet">
+      <div class="sheet-header">
+        <div class="sheet-title-wrap">
+          <span class="kicker">Pedido en edición</span>
+          <h2><span class="material-symbols-rounded" aria-hidden="true">add_box</span> Agregar producto</h2>
+        </div>
+        <button type="button" class="btn-close" aria-label="Cerrar">
+          <span class="material-symbols-rounded" aria-hidden="true">close</span>
+        </button>
+      </div>
+
+      <div class="sheet-body">
+        <div class="add-item">
+          <div class="source-toggle">
+            <span class="pill active">Catálogo</span>
+            <span class="pill">Inventario</span>
+            <span class="pill">Manual</span>
+          </div>
+
+          <div class="field">
+            <label>Buscar producto</label>
+            <div class="search-input-wrap">
+              <span class="material-symbols-rounded" aria-hidden="true">search</span>
+              <input class="input" type="text" value="sandalia" readonly />
+            </div>
+            <small class="hint">Escribe al menos 2 caracteres o escanea el código.</small>
+          </div>
+
+          <div class="listbox">
+            @for (s of suggestions; track s.title + s.meta) {
+              <div class="listbox-option">
+                <div class="thumb"></div>
+                <div class="listbox-main">
+                  <div class="card-title">{{ s.title }}</div>
+                  <div class="card-meta">{{ s.meta }}</div>
+                </div>
+                <span class="card-tag">{{ s.tag }}</span>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+
+      <div class="sheet-footer">
+        <button type="button" class="btn ghost">Cancelar</button>
+        <button type="button" class="btn primary">Agregar producto</button>
+      </div>
+    </div>
+  </div>
+
+  @if (keyboardOpen()) {
+    <div class="keyboard-mock" [style.height.px]="keyboardHeightPx()">
+      <span class="material-symbols-rounded" aria-hidden="true">keyboard</span>
+      Teclado del sistema (simulado — así lo cubre en un iPhone/Android real)
+    </div>
+  }
+</div>
