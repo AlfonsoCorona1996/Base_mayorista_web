@@ -2488,7 +2488,7 @@
                       </div>
                     } @else {
                       @for (s of inventorySuggestions(); track s.inventory_id) {
-                        <button type="button" role="option" class="listbox-option" [attr.aria-label]="'Inventario: ' + s.title + ', ' + inventoryAvailableQty(s) + ' piezas disponibles'" (mousedown)="$event.preventDefault(); beginProductPick(); pickInventory(s)" (touchstart)="$event.preventDefault(); beginProductPick(); pickInventory(s)" (click)="beginProductPick(); pickInventory(s)">
+                        <button type="button" role="option" class="listbox-option" [attr.aria-label]="'Inventario: ' + s.title + ', ' + inventoryAvailableQty(s) + ' piezas disponibles'" (mousedown)="$event.preventDefault(); beginProductPick()" (touchstart)="beginProductPick()" (click)="pickInventory(s)">
                           @if (s.image_urls[0]) {
                             <img class="listbox-thumb" [src]="s.image_urls[0]" alt="" />
                           } @else {
@@ -2533,7 +2533,7 @@
                     </div>
                   }
                   @for (c of catalogSuggestions(); track c.doc.normalized_id) {
-                    <button type="button" role="option" class="listbox-option" [attr.aria-label]="'Catalogo: ' + c.doc.listing.title" (mousedown)="$event.preventDefault(); beginProductPick(); pickCatalog(c.doc, c.variant, c.color)" (touchstart)="$event.preventDefault(); beginProductPick(); pickCatalog(c.doc, c.variant, c.color)" (click)="beginProductPick(); pickCatalog(c.doc, c.variant, c.color)">
+                    <button type="button" role="option" class="listbox-option" [attr.aria-label]="'Catalogo: ' + c.doc.listing.title" (mousedown)="$event.preventDefault(); beginProductPick()" (touchstart)="beginProductPick()" (click)="pickCatalog(c.doc, c.variant, c.color)">
                       @if (c.image) {
                         <img class="listbox-thumb" [src]="c.image" alt="" />
                       } @else {
@@ -2590,9 +2590,9 @@
                           role="option"
                           class="listbox-option"
                           [attr.aria-label]="p.name + ', ' + catalogSearchResultOptionSummary(result)"
-                          (mousedown)="$event.preventDefault(); beginProductPick(); pickCatalogProduct(p, result)"
-                          (touchstart)="$event.preventDefault(); beginProductPick(); pickCatalogProduct(p, result)"
-                          (click)="beginProductPick(); pickCatalogProduct(p, result)"
+                          (mousedown)="$event.preventDefault(); beginProductPick()"
+                          (touchstart)="beginProductPick()"
+                          (click)="pickCatalogProduct(p, result)"
                         >
                           @if (p.image_url) {
                             <img class="listbox-thumb" [src]="p.image_url" alt="" />

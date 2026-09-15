@@ -1916,6 +1916,10 @@ export default class ReviewPage {
         excluded_image_urls: this.excludedImages(),
         edited_by: this.auth.uid(),
       });
+      // Si este listing ya estaba validado, el buscador de productos de
+      // Pedidos pudo haber cacheado la versión anterior (título, precio,
+      // imágenes). Invalidar para que la próxima búsqueda traiga lo nuevo.
+      this.svc.invalidateAllValidated();
       this.doc.set(structuredClone(d));
       this.showInfoPopup("Guardado correctamente.", "Exito", "success");
     } catch (e: any) {
@@ -1991,6 +1995,12 @@ export default class ReviewPage {
           validatedBy: uid,
         },
       );
+      // El producto recién validado debe aparecer de inmediato en el
+      // buscador de Pedidos: sin esto, la caché en memoria de
+      // NormalizedListingsService.loadAllValidated() seguía sirviendo el
+      // catálogo de hasta 5 minutos atrás y el producto nuevo no salía sin
+      // F5 (recarga completa que crea una instancia nueva del servicio).
+      this.svc.invalidateAllValidated();
       this.doc.set(structuredClone(prepared));
       await this.router.navigateByUrl("/main/validacion");
     } catch (e: any) {
@@ -2015,6 +2025,9 @@ export default class ReviewPage {
       }
       
       await this.svc.reject(this.id, uid);
+      // Por si este listing estaba validado y se está retirando: que deje
+      // de aparecer en el buscador de Pedidos de inmediato.
+      this.svc.invalidateAllValidated();
       await this.router.navigateByUrl("/main/validacion");
     } catch (e: any) {
       this.error.set(e?.message || String(e));

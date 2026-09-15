@@ -1,7 +1,9 @@
 import { Component, signal, ChangeDetectionStrategy, inject } from '@angular/core';
 import { NavigationCancel, NavigationEnd, NavigationError, Router, RouterOutlet } from '@angular/router';
+import { SwUpdate, VersionReadyEvent } from '@angular/service-worker';
 import { filter, take } from 'rxjs';
 import { firebaseSmokeTest } from "./core/firebase.smoketest";
+import { initFirestoreConnectivityResume } from "./core/firestore-connectivity";
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -13,9 +15,12 @@ import { firebaseSmokeTest } from "./core/firebase.smoketest";
 })
 export class App {
   private readonly router = inject(Router);
+  private readonly swUpdate = inject(SwUpdate, { optional: true });
 
   constructor() {
     firebaseSmokeTest();
+    initFirestoreConnectivityResume();
+    this.setupServiceWorkerUpdates();
     this.router.events
       .pipe(
         filter((event): event is NavigationEnd | NavigationCancel | NavigationError =>
@@ -25,6 +30,35 @@ export class App {
       .subscribe(() => this.dismissBootSkeleton());
   }
   protected readonly title = signal('admin-web');
+
+  /**
+   * Aplica una nueva versión publicada del sitio sin interrumpir a alguien a
+   * media tarea: si la pestaña ya está oculta cuando llega la actualización
+   * (o la siguiente vez que se oculta), recarga ahí; nunca mientras está
+   * visible. Así se evita quedarse corriendo un bundle viejo por minutos u
+   * horas en una sesión de mobile que no se cierra, que es lo que deja rutas
+   * "colgadas" cargando para siempre tras un deploy.
+   */
+  private setupServiceWorkerUpdates(): void {
+    if (!this.swUpdate?.isEnabled) return;
+
+    let updateReady = false;
+
+    this.swUpdate.versionUpdates
+      .pipe(filter((event): event is VersionReadyEvent => event.type === 'VERSION_READY'))
+      .subscribe(() => {
+        updateReady = true;
+        if (document.visibilityState === 'hidden') document.location.reload();
+      });
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') {
+        if (updateReady) document.location.reload();
+        return;
+      }
+      this.swUpdate?.checkForUpdate().catch(() => undefined);
+    });
+  }
 
   /** Retira la pantalla de arranque estática (ver index.html) una vez que la
    * primera navegación real terminó, sin importar si fue con éxito o no. */
