@@ -1,0 +1,130 @@
+<section class="audit" aria-labelledby="profit-title" [attr.aria-busy]="busy()">
+  <header class="audit-heading">
+    <div><p class="eyebrow">Resultados y distribución · 50 / 50</p><h2 id="profit-title">Utilidades y socios</h2><p>Lo que hemos ganado, lo que retiramos y lo que nos corresponde.</p></div>
+    <div class="heading-actions"><span class="scope-label"><span class="material-symbols-rounded" aria-hidden="true">history</span>Histórico completo · {{ context() }}</span><button type="button" [disabled]="busy() || !!error()" (click)="inspect()"><span class="material-symbols-rounded" aria-hidden="true">picture_as_pdf</span>Preparar reporte para socios</button></div>
+  </header>
+  @if (busy()) {
+    <div class="empty" role="status">Cargando pedidos y movimientos. Los importes estarán disponibles al terminar.</div>
+  } @else if (error()) {
+    <div class="notice" role="alert"><span class="material-symbols-rounded" aria-hidden="true">error</span><div><strong>No se pudo completar la auditoría</strong><p>{{ error() }}</p><button type="button" (click)="retry.emit()">Volver a intentar</button></div></div>
+  } @else {
+    <div class="overview">
+      <article class="profit-total"><p class="eyebrow">Utilidad neta generada</p><strong>{{ money(report().totals.netProfit) }}</strong><p>De todos los pedidos, cobrados o por cobrar.</p>@if (report().issueCount > 0) {<small class="provisional">Provisional · hay registros por revisar</small>}<div class="equation"><span>{{ money(report().totals.profit) }} de utilidad en ventas</span><span>− {{ money(report().totals.expenses) }} de gastos</span></div><button type="button" (click)="inspect()">Ver de dónde sale<span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span></button></article>
+      <div class="overview-metrics">
+        <article><span class="metric-icon material-symbols-rounded" aria-hidden="true">shopping_bag</span><div><p>Venta a precio clienta</p><strong>{{ money(report().totals.sale) }}</strong><small>{{ report().orders.length }} pedidos incluidos</small></div></article>
+        <article><span class="metric-icon material-symbols-rounded" aria-hidden="true">account_balance_wallet</span><div><p>Venta cobrada</p><strong>{{ money(report().totals.collected) }}</strong><small>{{ money(report().totals.pending) }} pendientes de cobro</small></div></article>
+        <article><span class="metric-icon material-symbols-rounded" aria-hidden="true">payments</span><div><p>Retiros de socios</p><strong>{{ money(report().totals.blancaWithdrawn + report().totals.andreaPepeWithdrawn) }}</strong><button class="link" type="button" (click)="inspect('all', 'movements')">Consultar movimientos</button></div></article>
+      </div>
+    </div>
+
+    <div class="partner-section-heading"><h3>La cuenta de cada socio</h3><p>Acumulado de todos los meses · Los retiros no son gastos del negocio.</p></div>
+    <div class="partners">
+      @for (p of partners(); track p.id) {
+        <article class="partner-card" [class.partner-card--second]="p.id === 'socio_andrea_pepe'">
+          <header><span class="avatar">{{ p.initials }}</span><div><h3>{{ p.name }}</h3><p>Participación del 50%</p></div><span class="material-symbols-rounded" aria-hidden="true">handshake</span></header>
+          <dl class="partner-equation"><div><dt>Ha ganado</dt><dd>{{ money(p.share) }}</dd></div><div><dt>Retiros registrados</dt><dd>{{ money(p.withdrawn) }}</dd></div></dl>
+          <div class="remaining"><span>{{ p.remaining < 0 ? 'Saldo a compensar' : 'Falta por retirar' }}</span><strong>{{ money(p.remaining < 0 ? -p.remaining : p.remaining) }}</strong><small>Ganancia generada menos retiros acumulados</small>@if (p.withdrawn === 0) {<small>No hay retiros registrados para este socio.</small>}</div>
+          <div class="collection-note"><span class="material-symbols-rounded" aria-hidden="true">schedule</span><p><strong>{{ money(p.pendingCollection) }} de su ganancia por cobrar</strong><small>Es un dato de cobranza; no se vuelve a restar del saldo por retirar. No representa efectivo disponible.</small></p></div>
+          <footer><button type="button" (click)="inspect('all', 'orders')">Ver ganancia<span class="material-symbols-rounded" aria-hidden="true">receipt_long</span></button><button type="button" (click)="inspect('all', 'movements', p.id)">Ver sus retiros<span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span></button></footer>
+        </article>
+      }
+    </div>
+
+    @if (report().issueCount > 0) {
+      <div class="notice"><span class="material-symbols-rounded" aria-hidden="true">fact_check</span><div><strong>Hay {{ report().issueCount }} registros para revisar</strong><p>{{ report().incompleteOrders }} pedidos incompletos y {{ report().estimatedItems }} productos con costo estimado. Todos permanecen visibles. La utilidad de pedidos incompletos está sin determinar; los totales son provisionales.</p><button class="link" type="button" (click)="inspect('all', 'quality')">Revisar datos y estimaciones<span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span></button></div></div>
+    }
+    @if (report().totals.unclassified !== 0) {
+      <div class="notice"><span class="material-symbols-rounded" aria-hidden="true">help</span><div><strong>{{ money(report().totals.unclassified) }} con destino por clasificar</strong><p>Estos movimientos aún no se descuentan de la utilidad ni de un socio. Revisa su destino para confirmar los saldos.</p><button class="link" type="button" (click)="inspect('all', 'quality')">Consultar movimientos sin clasificar</button></div></div>
+    }
+
+    <section class="panel" aria-labelledby="history-title">
+      <header class="panel-heading"><div><p class="eyebrow">Ventas, cobranza y reparto</p><h3 id="history-title">Historial mensual auditable</h3><p>Los pedidos permanecen en su mes de creación. Su cobranza se actualiza hasta hoy.</p></div><span class="scope-label">MXN · {{ report().months.length }} periodos</span></header>
+      <div class="legend"><span><i class="dot dot--profit"></i>Utilidad generada, sin importar el cobro</span><span><i class="dot dot--pending"></i>Cobranza pendiente, informada por separado</span></div>
+      <p class="scroll-hint">Desliza la tabla para consultar todas las columnas. Selecciona un mes para ver su origen.</p>
+      <div class="table-scroll" tabindex="0" role="region" aria-label="Historial mensual, con desplazamiento horizontal">
+        <table class="history-table"><caption>Ventas vigentes por mes de creación, con cobranza acumulada; gastos y retiros por fecha del movimiento.</caption>
+          <thead><tr><th scope="col">Mes / pedidos</th><th scope="col">Venta clienta</th><th scope="col">Cobranza de venta<small>Cobrado / pendiente</small></th><th scope="col">Utilidad de venta<small>Antes de gastos</small></th><th scope="col">Cobranza de utilidad<small>Cobrada / pendiente</small></th><th scope="col">Gastos</th><th scope="col">Utilidad neta<small>Venta − costo − gastos</small></th><th scope="col">Retiros<small>Blanca / Andrea y Pepe</small></th></tr></thead>
+          <tbody>@for (m of report().months; track m.id) {
+            <tr [class.selected]="month() === m.id"><th scope="row"><button class="month-button" type="button" (click)="inspect(m.id)">{{ m.label }}<span class="material-symbols-rounded" aria-hidden="true">arrow_outward</span></button><small>{{ m.orders.length }} pedidos · {{ m.movements.length }} movimientos</small>@if (m.incompleteOrders > 0) {<small class="pending">{{ m.incompleteOrders }} sin utilidad determinada</small>}</th>
+              <td><strong>{{ money(m.sale) }}</strong></td><td><span>{{ money(m.collected) }} <small>cobrado</small></span><span class="pending">{{ money(m.pending) }} <small>pendiente</small></span></td>
+              <td class="profit-cell"><strong>{{ money(m.profit) }}</strong>@if (m.incompleteOrders > 0) {<small>Importe parcial</small>}</td><td><span>{{ money(m.collectedProfit) }} <small>cobrada</small></span><span class="pending">{{ money(m.pendingProfit) }} <small>pendiente</small></span></td>
+              <td><button class="link" type="button" [attr.aria-label]="'Ver gastos de ' + m.label" (click)="inspect(m.id, 'movements')">{{ money(m.expenses) }}</button></td><td class="profit-cell"><strong>{{ money(m.netProfit) }}</strong>@if (m.incompleteOrders > 0) {<small>Importe parcial</small>}</td><td><button class="link" type="button" [attr.aria-label]="'Ver retiros de Blanca en ' + m.label" (click)="inspect(m.id, 'movements', 'socio_blanca')">{{ money(m.blancaWithdrawn) }}</button><button class="link" type="button" [attr.aria-label]="'Ver retiros de Andrea y Pepe en ' + m.label" (click)="inspect(m.id, 'movements', 'socio_andrea_pepe')">{{ money(m.andreaPepeWithdrawn) }}</button></td></tr>
+          } @empty {<tr><td colspan="8" class="empty">No hay pedidos ni movimientos para este negocio y ruta.</td></tr>}</tbody>
+          <tfoot><tr><th scope="row">Total histórico</th><td>{{ money(report().totals.sale) }}</td><td>{{ money(report().totals.collected) }}<small>{{ money(report().totals.pending) }} pendiente</small></td><td>{{ money(report().totals.profit) }}</td><td>{{ money(report().totals.collectedProfit) }}<small>{{ money(report().totals.pendingProfit) }} pendiente</small></td><td>{{ money(report().totals.expenses) }}</td><td>{{ money(report().totals.netProfit) }}</td><td>{{ money(report().totals.blancaWithdrawn) }}<small>{{ money(report().totals.andreaPepeWithdrawn) }}</small></td></tr></tfoot>
+        </table>
+      </div>
+      <details class="method"><summary>Cómo se calcula este reporte</summary><div><p><strong>Venta:</strong> precio clienta × unidades vigentes, menos descuentos, más envío. Incluye pedidos en proceso. Las unidades canceladas, sin existencia o devueltas se descuentan; los pedidos cancelados o totalmente devueltos permanecen visibles con venta cero.</p><p><strong>Utilidad:</strong> venta − costo de mercancía. Si falta el costo, se usa precio público / 2 y se identifica el producto. Un costo cero explícito se respeta. Sin precio clienta, cantidad o costo estimable, la utilidad del pedido queda sin determinar y no se suma como ganancia.</p><p><strong>Cobranza de utilidad:</strong> utilidad × (cobrado / venta), con el cobro limitado a la venta. Es una asignación proporcional del margen, no una medición del saldo bancario. La cobranza posterior permanece vinculada al mes del pedido.</p><p><strong>Socios:</strong> (utilidad de ventas − gastos operativos) / 2 − retiros de cada socio. La compra de mercancía no se descuenta otra vez como gasto. Los retiros sin destino explícito requieren clasificación. Las devoluciones actualizan el mes de origen; esta vista no sustituye un cierre contable congelado.</p><p><strong>Fechas:</strong> calendario de Ciudad de México. Sin fecha comprobable, el registro se conserva en “Sin fecha”. Los movimientos pertenecen al mes en que ocurrieron y no indican qué mes de ganancia se retiró.</p></div></details>
+    </section>
+
+    <section class="panel detail-panel" aria-labelledby="audit-detail-title">
+      <header class="panel-heading"><div><p class="eyebrow">Consulta, analiza y comparte</p><h3 #detailHeading id="audit-detail-title" tabindex="-1">Reporte para socios</h3><p>Selecciona un mes o un rango y revisa el origen de cada importe antes de exportar.</p></div><span class="scope-label">{{ business() }} · {{ context() }}</span></header>
+      <div class="detail-controls"><label>Periodo<select [ngModel]="month()" (ngModelChange)="month.set($event); page.set(1)"><option value="all">Todo el historial</option><option value="custom">Rango de fechas</option>@for (m of report().months; track m.id) {<option [value]="m.id">{{ m.label }}</option>}</select></label>
+        @if (month() === 'custom') {
+          <label>Desde<input type="date" [ngModel]="dateFrom()" (ngModelChange)="dateFrom.set($event); page.set(1)" [attr.aria-invalid]="!!selection().error" aria-describedby="period-help period-error" /></label>
+          <label>Hasta<input type="date" [ngModel]="dateTo()" (ngModelChange)="dateTo.set($event); page.set(1)" [attr.aria-invalid]="!!selection().error" aria-describedby="period-help period-error" /></label>
+        }
+      </div>
+      <p id="period-help" class="report-help">Fechas de creación de los pedidos, con ambos días incluidos. Gastos y retiros por fecha del movimiento. Cobranza acumulada hasta hoy, incluso si se cobró después del periodo.</p>
+      <p id="period-error" class="period-error" role="alert">{{ selection().error }}</p>
+      @if (!selection().error) {
+        <div class="report-overview">
+          <div class="report-title"><div><p class="eyebrow">Vista del periodo · MXN</p><h4>{{ selection().label }}</h4></div><span>{{ selection().orders.length }} pedidos · {{ selection().movements.length }} movimientos</span></div>
+          <dl class="report-metrics">
+            <div><dt>Venta clienta</dt><dd>{{ money(totals().sale) }}</dd><dd class="metric-note"><small>{{ money(totals().collected) }} cobrados<br />{{ money(totals().pending) }} por cobrar</small></dd></div>
+            <div><dt>Costo de mercancía</dt><dd>{{ money(totals().cost) }}</dd><dd class="metric-note"><small>Parcial cuando faltan datos.<br />Consulta el detalle por producto.</small></dd></div>
+            <div><dt>Utilidad de ventas</dt><dd>{{ money(totals().profit) }}</dd><dd class="metric-note"><small>{{ money(totals().collectedProfit) }} cobrada<br />{{ money(totals().pendingProfit) }} por cobrar</small></dd></div>
+            <div><dt>Gastos operativos</dt><dd>{{ money(totals().expenses) }}</dd><dd class="metric-note"><small>Retiros y compras de mercancía se informan por separado.</small></dd></div>
+            <div class="report-net"><dt>Utilidad neta generada</dt><dd>{{ money(totals().netProfit) }}</dd><dd class="metric-note"><small>Utilidad de ventas menos gastos.<br />Sujeta a los datos por revisar.</small></dd></div>
+          </dl>
+          <div class="period-partners">@for (p of periodPartners(); track p.id) {<p><strong>{{ p.name }}</strong><span>{{ money(p.share) }} de utilidad neta del periodo</span><span>{{ money(p.withdrawn) }} retirados durante el periodo</span></p>}</div>
+          <p class="report-help">Los retiros pueden corresponder a ganancias de otros meses. El saldo histórico por retirar está en las tarjetas de socios y en una sección separada del PDF.</p>
+        </div>
+        @if (selection().undatedOrders.length || selection().undatedMovements.length) {
+          <div class="notice"><span class="material-symbols-rounded" aria-hidden="true">event_busy</span><div><strong>Sin fecha: {{ selection().undatedOrders.length }} pedidos y {{ selection().undatedMovements.length }} movimientos</strong><p>No se suman al periodo porque no podemos ubicarlos. El PDF los conserva en un anexo separado.</p><button class="link" type="button" (click)="inspect('undated', 'quality')">Consultar registros sin fecha</button></div></div>
+        }
+      }
+      <div class="report-export">
+        <label class="checkbox-label"><input type="checkbox" [ngModel]="includeProducts()" (ngModelChange)="includeProducts.set($event)" />Incluir desglose de productos en el PDF</label>
+        <div class="export-actions"><button #pdfTrigger class="primary-button" type="button" [disabled]="pdfBusy() || !!selection().error" (click)="previewPdf()"><span class="material-symbols-rounded" aria-hidden="true">picture_as_pdf</span>{{ pdfBusy() ? 'Preparando documento…' : 'Ver y descargar PDF' }}</button><button type="button" [disabled]="!!selection().error" (click)="exportCsv()"><span class="material-symbols-rounded" aria-hidden="true">download</span>Exportar detalle CSV</button></div>
+        <p>El PDF incluye el resumen, los saldos históricos de socios, todos los pedidos y movimientos del periodo y las observaciones. La búsqueda, el socio y la página del detalle no limitan la exportación.</p>
+        @if (pdfBusy()) {<p role="status">Generando todas las páginas del reporte. Puede tardar unos segundos.</p>}
+        @if (pdfError()) {<p class="period-error" role="alert">{{ pdfError() }}</p>}
+      </div>
+      <h4 class="detail-subheading">Origen de los importes</h4>
+      <div class="detail-controls"><label>Mostrar<select [ngModel]="detail()" (ngModelChange)="detail.set($event); page.set(1); partner.set('all')"><option value="orders">Pedidos y utilidad</option><option value="movements">Gastos y retiros</option><option value="quality">Datos por revisar</option></select></label>@if (detail() !== 'orders') {<label>Destino<select [ngModel]="partner()" (ngModelChange)="partner.set($event); page.set(1)"><option value="all">Todos los movimientos</option><option value="socio_blanca">Blanca Trejo</option><option value="socio_andrea_pepe">Andrea y Pepe</option></select></label>}<label class="search">Buscar<input type="search" placeholder="Pedido, clienta o concepto" [ngModel]="search()" (ngModelChange)="search.set($event); page.set(1)" /></label></div>
+      <p class="result-count" role="status">{{ detail() === 'movements' ? movements().length + ' movimientos' : detail() === 'orders' ? orders().length + ' pedidos' : orders().length + ' pedidos y ' + movements().length + ' movimientos por revisar' }} visibles. El buscador filtra el detalle, no los totales del periodo.</p>
+      @if (detail() !== 'movements') {
+        <div class="order-list">@for (r of visibleOrders(); track r.id) {
+          <details class="order-row"><summary><div><strong>{{ r.id }}</strong><span>{{ customer(r.customerId) }}</span><small>{{ r.date || 'Sin fecha' }} · {{ r.status }}</small></div><div><small>Venta clienta</small><strong>{{ money(r.sale) }}</strong></div><div><small>Utilidad</small><strong>{{ r.incomplete ? 'Sin determinar' : money(r.profit) }}</strong></div><span class="row-hint">{{ r.issues.length ? 'Ver datos y observaciones' : 'Ver productos y cálculo' }}<span class="material-symbols-rounded" aria-hidden="true">expand_more</span></span></summary>
+            <div class="order-detail"><div class="detail-summary"><span>Venta cobrada <strong>{{ money(r.collected) }}</strong></span><span>Venta por cobrar <strong>{{ money(r.pending) }}</strong></span><span>Utilidad cobrada <strong>{{ r.incomplete ? 'Sin determinar' : money(r.collectedProfit) }}</strong></span><span>Utilidad por cobrar <strong>{{ r.incomplete ? 'Sin determinar' : money(r.pendingProfit) }}</strong></span></div>
+              @if (r.issues.length) {<ul class="issues">@for (issue of r.issues; track $index) {<li>{{ issue }}</li>}</ul>}
+              <div class="table-scroll" tabindex="0" role="region" [attr.aria-label]="'Productos del pedido ' + r.id"><table class="items-table"><caption>Precios unitarios y cálculo del pedido {{ r.id }}</caption><thead><tr><th scope="col">Producto</th><th scope="col">Unidades / devueltas</th><th scope="col">Precio clienta</th><th scope="col">Costo unitario</th><th scope="col">Origen del costo</th><th scope="col">Venta vigente</th><th scope="col">Costo total</th></tr></thead><tbody>@for (item of r.items; track $index) {<tr><th scope="row">{{ item.title }}</th><td>{{ item.quantity }} / {{ item.returned }}</td><td>{{ item.client === null ? 'Sin dato' : money(item.client) }}</td><td>{{ item.cost === null ? 'Sin dato' : money(item.cost) }}</td><td>{{ item.costSource === 'estimated' ? 'Estimado · público / 2' : item.costSource === 'missing' ? 'Por completar' : 'Registrado' }}</td><td>{{ money(item.sale) }}</td><td>{{ money(item.totalCost) }}</td></tr>} @empty {<tr><td colspan="7">Este pedido no tiene productos registrados.</td></tr>}</tbody></table></div>
+              <p class="calculation">Descuento: {{ money(r.discount) }} · Envío: {{ money(r.shipping) }} · Costo de mercancía: {{ money(r.cost) }}. El costo conserva las pérdidas por productos devueltos dañados.</p>
+              @if (r.returnedSale > 0) {<p class="calculation">{{ money(r.returnedSale) }} de devoluciones ya descontadas de la venta. No se restan otra vez de la utilidad.</p>}
+              @if (r.overpayment > 0) {<p class="calculation">{{ money(r.overpayment) }} de cobro excedente no incluido como venta ni ganancia. Revisar saldo a favor o reembolso.</p>}
+              @if (r.recordedSale !== null && r.recordedSale !== r.sale) {<p class="calculation">Total guardado: {{ money(r.recordedSale) }} · Venta recalculada por productos: {{ money(r.sale) }}. Este reporte utiliza el detalle de productos y no modifica el total original.</p>}
+              @if (r.paymentDate) {<p class="calculation">Fecha de pago: {{ r.paymentDate }}{{ r.paymentDateEstimated ? ' · Estimada a partir de la creación del pedido, según la normalización histórica autorizada.' : ' · Registrada en el pedido.' }}</p>}
+              <button type="button" (click)="openOrder.emit(r.id)">Abrir pedido<span class="material-symbols-rounded" aria-hidden="true">arrow_outward</span></button>
+            </div>
+          </details>
+        } @empty {<div class="empty">No hay pedidos que coincidan con esta consulta.</div>}</div>
+      }
+      @if (detail() !== 'orders') {
+        <div class="movement-list">@for (r of visibleMovements(); track r.source + r.id) {<article class="movement-row"><div><span class="movement-type" [class.movement-type--withdrawal]="r.kind === 'withdrawal'">{{ movementLabel(r) }}</span><h4>{{ r.notes || 'Sin concepto registrado' }}</h4><p>{{ r.date || 'Sin fecha' }} · {{ r.category }} · {{ account(r.accountId) }}</p><small>Referencia: {{ r.id }}</small>@if (r.issues.length) {<ul class="issues">@for (issue of r.issues; track $index) {<li>{{ issue }}</li>}</ul>}</div><div class="movement-amount"><strong>{{ money(r.amount) }}</strong><small>{{ r.kind === 'expense' ? 'Resta utilidad' : r.kind === 'withdrawal' ? 'Resta al saldo del socio' : 'No resta utilidad' }}</small>@if (canEdit()) {<button type="button" (click)="editMovement.emit({ source: r.source, id: r.id })">Ver / editar</button>}</div></article>} @empty {<div class="empty">No hay movimientos que coincidan con esta consulta.</div>}</div>
+      }
+      @if (pageCount() > 1) {
+        <nav class="pagination" aria-label="Páginas del detalle">
+          <button type="button" [disabled]="currentPage() === 1" (click)="movePage(-1)">Anterior</button>
+          <span aria-live="polite">Página {{ currentPage() }} de {{ pageCount() }} · hasta {{ pageSize }} registros por lista</span>
+          <button type="button" [disabled]="currentPage() === pageCount()" (click)="movePage(1)">Siguiente</button>
+        </nav>
+      }
+    </section>
+  }
+</section>
+
+<dialog #pdfDialog (close)="restorePdfFocus()" class="pdf-dialog" aria-labelledby="pdf-preview-title">
+  <header><div><h3 id="pdf-preview-title">Informe para socios</h3><p>{{ pdfLabel() }}</p></div><button type="button" autofocus (click)="pdfDialog.close()" aria-label="Cerrar vista previa"><span class="material-symbols-rounded" aria-hidden="true">close</span></button></header>
+  <div class="pdf-toolbar"><button class="primary-button" type="button" (click)="downloadPdf()"><span class="material-symbols-rounded" aria-hidden="true">download</span>Descargar PDF</button><p>Si tu navegador no muestra la vista previa, descarga el documento para abrirlo.</p></div>
+  @if (pdfPreview(); as preview) {<iframe [src]="preview" title="Vista previa del informe financiero para socios"></iframe>}
+</dialog>

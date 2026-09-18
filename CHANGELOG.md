@@ -4,6 +4,20 @@ Todos los cambios relevantes del frontend se documentan aquí. El formato sigue
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa
 [Versionado Semántico](https://semver.org/lang/es/).
 
+## [2.3.0] - 2026-09-18
+
+### Añadido
+
+- Reporte para socios por mes, rango de fechas o historial completo, con consulta en pantalla, vista previa y descarga PDF y CSV.
+- Trazabilidad por pedido y producto de ventas, costos, cobros, utilidad, devoluciones y estimaciones; gastos y retiros identificados por referencia.
+- Auditoría reproducible del historial y normalización de fechas históricas de pago con respaldo, procedencia y verificación de integridad.
+
+### Cambiado
+
+- Rediseño de Utilidades y socios con ventas atribuidas al mes de creación, cobranza informada por separado y participación acumulada menos retiros de cada socio.
+- Los pedidos incompletos permanecen visibles, los costos faltantes se estiman con precio público / 2 cuando es posible y los registros sin fecha conservan un anexo separado en el PDF.
+- Los reportes distinguen actividad del periodo, cobranza acumulada a la emisión y saldos históricos de socios, sin limitar la exportación por búsqueda o paginación.
+
 ## [2.2.1] - 2026-08-12
 
 ### Cambiado

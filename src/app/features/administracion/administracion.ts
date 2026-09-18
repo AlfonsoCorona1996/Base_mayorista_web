@@ -27,6 +27,8 @@ import { calculateOrderProfitProjection } from "../../core/order-profit-projecti
 import { calculatePartnerWithdrawalSummary, calculateWithdrawalProfit } from "../../core/withdrawal-profit";
 import { BusinessPosition, calculateBusinessPosition } from "../../core/business-position";
 import { calculateAccountingPeriodOutcome, originalOrderFinancials } from "../../core/accounting-period";
+import { buildProfitAudit } from "../../core/profit-audit";
+import { ProfitAuditComponent } from "./profit-audit.component";
 
 type MoneyBucketId =
   | "openDrafts"
@@ -384,7 +386,7 @@ const DRILLDOWN_COLUMN_DEFAULT_DIRECTION: Record<DrilldownColumn, "asc" | "desc"
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   selector: "app-administracion",
-  imports: [FormsModule],
+  imports: [FormsModule, ProfitAuditComponent],
   templateUrl: "./administracion.html",
   styleUrls: ["./administracion-redesign-prototype.component.css", "./administracion.css"],
 })
@@ -530,6 +532,27 @@ export default class AdministracionPage {
     if (!routeId) return this.withdrawals();
     return this.withdrawals().filter((row) => row.route_id === routeId);
   });
+
+  profitAudit = computed(() => buildProfitAudit(this.filteredOrders(), this.filteredExpenses(), this.filteredWithdrawals()));
+  auditCustomers = computed(() => Object.fromEntries(this.customers().map(row => [row.customer_id, [row.first_name, row.last_name].filter(Boolean).join(' ')])));
+  auditAccounts = computed(() => Object.fromEntries(this.accounts().map(row => [row.account_id, row.name])));
+  auditError = computed(() => this.error() || this.ordersService.loadError());
+  auditLoading = computed(() => this.loading() || this.ordersService.loading() || this.financeService.loading());
+
+  editAuditMovement(event: { source: 'expense' | 'withdrawal'; id: string }): void {
+    if (!this.canEditMovements()) return;
+    if (event.source === 'expense') {
+      const row = this.expenses().find(row => row.expense_id === event.id);
+      if (!row) return;
+      this.startEditExpense(row);
+    } else {
+      const row = this.withdrawals().find(row => row.withdrawal_id === event.id);
+      if (!row) return;
+      this.startEditWithdrawal(row);
+    }
+    this.movementDialogKind.set(event.source);
+    this.movementDialogOpen.set(true);
+  }
 
   summary = computed<FinanceSummary>(() =>
     this.buildSummary({
@@ -833,7 +856,7 @@ export default class AdministracionPage {
   usesMonthScope = computed(() => {
     const view = this.activeView();
     if (view === "mensual" || view === "inventario") return true;
-    return view === "socios" && this.partnerScope() === "mensual";
+    return false;
   });
   distributableProfit = computed(() => this.selectedMonth().distributableProfit);
   monthlyCollectedProfit = computed(() => this.selectedMonth().collectedProfit);
@@ -1831,7 +1854,7 @@ export default class AdministracionPage {
     const state = {
       from: "administracion",
       scope: this.routeScope(),
-      drilldown: active?.id || null,
+      drilldown: this.activeView() === 'socios' ? 'profit-audit' : active?.id || null,
     };
     this.closeDrilldown();
     this.router.navigate(["/main/pedidos", orderId], { state });
@@ -1943,6 +1966,10 @@ export default class AdministracionPage {
   }
 
   private tryRestoreDrilldown(token: string) {
+    if (token === 'profit-audit') {
+      this.setView('socios');
+      return;
+    }
     if (token.startsWith("bucket:")) {
       const bucketId = token.slice("bucket:".length) as MoneyBucketId;
       const bucket = this.summary().buckets.find((row) => row.id === bucketId);

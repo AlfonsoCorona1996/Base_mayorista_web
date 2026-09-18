@@ -14,6 +14,7 @@ import {
   sumLedgerCash,
 } from "./finance-ledger";
 import { FIREBASE_AUTH } from "./firebase.providers";
+import { auditDate } from "./profit-audit";
 
 export type FinanceExpenseCategory =
   | "compra_inversion"
@@ -118,6 +119,7 @@ export interface FinanceExpense {
   category: FinanceExpenseCategory;
   amount: number;
   occurred_at: string;
+  audit_occurred_at?: string | null;
   route_id: string | null;
   route_run_id?: string | null;
   order_id?: string | null;
@@ -148,6 +150,7 @@ export interface FinanceWithdrawal {
   business_id: BusinessId;
   amount: number;
   occurred_at: string;
+  audit_occurred_at?: string | null;
   purpose: FinanceWithdrawalPurpose;
   recipient: string | null;
   route_id: string | null;
@@ -666,6 +669,7 @@ export class FinanceService {
       expense_id: String(data["expense_id"] || id),
       business_id: normalizeBusinessId(data["business_id"]),
       category: this.normalizeExpenseCategory(data["category"]),
+      audit_occurred_at: auditDate(data['occurred_at']),
       amount: this.toSafeAmount(data["amount"]),
       occurred_at: this.normalizeDateInput(data["occurred_at"]),
       route_id: this.toOptionalText(data["route_id"]),
@@ -691,6 +695,7 @@ export class FinanceService {
       amount: this.toSafeAmount(data["amount"]),
       occurred_at: this.normalizeDateInput(data["occurred_at"]),
       purpose: this.normalizeWithdrawalPurpose(data["purpose"]),
+      audit_occurred_at: auditDate(data['occurred_at']),
       recipient: this.toOptionalText(data["recipient"]),
       route_id: this.toOptionalText(data["route_id"]),
       account_id: this.toOptionalText(data["account_id"]),

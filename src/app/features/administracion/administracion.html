@@ -90,7 +90,9 @@
       </select>
     </label>
 
-    @if (!usesMonthScope()) {
+    @if (activeView() === 'socios') {
+      <span class="comparison-chip"><span class="material-symbols-rounded" aria-hidden="true">receipt_long</span>{{ profitAudit().orders.length }} pedidos incluidos</span>
+    } @else if (!usesMonthScope()) {
       <span class="comparison-chip"><span class="material-symbols-rounded" aria-hidden="true">verified</span>{{ includedClosuresCount() }} cierres incluidos</span>
     } @else {
       <span class="comparison-chip">
@@ -532,143 +534,11 @@
   }
 
   @if (activeView() === 'socios') {
-    <section class="view-stack" aria-labelledby="partners-title">
-      <header class="content-heading">
-        <div><p class="eyebrow">Distribución 50/50</p><h2 id="partners-title">Utilidades y socios</h2><p>Consulta la posición acumulada o entra al detalle de cada cierre mensual.</p></div>
-        @if (partnerScope() === 'general') {
-          <span class="status-chip status-chip--mixed"><span></span>{{ includedClosuresCount() }} cierres registrados</span>
-        } @else {
-          <span class="status-chip"><span></span>Mes preliminar</span>
-        }
-      </header>
-
-      <div class="scope-switch" role="group" aria-label="Nivel de análisis de utilidades y socios">
-        <button type="button" [class.is-active]="partnerScope() === 'general'" [attr.aria-pressed]="partnerScope() === 'general'" (click)="setPartnerScope('general')">
-          <span class="material-symbols-rounded" aria-hidden="true">donut_large</span>
-          Resumen acumulado
-        </button>
-        <button type="button" [class.is-active]="partnerScope() === 'mensual'" [attr.aria-pressed]="partnerScope() === 'mensual'" (click)="setPartnerScope('mensual')">
-          <span class="material-symbols-rounded" aria-hidden="true">calendar_month</span>
-          Análisis mensual
-        </button>
-      </div>
-
-      @if (partnerScope() === 'general') {
-        <section class="kpi-grid partner-overview-kpis" aria-label="Resumen acumulado de distribuciones">
-          <article class="kpi-card kpi-card--featured"><div class="kpi-label"><span>Utilidad generada</span><span class="material-symbols-rounded" aria-hidden="true">savings</span></div><strong>{{ formatMoney(totalDistributableProfit()) }}</strong><p>{{ periodRangeLabel() }}</p><small>Todo lo ganado, esté cobrado o no</small></article>
-          <article class="kpi-card"><div class="kpi-label"><span>Se puede retirar hoy</span><span class="material-symbols-rounded" aria-hidden="true">paid</span></div><strong>{{ formatMoney(totalAvailableNow()) }}</strong><p><span class="trend trend--positive">{{ formatMoney(totalCollectedProfit()) }}</span> cobrados</p><small>Menos {{ formatMoney(totalDistributed()) }} ya retirados</small></article>
-          <article class="kpi-card"><div class="kpi-label"><span>Por cobrar</span><span class="material-symbols-rounded" aria-hidden="true">pending_actions</span></div><strong>{{ formatMoney(totalPendingProfit()) }}</strong><p><span class="trend trend--warning">Es suyo, todavía no llega</span></p><small>Utilidad dentro de {{ formatMoney(summary().saldoPendienteCobro) }} sin liquidar</small></article>
-          <article class="kpi-card kpi-card--projection"><div class="kpi-label"><span>Utilidad proyectada</span><span class="material-symbols-rounded" aria-hidden="true">trending_up</span></div><strong>{{ formatMoney(totalProjectedProfit()) }}</strong><p><span class="trend trend--projection">+ {{ formatMoney(totalInProcessProfit()) }}</span> en {{ profitProjection().inProcessOrderCount }} pedidos en proceso</p><small>Generada más el margen estimado desde borrador hasta antes de entrega</small></article>
-          <article class="kpi-card"><div class="kpi-label"><span>Participación por socio</span><span class="material-symbols-rounded" aria-hidden="true">percent</span></div><strong>{{ formatMoney(totalSharePerPartner()) }}</strong><p>50% para cada parte</p><small>{{ formatMoney(totalCollectedSharePerPartner()) }} de eso ya está cobrado</small></article>
-        </section>
-
-        <article class="distribution-equation" aria-labelledby="distribution-general-title">
-          <header><div><p class="panel-kicker">Base acumulada</p><h2 id="distribution-general-title">De las ventas a la utilidad repartible</h2><p>El capital invertido no se descuenta: regresa como mercancía o como cobranza.</p></div><button type="button" class="text-button" (click)="goToWithdrawalBreakdownPage()">Ver movimientos incluidos</button></header>
-          <div class="equation-grid">
-            <div class="equation-item"><span>Ventas netas</span><strong>{{ formatMoney(summary().ventasNetas) }}</strong></div><span class="equation-operator">−</span>
-            <div class="equation-item"><span>Costo de la mercancía</span><strong>{{ formatMoney(summary().costoEntregado) }}</strong></div><span class="equation-operator">−</span>
-            <div class="equation-item"><span>Gastos del negocio</span><strong>{{ formatMoney(totalDistributionAdjustments()) }}</strong></div>
-            @if (totalUnclassifiedWithdrawals() > 0) {
-              <span class="equation-operator">−</span>
-              <div class="equation-item"><span>Salidas sin clasificar</span><strong>{{ formatMoney(totalUnclassifiedWithdrawals()) }}</strong></div>
-            }
-            <span class="equation-operator">=</span>
-            <div class="equation-item equation-item--result"><span>Utilidad repartible</span><strong>{{ formatMoney(totalDistributableProfit()) }}</strong></div>
-          </div>
-          <p class="equation-note"><span class="material-symbols-rounded" aria-hidden="true">info</span>De esa utilidad, {{ formatMoney(totalCollectedProfit()) }} ya están cobrados y {{ formatMoney(totalPendingProfit()) }} siguen por cobrar. “General” significa {{ periodRangeLabel() }}.</p>
-        </article>
-
-        <section class="partner-grid" aria-label="Saldos acumulados por socio">
-          <article class="partner-card partner-card--overall">
-            <header><span class="partner-avatar">BT</span><div><p>Socio 1 · acumulado</p><h2>Blanca Trejo</h2></div><span class="share-chip">50%</span></header>
-            <dl><div><dt>Le corresponde en total</dt><dd>{{ formatMoney(totalSharePerPartner()) }}</dd></div><div><dt>Total retirado</dt><dd>{{ formatMoney(totalPartnerOneWithdrawn()) }}</dd></div><div><dt>Pedidos pendientes de pago</dt><dd>{{ formatMoney(partnerOne().pendingShare) }}</dd></div><div class="partner-pending"><dt>Puede retirar hoy</dt><dd>{{ formatMoney(totalPartnerOneAvailable()) }}</dd></div><div><dt>Saldo pendiente total</dt><dd>{{ formatMoney(totalPartnerOnePending()) }}</dd></div></dl>
-            <div class="progress-copy"><span>Participación entregada</span><strong>{{ overallPartnerProgress(totalPartnerOneWithdrawn()).toFixed(0) }}%</strong></div>
-            <div class="progress-track" role="progressbar" aria-label="Participación acumulada entregada a Blanca Trejo" aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="overallPartnerProgress(totalPartnerOneWithdrawn())"><span [style.width.%]="overallPartnerProgress(totalPartnerOneWithdrawn())"></span></div>
-            <div class="partner-actions"><button type="button" class="button button--primary" (click)="openPartnerPayment('socio_blanca')">Registrar pago</button><button type="button" class="button button--secondary" (click)="setPartnerScope('mensual')">Analizar por mes</button></div>
-          </article>
-
-          <article class="partner-card partner-card--overall">
-            <header><span class="partner-avatar partner-avatar--green">AP</span><div><p>Socio 2 · acumulado</p><h2>Andrea y Pepe</h2></div><span class="share-chip">50%</span></header>
-            <dl><div><dt>Le corresponde en total</dt><dd>{{ formatMoney(totalSharePerPartner()) }}</dd></div><div><dt>Total retirado</dt><dd>{{ formatMoney(totalPartnerTwoWithdrawn()) }}</dd></div><div><dt>Pedidos pendientes de pago</dt><dd>{{ formatMoney(partnerTwo().pendingShare) }}</dd></div><div class="partner-pending" [class.is-settled]="totalPartnerTwoAvailable() <= 0"><dt>Puede retirar hoy</dt><dd>{{ formatMoney(totalPartnerTwoAvailable()) }}</dd></div><div><dt>Saldo pendiente total</dt><dd>{{ formatMoney(totalPartnerTwoPending()) }}</dd></div></dl>
-            <div class="progress-copy"><span>Participación entregada</span><strong>{{ overallPartnerProgress(totalPartnerTwoWithdrawn()).toFixed(0) }}%</strong></div>
-            <div class="progress-track progress-track--green" role="progressbar" aria-label="Participación acumulada entregada a Andrea y Pepe" aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="overallPartnerProgress(totalPartnerTwoWithdrawn())"><span [style.width.%]="overallPartnerProgress(totalPartnerTwoWithdrawn())"></span></div>
-            <div class="partner-actions"><button type="button" class="button button--primary" [disabled]="totalPartnerTwoAvailable() <= 0" (click)="openPartnerPayment('socio_andrea_pepe')">{{ totalPartnerTwoAvailable() <= 0 ? 'Sin efectivo disponible' : 'Registrar pago' }}</button><button type="button" class="button button--secondary" (click)="setPartnerScope('mensual')">Analizar por mes</button></div>
-          </article>
-        </section>
-      } @else {
-        <article class="distribution-equation" aria-labelledby="distribution-title">
-          <header><div><p class="panel-kicker">Base distribuible</p><h2 id="distribution-title">Cierre preliminar de {{ selectedMonth().label }}</h2></div><button type="button" class="text-button" (click)="goToWithdrawalBreakdownPage()">Ver movimientos incluidos</button></header>
-          <div class="equation-grid">
-            <div class="equation-item"><span>Ventas netas</span><strong>{{ formatMoney(selectedMonth().netSales) }}</strong></div><span class="equation-operator">−</span>
-            <div class="equation-item"><span>Costo de la mercancía</span><strong>{{ formatMoney(monthlyMerchandiseCost()) }}</strong></div><span class="equation-operator">−</span>
-            <div class="equation-item"><span>Gastos del negocio</span><strong>{{ formatMoney(monthlyDistributionAdjustments()) }}</strong></div><span class="equation-operator">=</span>
-            <div class="equation-item equation-item--result"><span>Utilidad del mes</span><strong>{{ formatMoney(distributableProfit()) }}</strong></div>
-          </div>
-          <p class="equation-note"><span class="material-symbols-rounded" aria-hidden="true">info</span>De esa utilidad, {{ formatMoney(monthlyCollectedProfit()) }} entraron en efectivo dentro del mes y {{ formatMoney(selectedMonth().pendingCollectionProfit) }} siguen pendientes de cobro.</p>
-        </article>
-
-        <article class="projection-callout" aria-labelledby="monthly-projection-title">
-          <span class="projection-callout__icon material-symbols-rounded" aria-hidden="true">monitoring</span>
-          <div><p class="panel-kicker">Escenario al completar pedidos</p><h2 id="monthly-projection-title">{{ formatMoney(selectedMonth().projectedProfit) }} de utilidad proyectada</h2><p>{{ formatMoney(selectedMonth().netProfit) }} ya generados + {{ formatMoney(selectedMonth().inProcessProfit) }} estimados en {{ selectedMonth().inProcessOrderCount }} pedido(s) todavía en proceso.</p></div>
-          <small>No es retirable todavía: precios, costos, cancelaciones y devoluciones pueden cambiar la proyección.</small>
-        </article>
-
-        <section class="partner-grid" aria-label="Saldos individuales de socios en el mes seleccionado">
-          <article class="partner-card">
-            <header><span class="partner-avatar">BT</span><div><p>Socio 1</p><h2>Blanca Trejo</h2></div><span class="share-chip">50%</span></header>
-            <dl><div><dt>Participación del mes</dt><dd>{{ formatMoney(sharePerPartner()) }}</dd></div><div><dt>Retirado</dt><dd>{{ formatMoney(selectedMonth().partnerOneWithdrawn) }}</dd></div><div class="partner-pending"><dt>Pendiente</dt><dd>{{ formatMoney(partnerOnePending()) }}</dd></div></dl>
-            <div class="progress-copy"><span>Distribución pagada</span><strong>{{ partnerProgress(selectedMonth().partnerOneWithdrawn).toFixed(0) }}%</strong></div>
-            <div class="progress-track" role="progressbar" aria-label="Distribución pagada a Blanca Trejo" aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="partnerProgress(selectedMonth().partnerOneWithdrawn)"><span [style.width.%]="partnerProgress(selectedMonth().partnerOneWithdrawn)"></span></div>
-            <div class="partner-actions"><button type="button" class="button button--primary" (click)="openPartnerPayment('socio_blanca')">Registrar pago</button><button type="button" class="button button--secondary" (click)="setPartnerScope('general')">Ver historial</button></div>
-          </article>
-
-          <article class="partner-card">
-            <header><span class="partner-avatar partner-avatar--green">AP</span><div><p>Socio 2</p><h2>Andrea y Pepe</h2></div><span class="share-chip">50%</span></header>
-            <dl><div><dt>Participación del mes</dt><dd>{{ formatMoney(sharePerPartner()) }}</dd></div><div><dt>Retirado</dt><dd>{{ formatMoney(selectedMonth().partnerTwoWithdrawn) }}</dd></div><div class="partner-pending is-settled"><dt>Pendiente</dt><dd>{{ formatMoney(partnerTwoPending()) }}</dd></div></dl>
-            <div class="progress-copy"><span>Distribución pagada</span><strong>{{ partnerProgress(selectedMonth().partnerTwoWithdrawn).toFixed(0) }}%</strong></div>
-            <div class="progress-track progress-track--green" role="progressbar" aria-label="Distribución pagada a Andrea y Pepe" aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="partnerProgress(selectedMonth().partnerTwoWithdrawn)"><span [style.width.%]="partnerProgress(selectedMonth().partnerTwoWithdrawn)"></span></div>
-            <div class="partner-actions"><button type="button" class="button button--primary" [disabled]="totalPartnerTwoAvailable() <= 0" (click)="openPartnerPayment('socio_andrea_pepe')">{{ totalPartnerTwoAvailable() <= 0 ? 'Sin efectivo disponible' : 'Registrar pago' }}</button><button type="button" class="button button--secondary" (click)="setPartnerScope('general')">Ver historial</button></div>
-          </article>
-        </section>
-      }
-
-      <article class="panel history-panel">
-        <header class="panel-header">
-          <div><p class="panel-kicker">Ventas, cobranza y reparto</p><h2>Historial mensual auditable</h2><p>Separa cuándo nació el pedido, cuándo se entregó y cuándo entró o salió el dinero.</p></div>
-          @if (partnerScope() === 'mensual') {
-            <button type="button" class="button button--dark" (click)="openCutDialog()"><span class="material-symbols-rounded" aria-hidden="true">lock</span>Cerrar periodo</button>
-          }
-        </header>
-        <div class="accounting-basis-grid" aria-label="Criterios usados en el historial">
-          <div><span class="material-symbols-rounded" aria-hidden="true">calendar_add_on</span><p><strong>Pedidos del mes</strong><small>Cada pedido permanece en el mes de <code>created_at</code>, aunque se cobre después.</small></p></div>
-          <div><span class="material-symbols-rounded" aria-hidden="true">payments</span><p><strong>Cobranza acumulada</strong><small>Muestra cuánto se ha cobrado hasta hoy de esos mismos pedidos.</small></p></div>
-          <div><span class="material-symbols-rounded" aria-hidden="true">trending_up</span><p><strong>Utilidad de esas ventas</strong><small>Venta menos costo; se separa en utilidad cobrada y utilidad que falta por cobrar.</small></p></div>
-        </div>
-        @if (unallocatedHistoricalCollections() > 0) {
-          <div class="data-quality-warning" role="status"><span class="material-symbols-rounded" aria-hidden="true">history_toggle_off</span><p><strong>{{ formatMoney(unallocatedHistoricalCollections()) }} cobrados sin día comprobable</strong><small>Sí se incluyen en la cobranza acumulada del mes en que nació el pedido, pero no se inventa un día para registrarlos como flujo de efectivo mensual.</small></p></div>
-        }
-        <p class="table-scroll-hint"><span class="material-symbols-rounded" aria-hidden="true">swipe</span>Desliza para consultar ventas, cobranza, utilidad y reparto.</p>
-        <div class="table-scroll" tabindex="0" aria-label="Historial mensual de ventas, cobranza, utilidad y distribuciones con desplazamiento horizontal">
-          <table class="distribution-history-table">
-            <thead><tr><th scope="col">Periodo</th><th scope="col"><span class="table-heading">Pedidos creados<small>Venta por fecha de creación</small></span></th><th scope="col"><span class="table-heading">Cobranza acumulada<small>De esos pedidos, hasta hoy</small></span></th><th scope="col"><span class="table-heading">Utilidad de las ventas<small>Venta menos costo</small></span></th><th scope="col"><span class="table-heading">Utilidad cobrada<small>Respaldada por cobranza</small></span></th><th scope="col"><span class="table-heading">Utilidad por cobrar<small>Pendiente de esas ventas</small></span></th><th scope="col">Blanca</th><th scope="col">Andrea y Pepe</th><th scope="col">Estado</th></tr></thead>
-            <tbody>
-              @for (month of months.slice().reverse(); track month.id) {
-                <tr [class.is-selected]="partnerScope() === 'mensual' && month.id === selectedMonthId()">
-                  <th scope="row">{{ month.label }}</th>
-                  <td class="metric-cell"><strong>{{ formatMoney(month.generatedSales) }}</strong><small>{{ month.generatedOrderCount }} pedidos creados</small><small>{{ formatMoney(month.cohortCurrentSales) }} vigentes hoy</small>@if (month.cohortReturnsToDate > 0) {<small class="has-pending">−{{ formatMoney(month.cohortReturnsToDate) }} devuelto después</small>}</td>
-                  <td class="metric-cell cohort-cell"><strong>{{ formatMoney(month.cohortCollectedToDate) }} cobrados</strong><small [class.has-pending]="month.cohortPendingToday > 0">{{ formatMoney(month.cohortPendingToday) }} de venta pendiente</small><span class="cohort-progress" role="progressbar" aria-label="Porcentaje cobrado de las ventas de este periodo" aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="boundedRatio(month.cohortCollectedToDate, month.cohortCollectedToDate + month.cohortPendingToday) * 100"><i [style.width.%]="boundedRatio(month.cohortCollectedToDate, month.cohortCollectedToDate + month.cohortPendingToday) * 100"></i></span></td>
-                  <td class="metric-cell"><strong>{{ formatMoney(month.cohortProfit) }}</strong><small>Margen de los pedidos vigentes</small><small>Antes de gastos generales</small></td>
-                  <td class="metric-cell"><strong>{{ formatMoney(month.cohortCollectedProfit) }}</strong><small>{{ formatPercent(boundedRatio(month.cohortCollectedProfit, month.cohortProfit)) }} de la utilidad</small></td>
-                  <td class="metric-cell"><strong>{{ formatMoney(month.cohortPendingProfit) }}</strong><small [class.has-pending]="month.cohortPendingProfit > 0">Falta respaldar con cobranza</small></td>
-                  <td>{{ formatMoney(month.partnerOneWithdrawn) }}</td><td>{{ formatMoney(month.partnerTwoWithdrawn) }}</td>
-                  <td><span class="table-status" [class.table-status--open]="monthlyDistributionStatus(month) === 'Preliminar'" [class.table-status--partial]="monthlyDistributionStatus(month) === 'Seguimiento'" [class.table-status--late]="monthlyDistributionStatus(month) === 'Cobrado después'">{{ monthlyDistributionStatus(month) }}</span></td>
-                </tr>
-              }
-            </tbody>
-          </table>
-        </div>
-      </article>
-    </section>
+    <app-profit-audit [report]="profitAudit()" [busy]="auditLoading()" [error]="auditError()"
+      [business]="activeBusinessLabel()"
+      [context]="routeScope() === 'general' ? 'Todas las rutas' : routeName(routeScope())"
+      [customers]="auditCustomers()" [accounts]="auditAccounts()" [canEdit]="canEditMovements()"
+      (openOrder)="openOrder($event)" (retry)="reload()" (editMovement)="editAuditMovement($event)" />
   }
 </main>
 

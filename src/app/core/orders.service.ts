@@ -294,6 +294,8 @@ export interface Order {
   last_incident_at?: string | null;
   last_event_at?: string | null;
   created_at: string;
+  /** Original creation date for audit; null means the source did not provide it. */
+  audit_created_at?: string | null;
   updated_at: string;
   items: OrderItem[];
   packages: PackageRecord[];
@@ -314,6 +316,7 @@ export interface Order {
   has_returns?: boolean;
   delivered_at?: string | null;
   paid_at?: string | null;
+  paid_at_quality?: 'estimated' | null;
   closed_at?: string | null;
   collection_status?: CollectionStatus;
   collection_reminder_at?: string | null;
@@ -427,6 +430,7 @@ export class OrdersService {
   private businessScope = inject(BusinessScopeService);
   private adminApi = inject(UserAdminApiService);
   loading = signal(false);
+  loadError = signal<string | null>(null);
   private unsubscribeOrders?: Unsubscribe;
 
   list = computed(() => {
@@ -439,6 +443,7 @@ export class OrdersService {
     if (this.unsubscribeOrders) return;
 
     this.loading.set(true);
+    this.loadError.set(null);
     const allowedBusinesses = this.businessScope.availableBusinessIds();
     const q = query(this.colRef, where("business_id", "in", allowedBusinesses));
 
@@ -448,6 +453,7 @@ export class OrdersService {
       this.unsubscribeOrders = onSnapshot(
         q,
         (snap) => {
+          this.loadError.set(null);
           const rows: Order[] = snap.docs
             .map((d) => this.normalize(d.id, d.data() as any))
             .sort((a, b) => (a.updated_at > b.updated_at ? -1 : 1));
@@ -459,6 +465,8 @@ export class OrdersService {
           }
         },
         (error) => {
+          this.loadError.set('No se pudieron cargar todos los pedidos. Actualiza para reintentar.');
+          this.unsubscribeOrders = undefined;
           console.error("[OrdersService] onSnapshot error:", error);
           this.loading.set(false);
           if (!resolved) {
@@ -900,6 +908,7 @@ export class OrdersService {
         updated_at: serverTimestamp(),
         totals: persistedTotals,
         paid_at: customerPaymentStatus === "collected" ? serverTimestamp() : liveOrder.paid_at || null,
+        paid_at_quality: customerPaymentStatus === "collected" ? null : liveOrder.paid_at_quality || null,
         customer_payment_status: customerPaymentStatus,
         settlement_status: settlementStatus,
         collection_status: customerPaymentStatus === "collected" ? "paid" : "pending",
@@ -956,6 +965,7 @@ export class OrdersService {
         status: nextStatus,
         updated_at: now,
         paid_at: customerPaymentStatus === "collected" ? now : liveOrder.paid_at || null,
+        paid_at_quality: customerPaymentStatus === "collected" ? null : liveOrder.paid_at_quality || null,
         customer_payment_status: customerPaymentStatus,
         settlement_status: settlementStatus,
         collection_status: customerPaymentStatus === "collected" ? "paid" : "pending",
@@ -1917,6 +1927,7 @@ export class OrdersService {
       last_incident_at: data.last_incident_at ? toIso(data.last_incident_at) : null,
       last_event_at: data.last_event_at ? toIso(data.last_event_at) : null,
       created_at: toIso(data.created_at),
+      audit_created_at: data.created_at ? toIso(data.created_at) : null,
       updated_at: toIso(data.updated_at),
       items: Array.isArray(data.items) ? data.items : [],
       packages: Array.isArray(data.packages) ? data.packages.map(normalizePackage) : [],
@@ -1946,6 +1957,7 @@ export class OrdersService {
       has_returns: Boolean(data.has_returns || (Array.isArray(data.items) && data.items.some((item: any) => Number(item?.returned_qty || 0) > 0))),
       delivered_at: data.delivered_at ? toIso(data.delivered_at) : null,
       paid_at: data.paid_at ? toIso(data.paid_at) : null,
+      paid_at_quality: data.paid_at_quality === 'estimated' ? 'estimated' : null,
       closed_at: data.closed_at ? toIso(data.closed_at) : null,
       collection_status: this.normalizeCollectionStatus(data.collection_status),
       collection_reminder_at: data.collection_reminder_at ? toIso(data.collection_reminder_at) : null,
