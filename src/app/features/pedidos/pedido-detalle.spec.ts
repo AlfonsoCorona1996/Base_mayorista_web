@@ -42,10 +42,9 @@ import { calculateWithdrawalProfit } from "../../core/withdrawal-profit";
 /**
  * Estas pruebas cubren la lógica aislada de selección, precios, inventario,
  * opción provisional, badge por producto y tabs.
- * Solo la comprobación responsive renderiza el template. Se omite ngOnInit(),
- * que dispara llamadas reales a servicios
- * (watch() de suscripciones, resolucion de ruta) fuera del alcance de estas
- * pruebas unitarias.
+ * La mayoría comprueba lógica y servicios sin render. Las comprobaciones de
+ * disposición responsive renderizan el template e interrumpen ngOnInit(),
+ * que dispara llamadas reales a servicios.
  */
 describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
   let component: PedidoDetallePage;
@@ -256,8 +255,8 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
       const saving = component.addItem(order);
       expect(component.priceRuleInvalid()).toBeTrue();
       expect(component.popupConfirmOpen()).toBeFalse();
-      expect(component.popupAlertOpen()).toBeTrue();
-      component.closeAlertPopup();
+      expect(component.addItemSubmitDisabled(order)).toBeTrue();
+      expect(component.popupAlertOpen()).toBeFalse();
       await saving;
       expect(addOrderItem).not.toHaveBeenCalled();
     });
@@ -307,17 +306,25 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
     });
 
     it("muestra el aviso completo sin desbordar el modal en los cinco tamaños requeridos", async () => {
+      TestBed.inject(AuthzService).canCap = () => true;
       component.initialHydration.set(false);
       component.addItemModalOpen.set(true);
       component.newItemTitle.set("Espejo y bolsa de regalo con un nombre largo para comprobar la lectura del producto");
+      component.newItemPricePublic.set(109);
+      component.newItemPriceClienta.set(105);
+      component.newItemPriceCost.set(109);
+      component.priceOverrideReason.set("Liquidación de mercancía rezagada");
       fixture.detectChanges();
       await fixture.whenStable();
       fixture.detectChanges();
       const root = fixture.nativeElement as HTMLElement;
-      const notice = root.querySelector<HTMLElement>(".catalog-price-summary");
-      expect(notice?.textContent).toContain("Regalo sin cargo");
-      expect(notice?.textContent).toContain("$109.00");
-      expect(notice?.getAttribute("role")).toBe("status");
+      const notice = root.querySelector<HTMLElement>(".manual-below-cost-reason");
+      const lossSummary = root.querySelector<HTMLElement>(".catalog-price-summary--negative");
+      expect(notice?.textContent).toContain("Autorizar venta con pérdida");
+      expect(lossSummary?.textContent).toContain("$105.00");
+      expect(lossSummary?.textContent).toContain("$4.00");
+      expect(lossSummary?.getAttribute("role")).toBe("status");
+      expect(root.querySelector(".manual-below-cost-authorize")).toBeTruthy();
 
       const css = Array.from(document.styleSheets).flatMap(sheet => Array.from(sheet.cssRules, rule => rule.cssText)).join("\n");
       for (const [width, height] of [[1440, 900], [1024, 768], [768, 1024], [390, 844], [360, 800]]) {
@@ -339,7 +346,7 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
           // Comprueba la disposición final, después de la animación de apertura.
           await new Promise<void>(resolve => frame.contentWindow!.setTimeout(resolve, 200));
           const dialog = doc.querySelector<HTMLElement>(".sheet-add-item-ios")!;
-          const message = doc.querySelector<HTMLElement>(".catalog-price-summary")!;
+          const message = doc.querySelector<HTMLElement>(".catalog-price-summary--negative")!;
           const body = doc.querySelector<HTMLElement>(".sheet-add-item-ios .sheet-body")!;
           body.scrollTop = body.scrollHeight;
           const label = `${width} × ${height}`;
@@ -350,12 +357,112 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
           const actions = doc.querySelector<HTMLElement>(".sheet-add-item-ios .sheet-footer")!;
           expect(message.getBoundingClientRect().bottom).withContext(label).toBeLessThanOrEqual(actions.getBoundingClientRect().top);
           const save = actions.querySelector<HTMLButtonElement>(".primary")!;
+          const authorize = doc.querySelector<HTMLButtonElement>(".manual-below-cost-authorize");
           expect(save.getBoundingClientRect().height).withContext(label).toBeGreaterThanOrEqual(44);
           expect(actions.getBoundingClientRect().bottom).withContext(label).toBeLessThanOrEqual(height);
+          if (authorize) {
+            expect(authorize.scrollWidth).withContext(label).toBeLessThanOrEqual(authorize.clientWidth);
+            expect(authorize.getBoundingClientRect().height).withContext(label).toBeGreaterThanOrEqual(44);
+            expect(authorize.getBoundingClientRect().bottom).withContext(label).toBeLessThanOrEqual(actions.getBoundingClientRect().top);
+          }
         } finally {
           frame.remove();
         }
       }
+    });
+  });
+
+  describe("autorización de liquidaciones manuales debajo del costo", () => {
+    let order: Order;
+
+    beforeEach(() => {
+      order = {
+        order_id: "PED-LIQUIDACION", business_id: "bm", customer_id: "customer", route_id: null,
+        status: "borrador", created_at: "2026-10-14", updated_at: "2026-10-14", items: [],
+        packages: [], timeline: [], totals: { total_amount: 0, paid_amount: 0, balance_due: 0 },
+        packing: { status: "in_progress", packages_count: 0, completed_at: null },
+        dispatch_request: { status: "none", requested_at: null, requested_by: null },
+      };
+      ordersGetById.and.returnValue(order);
+      spyOn(component, "refreshEvents").and.resolveTo();
+      component.newItemSource.set("manual");
+      component.newItemTitle.set("Bolsa rezagada");
+      component.newItemQty.set(2);
+      component.newItemPricePublic.set(109);
+      component.newItemPriceClienta.set(105);
+      component.newItemPriceCost.set(109);
+      component.priceOverrideReason.set("Liquidación de mercancía rezagada");
+    });
+
+    it("muestra la pérdida total, solicita autorización explícita y registra motivo y usuario", async () => {
+      expect(component.isManualBelowCost()).toBeTrue();
+      expect(component.priceRuleInvalid()).toBeTrue();
+      expect(component.manualBelowCostRecoveryLabel()).toBe("$210.00");
+      expect(component.manualBelowCostLossLabel()).toBe("$8.00");
+      expect(component.manualBelowCostApprovalDisabled()).toBeFalse();
+      expect(component.addItemSubmitDisabled(order)).toBeTrue();
+
+      const authorization = component.authorizeManualBelowCost();
+      expect(component.popupConfirmTitle()).toBe("Autorizar venta por debajo del costo");
+      expect(component.popupConfirmMessage()).toContain("$210.00");
+      expect(component.popupConfirmMessage()).toContain("$8.00");
+      component.closeConfirmPopup(true);
+      await authorization;
+
+      expect(component.manualBelowCostAuthorized()).toBeTrue();
+      expect(component.addItemSubmitDisabled(order)).toBeFalse();
+      await component.addItem(order);
+
+      const item = addOrderItem.calls.mostRecent().args[1] as OrderItem;
+      expect(item).toEqual(jasmine.objectContaining({
+        source: "manual", price_clienta: 105, price_cost: 109,
+        price_selected_tier: "manual", price_override_reason: "Liquidación de mercancía rezagada",
+        price_override_by: "test-user", price_override_from: 109, price_override_to: 105,
+        price_override_below_cost: true,
+      }));
+      expect(item.price_override_at).toBeTruthy();
+      expect(logOrderEvent).toHaveBeenCalledWith("PED-LIQUIDACION", "ITEM_ADDED", jasmine.any(String),
+        jasmine.objectContaining({
+          priceOverrideReason: "Liquidación de mercancía rezagada",
+          priceOverrideBelowCost: true,
+        }));
+      expect(auditOrder({ ...order, items: [item] }).profit).toBe(-8);
+    });
+
+    it("requiere confirmar otra vez si se modifica el precio, el costo, la cantidad o el motivo", async () => {
+      const authorization = component.authorizeManualBelowCost();
+      component.closeConfirmPopup(true);
+      await authorization;
+      expect(component.manualBelowCostAuthorized()).toBeTrue();
+
+      component.newItemPriceCost.set(110);
+      expect(component.manualBelowCostAuthorized()).toBeFalse();
+      expect(component.addItemSubmitDisabled(order)).toBeTrue();
+
+      component.newItemPriceClienta.set(104);
+      expect(component.manualBelowCostAuthorized()).toBeFalse();
+      component.priceOverrideReason.set("Liquidación por rezago");
+      expect(component.manualBelowCostAuthorized()).toBeFalse();
+    });
+
+    it("bloquea la autorización si falta permiso o el motivo tiene menos de ocho caracteres", async () => {
+      component.priceOverrideReason.set("rezago");
+      expect(component.manualBelowCostApprovalDisabled()).toBeTrue();
+
+      component.priceOverrideReason.set("Liquidación rezagada");
+      spyOn(TestBed.inject(AuthzService), "canCap").and.returnValue(false);
+      expect(component.manualBelowCostApprovalDisabled()).toBeTrue();
+      await component.authorizeManualBelowCost();
+      expect(component.priceOverrideError()).toContain("no puede autorizar");
+      expect(component.manualBelowCostAuthorized()).toBeFalse();
+      expect(component.popupConfirmOpen()).toBeFalse();
+      expect(component.addItemSubmitDisabled(order)).toBeTrue();
+    });
+
+    it("no confunde una liquidación debajo del costo con un regalo", () => {
+      expect(component.isManualBelowCost()).toBeTrue();
+      expect(component.isManualGift()).toBeFalse();
+      expect(component.manualBelowCostLossLabel()).toBe("$8.00");
     });
   });
 

@@ -3276,6 +3276,49 @@
   resize: vertical;
 }
 
+.manual-below-cost-authorize,
+.manual-below-cost-authorized {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ui-space-8);
+  width: fit-content;
+  max-width: 100%;
+  min-height: var(--ui-touch-target-min);
+}
+
+.manual-below-cost-authorize {
+  white-space: normal;
+  text-align: center;
+}
+
+.manual-below-cost-authorized,
+.manual-below-cost-help {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.manual-below-cost-authorized {
+  color: #166534;
+  font-weight: 700;
+}
+
+.manual-below-cost-authorized .material-symbols-rounded,
+.manual-below-cost-authorize .material-symbols-rounded {
+  flex: 0 0 auto;
+}
+
+.manual-below-cost-help {
+  color: #64748b;
+  font-size: 0.75rem;
+}
+
+@media (max-width: 479px) {
+  .manual-below-cost-authorize {
+    width: 100%;
+  }
+}
+
 .sheet-add-item-ios .input,
 .sheet-add-item-ios select.input,
 .sheet-add-item-ios textarea.input,

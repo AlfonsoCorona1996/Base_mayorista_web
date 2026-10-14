@@ -92,6 +92,14 @@ type OrderItemPriceAudit = Pick<
   | "price_override_below_cost"
 >;
 
+type ManualBelowCostAuthorizationInput = {
+  title: string;
+  clientaPrice: number;
+  costPrice: number;
+  quantity: number;
+  reason: string;
+};
+
 type ProductCountsVm = {
   total: number;
   outOfStock: number;
@@ -621,6 +629,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   catalogPriceTier = signal<CatalogPriceTier>("clienta");
   priceOverrideReason = signal("");
   priceOverrideError = signal<string | null>(null);
+  private readonly manualBelowCostAuthorization = signal<string | null>(null);
   clientaDiscountOpen = signal(false);
   clientaDiscountMode = signal<"pct" | "fixed">("pct");
   clientaDiscountPct = signal(25);
@@ -2986,6 +2995,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       || !this.canEditItems(order)
       || this.addItemSaving()
       || this.addItemProvisionalEditorOpen()
+      || (this.isManualBelowCost() && !this.manualBelowCostAuthorized())
       || (this.newItemSource() === "inventario" && (
         this.inventorySourceLoading()
         || !!this.inventorySourceError()
@@ -5146,6 +5156,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.catalogPriceTier.set("clienta");
     this.priceOverrideReason.set("");
     this.priceOverrideError.set(null);
+    this.manualBelowCostAuthorization.set(null);
     this.selectedPreviewHasColorImage.set(true);
     this.showProductList.set(false);
     this.manualSuggestionsOpen.set(false);
@@ -5289,6 +5300,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.catalogPriceTier.set("clienta");
     this.priceOverrideReason.set("");
     this.priceOverrideError.set(null);
+    this.manualBelowCostAuthorization.set(null);
     this.selectedPreviewHasColorImage.set(true);
     this.manualSuggestionsOpen.set(false);
   }
@@ -9350,7 +9362,9 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     const sourceBusinessId: BusinessId = this.crossBusinessCatalogMode() ? "catalogo" : businessId;
     const selectedImportedProduct = source === "catalogo" ? this.selectedCatalogProduct() : null;
     const warningReason = selectedImportedProduct ? this.priceWarningAckReason() : null;
-    const priceAudit = selectedImportedProduct || this.isManualGift() ? this.catalogPriceAudit() : null;
+    const priceAudit = selectedImportedProduct || this.isManualGift() || (this.isManualBelowCost() && this.manualBelowCostAuthorized())
+      ? this.catalogPriceAudit()
+      : null;
     const productRefType =
       source === "manual"
         ? "manual"
@@ -10210,6 +10224,85 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     return this.authz.canCap("cap.orders.price_below_cost");
   }
 
+  isManualBelowCost(): boolean {
+    const clientaPrice = this.newItemPriceClienta();
+    const costPrice = this.newItemPriceCost();
+    return this.isManualSource()
+      && clientaPrice !== null
+      && clientaPrice > 0
+      && costPrice !== null
+      && Number.isFinite(costPrice)
+      && costPrice > 0
+      && clientaPrice < costPrice;
+  }
+
+  manualBelowCostAuthorizationInput(): ManualBelowCostAuthorizationInput {
+    return {
+      title: this.newItemTitle().trim(),
+      clientaPrice: this.newItemPriceClienta() ?? 0,
+      costPrice: this.newItemPriceCost() ?? 0,
+      quantity: this.normalizedNewItemQty(),
+      reason: this.priceOverrideReason().trim(),
+    };
+  }
+
+  manualBelowCostAuthorized(): boolean {
+    return this.isManualBelowCost()
+      && this.priceOverrideReason().trim().length >= 8
+      && this.manualBelowCostAuthorization() === JSON.stringify(this.manualBelowCostAuthorizationInput());
+  }
+
+  manualBelowCostApprovalDisabled(): boolean {
+    return !this.canAuthorizeBelowCost()
+      || !this.isManualBelowCost()
+      || !this.newItemTitle().trim()
+      || this.priceOverrideReason().trim().length < 8
+      || this.manualBelowCostAuthorized()
+      || this.addItemSaving();
+  }
+
+  manualBelowCostRecoveryLabel(): string {
+    const input = this.manualBelowCostAuthorizationInput();
+    return this.formatCurrency(Number((input.clientaPrice * input.quantity).toFixed(2)));
+  }
+
+  manualBelowCostLossLabel(): string {
+    const input = this.manualBelowCostAuthorizationInput();
+    return this.formatCurrency(Number(((input.costPrice - input.clientaPrice) * input.quantity).toFixed(2)));
+  }
+
+  async authorizeManualBelowCost(): Promise<void> {
+    this.priceOverrideError.set(null);
+    if (!this.isManualBelowCost()) return;
+    if (!this.canAuthorizeBelowCost()) {
+      this.priceOverrideError.set("Tu usuario no puede autorizar ventas por debajo del costo.");
+      return;
+    }
+
+    const input = this.manualBelowCostAuthorizationInput();
+    if (!input.title) {
+      this.priceOverrideError.set("Escribe el nombre del producto antes de autorizar el precio.");
+      return;
+    }
+    if (input.reason.length < 8) {
+      this.priceOverrideError.set("Explica el motivo de la liquidación (mínimo 8 caracteres).");
+      return;
+    }
+
+    const approved = await this.showPopupConfirm(
+      `Cobrarás ${this.formatCurrency(input.clientaPrice * input.quantity)}. El costo no recuperado será ${this.formatCurrency((input.costPrice - input.clientaPrice) * input.quantity)} en ${input.quantity} pieza(s). Motivo: ${input.reason}.`,
+      {
+        title: "Autorizar venta por debajo del costo",
+        confirmLabel: "Autorizar pérdida",
+        cancelLabel: "Revisar",
+        danger: true,
+      },
+    );
+    if (!approved) return;
+    this.manualBelowCostAuthorization.set(JSON.stringify(input));
+    this.priceOverrideError.set(null);
+  }
+
   isManualGift(): boolean {
     const cost = this.newItemPriceCost();
     return this.isManualSource()
@@ -10235,6 +10328,17 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
           cancelLabel: "Revisar",
         },
       );
+    }
+    if (this.isManualBelowCost()) {
+      if (!this.canAuthorizeBelowCost()) {
+        this.priceOverrideError.set("Tu usuario no puede autorizar ventas por debajo del costo.");
+        return false;
+      }
+      if (!this.manualBelowCostAuthorized()) {
+        this.priceOverrideError.set("Autoriza y confirma la pérdida antes de añadir este producto.");
+        return false;
+      }
+      return true;
     }
     const selectedProduct = this.selectedCatalogProduct();
     const cost = this.newItemPriceCost();
@@ -10300,6 +10404,18 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         price_override_at: new Date().toISOString(),
         price_override_from: this.newItemPricePublic(),
         price_override_to: 0,
+        price_override_below_cost: true,
+      };
+    }
+    if (this.isManualBelowCost() && this.manualBelowCostAuthorized()) {
+      const input = this.manualBelowCostAuthorizationInput();
+      return {
+        price_selected_tier: "manual",
+        price_override_reason: input.reason,
+        price_override_by: this.authz.currentUserSig()?.uid || null,
+        price_override_at: new Date().toISOString(),
+        price_override_from: input.costPrice,
+        price_override_to: input.clientaPrice,
         price_override_below_cost: true,
       };
     }

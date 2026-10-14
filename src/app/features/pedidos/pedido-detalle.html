@@ -2883,6 +2883,48 @@
               </div>
             }
 
+            @if (isManualBelowCost()) {
+              <div class="catalog-price-summary catalog-price-summary--negative" role="status" aria-live="polite">
+                <span class="material-symbols-rounded" aria-hidden="true">warning</span>
+                <span>Recuperas <strong>{{ manualBelowCostRecoveryLabel() }}</strong>. Quedarán <strong>{{ manualBelowCostLossLabel() }}</strong> de costo por recuperar por esta cantidad.</span>
+              </div>
+              <div class="field catalog-price-reason manual-below-cost-reason">
+                <label for="manual-below-cost-reason">Motivo de la liquidación</label>
+                <textarea
+                  id="manual-below-cost-reason"
+                  class="input"
+                  rows="2"
+                  maxlength="280"
+                  [ngModel]="priceOverrideReason()"
+                  (ngModelChange)="priceOverrideReason.set($event); priceOverrideError.set(null)"
+                  [attr.aria-describedby]="priceOverrideError() ? 'manual-below-cost-error' : null"
+                  placeholder="Mercancía rezagada · mínimo 8 caracteres"
+                ></textarea>
+                @if (priceOverrideError()) {
+                  <p id="manual-below-cost-error" class="field-error" role="alert">{{ priceOverrideError() }}</p>
+                }
+                @if (!canAuthorizeBelowCost()) {
+                  <p class="field-error" role="alert">Tu usuario no puede autorizar ventas por debajo del costo. Solicita la autorización a alguien con ese permiso.</p>
+                } @else if (manualBelowCostAuthorized()) {
+                  <p class="manual-below-cost-authorized" role="status">
+                    <span class="material-symbols-rounded" aria-hidden="true">verified_user</span>
+                    Pérdida autorizada. Ya puedes añadir el producto.
+                  </p>
+                } @else {
+                  <button
+                    type="button"
+                    class="btn danger manual-below-cost-authorize"
+                    [disabled]="manualBelowCostApprovalDisabled()"
+                    (click)="authorizeManualBelowCost()"
+                  >
+                    <span class="material-symbols-rounded" aria-hidden="true">verified_user</span>
+                    Autorizar venta con pérdida
+                  </button>
+                  <p class="manual-below-cost-help">Debes autorizar la pérdida antes de añadir el producto.</p>
+                }
+              </div>
+            }
+
             @if (selectedCatalogProduct()) {
               <div class="catalog-price-summary" [class.catalog-price-summary--negative]="priceRuleInvalid()" role="status" aria-live="polite">
                 <span class="material-symbols-rounded" aria-hidden="true">{{ priceRuleInvalid() ? "warning" : "trending_up" }}</span>
