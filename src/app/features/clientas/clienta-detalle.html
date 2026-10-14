@@ -288,6 +288,9 @@
         </div>
       }
     }
+    @if (creditHistoryError()) {
+      <p class="cd-empty compact" role="status">No se pudo cargar el historial de saldo a favor; los movimientos pueden estar incompletos. El saldo a favor mostrado viene de la ficha de la clienta.</p>
+    }
     @if (creditMovements().length > 0) {
       <ul class="cd-order-list">
         @for (movement of creditMovements(); track movement.movement_id) {

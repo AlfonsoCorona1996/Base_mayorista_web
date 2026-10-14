@@ -1,6 +1,7 @@
-import { Injectable, signal } from "@angular/core";
+import { Injectable, inject, signal } from "@angular/core";
 import { FIRESTORE } from "./firebase.providers";
 import { collection, doc, getDocs, orderBy, query, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
+import { PerfMetricsService, firebaseErrorCode } from "./perf-metrics.service";
 
 export interface RouteExpenseTemplate {
   template_id: string;
@@ -28,10 +29,21 @@ export interface RoutePlan {
 export class RoutesService {
   private colRef = collection(FIRESTORE, "routes");
   routes = signal<RoutePlan[]>([]);
+  private perf = inject(PerfMetricsService);
 
   async loadFromFirestore(): Promise<void> {
     const q = query(this.colRef, orderBy("name", "asc"));
-    const snap = await getDocs(q);
+    const startedAt = this.perf.now();
+    let snap;
+    try {
+      snap = await getDocs(q);
+    } catch (error) {
+      this.perf.record("routes_query_ms", startedAt, { result: "error", error_code: firebaseErrorCode(error) });
+      throw error;
+    }
+    this.perf.record("routes_query_ms", startedAt, {
+      result: "success", source: snap.metadata.fromCache ? "cache" : "server", docs: snap.docs.length,
+    });
 
     const rows = snap.docs.map((entry) => {
       const data = entry.data() as Partial<RoutePlan>;

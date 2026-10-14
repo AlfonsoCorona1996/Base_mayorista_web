@@ -47,9 +47,19 @@
               </button>
             }
           </div>
-        } @else if (showCustomerList() && customerQuery().trim().length >= 2) {
-          <div class="auto-list auto-empty" (mousedown)="$event.preventDefault()">
-            <div class="auto-empty-text">No existe una clienta con ese nombre.</div>
+        } @else if (showCustomerList() && customerSearchState() !== 'idle') {
+          <div class="auto-list auto-empty" role="status" (mousedown)="$event.preventDefault()">
+            @switch (customerSearchState()) {
+              @case ('loading') {
+                <div class="auto-empty-text">Cargando clientas…</div>
+              }
+              @case ('error') {
+                <div class="auto-empty-text">No se pudieron cargar las clientas.</div>
+              }
+              @default {
+                <div class="auto-empty-text">No existe una clienta con ese nombre.</div>
+              }
+            }
           </div>
         }
       </div>
@@ -70,6 +80,20 @@
         </label>
       }
     </div>
+
+    @if (customersLoadError()) {
+      <div class="alert error load-alert" role="alert">
+        <span class="material-symbols-rounded" aria-hidden="true">error</span>
+        <span class="load-alert-text">
+          @if (customersLoaded()) {
+            No se pudo actualizar la lista de clientas. El buscador usa la última lista cargada.
+          } @else {
+            No se pudieron cargar las clientas para el buscador.
+          }
+        </span>
+        <button type="button" class="btn ghost load-alert-action" (click)="retryCustomers()">Reintentar</button>
+      </div>
+    }
   </section>
 
   <section class="filters surface-card">
@@ -169,6 +193,19 @@
     <div class="alert error">
       <span class="material-symbols-rounded" aria-hidden="true">error</span>
       <span>{{ error() }}</span>
+    </div>
+  }
+
+  @if (ordersLoadError()) {
+    <div class="alert error load-alert" role="alert">
+      <span class="material-symbols-rounded" aria-hidden="true">error</span>
+      <span class="load-alert-text">
+        No se pudieron cargar los pedidos.
+        @if (filtered().length > 0) {
+          Se muestran los últimos datos recibidos.
+        }
+      </span>
+      <button type="button" class="btn ghost load-alert-action" (click)="retryOrders()" [disabled]="loading()">Reintentar</button>
     </div>
   }
 
@@ -278,10 +315,14 @@
       }
     </div>
 
-      @if (filteredOrders.length === 0 && !loading()) {
+      @if (filteredOrders.length === 0 && ordersListState() === 'ready') {
         <article class="empty-card surface-card">
           <p class="kicker">Sin resultados</p>
           <p class="muted">Crea tu primer pedido o ajusta los filtros.</p>
+        </article>
+      } @else if (filteredOrders.length === 0 && ordersListState() === 'syncing') {
+        <article class="empty-card surface-card" role="status">
+          <p>Sincronizando pedidos con el servidor…</p>
         </article>
       }
     }
@@ -293,7 +334,7 @@
         <div class="sheet-handle" aria-hidden="true"></div>
         <h2>Cuantos paquetes esperas?</h2>
         <p class="muted">
-          {{ customerName(plannedOrder()?.customer_id || "") }} &middot; {{ routeName(plannedOrder()?.route_id || null) }}
+          {{ customerDisplayName(plannedOrder()?.customer_id || "") }} &middot; {{ routeName(plannedOrder()?.route_id || null) }}
         </p>
         <div class="sheet-field">
           <label>Paquetes planificados</label>
@@ -313,7 +354,7 @@
         <div class="sheet-handle" aria-hidden="true"></div>
         <h2>{{ sheetAction()?.label }}</h2>
         <p class="muted">
-          {{ customerName(sheetOrder()?.customer_id || "") }} &middot; {{ routeName(sheetOrder()?.route_id || null) }}
+          {{ customerDisplayName(sheetOrder()?.customer_id || "") }} &middot; {{ routeName(sheetOrder()?.route_id || null) }}
         </p>
         <div class="sheet-summary">
           <span>{{ sheetOrder()?.items?.length ?? 0 }} productos</span>
@@ -475,7 +516,15 @@
         </div>
         <div class="tfilter-footer">
           <p class="tfilter-footer-text">
-            <strong>{{ tableRows().length }} resultados</strong>
+            <strong>
+              @if (tableRows().length > 0 || ordersListState() === 'ready') {
+                {{ tableRows().length }} resultados
+              } @else if (ordersListState() === 'error') {
+                Resultados no disponibles
+              } @else {
+                Cargando resultados…
+              }
+            </strong>
             @if (tableRangeCompactSummary()) {
               <span class="tfilter-footer-sep" aria-hidden="true">&bull;</span>
               <span>{{ tableRangeCompactSummary() }}</span>
@@ -512,7 +561,7 @@
         }
       </div>
 
-      @if (tableRows().length === 0) {
+      @if (tableRows().length === 0 && ordersListState() === 'ready') {
         <div class="table-empty-banner" role="status">
           <span class="material-symbols-rounded" aria-hidden="true">filter_alt_off</span>
           <span>No hay resultados con los filtros activos.</span>
@@ -701,7 +750,7 @@
                 </td>
                 <td class="td-date">{{ formatTableDateShort(order.created_at) }}</td>
                 <td class="td-customer">
-                  <span class="tc-name">{{ customerName(order.customer_id) }}</span>
+                  <span class="tc-name">{{ customerDisplayName(order.customer_id) }}</span>
                   @if (businessScope.isBothMode()) {
                     <span class="business-badge" [ngClass]="orderBusinessClass(order)">{{ orderBusinessLabel(order) }}</span>
                   }
@@ -730,6 +779,21 @@
                 </td>
               </tr>
             } @empty {
+              @if (ordersListState() !== 'ready') {
+                <tr>
+                  <td colspan="9" class="trow-empty">
+                    <div class="trow-empty-content" role="status">
+                      <p class="trow-empty-title">
+                        @switch (ordersListState()) {
+                          @case ('error') { No se pudieron cargar los pedidos. }
+                          @case ('syncing') { Sincronizando pedidos con el servidor… }
+                          @default { Cargando pedidos… }
+                        }
+                      </p>
+                    </div>
+                  </td>
+                </tr>
+              } @else {
               <tr>
                 <td colspan="9" class="trow-empty">
                   <div class="trow-empty-content">
@@ -749,6 +813,7 @@
                   </div>
                 </td>
               </tr>
+              }
             }
           </tbody>
         </table>
