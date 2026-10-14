@@ -184,6 +184,7 @@ export default class ClientaDetallePage implements OnInit {
     return Math.floor(daysSince(pending[pending.length - 1].created_at));
   });
   creditMovements = computed(() => this.customers.creditMovementsFor(this.customerId()));
+  creditHistoryError = computed(() => this.customers.creditError());
   followups = computed(() => this.followupsService.forCustomer(this.customerId()).sort((a, b) => a.due_at.localeCompare(b.due_at)));
   openFollowups = computed(() => this.followups().filter((row) => row.status === "open" || row.status === "snoozed"));
   overdueFollowups = computed(() => this.openFollowups().filter((row) => this.isOverdue(row.due_at)));

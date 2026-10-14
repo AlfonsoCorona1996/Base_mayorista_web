@@ -1,9 +1,11 @@
-import { Injectable, inject, signal } from "@angular/core";
+import { Injectable, InjectionToken, computed, inject, signal } from "@angular/core";
 import { FIRESTORE } from "./firebase.providers";
-import { collection, doc, getDocs, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc, where } from "firebase/firestore";
+import { QuerySnapshot, collection, doc, getDocs, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc, where } from "firebase/firestore";
 import { BusinessId, normalizeBusinessId } from "./rbac.constants";
 import { BusinessScopeService } from "./business-scope.service";
 import { calculateOrderFinancials, toPersistedOrderTotals } from "./order-financials";
+import { LatestLoadGate, LoadTicket } from "./latest-load-gate";
+import { PerfMetricsService, PerfSource, firebaseErrorCode } from "./perf-metrics.service";
 
 export type OptInStatus = "opted_in" | "opted_out" | "unknown";
 export type CommercialStage = "nueva" | "activa" | "frecuente" | "en_riesgo" | "inactiva" | "recuperada" | "prospecto";
@@ -65,44 +67,242 @@ export interface CustomerCreditMovement {
   created_at?: any;
 }
 
+/** Disponibilidad de un recurso cargado bajo demanda. */
+export type DataLoadStatus = "idle" | "loading" | "ready" | "error";
+
+export interface RawFirestoreDoc {
+  id: string;
+  data(): Record<string, unknown>;
+}
+
+export interface RawQueryResult {
+  docs: RawFirestoreDoc[];
+  fromCache: boolean;
+}
+
+/**
+ * Lecturas de Firestore que usa CustomersService. Separadas en un token para
+ * poder controlar en pruebas el orden y el resultado de cada consulta.
+ */
+export interface CustomersDataSource {
+  /** Formato legado: incluye documentos que todavía no tienen business_id. */
+  fetchAllCustomers(): Promise<RawQueryResult>;
+  fetchCustomersByBusiness(businessIds: BusinessId[]): Promise<RawQueryResult>;
+  fetchCreditMovements(businessIds: BusinessId[]): Promise<RawQueryResult>;
+}
+
+export const CUSTOMERS_DATA_SOURCE = new InjectionToken<CustomersDataSource>("CUSTOMERS_DATA_SOURCE", {
+  providedIn: "root",
+  factory: () => {
+    const customersCol = collection(FIRESTORE, "customers");
+    const creditCol = collection(FIRESTORE, "customer_credit_movements");
+    const toResult = (snap: QuerySnapshot): RawQueryResult => ({ docs: snap.docs, fromCache: snap.metadata.fromCache });
+    return {
+      fetchAllCustomers: async () => toResult(await getDocs(query(customersCol, orderBy("first_name", "asc")))),
+      fetchCustomersByBusiness: async (businessIds) => toResult(await getDocs(query(customersCol, where("business_id", "in", businessIds)))),
+      fetchCreditMovements: async (businessIds) => toResult(await getDocs(query(creditCol, where("business_id", "in", businessIds)))),
+    };
+  },
+});
+
+interface StoredCustomer {
+  customer: Customer;
+  legacyWithoutBusiness: boolean;
+}
+
+export interface LoadOptions {
+  /** Inicia una lectura nueva aunque haya otra en curso (la usa la carga completa). */
+  force?: boolean;
+}
+
 @Injectable({ providedIn: "root" })
 export class CustomersService {
   private colRef = collection(FIRESTORE, "customers");
   private creditMovementsCol = collection(FIRESTORE, "customer_credit_movements");
-  customers = signal<Customer[]>([]);
-  creditMovements = signal<CustomerCreditMovement[]>([]);
   private businessScope = inject(BusinessScopeService);
+  private dataSource = inject(CUSTOMERS_DATA_SOURCE);
+  private perf = inject(PerfMetricsService);
 
-  async loadFromFirestore(): Promise<void> {
-    // Primero leemos el formato legado: esos documentos aún no tienen business_id.
-    // Cuando las reglas V2 ya estén desplegadas, la consulta acotada es el fallback seguro.
-    let snap;
-    try {
-      snap = await getDocs(query(this.colRef, orderBy("first_name", "asc")));
-    } catch {
-      snap = await getDocs(query(this.colRef, where("business_id", "in", this.businessScope.availableBusinessIds())));
-    }
+  // Se guarda todo lo autorizado y se filtra al negocio activo al leer: cambiar de
+  // negocio no necesita otra consulta ni deja clientas del ámbito anterior.
+  private customerRows = signal<StoredCustomer[]>([]);
+  private creditRows = signal<CustomerCreditMovement[]>([]);
 
-    let creditDocs: Array<{ id: string; data: () => Record<string, unknown> }> = [];
-    try {
-      const creditSnap = await getDocs(query(this.creditMovementsCol, where("business_id", "in", this.businessScope.availableBusinessIds())));
-      creditDocs = creditSnap.docs as Array<{ id: string; data: () => Record<string, unknown> }>;
-    } catch {
-      // El ledger es nuevo y no debe impedir que carguen las clientas antiguas.
-      creditDocs = [];
-    }
-
-    const normalizedRows = snap.docs.map((entry) => {
-      const data = entry.data() as Partial<Customer>;
-      return { customer: this.normalizeCustomer(data, entry.id), legacyWithoutBusiness: !data.business_id };
-    }).sort((a, b) => a.customer.first_name.localeCompare(b.customer.first_name, "es"));
-
+  /** Clientas del negocio activo (los documentos legados sin business_id se conservan). */
+  readonly customers = computed<Customer[]>(() => {
     const active = this.businessScope.activeBusinessIds();
-    this.customers.set(normalizedRows
+    return this.customerRows()
       .filter((row) => row.legacyWithoutBusiness || active.includes(row.customer.business_id))
-      .map((row) => row.customer));
-    this.creditMovements.set(creditDocs.map((entry) => {
-      const data = entry.data() as Record<string, unknown>;
+      .map((row) => row.customer);
+  });
+
+  /** Movimientos de saldo a favor del negocio activo. */
+  readonly creditMovements = computed<CustomerCreditMovement[]>(() => {
+    const active = this.businessScope.activeBusinessIds();
+    return this.creditRows().filter((row) => active.includes(row.business_id));
+  });
+
+  /** Estado de la última lectura de clientas básicas. */
+  readonly customersStatus = signal<DataLoadStatus>("idle");
+  readonly customersError = signal<string | null>(null);
+  /** Hay un resultado exitoso publicado para los negocios autorizados vigentes. */
+  readonly customersLoaded = signal(false);
+  /** Origen del último resultado publicado según Firestore. */
+  readonly customersSource = signal<"cache" | "server" | null>(null);
+
+  /** Estado de la última lectura del historial de saldo a favor. */
+  readonly creditStatus = signal<DataLoadStatus>("idle");
+  readonly creditError = signal<string | null>(null);
+  readonly creditLoaded = signal(false);
+
+  private customersGate = new LatestLoadGate();
+  private creditGate = new LatestLoadGate();
+  private customersKey: string | null = null;
+  private creditKey: string | null = null;
+
+  /**
+   * Carga completa con el contrato histórico: clientas + historial de saldo a favor.
+   *
+   * - Como antes, siempre hace lecturas nuevas: nunca reutiliza una lectura iniciada
+   *   antes (p. ej. antes de que otra pantalla registrara una devolución con saldo).
+   * - Las clientas se publican en cuanto termina su consulta; ya no esperan al ledger.
+   * - La promesa resuelve cuando ambas lecturas terminaron, así que quien la espera
+   *   sigue recibiendo datos completos (p. ej. la ficha de clienta).
+   * - Rechaza si fallan las clientas, como antes. Un fallo del ledger tampoco rechaza
+   *   (antes se silenciaba igual), pero ahora queda en `creditStatus`/`creditError`.
+   */
+  async loadFromFirestore(): Promise<void> {
+    const customers = this.loadCustomers({ force: true });
+    const credit = this.loadCreditMovements({ force: true }).catch(() => undefined);
+    await Promise.all([customers, credit]);
+  }
+
+  /**
+   * Solo clientas básicas (nombre, WhatsApp, ruta, saldo de la ficha). Es lo que
+   * necesitan el buscador y los nombres de Pedidos. Comparte la lectura en curso.
+   */
+  loadCustomers(options: LoadOptions = {}): Promise<void> {
+    const businessIds = this.businessScope.availableBusinessIds();
+    const key = businessIds.join("|");
+    return this.customersGate.run(key, options.force === true, (ticket) =>
+      this.fetchAndPublishCustomers(businessIds, key, ticket),
+    );
+  }
+
+  /** Solo el historial de movimientos de saldo a favor. Comparte la lectura en curso. */
+  loadCreditMovements(options: LoadOptions = {}): Promise<void> {
+    const businessIds = this.businessScope.availableBusinessIds();
+    const key = businessIds.join("|");
+    return this.creditGate.run(key, options.force === true, (ticket) =>
+      this.fetchAndPublishCredit(businessIds, key, ticket),
+    );
+  }
+
+  private async fetchAndPublishCustomers(businessIds: BusinessId[], key: string, ticket: LoadTicket): Promise<void> {
+    const loadId = this.perf.newLoadId("customers");
+    const startedAt = this.perf.now();
+    if (this.customersKey !== null && this.customersKey !== key) {
+      // Cambiaron los negocios autorizados: no se conserva nada leído con el permiso anterior.
+      this.customerRows.set([]);
+      this.customersLoaded.set(false);
+      this.customersSource.set(null);
+      this.customersKey = null;
+    }
+    this.customersStatus.set("loading");
+    this.customersError.set(null);
+
+    let result: RawQueryResult;
+    try {
+      result = await this.queryCustomers(businessIds, loadId, ticket.isCurrent);
+    } catch (error) {
+      // El fallo de una carga ya reemplazada no se muestra: se espera a la vigente.
+      if (!ticket.isCurrent()) return this.customersGate.latest() ?? undefined;
+      this.customersStatus.set("error");
+      this.customersError.set("No se pudieron cargar las clientas.");
+      this.perf.record("customers_publish_ms", startedAt, { result: "error", load_id: loadId, error_code: firebaseErrorCode(error) });
+      throw error;
+    }
+    // Una carga posterior ya publicó: esta respuesta, más vieja, no debe sobrescribirla.
+    if (!ticket.claimPublish()) return this.customersGate.latest() ?? undefined;
+
+    const rows = result.docs
+      .map((entry) => {
+        const data = entry.data() as Partial<Customer>;
+        return { customer: this.normalizeCustomer(data, entry.id), legacyWithoutBusiness: !data.business_id };
+      })
+      .sort((a, b) => a.customer.first_name.localeCompare(b.customer.first_name, "es"));
+
+    this.customerRows.set(rows);
+    this.customersKey = key;
+    this.customersLoaded.set(true);
+    this.customersSource.set(result.fromCache ? "cache" : "server");
+    this.customersStatus.set("ready");
+    this.customersError.set(null);
+    this.perf.record("customers_publish_ms", startedAt, {
+      result: "success",
+      load_id: loadId,
+      source: result.fromCache ? "cache" : "server",
+      docs: rows.length,
+      docs_in_scope: this.customers().length,
+    });
+  }
+
+  // Primero leemos el formato legado: esos documentos aún no tienen business_id.
+  // Cuando las reglas V2 ya estén desplegadas, la consulta acotada es el fallback seguro.
+  private async queryCustomers(businessIds: BusinessId[], loadId: string, isCurrent: () => boolean): Promise<RawQueryResult> {
+    const legacyStartedAt = this.perf.now();
+    try {
+      const result = await this.dataSource.fetchAllCustomers();
+      this.perf.record("customers_query_ms", legacyStartedAt, this.querySuccess(loadId, "legacy", result));
+      return result;
+    } catch (legacyError) {
+      this.perf.record("customers_query_ms", legacyStartedAt, {
+        result: "error", load_id: loadId, attempt: "legacy", error_code: firebaseErrorCode(legacyError),
+      });
+      // Una carga ya reemplazada no gasta otra lectura en el fallback.
+      if (!isCurrent()) throw legacyError;
+    }
+
+    const scopedStartedAt = this.perf.now();
+    try {
+      const result = await this.dataSource.fetchCustomersByBusiness(businessIds);
+      this.perf.record("customers_query_ms", scopedStartedAt, this.querySuccess(loadId, "business_scope", result));
+      return result;
+    } catch (error) {
+      this.perf.record("customers_query_ms", scopedStartedAt, {
+        result: "error", load_id: loadId, attempt: "business_scope", error_code: firebaseErrorCode(error),
+      });
+      throw error;
+    }
+  }
+
+  private async fetchAndPublishCredit(businessIds: BusinessId[], key: string, ticket: LoadTicket): Promise<void> {
+    const loadId = this.perf.newLoadId("credit");
+    const startedAt = this.perf.now();
+    if (this.creditKey !== null && this.creditKey !== key) {
+      this.creditRows.set([]);
+      this.creditLoaded.set(false);
+      this.creditKey = null;
+    }
+    this.creditStatus.set("loading");
+    this.creditError.set(null);
+
+    let result: RawQueryResult;
+    try {
+      result = await this.dataSource.fetchCreditMovements(businessIds);
+    } catch (error) {
+      if (!ticket.isCurrent()) return this.creditGate.latest() ?? undefined;
+      // Se conservan los movimientos ya publicados para este mismo ámbito; el estado
+      // de error indica que pueden no estar actualizados.
+      this.creditStatus.set("error");
+      this.creditError.set("No se pudo cargar el historial de saldo a favor.");
+      this.perf.record("customer_credit_query_ms", startedAt, { result: "error", load_id: loadId, error_code: firebaseErrorCode(error) });
+      throw error;
+    }
+    if (!ticket.claimPublish()) return this.creditGate.latest() ?? undefined;
+
+    const rows = result.docs.map((entry) => {
+      const data = entry.data();
       return {
         movement_id: String(data["movement_id"] || entry.id),
         business_id: normalizeBusinessId(data["business_id"]),
@@ -114,7 +314,24 @@ export class CustomersService {
         notes: data["notes"] ? String(data["notes"]) : null,
         created_at: data["created_at"] ?? null,
       };
-    }).filter((row) => active.includes(row.business_id)));
+    });
+    this.creditRows.set(rows);
+    this.creditKey = key;
+    this.creditLoaded.set(true);
+    this.creditStatus.set("ready");
+    this.creditError.set(null);
+    this.perf.record("customer_credit_query_ms", startedAt, {
+      result: "success",
+      load_id: loadId,
+      source: result.fromCache ? "cache" : "server",
+      docs: rows.length,
+      docs_in_scope: this.creditMovements().length,
+    });
+  }
+
+  private querySuccess(loadId: string, attempt: "legacy" | "business_scope", result: RawQueryResult) {
+    const source: PerfSource = result.fromCache ? "cache" : "server";
+    return { result: "success" as const, load_id: loadId, attempt, source, docs: result.docs.length };
   }
 
   getActive(): Customer[] {

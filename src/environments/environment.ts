@@ -4,6 +4,8 @@ export const environment = {
   // Ejemplo: "https://api.tudominio.com"
   adminApiBaseUrl: "https://api.base-mayorista.com",
   featureFlags: { returnsV2: true, inventoryProductsV2: true, customerCrmV2: true },
+  // Mediciones de carga solo en memoria del navegador. Tambien se activan con ?perf=1.
+  perfMetrics: false,
   // adminApiBaseUrl: "http://localhost:3000",
   firebase:{
       apiKey: "AIzaSyBZhmiBbnywXaTW32VTaZFPPPzGNLJCXDo",

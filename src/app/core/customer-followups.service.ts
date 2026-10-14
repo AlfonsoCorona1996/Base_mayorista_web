@@ -3,6 +3,7 @@ import { collection, doc, getDocs, query, serverTimestamp, setDoc, updateDoc, wh
 import { FIREBASE_AUTH, FIRESTORE } from "./firebase.providers";
 import { BusinessScopeService } from "./business-scope.service";
 import { BusinessId, normalizeBusinessId } from "./rbac.constants";
+import { PerfMetricsService, firebaseErrorCode } from "./perf-metrics.service";
 
 export type CustomerFollowupType = "payment_reminder" | "post_sale" | "birthday" | "reactivation" | "quote" | "general_note";
 export type CustomerFollowupStatus = "open" | "done" | "snoozed" | "canceled";
@@ -43,6 +44,7 @@ export interface CustomerFollowupInput {
 export class CustomerFollowupsService {
   private colRef = collection(FIRESTORE, "customer_followups");
   private businessScope = inject(BusinessScopeService);
+  private perf = inject(PerfMetricsService);
   followups = signal<CustomerFollowup[]>([]);
 
   async loadFromFirestore(): Promise<void> {
@@ -53,10 +55,15 @@ export class CustomerFollowupsService {
     }
 
     let docs: Array<{ id: string; data: () => Record<string, unknown> }> = [];
+    const startedAt = this.perf.now();
     try {
       const snap = await getDocs(query(this.colRef, where("business_id", "in", businessIds)));
       docs = snap.docs as Array<{ id: string; data: () => Record<string, unknown> }>;
-    } catch {
+      this.perf.record("followups_query_ms", startedAt, {
+        result: "success", source: snap.metadata.fromCache ? "cache" : "server", docs: docs.length,
+      });
+    } catch (error) {
+      this.perf.record("followups_query_ms", startedAt, { result: "error", error_code: firebaseErrorCode(error) });
       docs = [];
     }
 

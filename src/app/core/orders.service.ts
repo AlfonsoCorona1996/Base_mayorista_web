@@ -1,4 +1,4 @@
-import { Injectable, computed, inject, signal } from "@angular/core";
+import { Injectable, InjectionToken, computed, inject, signal } from "@angular/core";
 import { FIRESTORE } from "./firebase.providers";
 import {
   arrayUnion,
@@ -39,6 +39,47 @@ import {
   supplierOperationReservedForOrderId,
 } from "./supplier-operation-state";
 import { financePeriodDocumentId, ledgerEntryPayload, monthIdFromDateInput } from "./finance-ledger";
+import { PerfMetricsService, firebaseErrorCode } from "./perf-metrics.service";
+
+/**
+ * Sincronización del listener de pedidos:
+ * - loading: aún no llega ningún snapshot.
+ * - cache: datos locales de IndexedDB; el servidor todavía no los confirmó.
+ * - server: snapshot confirmado por el servidor.
+ * - error: el listener se cerró con error; los datos previos se conservan.
+ */
+export type OrdersSyncState = "idle" | "loading" | "cache" | "server" | "error";
+
+export interface OrdersSnapshotEvent {
+  docs: Array<{ id: string; data(): Record<string, unknown> }>;
+  fromCache: boolean;
+  /** Documentos agregados, modificados o eliminados; 0 si solo cambió metadata. */
+  changedDocs: number;
+}
+
+/** Listener de pedidos aislado en un token para poder simularlo en pruebas. */
+export interface OrdersSnapshotSource {
+  listen(
+    businessIds: BusinessId[],
+    next: (event: OrdersSnapshotEvent) => void,
+    error: (error: unknown) => void,
+  ): Unsubscribe;
+}
+
+export const ORDERS_SNAPSHOT_SOURCE = new InjectionToken<OrdersSnapshotSource>("ORDERS_SNAPSHOT_SOURCE", {
+  providedIn: "root",
+  factory: () => ({
+    listen: (businessIds, next, error) =>
+      onSnapshot(
+        query(collection(FIRESTORE, "orders"), where("business_id", "in", businessIds)),
+        // Sin metadata Firestore no avisa cuando un snapshot de caché queda
+        // confirmado por el servidor sin cambios de datos.
+        { includeMetadataChanges: true },
+        (snap) => next({ docs: snap.docs, fromCache: snap.metadata.fromCache, changedDocs: snap.docChanges().length }),
+        error,
+      ),
+  }),
+});
 
 /**
  * Estados del pedido. Vocabulario cerrado a proposito: antes terminaba en
@@ -429,59 +470,116 @@ export class OrdersService {
   private inventory = inject(InventoryService);
   private businessScope = inject(BusinessScopeService);
   private adminApi = inject(UserAdminApiService);
+  private snapshotSource = inject(ORDERS_SNAPSHOT_SOURCE);
+  private perf = inject(PerfMetricsService);
   loading = signal(false);
   loadError = signal<string | null>(null);
+  /** Origen de los datos publicados; distingue caché local de confirmación del servidor. */
+  syncState = signal<OrdersSyncState>("idle");
   private unsubscribeOrders?: Unsubscribe;
+  private firstSnapshotPromise: Promise<void> | null = null;
+  private listenerSequence = 0;
 
   list = computed(() => {
     const active = this.businessScope.activeBusinessIds();
     return this.rows().filter((order) => active.includes(order.business_id || "bm"));
   });
 
-  /** Inicia un listener en tiempo real. Seguro llamarlo múltiples veces: solo abre un listener. */
+  /**
+   * Inicia un listener en tiempo real. Seguro llamarlo múltiples veces: solo abre un
+   * listener, y mientras el primer snapshot no llega todas las llamadas comparten la
+   * misma promesa. Tras un error, volver a llamarlo funciona como reintento.
+   *
+   * La promesa resuelve también cuando falla (contrato histórico: muchas pantallas la
+   * usan en Promise.all). El fallo queda en `loadError` y `syncState === "error"`.
+   */
   async loadFromFirestore(): Promise<void> {
-    if (this.unsubscribeOrders) return;
+    if (this.unsubscribeOrders) return this.firstSnapshotPromise ?? undefined;
 
+    const listenerId = ++this.listenerSequence;
+    const isCurrent = () => listenerId === this.listenerSequence;
+    const loadId = this.perf.newLoadId("orders");
+    const startedAt = this.perf.now();
     this.loading.set(true);
     this.loadError.set(null);
+    this.syncState.set("loading");
     const allowedBusinesses = this.businessScope.availableBusinessIds();
-    const q = query(this.colRef, where("business_id", "in", allowedBusinesses));
 
-    return new Promise<void>((resolve) => {
-      let resolved = false;
+    const firstSnapshot = new Promise<void>((resolve) => {
+      let hasSnapshot = false;
+      let hasServerSnapshot = false;
+      let failed = false;
 
-      this.unsubscribeOrders = onSnapshot(
-        q,
-        (snap) => {
+      const unsubscribe = this.snapshotSource.listen(
+        allowedBusinesses,
+        (event) => {
+          // Un callback de un listener ya reemplazado no debe pisar datos nuevos.
+          if (!isCurrent()) return;
+          if (!hasSnapshot || event.changedDocs > 0) {
+            const normalizationStartedAt = this.perf.now();
+            const rows: Order[] = event.docs
+              .map((d) => this.normalize(d.id, d.data() as any))
+              .sort((a, b) => (a.updated_at > b.updated_at ? -1 : 1));
+            this.rows.set(rows);
+            this.perf.record("orders_normalization_ms", normalizationStartedAt, {
+              result: "success", load_id: loadId, docs: rows.length,
+            });
+          }
+          // Si solo cambió la metadata (caché -> servidor) no se re-normalizan los pedidos.
+          const source = event.fromCache ? "cache" : "server";
           this.loadError.set(null);
-          const rows: Order[] = snap.docs
-            .map((d) => this.normalize(d.id, d.data() as any))
-            .sort((a, b) => (a.updated_at > b.updated_at ? -1 : 1));
-          this.rows.set(rows);
+          this.syncState.set(source);
           this.loading.set(false);
-          if (!resolved) {
-            resolved = true;
+          if (!hasSnapshot) {
+            hasSnapshot = true;
+            this.perf.record("orders_first_snapshot_ms", startedAt, {
+              result: "success", load_id: loadId, source, docs: event.docs.length,
+            });
             resolve();
+          }
+          if (!event.fromCache && !hasServerSnapshot) {
+            hasServerSnapshot = true;
+            this.perf.record("orders_server_snapshot_ms", startedAt, {
+              result: "success", load_id: loadId, source, docs: event.docs.length,
+            });
           }
         },
         (error) => {
+          failed = true;
+          if (!isCurrent()) return;
+          // Los pedidos ya publicados se conservan: un fallo no los convierte en "sin pedidos".
           this.loadError.set('No se pudieron cargar todos los pedidos. Actualiza para reintentar.');
+          // Firestore ya cerró el listener; liberarlo explícitamente es inocuo y evita huérfanos.
+          this.unsubscribeOrders?.();
           this.unsubscribeOrders = undefined;
+          this.firstSnapshotPromise = null;
           console.error("[OrdersService] onSnapshot error:", error);
           this.loading.set(false);
-          if (!resolved) {
-            resolved = true;
-            resolve();
+          this.syncState.set("error");
+          // Solo se mide como fallo la etapa que no llegó a completarse.
+          if (!hasServerSnapshot) {
+            this.perf.record(hasSnapshot ? "orders_server_snapshot_ms" : "orders_first_snapshot_ms", startedAt, {
+              result: "error", load_id: loadId, error_code: firebaseErrorCode(error),
+            });
           }
+          resolve();
         },
       );
+      // Si el error llegó de forma síncrona el listener ya está cerrado.
+      if (failed) unsubscribe();
+      else if (isCurrent()) this.unsubscribeOrders = unsubscribe;
     });
+
+    if (this.unsubscribeOrders && isCurrent()) this.firstSnapshotPromise = firstSnapshot;
+    return firstSnapshot;
   }
 
   /** Detiene el listener activo (usar al destruir contextos de prueba). */
   stopListening(): void {
+    this.listenerSequence += 1;
     this.unsubscribeOrders?.();
     this.unsubscribeOrders = undefined;
+    this.firstSnapshotPromise = null;
   }
 
   async createDraft(

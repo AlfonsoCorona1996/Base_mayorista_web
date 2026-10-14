@@ -21,6 +21,7 @@ import { CustomerFollowupsService } from "../../core/customer-followups.service"
 import { Shipment, ShipmentBusinessSummary, ShipmentItem, ShipmentsService } from "../../core/shipments.service";
 import { AuthzService } from "../../core/authz.service";
 import { canMarkOrderAsPaidFromTable } from "./order-table-bulk-actions";
+import { PerfMetricsService } from "../../core/perf-metrics.service";
 
 type IntentFilter =
   | "hoy"
@@ -97,6 +98,8 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   private router = inject(Router);
   private activatedRoute = inject(ActivatedRoute);
   private destroyRef = inject(DestroyRef);
+  private perf = inject(PerfMetricsService);
+  private destroyed = false;
   private readonly uiStateStorageKey = "pedidos.ui-state.v1";
   private uiStateHydrated = signal(false);
 
@@ -111,6 +114,20 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   newNotes = signal<string>("");
   error = signal<string | null>(null);
   loading = computed(() => this.orders.loading());
+  ordersLoadError = computed(() => this.orders.loadError());
+  /**
+   * Solo "ready" permite afirmar que no hay pedidos: un snapshot de caché todavía
+   * no está confirmado por el servidor y un error no equivale a un listado vacío.
+   */
+  ordersListState = computed<"loading" | "syncing" | "error" | "ready">(() => {
+    if (this.orders.loadError()) return "error";
+    const sync = this.orders.syncState();
+    if (sync === "server") return "ready";
+    if (sync === "cache") return "syncing";
+    return "loading";
+  });
+  customersLoadError = computed(() => this.customers.customersError());
+  customersLoaded = computed(() => this.customers.customersLoaded());
   actionSheetOpen = signal(false);
   sheetOrder = signal<Order | null>(null);
   sheetAction = signal<PrimaryAction | null>(null);
@@ -1493,6 +1510,16 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
       })
       .slice(0, 6);
   });
+  /**
+   * Estado del buscador. "Sin coincidencias" solo se afirma con datos publicados;
+   * mientras no los hay se distingue la carga del error.
+   */
+  customerSearchState = computed<"idle" | "loading" | "error" | "results" | "no-results">(() => {
+    if (this.normalizeSearchTerm(this.customerQuery()).length < 2) return "idle";
+    if (this.customerSuggestions().length > 0) return "results";
+    if (this.customers.customersLoaded()) return "no-results";
+    return this.customers.customersStatus() === "error" ? "error" : "loading";
+  });
   allRoutes = computed(() => this.routes.routes());
   selectedCustomer = computed(() => this.customers.getById(this.newCustomerId() || ""));
   canCreateOrder = computed(() => !!this.selectedCustomer());
@@ -1614,27 +1641,74 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   async ngOnInit() {
+    const pageStartedAt = this.perf.now();
     this.restoreUiStateSnapshot();
     try {
       await Promise.all([
         this.orders.loadFromFirestore(),
-        this.customers.loadFromFirestore().catch(() => null),
+        // Pedidos solo necesita clientas básicas: el historial de saldo a favor no
+        // participa en nombres, buscador ni ruta, así que no se espera aquí.
+        this.loadCustomersForSearch(pageStartedAt),
         this.routes.loadFromFirestore().catch(() => null),
         this.followups.loadFromFirestore().catch(() => null),
       ]);
+      // Si ya se salió de la pantalla no se abre un listener nuevo sin dueño.
+      if (this.destroyed) return;
       this.shipments.watch();
-      const queryCustomerId = this.activatedRoute.snapshot.queryParamMap.get("customer_id");
-      const queryBusinessId = this.activatedRoute.snapshot.queryParamMap.get("business_id");
-      if (queryBusinessId) {
-        const normalized = normalizeBusinessId(queryBusinessId);
-        if (this.businessScope.canAccessBusiness(normalized)) this.newBusinessId.set(normalized);
-      }
-      if (queryCustomerId && this.customers.getById(queryCustomerId)) {
-        this.pickCustomer(queryCustomerId);
-      }
     } catch (error: any) {
       this.error.set(error?.message || "No se pudieron cargar pedidos");
     }
+  }
+
+  private async loadCustomersForSearch(pageStartedAt: number): Promise<void> {
+    const hadData = this.customers.customersLoaded();
+    if (hadData) {
+      // Datos de una visita anterior: el buscador ya es utilizable mientras se refrescan.
+      this.perf.record("customer_search_ready_ms", pageStartedAt, {
+        result: "success", source: "memory", docs: this.customers.customers().length,
+      });
+    }
+    try {
+      await this.customers.loadCustomers();
+      if (!hadData) {
+        this.perf.record("customer_search_ready_ms", pageStartedAt, {
+          result: "success",
+          source: this.customers.customersSource() ?? undefined,
+          docs: this.customers.customers().length,
+        });
+      }
+    } catch {
+      if (!hadData) this.perf.record("customer_search_ready_ms", pageStartedAt, { result: "error" });
+    }
+    if (this.destroyed || !this.customers.customersLoaded()) return;
+    this.applyQueryPreselection();
+  }
+
+  private applyQueryPreselection(): void {
+    if (this.newCustomerId()) return;
+    const queryCustomerId = this.activatedRoute.snapshot.queryParamMap.get("customer_id");
+    const queryBusinessId = this.activatedRoute.snapshot.queryParamMap.get("business_id");
+    if (queryBusinessId) {
+      const normalized = normalizeBusinessId(queryBusinessId);
+      if (this.businessScope.canAccessBusiness(normalized)) this.newBusinessId.set(normalized);
+    }
+    if (queryCustomerId && this.customers.getById(queryCustomerId)) {
+      this.pickCustomer(queryCustomerId);
+    }
+  }
+
+  /** Reintento localizado: comparte la lectura si ya hay una en curso. */
+  retryCustomers(): void {
+    this.customers.loadCustomers()
+      .then(() => {
+        if (!this.destroyed) this.applyQueryPreselection();
+      })
+      .catch(() => null);
+  }
+
+  /** Reabre el listener de pedidos solo si se cerró; nunca duplica uno activo. */
+  retryOrders(): void {
+    void this.orders.loadFromFirestore();
   }
 
   ngAfterViewInit(): void {
@@ -1656,6 +1730,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.destroyed = true;
     this.pillsResizeObserver?.disconnect();
     this.pillsResizeObserver = null;
     if (this.tableBulkProgressHideTimer) {
@@ -1950,7 +2025,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     const orderId = order.order_id;
     const visibleRaw = this.visiblePillsByOrder()[orderId];
     const visibleCount = typeof visibleRaw === "number" ? visibleRaw : Math.min(3, order.items.length);
-    const customerName = this.customerName(order.customer_id);
+    const customerName = this.customerDisplayName(order.customer_id);
     const routeName = this.routeName(order.route_id);
     const cached = this.orderMetaCache.get(orderId);
     if (
@@ -2451,6 +2526,15 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     const row = this.customers.getById(customerId);
     if (!row) return "Cliente sin nombre";
     return [row.first_name, row.last_name].filter(Boolean).join(" ").trim() || "Cliente sin nombre";
+  }
+
+  /**
+   * Nombre para mostrar. A diferencia de customerName(), que se usa en búsqueda,
+   * orden y datos guardados, distingue clienta aún no cargada de clienta inexistente.
+   */
+  customerDisplayName(customerId: string): string {
+    if (this.customers.getById(customerId) || this.customers.customersLoaded()) return this.customerName(customerId);
+    return this.customers.customersStatus() === "error" ? "Clienta no disponible" : "Cargando clienta…";
   }
 
   routeName(routeId: string | null): string {

@@ -10,6 +10,7 @@ import {
   normalizeRoleId,
 } from "../core/rbac.constants";
 import { environment } from "../../environments/environment";
+import { PerfMetricsService, firebaseErrorCode } from "../core/perf-metrics.service";
 
 /** Error con el mensaje/código reales que manda el backend (no el texto genérico de Angular). */
 export class ApiError extends Error {
@@ -159,6 +160,7 @@ const BACKEND_SECTION_KEYS: BackendSectionKey[] = [
 export class UserAdminApiService {
   private readonly baseUrl = environment.adminApiBaseUrl.replace(/\/+$/, "");
   private readonly http = inject(HttpClient);
+  private readonly perf = inject(PerfMetricsService);
   private readonly authStateReadyPromise = FIREBASE_AUTH.authStateReady().catch(() => undefined);
 
   /** AuthService.getAccessStatus() y UsersService.ensureFromAuth() piden esto
@@ -337,16 +339,34 @@ export class UserAdminApiService {
   }
 
   async getSessionBootstrap(): Promise<SessionBootstrapUser> {
+    const startedAt = this.perf.now();
     const cached = this.sessionBootstrapCache;
     if (cached && Date.now() - cached.at < UserAdminApiService.SESSION_BOOTSTRAP_TTL_MS) {
+      this.perf.record("session_bootstrap_ms", startedAt, { result: "success", source: "memory" });
       return cached.value;
     }
-    if (this.sessionBootstrapPromise) return this.sessionBootstrapPromise;
+    if (this.sessionBootstrapPromise) return this.measureBootstrap(this.sessionBootstrapPromise, startedAt, "shared");
     this.sessionBootstrapPromise = this.fetchSessionBootstrap();
     try {
-      return await this.sessionBootstrapPromise;
+      return await this.measureBootstrap(this.sessionBootstrapPromise, startedAt, "network");
     } finally {
       this.sessionBootstrapPromise = null;
+    }
+  }
+
+  /** Tiempo total visto por el navegador (incluye token, red y todo el trabajo del backend). */
+  private async measureBootstrap(
+    promise: Promise<SessionBootstrapUser>,
+    startedAt: number,
+    source: "shared" | "network",
+  ): Promise<SessionBootstrapUser> {
+    try {
+      const value = await promise;
+      this.perf.record("session_bootstrap_ms", startedAt, { result: "success", source });
+      return value;
+    } catch (error) {
+      this.perf.record("session_bootstrap_ms", startedAt, { result: "error", source, error_code: firebaseErrorCode(error) });
+      throw error;
     }
   }
 

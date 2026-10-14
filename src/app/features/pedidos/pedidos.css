@@ -683,6 +683,22 @@
   font-size: 18px;
 }
 
+/* Aviso de carga fallida con reintento: el texto envuelve y la acción conserva área táctil. */
+.load-alert {
+  display: flex;
+  flex-wrap: wrap;
+  padding: var(--ui-space-8) var(--ui-space-12);
+}
+
+.load-alert-text {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.load-alert .load-alert-action {
+  min-height: var(--ui-touch-target-min);
+}
+
 .btn {
   border: 1px solid transparent;
   border-radius: 13px;

@@ -4,6 +4,8 @@ export const environment = {
   // En produccion debe ser HTTPS para evitar Mixed Content en navegador.
   adminApiBaseUrl: "https://api.base-mayorista.com",
   featureFlags: { returnsV2: true, inventoryProductsV2: true, customerCrmV2: true },
+  // Mediciones de carga solo en memoria del navegador. Tambien se activan con ?perf=1.
+  perfMetrics: false,
   firebase: {
     apiKey: "AIzaSyBZhmiBbnywXaTW32VTaZFPPPzGNLJCXDo",
     authDomain: "base-mayorista.firebaseapp.com",
