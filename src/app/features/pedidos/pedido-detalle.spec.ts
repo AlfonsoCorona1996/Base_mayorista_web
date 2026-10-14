@@ -35,12 +35,15 @@ import { OperationalExpenseReportsService } from "../../core/operational-expense
 import { UserAdminApiService } from "../../services/user-admin-api.service";
 import type { Order, OrderItem } from "../../core/orders.service";
 import type { CatalogProduct, CatalogProductSearchResult } from "../../core/catalog-products.service";
+import { calculateOrderFinancials } from "../../core/order-financials";
+import { auditOrder } from "../../core/profit-audit";
+import { calculateWithdrawalProfit } from "../../core/withdrawal-profit";
 
 /**
  * Estas pruebas cubren la lógica aislada de selección, precios, inventario,
  * opción provisional, badge por producto y tabs.
- * No renderizan el template (no se llama a fixture.detectChanges())
- * para evitar disparar ngOnInit(), que dispara llamadas reales a servicios
+ * Solo la comprobación responsive renderiza el template. Se omite ngOnInit(),
+ * que dispara llamadas reales a servicios
  * (watch() de suscripciones, resolucion de ruta) fuera del alcance de estas
  * pruebas unitarias.
  */
@@ -103,10 +106,10 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
             list: () => [],
           },
         },
-        { provide: CustomersService, useValue: { getById: () => null } },
+        { provide: CustomersService, useValue: { getById: () => null, customers: () => [] } },
         { provide: CustomerFollowupsService, useValue: {} },
-        { provide: SuppliersService, useValue: {} },
-        { provide: RoutesService, useValue: {} },
+        { provide: SuppliersService, useValue: { getById: () => null, getActive: () => [] } },
+        { provide: RoutesService, useValue: { getById: () => null } },
         { provide: LocalitiesService, useValue: {} },
         {
           provide: InventoryService,
@@ -131,7 +134,9 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
             loadFromFirestore: loadSupplierOperations,
           },
         },
-        { provide: ManualProductHistoryService, useValue: {} },
+        { provide: ManualProductHistoryService, useValue: {
+          record: jasmine.createSpy("record").and.resolveTo(), entries: () => [], search: () => [],
+        } },
         { provide: ReturnsService, useValue: {} },
         {
           provide: FinanceService,
@@ -141,16 +146,17 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
           },
         },
         { provide: BusinessScopeService, useValue: { unlockScope: () => {} } },
-        { provide: AuthzService, useValue: { canCap: () => true } },
+        { provide: AuthzService, useValue: { canCap: () => true, canSection: () => false, currentUserSig: () => ({ uid: "test-user" }) } },
         { provide: AuthService, useValue: {} },
         { provide: SalesNoteRenderService, useValue: {} },
         { provide: RouteRunsService, useValue: {} },
-        { provide: ShipmentsService, useValue: {} },
-        { provide: OperationalExpenseReportsService, useValue: {} },
+        { provide: ShipmentsService, useValue: { rows: () => [] } },
+        { provide: OperationalExpenseReportsService, useValue: { reportsForOrder: () => [] } },
         { provide: UserAdminApiService, useValue: {} },
       ],
     }).compileComponents();
 
+    spyOn(PedidoDetallePage.prototype, "ngOnInit");
     fixture = TestBed.createComponent(PedidoDetallePage);
     component = fixture.componentInstance;
     // Deliberadamente NO se llama a fixture.detectChanges(): eso dispararia
@@ -160,6 +166,263 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
 
   it("should create", () => {
     expect(component).toBeTruthy();
+  });
+
+  describe("regalos manuales sin cargo", () => {
+    let order: Order;
+
+    beforeEach(() => {
+      order = {
+        order_id: "PED-REGALO", business_id: "bm", customer_id: "customer", route_id: null,
+        status: "borrador", created_at: "2026-10-13", updated_at: "2026-10-13", items: [],
+        packages: [], timeline: [], totals: { total_amount: 0, paid_amount: 0, balance_due: 0 },
+        packing: { status: "in_progress", packages_count: 0, completed_at: null },
+        dispatch_request: { status: "none", requested_at: null, requested_by: null },
+      };
+      ordersGetById.and.returnValue(order);
+      spyOn(component, "refreshEvents").and.resolveTo();
+      spyOn(TestBed.inject(AuthzService), "canCap").and.returnValue(false);
+      component.newItemSource.set("manual");
+      component.newItemTitle.set("Espejo y Bolsa de regalo");
+      component.newItemVariant.set("NA");
+      component.newItemColor.set("NA");
+      component.newItemPricePublic.set(0);
+      component.newItemPriceClienta.set(0);
+      component.newItemPriceCost.set(109);
+    });
+
+    it("pide confirmación y conserva el costo y la auditoría sin permiso de venta bajo costo", async () => {
+      const saving = component.addItem(order);
+      expect(component.popupConfirmOpen()).toBeTrue();
+      expect(component.popupConfirmTitle()).toBe("Confirmar regalo sin cargo");
+      expect(component.popupConfirmMessage()).toContain("$109.00");
+      expect(addOrderItem).not.toHaveBeenCalled();
+      expect(component.priceRuleInvalid()).toBeFalse();
+
+      component.closeConfirmPopup(true);
+      await saving;
+
+      const item = addOrderItem.calls.mostRecent().args[1] as OrderItem;
+      expect(item).toEqual(jasmine.objectContaining({
+        source: "manual", price_clienta: 0, price_public: 0, price_cost: 109,
+        price_selected_tier: "manual", price_override_reason: "Regalo sin cargo",
+        price_override_by: "test-user", price_override_to: 0, price_override_below_cost: true,
+      }));
+      expect(item.price_override_at).toBeTruthy();
+      expect(logOrderEvent).toHaveBeenCalledWith("PED-REGALO", "ITEM_ADDED", jasmine.any(String),
+        jasmine.objectContaining({ priceOverrideReason: "Regalo sin cargo", priceOverrideTo: 0 }));
+      // La auditoría incluye piezas pendientes; los totales reconocen las confirmadas.
+      expect(auditOrder({ ...order, items: [item] }).profit).toBe(-109);
+      const totals = calculateOrderFinancials({ ...order, items: [{ ...item, confirmation_state: "confirmed", confirmed_qty: 1 }] });
+      expect(totals.netAmount).toBe(0);
+      expect(totals.netCost).toBe(109);
+      expect(totals.grossProfit).toBe(-109);
+    });
+
+    it("cancelar conserva el formulario sin guardar ni registrar movimientos", async () => {
+      const saving = component.addItem(order);
+      component.closeConfirmPopup(false);
+      await saving;
+      expect(addOrderItem).not.toHaveBeenCalled();
+      expect(updateOrderItems).not.toHaveBeenCalled();
+      expect(logOrderEvent).not.toHaveBeenCalled();
+      expect(component.newItemPriceCost()).toBe(109);
+      expect(component.newItemPriceClienta()).toBe(0);
+    });
+
+    it("muestra el costo por cantidad y resta el regalo a la utilidad de los productos vendidos", async () => {
+      order.items = [{ item_id: "venta", source: "manual", title: "Venta", quantity: 1,
+        state: "borrador", confirmation_state: "confirmed", confirmed_qty: 1,
+        price_clienta: 500, price_cost: 200 }];
+      component.newItemQty.set(2);
+      const saving = component.addItem(order);
+      expect(component.popupConfirmMessage()).toContain("$218.00");
+      component.closeConfirmPopup(true);
+      await saving;
+      const item = addOrderItem.calls.mostRecent().args[1] as OrderItem;
+      const report = auditOrder({ ...order, items: [...order.items, item] });
+      expect(report.sale).toBe(500);
+      expect(report.cost).toBe(418);
+      expect(report.profit).toBe(82);
+      const withdrawal = calculateWithdrawalProfit([{
+        ...order, status: "entregado", totals: { ...order.totals, paid_amount: 500 },
+        items: [...order.items, { ...item, confirmation_state: "confirmed", confirmed_qty: 2 }],
+      }], 0);
+      expect(withdrawal.collectedNetProfit).toBe(82);
+    });
+
+    it("mantiene la protección para una venta manual con precio positivo inferior al costo", async () => {
+      component.newItemPriceClienta.set(1);
+      const saving = component.addItem(order);
+      expect(component.priceRuleInvalid()).toBeTrue();
+      expect(component.popupConfirmOpen()).toBeFalse();
+      expect(component.popupAlertOpen()).toBeTrue();
+      component.closeAlertPopup();
+      await saving;
+      expect(addOrderItem).not.toHaveBeenCalled();
+    });
+
+    it("no aplica la excepción a inventario, catálogo, un precio vacío o un costo inválido", () => {
+      for (const source of ["inventario", "catalogo"] as const) {
+        component.newItemSource.set(source);
+        expect(component.isManualGift()).toBeFalse();
+        expect(component.priceRuleInvalid()).toBeTrue();
+      }
+      component.newItemSource.set("manual");
+      component.newItemPriceClienta.set(null);
+      expect(component.isManualGift()).toBeFalse();
+      component.newItemPriceClienta.set(0);
+      for (const cost of [null, 0, -1, NaN, Infinity]) {
+        component.newItemPriceCost.set(cost);
+        expect(component.isManualGift()).toBeFalse();
+      }
+    });
+
+    it("permite editar un regalo conservando su costo y registro", async () => {
+      order.items = [{ item_id: "regalo", source: "manual", title: "Regalo", quantity: 1,
+        state: "borrador", price_clienta: 0, price_public: 0, price_cost: 109 }];
+      component.editTargetItemId.set("regalo");
+      component.newItemQty.set(2);
+      const saving = component.updateExistingItem(order);
+      expect(component.popupConfirmMessage()).toContain("$218.00");
+      component.closeConfirmPopup(true);
+      await saving;
+      expect(updateOrderItems).toHaveBeenCalledWith("PED-REGALO", [jasmine.objectContaining({
+        item_id: "regalo", quantity: 2, price_clienta: 0, price_cost: 109,
+        price_override_reason: "Regalo sin cargo",
+      })]);
+    });
+
+    it("limpia la marca de regalo al cambiarlo a una venta normal", async () => {
+      order.items = [{ item_id: "regalo", source: "manual", title: "Regalo", quantity: 1,
+        state: "borrador", price_clienta: 0, price_public: 0, price_cost: 109,
+        price_selected_tier: "manual", price_override_reason: "Regalo sin cargo", price_override_below_cost: true }];
+      component.editTargetItemId.set("regalo");
+      component.newItemPriceClienta.set(150);
+      await component.updateExistingItem(order);
+      expect(component.popupConfirmOpen()).toBeFalse();
+      expect(updateOrderItems).toHaveBeenCalledWith("PED-REGALO", [jasmine.objectContaining({
+        price_clienta: 150, price_cost: 109, price_override_reason: null, price_override_below_cost: null,
+      })]);
+    });
+
+    it("muestra el aviso completo sin desbordar el modal en los cinco tamaños requeridos", async () => {
+      component.initialHydration.set(false);
+      component.addItemModalOpen.set(true);
+      component.newItemTitle.set("Espejo y bolsa de regalo con un nombre largo para comprobar la lectura del producto");
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      const root = fixture.nativeElement as HTMLElement;
+      const notice = root.querySelector<HTMLElement>(".catalog-price-summary");
+      expect(notice?.textContent).toContain("Regalo sin cargo");
+      expect(notice?.textContent).toContain("$109.00");
+      expect(notice?.getAttribute("role")).toBe("status");
+
+      const css = Array.from(document.styleSheets).flatMap(sheet => Array.from(sheet.cssRules, rule => rule.cssText)).join("\n");
+      for (const [width, height] of [[1440, 900], [1024, 768], [768, 1024], [390, 844], [360, 800]]) {
+        const frame = document.createElement("iframe");
+        frame.style.width = `${width}px`;
+        frame.style.height = `${height}px`;
+        frame.style.position = "fixed";
+        frame.style.border = "0";
+        document.body.appendChild(frame);
+        try {
+          const doc = frame.contentDocument!;
+          doc.open();
+          doc.write("<!doctype html><html><head></head><body></body></html>");
+          doc.close();
+          const style = doc.createElement("style");
+          style.textContent = css;
+          doc.head.appendChild(style);
+          doc.body.appendChild(root.cloneNode(true));
+          // Comprueba la disposición final, después de la animación de apertura.
+          await new Promise<void>(resolve => frame.contentWindow!.setTimeout(resolve, 200));
+          const dialog = doc.querySelector<HTMLElement>(".sheet-add-item-ios")!;
+          const message = doc.querySelector<HTMLElement>(".catalog-price-summary")!;
+          const body = doc.querySelector<HTMLElement>(".sheet-add-item-ios .sheet-body")!;
+          body.scrollTop = body.scrollHeight;
+          const label = `${width} × ${height}`;
+          expect(doc.documentElement.scrollWidth).withContext(label).toBeLessThanOrEqual(width);
+          expect(dialog.scrollWidth).withContext(label).toBeLessThanOrEqual(dialog.clientWidth);
+          expect(message.scrollWidth).withContext(label).toBeLessThanOrEqual(message.clientWidth);
+          expect(message.clientHeight).withContext(label).toBeGreaterThan(0);
+          const actions = doc.querySelector<HTMLElement>(".sheet-add-item-ios .sheet-footer")!;
+          expect(message.getBoundingClientRect().bottom).withContext(label).toBeLessThanOrEqual(actions.getBoundingClientRect().top);
+          const save = actions.querySelector<HTMLButtonElement>(".primary")!;
+          expect(save.getBoundingClientRect().height).withContext(label).toBeGreaterThanOrEqual(44);
+          expect(actions.getBoundingClientRect().bottom).withContext(label).toBeLessThanOrEqual(height);
+        } finally {
+          frame.remove();
+        }
+      }
+    });
+  });
+
+  describe("agrupar productos repetidos al cambiar color", () => {
+    const makeOrder = (items: OrderItem[]): Order => ({
+      order_id: 'PED-MK', business_id: 'bm', customer_id: 'customer', route_id: null,
+      status: 'borrador', created_at: '2026-10-07', updated_at: '2026-10-07', items,
+      packages: [], timeline: [], totals: { total_amount: 0, paid_amount: 0, balance_due: 0 },
+      packing: { status: 'in_progress', packages_count: 0, completed_at: null },
+      dispatch_request: { status: 'none', requested_at: null, requested_by: null },
+    });
+    const makeItem = (id: string, color = 'gris'): OrderItem => ({
+      item_id: id, business_id: 'bm', title: 'Pantalón MK5224', source: 'catalogo',
+      supplier_id: 'bommy', product_id: 'mk', product_ref_type: 'normalized_listing',
+      variant: 'M', color, quantity: 1, confirmation_state: 'pending', confirmed_qty: null,
+      state: 'confirmando_proveedor', price_public: 250, price_clienta: 187.5,
+      price_cost: 125, discount_pct: 25, catalog_option_status: 'pending_review',
+      catalog_option_base_product_id: 'mk', catalog_option_image_source: 'catalog',
+      image_url: 'https://example.test/mk.jpg',
+    });
+
+    it("guarda una sola línea después de editar y deja constancia de los IDs agrupados", async () => {
+      const items = [makeItem('gris-1'), makeItem('edit', 'tinto'), makeItem('gris-2')];
+      const order = makeOrder(items);
+      ordersGetById.and.returnValue(order);
+      spyOn(component, 'refreshEvents').and.resolveTo();
+      component.editTargetItemId.set('edit');
+      component.newItemSource.set('catalogo');
+      component.newItemTitle.set('Pantalón MK5224');
+      component.newItemVariant.set('M');
+      component.newItemColor.set('gris');
+      component.newItemQty.set(1);
+      component.newItemPricePublic.set(250);
+      component.newItemPriceClienta.set(187.5);
+      component.newItemPriceCost.set(125);
+      component.selectedPreview.set({ title: 'Pantalón MK5224', variant: 'M', color: 'gris', image: 'https://example.test/mk.jpg', source: 'Catálogo' });
+
+      await component.updateExistingItem(order);
+
+      expect(updateOrderItems).toHaveBeenCalledWith('PED-MK', [jasmine.objectContaining({ item_id: 'edit', quantity: 3, color: 'gris', catalog_option_status: 'pending_review' })]);
+      expect(logOrderEvent).toHaveBeenCalledWith('PED-MK', 'ITEM_UPDATED', jasmine.any(String), jasmine.objectContaining({ mergedItemIds: ['gris-1', 'gris-2'], savedQty: 3 }));
+      expect(reserveStock).not.toHaveBeenCalled();
+      expect(releaseReservation).not.toHaveBeenCalled();
+    });
+
+    it("al agregar suma una opción provisional repetida sin convertirla en oficial", async () => {
+      const existing = makeItem('gris');
+      const order = makeOrder([existing]);
+      spyOn(component, 'refreshEvents').and.resolveTo();
+      component.newItemSource.set('catalogo');
+      component.newItemTitle.set(existing.title);
+      component.newItemProductId.set('mk');
+      component.newItemSupplierId.set('bommy');
+      component.newItemVariant.set('M');
+      component.newItemColor.set('gris');
+      component.newItemQty.set(2);
+      component.newItemPricePublic.set(250);
+      component.newItemPriceClienta.set(187.5);
+      component.newItemPriceCost.set(125);
+      component.selectedPreview.set({ title: existing.title, variant: 'M', color: 'gris', image: existing.image_url || null, source: 'Catálogo' });
+      component.addItemProvisionalOption.set({ variant: 'M', color: 'gris', imageId: 'mk', imageUrl: existing.image_url || '', uploadedFileName: null });
+
+      await component.addItem(order);
+
+      expect(addOrderItem).not.toHaveBeenCalled();
+      expect(updateOrderItems).toHaveBeenCalledWith('PED-MK', [jasmine.objectContaining({ item_id: 'gris', quantity: 3, catalog_option_status: 'pending_review' })]);
+    });
   });
 
   describe("cuenta General para devolver dinero", () => {

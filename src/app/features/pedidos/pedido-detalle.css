@@ -3261,6 +3261,11 @@
   color: #166534;
 }
 
+.catalog-price-summary > span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .catalog-price-summary--negative {
   background: #fff1f2;
   color: #9f1239;

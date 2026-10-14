@@ -2876,6 +2876,13 @@
               </div>
             </div>
 
+            @if (isManualGift()) {
+              <div class="catalog-price-summary" role="status" aria-live="polite">
+                <span class="material-symbols-rounded" aria-hidden="true">redeem</span>
+                <span>Regalo sin cargo. Costo total: <strong>{{ manualGiftCostLabel() }}</strong>. Se descontará de la utilidad del pedido al confirmar las piezas.</span>
+              </div>
+            }
+
             @if (selectedCatalogProduct()) {
               <div class="catalog-price-summary" [class.catalog-price-summary--negative]="priceRuleInvalid()" role="status" aria-live="polite">
                 <span class="material-symbols-rounded" aria-hidden="true">{{ priceRuleInvalid() ? "warning" : "trending_up" }}</span>

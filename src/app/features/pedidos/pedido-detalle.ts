@@ -22,6 +22,7 @@ import {
 import { NormalizedListingsService, NormalizedListingDoc } from "../../core/normalized-listings.service";
 import { SupplierOperationsService } from "../../core/supplier-operations.service";
 import { isSupplierReceiptComplete } from "../../core/supplier-operation-state";
+import { canMergePendingOrderItem, mergeEditedOrderItem, sameOrderItemProduct } from "../../core/order-item-merge";
 import { ManualProductHistoryService, ManualProductEntry } from "../../core/manual-product-history.service";
 import {
   CatalogProduct,
@@ -9012,7 +9013,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         }
       : undefined;
     const item: OrderItem = this.buildOrderItemFromForm(itemId, source, state, lateMeta);
-    const existingMatch = (order.items || []).find((row) => this.isSamePendingProduct(row, item));
+    const existingMatch = (order.items || []).find((row) => this.isSamePendingProduct(row, item) && this.canMergeIntoExistingRow(order, row));
     const canMergeExisting = !!existingMatch && this.canMergeIntoExistingRow(order, existingMatch) && !lateNote;
     if (existingMatch && canMergeExisting) {
       const nextItems = order.items.map((row) => {
@@ -9213,7 +9214,9 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         : nextState === "out_of_stock"
           ? 0
           : null;
-    const priceAudit: OrderItemPriceAudit = this.selectedCatalogProduct()
+    const refreshPriceAudit = this.selectedCatalogProduct() || this.isManualGift()
+      || (target.source === "manual" && target.price_override_reason === "Regalo sin cargo");
+    const priceAudit: OrderItemPriceAudit = refreshPriceAudit
       ? this.catalogPriceAudit()
       : {
           price_selected_tier: target.price_selected_tier || null,
@@ -9247,7 +9250,10 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         : {}),
     };
 
-    const nextItems = (live.items || []).map((item) => (item.item_id === target.item_id ? updated : item));
+    const editedItems = (live.items || []).map((item) => (item.item_id === target.item_id ? updated : item));
+    const protectedIds = new Set((live.items || []).filter(item => !this.canMergeIntoExistingRow(live, item)).map(item => item.item_id));
+    const merge = mergeEditedOrderItem(editedItems, target.item_id, live.business_id, protectedIds);
+    const nextItems = merge.items;
     const inventoryId = target.source === "inventario" ? target.inventory_id || null : null;
     const delta = inventoryId ? nextQty - this.itemQuantity(target) : 0;
     if (inventoryId && delta > 0) {
@@ -9309,6 +9315,9 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       itemId: target.item_id,
       prevQty: this.itemQuantity(target),
       nextQty,
+      mergedItemIds: merge.mergedItemIds,
+      mergedQuantity: merge.addedQuantity,
+      savedQty: nextItems.find(item => item.item_id === target.item_id)?.quantity ?? nextQty,
       previousClientaPrice: target.price_clienta ?? null,
       ...this.orderItemPriceAuditMeta(updated),
     });
@@ -9328,7 +9337,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.resetAddItemForm();
     this.addItemModalOpen.set(false);
     await this.refreshEvents().catch(() => undefined);
-    this.showActionToast("Producto actualizado.");
+    this.showActionToast(merge.mergedItemIds.length ? "Producto actualizado y cantidades sumadas." : "Producto actualizado.");
   }
 
   private buildOrderItemFromForm(
@@ -9341,7 +9350,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     const sourceBusinessId: BusinessId = this.crossBusinessCatalogMode() ? "catalogo" : businessId;
     const selectedImportedProduct = source === "catalogo" ? this.selectedCatalogProduct() : null;
     const warningReason = selectedImportedProduct ? this.priceWarningAckReason() : null;
-    const priceAudit = selectedImportedProduct ? this.catalogPriceAudit() : null;
+    const priceAudit = selectedImportedProduct || this.isManualGift() ? this.catalogPriceAudit() : null;
     const productRefType =
       source === "manual"
         ? "manual"
@@ -9486,46 +9495,14 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   private canMergeIntoExistingRow(order: Order, existing: OrderItem): boolean {
-    if (existing.state === "cancelado" || existing.state === "devuelto") return false;
-    if (existing.confirmation_state && existing.confirmation_state !== "pending") return false;
+    if (!canMergePendingOrderItem(existing)) return false;
     if (this.itemPackedQty(order, existing.item_id) > 0) return false;
+    if (this.supplierOperations.rows().some(row => row.order_id === order.order_id && row.order_item_id === existing.item_id)) return false;
     return true;
   }
 
   private isSamePendingProduct(existing: OrderItem, incoming: OrderItem): boolean {
-    // Detect rows that represent the same SKU/product+variant+color.
-    // Late changes decide later if we merge or keep a separate line.
-    if (existing.state === "cancelado" || existing.state === "devuelto") return false;
-    if (existing.catalog_option_status === "pending_review" || incoming.catalog_option_status === "pending_review") {
-      return false;
-    }
-    const existingBusiness = normalizeBusinessId(existing.source_business_id || existing.business_id || this.orderBusinessId());
-    const incomingBusiness = normalizeBusinessId(incoming.source_business_id || incoming.business_id || this.orderBusinessId());
-    if (existingBusiness !== incomingBusiness) return false;
-    if (existing.inventory_id && incoming.inventory_id) {
-      return existing.inventory_id === incoming.inventory_id;
-    }
-
-    const sameVariant = this.isCompatibleVariant(existing.variant, incoming.variant);
-    const sameColor = this.isCompatibleVariant(existing.color, incoming.color);
-    const samePrice = this.sameOrderItemPrice(existing, incoming);
-
-    if (existing.product_id && incoming.product_id && existing.product_id === incoming.product_id) {
-      return sameVariant && sameColor && samePrice;
-    }
-
-    return this.normalizeText(existing.title) === this.normalizeText(incoming.title)
-      && sameVariant
-      && sameColor
-      && samePrice;
-  }
-
-  private sameOrderItemPrice(left: OrderItem, right: OrderItem): boolean {
-    const cents = (value: number | null | undefined) => Math.round(Number(value || 0) * 100);
-    return cents(left.price_clienta) === cents(right.price_clienta)
-      && cents(left.price_public) === cents(right.price_public)
-      && cents(left.price_cost) === cents(right.price_cost)
-      && (left.price_selected_tier || null) === (right.price_selected_tier || null);
+    return canMergePendingOrderItem(existing) && sameOrderItemProduct(existing, incoming, this.orderBusinessId());
   }
 
   private normalizeText(value: string | null | undefined): string {
@@ -10233,9 +10210,32 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     return this.authz.canCap("cap.orders.price_below_cost");
   }
 
+  isManualGift(): boolean {
+    const cost = this.newItemPriceCost();
+    return this.isManualSource()
+      && this.newItemPriceClienta() === 0
+      && cost !== null
+      && Number.isFinite(cost)
+      && cost > 0;
+  }
+
+  manualGiftCostLabel(): string {
+    return this.formatCurrency(Number(((this.newItemPriceCost() ?? 0) * this.normalizedNewItemQty()).toFixed(2)));
+  }
+
   private async confirmPriceOverrideIfNeeded(): Promise<boolean> {
     this.priceOverrideError.set(null);
     this.error.set(null);
+    if (this.isManualGift()) {
+      return this.showPopupConfirm(
+        `Se registrará "${this.newItemTitle().trim()}" como regalo sin cobrar a la clienta. El costo total de ${this.manualGiftCostLabel()} reducirá la utilidad del pedido cuando se confirmen las piezas.`,
+        {
+          title: "Confirmar regalo sin cargo",
+          confirmLabel: "Guardar regalo",
+          cancelLabel: "Revisar",
+        },
+      );
+    }
     const selectedProduct = this.selectedCatalogProduct();
     const cost = this.newItemPriceCost();
     if (selectedProduct && (!selectedProduct.sellable || cost === null || cost <= 0)) {
@@ -10292,6 +10292,17 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
   private catalogPriceAudit(): OrderItemPriceAudit {
     const product = this.selectedCatalogProduct();
+    if (this.isManualGift()) {
+      return {
+        price_selected_tier: "manual",
+        price_override_reason: "Regalo sin cargo",
+        price_override_by: this.authz.currentUserSig()?.uid || null,
+        price_override_at: new Date().toISOString(),
+        price_override_from: this.newItemPricePublic(),
+        price_override_to: 0,
+        price_override_below_cost: true,
+      };
+    }
     if (!product) {
       return {
         price_selected_tier: null,
@@ -10359,7 +10370,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   priceRuleInvalid(): boolean {
-    return this.isClientaBelowCosto();
+    return this.isClientaBelowCosto() && !this.isManualGift();
   }
 
   private updatePriceDraftFromSignals() {
