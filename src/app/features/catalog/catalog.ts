@@ -1,3 +1,4 @@
+import { matchesListingMetadata } from "../../core/listing-metadata";
 import { Component, computed, effect, inject, signal, ChangeDetectionStrategy } from "@angular/core";
 import { FormsModule } from "@angular/forms";
 import { Router } from "@angular/router";
@@ -204,6 +205,7 @@ export default class CatalogPage {
       const textOk =
         !search ||
         title.includes(search) ||
+        matchesListingMetadata(doc.listing, search) ||
         supplierName.includes(search) ||
         supplierId.includes(search) ||
         categoryText.includes(search) ||

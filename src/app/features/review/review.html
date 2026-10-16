@@ -1,599 +1,839 @@
-<!-- Review Page - Mobile First UX -->
-<div class="review-container">
+<article class="review-container">
   <header class="review-header">
-    <button class="btn-icon" (click)="goInbox()" aria-label="Volver al inbox" title="Volver">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M19 12H5M12 19l-7-7 7-7"/>
+    <button type="button" class="btn-icon" (click)="goInbox()" aria-label="Volver a validación">
+      <svg
+        width="24"
+        height="24"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        aria-hidden="true"
+      >
+        <path d="M19 12H5M12 19l-7-7 7-7" />
       </svg>
     </button>
-    <div class="header-title-section">
-      <h1 class="review-title">Revision de Producto</h1>
-      <p class="review-subtitle">Validar y editar informacion</p>
+    <div>
+      <p class="eyebrow">WHATSAPP <span class="breadcrumb-slash">/</span> VALIDACIÓN</p>
+      <h1>{{ draft()?.listing?.title || 'Revisar producto' }}</h1>
+      <p class="hint">Revisión del producto</p>
     </div>
-    <div class="header-spacer"></div>
   </header>
-
   @if (error()) {
-    <div class="alert alert-error">{{ error() }}</div>
-  }
-
-  @if (loading()) {
-    <div class="loading-container">
-      <div class="spinner"></div>
-      <p>Cargando...</p>
+    <div class="alert" role="alert">
+      {{ error() }} <button type="button" class="btn" (click)="load()">Reintentar</button>
     </div>
+  }
+  @if (loading()) {
+    <p class="loading-container" role="status">Cargando producto…</p>
   } @else if (draft(); as d) {
-    <section class="review-summary">
-      <article class="summary-item">
-        <span class="summary-label">Variantes</span>
-        <strong>{{ d.listing.items.length }}</strong>
-      </article>
-      <article class="summary-item">
-        <span class="summary-label">Colores globales</span>
-        <strong>{{ (d.product_colors || []).length }}</strong>
-      </article>
-      <article class="summary-item">
-        <span class="summary-label">Imagenes disponibles</span>
-        <strong>{{ visibleRawImages().length }}</strong>
-      </article>
-      <article class="summary-item">
-        <span class="summary-label">ID</span>
-        <strong>{{ id }}</strong>
-      </article>
-    </section>
-
-    <div class="review-layout">
-      <div class="review-column review-column-main">
-        <section class="card card-basic">
-      <h2 class="section-title">Informacion basica</h2>
-
-      <div class="form-group">
-        <label class="label">Proveedor *</label>
-        <select
-          [(ngModel)]="d.supplier_id"
-          class="input"
-          (change)="onSupplierChange()"
-        >
-          <option [value]="null">Seleccionar proveedor...</option>
-          @for (sup of activeSuppliers(); track sup.supplier_id) {
-            <option [value]="sup.supplier_id">{{ sup.display_name }}</option>
+    <div class="review-summary" aria-label="Resumen del producto">
+      <span
+        class="status-badge"
+        [class.published]="d.workflow.status === 'validated'"
+        [class.rejected]="d.workflow.status === 'rejected'"
+        >{{
+          d.workflow.status === 'validated'
+            ? 'Publicado'
+            : d.workflow.status === 'rejected'
+              ? 'Rechazado'
+              : 'Por revisar'
+        }}</span
+      >
+      <span>{{ galleryImages().length }} fotos</span>
+      <span>{{ d.product_colors.length }} colores</span>
+      <span>{{ d.listing.items.length }} variantes</span>
+    </div>
+    <fieldset class="review-fields" [disabled]="finalActionBusy() || mergeApplying()">
+      <legend class="sr-only">Datos del producto</legend>
+      <section class="review-section gallery-section" aria-labelledby="photos-title">
+        <div class="section-header">
+          <h2 id="photos-title">
+            <review-icon name="image" /> Fotos y colores
+            <span class="count">{{ galleryImages().length }}</span>
+          </h2>
+          <button
+            type="button"
+            class="btn-icon subtle"
+            (click)="openCoverSelector()"
+            aria-label="Añadir fotos o elegir portada"
+          >
+            <review-icon name="plus" />
+          </button>
+        </div>
+        @if (previewImage(); as url) {
+          <button
+            type="button"
+            class="photo-open hero-photo"
+            (click)="openLightbox(lightbox, url)"
+            [attr.aria-label]="'Ampliar imagen: ' + imageColorLabel(url)"
+          >
+            <img [src]="url" [alt]="imageColorLabel(url)" />
+            @if (coverUrl() === url) {
+              <span class="cover-badge"><review-icon name="check" /> Portada</span>
+            }
+            <span class="expand-photo"><review-icon name="expand" /></span>
+          </button>
+          <p class="photo-caption">
+            <span>{{ imageColorLabel(url) }}</span
+            ><span>{{ galleryImages().indexOf(url) + 1 }} / {{ galleryImages().length }}</span>
+          </p>
+        } @else {
+          <div class="empty-photo">
+            <review-icon name="image" />
+            <p>No hay fotos disponibles.</p>
+            <button type="button" class="btn" (click)="openCoverSelector()">
+              Añadir fotografía
+            </button>
+          </div>
+        }
+        <div class="section-header color-heading">
+          <h3>
+            Colores del producto <span class="count">{{ d.product_colors.length }}</span>
+          </h3>
+        </div>
+        <div class="color-list">
+          @for (color of d.product_colors; track $index; let i = $index) {
+            <div
+              class="color-card"
+              [class.selected]="!!color.image_url && previewImage() === color.image_url"
+            >
+              <button
+                type="button"
+                class="color-thumb"
+                (click)="
+                  color.image_url
+                    ? selectedPreview.set(color.image_url)
+                    : openGlobalColorImageSelector(i)
+                "
+                [attr.aria-label]="
+                  color.image_url ? 'Ver foto de ' + color.name : 'Asignar foto a ' + color.name
+                "
+                [attr.aria-pressed]="!!color.image_url && previewImage() === color.image_url"
+              >
+                @if (color.image_url) {
+                  <img [src]="color.image_url" [alt]="color.name" loading="lazy" />
+                } @else {
+                  <review-icon name="image" />
+                }
+              </button>
+              <label class="color-name"
+                ><span class="sr-only">Nombre del color {{ i + 1 }}</span
+                ><input
+                  class="input"
+                  [title]="color.name"
+                  [(ngModel)]="color.name"
+                  (focus)="onGlobalColorFocus(i, color.name)"
+                  (blur)="onGlobalColorBlur(i)"
+                  placeholder="Nombre del color"
+                />
+                <span class="color-meta">{{
+                  !color.image_url
+                    ? 'Sin fotografía'
+                    : coverUrl() === color.image_url
+                      ? 'Portada del producto'
+                      : 'Fotografía asignada'
+                }}</span>
+              </label>
+              <button
+                type="button"
+                class="btn-icon subtle"
+                (click)="openGlobalColorImageSelector(i)"
+                [attr.aria-label]="'Cambiar foto de ' + color.name"
+                title="Cambiar fotografía"
+              >
+                <review-icon name="image" />
+              </button>
+              <details
+                class="context-menu"
+                #colorMenu
+                (keydown.escape)="closeImageMenu($event, colorMenu)"
+              >
+                <summary [attr.aria-label]="'Acciones de ' + color.name">
+                  <review-icon name="more" />
+                </summary>
+                <div class="menu-items">
+                  @if (color.image_url; as image) {
+                    <button
+                      type="button"
+                      (click)="setCover(image); colorMenu.open = false"
+                      [disabled]="coverUrl() === image"
+                    >
+                      Usar como portada
+                    </button>
+                    <button
+                      type="button"
+                      (click)="openLightbox(lightbox, image); colorMenu.open = false"
+                    >
+                      Ampliar fotografía
+                    </button>
+                    <button
+                      type="button"
+                      class="danger"
+                      (click)="removeImage(image); colorMenu.open = false"
+                    >
+                      Excluir fotografía
+                    </button>
+                  }
+                  <button
+                    type="button"
+                    class="danger"
+                    (click)="removeGlobalColorAt(i); colorMenu.open = false"
+                  >
+                    Eliminar color
+                  </button>
+                </div>
+              </details>
+            </div>
           }
-        </select>
-        <small class="hint">Proveedor de donde viene este producto</small>
-      </div>
-
-      <div class="form-group">
-        <label class="label">Titulo del producto *</label>
-        <input
-          type="text"
-          [(ngModel)]="d.listing.title"
-          class="input"
-          placeholder="Ej: Cobertor Matrimonial"
-        />
-      </div>
-
-      <div class="form-group">
-        <label class="label">Categoria *</label>
-        <div class="category-input-wrapper">
-          <input
-            type="text"
-            [(ngModel)]="categorySearch"
-            (input)="onCategorySearch()"
-            (focus)="showCategoryDropdown.set(true)"
-            class="input"
-            placeholder="Buscar categoria..."
-            [value]="d.listing.category_hint || ''"
-          />
-
-          @if (showCategoryDropdown() && filteredCategories().length > 0) {
-            <div class="dropdown">
-              @for (cat of filteredCategories(); track cat.id) {
-                <button
-                  type="button"
-                  class="dropdown-item"
-                  [class.selected]="d.listing.category_hint === cat.fullPath"
-                  (click)="selectCategory(cat)"
-                >
-                  <span class="category-level-{{cat.level}}">{{ cat.fullPath }}</span>
+        </div>
+        <div class="inline-actions add-colors">
+          <button type="button" class="btn subtle" (click)="addGlobalColorWithImage()">
+            <review-icon name="plus" /> Color con foto
+          </button>
+          <button type="button" class="btn subtle" (click)="addGlobalColorWithoutImage()">
+            <review-icon name="plus" /> Sin foto
+          </button>
+        </div>
+        @if (unassignedImages().length) {
+          <div class="additional-photos">
+            <h3>
+              Fotos adicionales <span class="count">{{ unassignedImages().length }}</span>
+            </h3>
+            <div class="photo-gallery">
+              @for (url of unassignedImages(); track url) {
+                <figure class="extra-photo">
+                  <button
+                    type="button"
+                    class="photo-open"
+                    (click)="selectedPreview.set(url)"
+                    aria-label="Ver foto adicional"
+                  >
+                    <img [src]="url" alt="Foto adicional del producto" loading="lazy" />
+                  </button>
+                  <details
+                    class="context-menu"
+                    #photoMenu
+                    (keydown.escape)="closeImageMenu($event, photoMenu)"
+                  >
+                    <summary aria-label="Acciones de la fotografía">
+                      <review-icon name="more" />
+                    </summary>
+                    <div class="menu-items">
+                      <button
+                        type="button"
+                        (click)="setCover(url); photoMenu.open = false"
+                        [disabled]="coverUrl() === url"
+                      >
+                        {{ coverUrl() === url ? 'Es portada' : 'Usar como portada' }}
+                      </button>
+                      <button
+                        type="button"
+                        (click)="openLightbox(lightbox, url); photoMenu.open = false"
+                      >
+                        Ampliar fotografía
+                      </button>
+                      <button
+                        type="button"
+                        class="danger"
+                        (click)="removeImage(url); photoMenu.open = false"
+                      >
+                        Excluir fotografía
+                      </button>
+                    </div>
+                  </details>
+                </figure>
+              }
+            </div>
+          </div>
+        }
+        @if (excludedImages().length) {
+          <details>
+            <summary>Fotos excluidas ({{ excludedImages().length }})</summary>
+            <div class="picker-grid">
+              @for (url of excludedImages(); track url) {
+                <button type="button" class="picker-image" (click)="restoreImage(url)">
+                  <img [src]="url" alt="Foto excluida" /><span>Restaurar foto</span>
                 </button>
               }
             </div>
-          }
-        </div>
-        @if (!d.listing.category_hint && editableCategoryProposal()) {
-          <div class="cat-proposal-panel">
-            <div class="cat-proposal-header">
-              <span class="cat-proposal-badge">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
-                  <circle cx="12" cy="12" r="9"/>
-                  <path d="M12 8.5v.01M12 11.5v5"/>
-                </svg>
-                Categoría sugerida por IA
-              </span>
-              <button
-                type="button"
-                class="cat-proposal-dismiss"
-                (click)="dismissCategoryProposal()"
-                aria-label="Descartar propuesta"
-                title="Descartar y buscar manualmente"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
-                  <path d="M18 6 6 18M6 6l12 12"/>
-                </svg>
-              </button>
-            </div>
-
-            <p class="cat-proposal-hint">
-              Esta categoría no existe aún. Puedes editarla, crearla o buscar una existente.
-            </p>
-
-            <!-- Breadcrumb visual de los segmentos -->
-            @if (categoryProposalSegments().length > 0) {
-              <div class="cat-proposal-breadcrumb">
-                @for (seg of categoryProposalSegments(); track seg; let last = $last) {
-                  <span class="cat-seg">{{ seg }}</span>
-                  @if (!last) {
-                    <span class="cat-sep" aria-hidden="true">›</span>
-                  }
-                }
-              </div>
-            }
-
-            <!-- Input editable para modificar la ruta -->
-            <div class="cat-proposal-edit">
-              <label class="cat-proposal-edit-label">Editar ruta de la nueva categoría</label>
-              <input
-                type="text"
+          </details>
+        }
+      </section>
+      <div class="product-panel">
+        <section class="review-section identity-section" aria-labelledby="info-title">
+          <h2 id="info-title"><review-icon name="box" /> Producto</h2>
+          <div class="identity-fields">
+            <label class="field"
+              >Nombre del producto
+              <textarea
                 class="input"
-                [ngModel]="editableCategoryProposal()"
-                (ngModelChange)="editableCategoryProposal.set($event)"
-                placeholder="Ej: Calzado > Tenis > Sneakers"
+                [(ngModel)]="d.listing.title"
+                placeholder="Nombre y modelo"
+                rows="2"
+                id="product-title"
+                [class.input-error]="fieldErrors().title"
+                [attr.aria-invalid]="!!fieldErrors().title"
+                aria-describedby="title-error"
+                (ngModelChange)="clearFieldError('title')"
+                required
+              ></textarea>
+            </label>
+            @if (fieldErrors().title) {
+              <p id="title-error" class="field-error" role="alert">{{ fieldErrors().title }}</p>
+            }
+            <label class="field"
+              ><span>Código etiqueta <span class="optional">· Opcional</span></span>
+              <input
+                id="product-label-code"
+                class="input"
+                [ngModel]="d.listing.supplierSku"
+                (ngModelChange)="setSupplierSku($event)"
+                placeholder="Código de la etiqueta del proveedor"
+                aria-describedby="product-label-code-help"
               />
-              <small class="hint">Usa " > " para separar niveles. Ej: <em>Ropa > Mujer > Overall</em></small>
-            </div>
-
-            <div class="cat-proposal-actions">
-              <button
-                type="button"
-                class="btn btn-sm btn-primary"
-                [disabled]="categoryProposalSaving() || !editableCategoryProposal().trim()"
-                (click)="acceptCategoryProposal()"
-              >
-                @if (categoryProposalSaving()) {
-                  <span class="btn-spinner" aria-hidden="true"></span>
-                  Creando categoría...
-                } @else {
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
-                    <path d="M12 5v14M5 12h14"/>
-                  </svg>
-                  Crear y usar esta categoría
+              <small id="product-label-code-help" class="hint">
+                Identificador del producto usado por el proveedor. El SKU interno del sistema se
+                genera por separado.
+              </small>
+            </label>
+            <div class="field">
+              <label for="keyword-add"
+                >Palabras clave <span class="optional">Para encontrar el producto</span>
+              </label>
+              <div class="chips">
+                @for (keyword of d.listing.keywords || []; track $index; let i = $index) {
+                  <div class="keyword-chip">
+                    <input
+                      #keywordValue
+                      [value]="keyword"
+                      (change)="editKeyword(i, keywordValue.value)"
+                      [attr.aria-label]="'Editar palabra clave ' + (i + 1)"
+                      [style.width.ch]="keyword.length + 2"
+                    />
+                    <button
+                      type="button"
+                      class="chip-remove"
+                      (click)="removeKeyword(i)"
+                      [attr.aria-label]="'Eliminar ' + keyword"
+                    >
+                      ×
+                    </button>
+                  </div>
                 }
-              </button>
-              <button
-                type="button"
-                class="btn btn-sm btn-secondary"
-                [disabled]="categoryProposalSaving()"
-                (click)="chooseExistingCategoryFromProposal()"
-              >
-                Buscar categoría existente
-              </button>
-            </div>
-          </div>
-        }
-        <small class="hint">Categoria estandarizada del producto</small>
-      </div>
-        </section>
-
-        <section class="card card-media">
-          <h2 class="section-title">Imagenes y Colores</h2>
-
-      <div class="subsection">
-        <h3 class="subsection-title">Imagen de Portada</h3>
-        <p class="subsection-hint">
-          Esta es la imagen principal que se muestra en la vista general del producto.
-          <strong>No es un color,</strong> es la imagen de presentacion.
-        </p>
-
-        @if (coverUrl()) {
-          <div class="cover-preview-main">
-            <div class="cover-preview-image-wrapper">
-              <img [src]="coverUrl()" class="cover-preview-image" alt="Portada del producto"/>
-              <div class="cover-badge-large">Portada Actual</div>
-            </div>
-            <button
-              type="button"
-              class="btn btn-sm btn-secondary"
-              (click)="openCoverSelector()"
-            >
-              Cambiar Portada
-            </button>
-          </div>
-        } @else {
-          <button
-            type="button"
-            class="btn btn-primary"
-            (click)="openCoverSelector()"
-          >
-            + Seleccionar Imagen de Portada
-          </button>
-        }
-      </div>
-
-      <hr class="divider"/>
-
-      <div class="subsection">
-        <div class="subsection-header">
-          <div>
-            <h3 class="subsection-title">Colores Globales del Producto</h3>
-            <p class="subsection-hint">
-              Define aqui TODOS los colores disponibles del producto.
-            </p>
-          </div>
-          <div class="colors-actions">
-            <button type="button" class="btn btn-sm btn-primary" (click)="addGlobalColorWithImage()">
-              Con imagen
-            </button>
-            <button type="button" class="btn btn-sm btn-secondary" (click)="addGlobalColorWithoutImage()">
-              Solo nombre
-            </button>
-          </div>
-        </div>
-
-        <div class="images-gallery">
-          @for (color of (d.product_colors || []); track (color.name || i); let i = $index) {
-            <div class="gallery-item">
-              <div class="gallery-item-image-wrapper">
-                <button
-                  type="button"
-                  class="gallery-item-image-trigger"
-                  (click)="openGlobalColorImageSelector(i)"
-                  [attr.aria-label]="hasColorImage(color.image_url) ? 'Cambiar imagen del color global' : 'Agregar imagen al color global'"
-                  [attr.title]="hasColorImage(color.image_url) ? 'Cambiar imagen' : 'Agregar imagen'"
-                >
-                  @if (hasColorImage(color.image_url)) {
-                    <img [src]="color.image_url" class="gallery-item-image" alt="Imagen de color"/>
-                  } @else {
-                    <div class="gallery-item-placeholder">
-                      <span class="placeholder-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                          <path d="M4 7h4l2-2h4l2 2h4v12H4z"></path>
-                          <circle cx="12" cy="13" r="3"></circle>
-                        </svg>
-                      </span>
-                      <span class="placeholder-text">Sin imagen</span>
-                    </div>
-                  }
-                </button>
-
-                <button
-                  type="button"
-                  class="gallery-item-remove"
-                  (click)="removeGlobalColorAt(i)"
-                  aria-label="Eliminar color global"
-                  title="Eliminar color"
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                    <path d="M3 6h18"></path>
-                    <path d="M8 6V4h8v2"></path>
-                    <path d="M19 6l-1 14H6L5 6"></path>
-                    <path d="M10 11v6"></path>
-                    <path d="M14 11v6"></path>
-                  </svg>
-                </button>
               </div>
-
-              <div class="gallery-item-color">
-                <label class="gallery-label">Color</label>
+              <div class="inline-add">
                 <input
-                  type="text"
-                  [(ngModel)]="color.name"
-                  class="gallery-input"
-                  placeholder="Ej: negro, rosa..."
-                  (focus)="onGlobalColorFocus(i, color.name)"
-                  (blur)="onGlobalColorBlur(i)"
+                  id="keyword-add"
+                  class="input"
+                  [(ngModel)]="keywordInput"
+                  (keydown.enter)="addKeyword(); $event.preventDefault()"
+                  placeholder="Añadir palabra o frase"
                 />
                 <button
                   type="button"
-                  class="btn btn-sm btn-secondary"
-                  (click)="openGlobalColorImageSelector(i)"
+                  class="btn"
+                  (click)="addKeyword()"
+                  [disabled]="!keywordInput.trim()"
                 >
-                  {{ hasColorImage(color.image_url) ? "Cambiar imagen" : "Agregar imagen" }}
+                  Añadir
+                </button>
+              </div>
+              @if (!d.listing.keywords?.length) {
+                <small class="hint"
+                  >Sin palabras clave. Añade solo términos que describan este producto.</small
+                >
+              }
+            </div>
+            <div class="field">
+              <label for="category-search">Categoría</label>
+              <input
+                id="category-search"
+                [class.input-error]="fieldErrors().category"
+                [attr.aria-invalid]="!!fieldErrors().category"
+                aria-describedby="category-error"
+                class="input"
+                [(ngModel)]="categorySearch"
+                (input)="onCategorySearch(); showCategoryDropdown.set(true)"
+                (focus)="showCategoryDropdown.set(true)"
+                placeholder="Buscar categoría…"
+                [attr.aria-expanded]="showCategoryDropdown()"
+                aria-controls="category-results"
+              />
+              <small class="category-selected" [class.unselected]="!d.listing.category_hint">
+                @if (d.listing.category_hint) {
+                  <review-icon name="check" />
+                }
+                {{ d.listing.category_hint || 'Sin categoría seleccionada' }}</small
+              >
+              @if (fieldErrors().category) {
+                <p id="category-error" class="field-error" role="alert">
+                  {{ fieldErrors().category }}
+                </p>
+              }
+              @if (showCategoryDropdown()) {
+                <div id="category-results" class="category-results">
+                  <div class="section-header">
+                    <strong>Categorías</strong>
+                    <button type="button" class="btn" (click)="showCategoryDropdown.set(false)">
+                      Cerrar
+                    </button>
+                  </div>
+                  @for (cat of filteredCategories(); track cat.id) {
+                    <button type="button" class="category-result" (click)="selectCategory(cat)">
+                      {{ cat.fullPath }}
+                    </button>
+                  }
+                  @if (!filteredCategories().length) {
+                    <p class="hint">Sin resultados. Puedes crear una categoría aquí.</p>
+                  }
+                  <details>
+                    <summary>Navegar por jerarquía</summary>
+                    <button type="button" class="btn" (click)="browseCategory(null)">
+                      Volver a raíces
+                    </button>
+                    @for (cat of categoryChildren(); track cat.id) {
+                      <div class="category-branch">
+                        <button type="button" class="category-result" (click)="selectCategory(cat)">
+                          {{ cat.fullPath }}
+                        </button>
+                        <button
+                          type="button"
+                          class="btn-icon"
+                          (click)="browseCategory(cat.id)"
+                          [attr.aria-label]="'Ver subcategorías de ' + cat.name"
+                        >
+                          ›
+                        </button>
+                      </div>
+                    }
+                    @if (!categoryChildren().length) {
+                      <p class="hint">Esta categoría no tiene subcategorías.</p>
+                    }
+                  </details>
+                  <details class="inline-create">
+                    <summary>Crear categoría</summary>
+                    <div class="field-grid">
+                      <label class="field"
+                        >Categoría padre<select class="input" [(ngModel)]="categoryParentId">
+                          <option value="">Ninguna (categoría raíz)</option>
+                          @for (cat of allCategories(); track cat.id) {
+                            <option [value]="cat.id">{{ cat.fullPath }}</option>
+                          }
+                        </select>
+                      </label>
+                      <label class="field"
+                        >Nombre<input
+                          class="input"
+                          [(ngModel)]="newCategoryName"
+                          placeholder="Nombre de la nueva categoría"
+                        />
+                      </label>
+                    </div>
+                    <button
+                      type="button"
+                      class="btn"
+                      (click)="createInlineCategory()"
+                      [disabled]="categoryProposalSaving() || !newCategoryName.trim()"
+                    >
+                      {{ categoryProposalSaving() ? 'Creando…' : 'Crear y utilizar' }}
+                    </button>
+                  </details>
+                </div>
+              }
+            </div>
+          </div>
+          @if (editableCategoryProposal()) {
+            <div class="category-proposal">
+              <p>
+                <strong>Sugerencia del bot:</strong> {{ editableCategoryProposal() }}
+                {{ categoryExists(editableCategoryProposal()) ? '' : 'no existe todavía.' }}
+              </p>
+              <label class="field"
+                >Ruta de la categoría<input
+                  class="input"
+                  [ngModel]="editableCategoryProposal()"
+                  (ngModelChange)="editableCategoryProposal.set($event)"
+                />
+              </label>
+              <small class="hint"
+                >Cada nivel antes del último será su categoría padre. Se reutilizarán las
+                coincidencias existentes.</small
+              >
+              <div class="inline-actions">
+                <button
+                  type="button"
+                  class="btn btn-primary"
+                  (click)="acceptCategoryProposal()"
+                  [disabled]="categoryProposalSaving() || !editableCategoryProposal().trim()"
+                >
+                  {{
+                    categoryProposalSaving()
+                      ? 'Aplicando…'
+                      : categoryExists(editableCategoryProposal())
+                        ? 'Usar categoría'
+                        : 'Crear y utilizar'
+                  }}
+                </button>
+                <button type="button" class="btn" (click)="dismissCategoryProposal()">
+                  Descartar sugerencia
                 </button>
               </div>
             </div>
           }
-        </div>
-
-        @if ((d.product_colors || []).length === 0) {
-          <p class="text-muted">No hay colores definidos. Agrega al menos uno usando los botones de arriba.</p>
-        }
-      </div>
         </section>
-      </div>
+        <section class="review-section" aria-labelledby="variants-title">
+          <h2 id="variants-title">
+            <review-icon name="layers" /> Variantes
+            <span class="optional">{{ d.listing.items.length }}</span>
+          </h2>
 
-      <div class="review-column review-column-variants">
-        <section class="card card-variants">
-          <div class="section-header">
-            <h2 class="section-title">Variantes y precios</h2>
-            <button type="button" class="btn btn-sm btn-primary" (click)="addVariant()">
-              + Agregar variante
-            </button>
-          </div>
-
-      <div class="form-group">
-        <label class="checkbox-label">
-          <input
-            type="checkbox"
-            class="checkbox"
-            [checked]="hasVariantColors()"
-            (change)="toggleVariantColors($any($event.target).checked)"
-          />
-          <span>Estas variantes manejan colores distintos</span>
-        </label>
-        <small class="hint">Por defecto, los colores globales se aplican automaticamente a todas las variantes.</small>
-      </div>
-
-      <div class="form-group">
-        <label class="checkbox-label">
-          <input
-            type="checkbox"
-            class="checkbox"
-            [checked]="useSharedPrices()"
-            (change)="toggleSharedPrices($any($event.target).checked)"
-          />
-          <span>Usar precios generales para todas las variantes</span>
-        </label>
-        <small class="hint">Edita una sola vez y se replica en todas las variantes.</small>
-      </div>
-
-      @if (useSharedPrices()) {
-        <div class="prices-section prices-section-shared">
-          <label class="label">Precios generales</label>
-          <div class="price-row">
-            <span class="price-label">Precio costo</span>
-            <input
-              type="text"
-              [ngModel]="getSharedPriceInputValue('costo')"
-              (ngModelChange)="onSharedPriceInputChange('costo', $event)"
-              (blur)="onSharedPriceInputBlur('costo')"
-              class="input input-sm price-input"
-              [class.input-error]="isSharedPriceLossRisk()"
-              placeholder="0.00"
-            />
-            <span class="currency">MXN</span>
-          </div>
-          <div class="price-row">
-            <span class="price-label">Precio final</span>
-            <input
-              type="text"
-              [ngModel]="getSharedPriceInputValue('final')"
-              (ngModelChange)="onSharedPriceInputChange('final', $event)"
-              (blur)="onSharedPriceInputBlur('final')"
-              class="input input-sm price-input"
-              [class.input-error]="isSharedPriceLossRisk()"
-              placeholder="0.00"
-            />
-            <span class="currency">MXN</span>
-          </div>
-          <div class="price-row">
-            <span class="price-label">Precio clienta</span>
-            <input
-              type="text"
-              [value]="getSharedClientPriceValue()"
-              class="input input-sm input-disabled price-input"
-              readonly
-            />
-            <span class="currency">MXN</span>
-          </div>
-        </div>
-      }
-
-      <div class="variants-list">
-        @for (variant of d.listing.items; track (variant.sku || variant.variant_name || i); let i = $index) {
-          <div class="variant-card">
-            <div class="variant-header">
-              <span class="variant-number">#{{ i + 1 }}</span>
-              <button
-                type="button"
-                class="btn-icon-sm btn-danger"
-                (click)="removeVariant(i)"
-                [disabled]="d.listing.items.length <= 1"
-                aria-label="Eliminar variante"
-                title="Eliminar variante"
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                  <path d="M3 6h18"></path>
-                  <path d="M8 6V4h8v2"></path>
-                  <path d="M19 6l-1 14H6L5 6"></path>
-                  <path d="M10 11v6"></path>
-                  <path d="M14 11v6"></path>
-                </svg>
-              </button>
-            </div>
-
-            @if (variant.image_url) {
-              <div class="variant-image-preview">
-                <img [src]="variant.image_url" alt="Variante"/>
+          <div class="chips variant-chips">
+            @for (variant of d.listing.items; track variant.variant_id; let i = $index) {
+              <div class="variant-chip" [class.selected]="expandedVariant() === variant.variant_id">
+                <button
+                  type="button"
+                  (click)="
+                    expandedVariant.set(
+                      expandedVariant() === variant.variant_id ? null : variant.variant_id
+                    )
+                  "
+                  [attr.title]="stockLabel(variant.stock_state)"
+                  aria-haspopup="dialog"
+                  [attr.aria-expanded]="expandedVariant() === variant.variant_id"
+                >
+                  <span class="stock-dot" [attr.data-stock]="variant.stock_state">{{
+                    variant.stock_state === 'out_of_stock'
+                      ? '×'
+                      : variant.stock_state === 'last_pair'
+                        ? '!'
+                        : variant.stock_state === 'unknown_qty'
+                          ? '?'
+                          : ''
+                  }}</span
+                  >{{ variant.variant_name || 'Sin nombre'
+                  }}<span class="sr-only">, {{ stockLabel(variant.stock_state) }}</span>
+                </button>
               </div>
             }
-
-            <div class="form-group">
-              <label class="label">Nombre de variante</label>
-              <input
-                type="text"
-                [(ngModel)]="variant.variant_name"
-                class="input"
-                placeholder="Ej: Matrimonial Rosa"
-              />
-            </div>
-
-            <div class="form-group">
-              <label class="label">SKU</label>
-              @if (variant.sku) {
-                <input type="text" [value]="variant.sku" class="input input-disabled" readonly />
-                <small class="hint">Identificador unico por variante/talla (no editable)</small>
-              } @else {
-                <small class="hint">Se generara automaticamente al guardar/validar.</small>
-              }
-            </div>
-
-            @if (hasVariantColors()) {
-              <div class="form-group">
-                <div class="colors-header">
-                  <label class="label">Colores de esta variante</label>
-                  <button type="button" class="btn btn-sm btn-primary" (click)="assignColorToVariant(i)">
-                    + Asignar color
+            <details class="variant-add">
+              <summary><review-icon name="plus" /> Añadir</summary>
+              <div class="inline-add">
+                <label class="field"
+                  >Añadir variante<input
+                    class="input"
+                    [(ngModel)]="variantInput"
+                    (keydown.enter)="addVariant(); $event.preventDefault()"
+                    placeholder="Ej. 6, 8 o Unitalla"
+                    aria-describedby="variant-error"
+                  />
+                </label>
+                <button type="button" class="btn" (click)="addVariant()">+ Añadir</button>
+              </div>
+            </details>
+          </div>
+          <p id="variant-error" class="field-error" role="status">{{ variantError() }}</p>
+          @if (!d.listing.items.length) {
+            <p class="hint">Añade al menos una variante para publicar.</p>
+          }
+          @for (variant of d.listing.items; track variant.variant_id; let i = $index) {
+            @if (expandedVariant() === variant.variant_id) {
+              <dialog
+                reviewDialog
+                class="review-dialog variant-editor"
+                aria-labelledby="variant-editor-title"
+                (close)="expandedVariant.set(null)"
+              >
+                <div class="section-header">
+                  <h3 id="variant-editor-title">Editar {{ variant.variant_name || 'variante' }}</h3>
+                  <button
+                    type="button"
+                    class="btn-icon subtle"
+                    (click)="expandedVariant.set(null)"
+                    aria-label="Cerrar edición de variante"
+                  >
+                    <review-icon name="close" />
                   </button>
                 </div>
-
-                <div class="colors-hint">
-                  Los colores se definen arriba en "Colores Globales". Aqui seleccionas cuales aplican para esta variante.
-                </div>
-
-                @if ((variant.color_stock || []).length > 0) {
-                  <div class="colors-list-readonly">
-                    @for (entry of (variant.color_stock || []); track (entry.color_name || ci); let ci = $index) {
-                      <div class="color-chip">
-                        @if (getColorImage(entry.color_name); as colorImage) {
-                          <img [src]="colorImage" alt="{{entry.color_name}}" class="color-chip-image" />
-                        } @else {
-                          <div class="color-chip-placeholder">Sin</div>
-                        }
-
-                        <span class="color-chip-name">{{ entry.color_name || 'Sin nombre' }}</span>
-                        <select
-                          class="input input-sm"
-                          [(ngModel)]="entry.stock_state"
-                          style="width: 150px;"
-                          (ngModelChange)="touchDraft()"
-                        >
-                          @for (opt of stockOptions; track opt.value) {
-                            <option [ngValue]="opt.value">{{ opt.label }}</option>
-                          }
-                        </select>
-
+                <label class="field"
+                  >Nombre o talla<input
+                    #variantName
+                    class="input"
+                    [value]="variant.variant_name || ''"
+                    (change)="
+                      renameVariant(i, variantName.value);
+                      variantName.value = variant.variant_name || ''
+                    "
+                  />
+                </label>
+                <details>
+                  <summary>Disponibilidad, colores y notas</summary>
+                  <label class="field"
+                    >Disponibilidad<select class="input" [(ngModel)]="variant.stock_state">
+                      @for (opt of stockOptions; track opt.value) {
+                        <option [value]="opt.value">{{ opt.label }}</option>
+                      }
+                    </select>
+                  </label>
+                  <label class="check">
+                    <input
+                      #differentColors
+                      type="checkbox"
+                      [checked]="hasVariantColors()"
+                      (change)="toggleVariantColors(differentColors.checked)"
+                    />Las variantes usan colores distintos</label
+                  >
+                  @if (hasVariantColors()) {
+                    @for (entry of variant.color_stock; track $index; let ci = $index) {
+                      <div class="color-row">
+                        <label class="field"
+                          >{{ entry.color_name
+                          }}<select
+                            class="input"
+                            [(ngModel)]="entry.stock_state"
+                            (ngModelChange)="touchDraft()"
+                          >
+                            @for (opt of stockOptions; track opt.value) {
+                              <option [value]="opt.value">{{ opt.label }}</option>
+                            }
+                          </select>
+                        </label>
                         <button
                           type="button"
-                          class="color-chip-remove"
+                          class="btn"
                           (click)="removeColorFromVariant(i, ci)"
-                          aria-label="Quitar color de la variante"
-                          title="Quitar este color de la variante"
+                          [attr.aria-label]="'Quitar color ' + entry.color_name"
                         >
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                            <path d="M3 6h18"></path>
-                            <path d="M8 6V4h8v2"></path>
-                            <path d="M19 6l-1 14H6L5 6"></path>
-                            <path d="M10 11v6"></path>
-                            <path d="M14 11v6"></path>
-                          </svg>
+                          Quitar
                         </button>
                       </div>
                     }
-                  </div>
-                } @else {
-                  <div class="empty-state">
-                    <p>No hay colores asignados. Click en "Asignar color" para agregar.</p>
-                  </div>
-                }
-              </div>
-            } @else {
-              <div class="form-group">
-                <small class="hint">Esta variante usa automaticamente los colores globales del producto.</small>
-              </div>
+                    <button type="button" class="btn" (click)="assignColorToVariant(i)">
+                      Asignar color
+                    </button>
+                  } @else {
+                    <p class="hint">Se aplican los colores globales del producto.</p>
+                  }
+                  <label class="field"
+                    >Notas<textarea class="input" [(ngModel)]="variant.notes" rows="2"></textarea>
+                  </label>
+                </details>
+                <p class="field-error" role="status">{{ variantError() }}</p>
+                <div class="dialog-footer">
+                  <button
+                    type="button"
+                    class="btn danger"
+                    (click)="confirmRemoveVariant(i)"
+                    [disabled]="d.listing.items.length <= 1"
+                  >
+                    Eliminar variante</button
+                  ><button
+                    type="button"
+                    class="btn btn-primary"
+                    (click)="expandedVariant.set(null)"
+                  >
+                    Listo
+                  </button>
+                </div>
+              </dialog>
             }
-
-            <div class="form-group">
-              <label class="label">Disponibilidad</label>
-              <select [(ngModel)]="variant.stock_state" class="input">
-                <option value="in_stock">Disponible</option>
-                <option value="last_pair">Ultima pieza</option>
-                <option value="out_of_stock">Agotado</option>
-                <option value="unknown_qty">Cantidad desconocida</option>
-              </select>
-            </div>
-
-            @if (!useSharedPrices()) {
-              <div class="prices-section">
-                <label class="label">Precios</label>
-                <div class="price-row">
-                  <span class="price-label">Precio costo</span>
-                  <input
-                    type="text"
-                    [ngModel]="getPriceInputValue(i, 'costo')"
-                    (ngModelChange)="onPriceInputChange(i, 'costo', $event)"
-                    (blur)="onPriceInputBlur(i, 'costo')"
-                    class="input input-sm price-input"
-                    [class.input-error]="isPriceLossRisk(variant)"
-                    placeholder="0.00"
-                  />
-                  <span class="currency">{{ $any(variant).prices?.currency || 'MXN' }}</span>
-                </div>
-                <div class="price-row">
-                  <span class="price-label">Precio final</span>
-                  <input
-                    type="text"
-                    [ngModel]="getPriceInputValue(i, 'final')"
-                    (ngModelChange)="onPriceInputChange(i, 'final', $event)"
-                    (blur)="onPriceInputBlur(i, 'final')"
-                    class="input input-sm price-input"
-                    [class.input-error]="isPriceLossRisk(variant)"
-                  />
-                  <span class="currency">{{ $any(variant).prices?.currency || 'MXN' }}</span>
-                </div>
-                <div class="price-row">
-                  <span class="price-label">Precio clienta</span>
-                  <input
-                    type="text"
-                    [value]="formatMoney($any(variant).prices?.precio_clienta, $any(variant).prices?.currency || 'MXN')"
-                    class="input input-sm input-disabled price-input"
-                    readonly
-                  />
-                  <span class="currency">{{ $any(variant).prices?.currency || 'MXN' }}</span>
-                </div>
-              </div>
-            }
-
-            <div class="form-group">
-              <label class="label">Notas</label>
-              <textarea
-                [(ngModel)]="variant.notes"
-                class="input"
-                rows="2"
-                placeholder="Notas adicionales..."
-              ></textarea>
-            </div>
-          </div>
-        }
-      </div>
-
-          @if (d.listing.items.length === 0) {
-            <div class="empty-state">
-              <p>No hay variantes. Agrega al menos una para continuar.</p>
-            </div>
           }
         </section>
+        <section class="review-section prices-section" aria-labelledby="prices-title">
+          <h2 id="prices-title"><review-icon name="tag" /> Precios</h2>
+          <label class="check">
+            <input
+              #generalPrices
+              type="checkbox"
+              [checked]="useSharedPrices()"
+              (change)="toggleSharedPrices(generalPrices.checked)"
+            />Mismos precios para todas las variantes</label
+          >
+          @if (useSharedPrices()) {
+            <div class="field-grid price-fields">
+              <label class="field"
+                >Costo (MXN)<input
+                  class="input"
+                  inputmode="decimal"
+                  [ngModel]="getSharedPriceInputValue('costo')"
+                  (ngModelChange)="onSharedPriceInputChange('costo', $event)"
+                  (blur)="onSharedPriceInputBlur('costo')"
+                  [class.input-error]="isSharedPriceLossRisk()"
+                />
+              </label>
+              <label class="field"
+                >Precio de venta (MXN)<input
+                  class="input"
+                  inputmode="decimal"
+                  [ngModel]="getSharedPriceInputValue('final')"
+                  (ngModelChange)="onSharedPriceInputChange('final', $event)"
+                  (blur)="onSharedPriceInputBlur('final')"
+                  [class.input-error]="isSharedPriceLossRisk()"
+                />
+              </label>
+            </div>
+            <p class="price-derived">
+              Precio clienta <strong>{{ getSharedClientPriceValue() }}</strong>
+            </p>
+            @if (isSharedPriceLossRisk()) {
+              <p class="field-error">El precio clienta no puede ser menor al costo.</p>
+            }
+          } @else {
+            @for (variant of d.listing.items; track variant.variant_id; let i = $index) {
+              <div class="variant-prices">
+                <h3>{{ variant.variant_name || 'Sin nombre' }}</h3>
+                <div class="field-grid price-fields">
+                  <label class="field"
+                    >Costo ({{ variant.prices.currency }})<input
+                      class="input"
+                      inputmode="decimal"
+                      [ngModel]="getPriceInputValue(i, 'costo')"
+                      (ngModelChange)="onPriceInputChange(i, 'costo', $event)"
+                      (blur)="onPriceInputBlur(i, 'costo')"
+                    />
+                  </label>
+                  <label class="field"
+                    >Precio de venta ({{ variant.prices.currency }})<input
+                      class="input"
+                      inputmode="decimal"
+                      [ngModel]="getPriceInputValue(i, 'final')"
+                      (ngModelChange)="onPriceInputChange(i, 'final', $event)"
+                      (blur)="onPriceInputBlur(i, 'final')"
+                    />
+                  </label>
+                </div>
+                <p class="price-derived">
+                  Precio clienta
+                  <strong>{{
+                    formatMoney(variant.prices.precio_clienta, variant.prices.currency)
+                  }}</strong>
+                </p>
+                @if (isPriceLossRisk(variant)) {
+                  <p class="field-error">El precio clienta no puede ser menor al costo.</p>
+                }
+              </div>
+            }
+          }
+        </section>
+        <section class="review-section metadata-section" aria-labelledby="supplier-title">
+          <h2 id="supplier-title"><review-icon name="truck" /> Proveedor</h2>
+          <div class="identity-fields">
+            <label class="field"
+              >Proveedor
+              <select
+                id="supplier-select"
+                class="input"
+                [class.input-error]="fieldErrors().supplier"
+                [attr.aria-invalid]="!!fieldErrors().supplier"
+                aria-describedby="supplier-error"
+                [(ngModel)]="d.supplier_id"
+                (change)="onSupplierChange()"
+              >
+                <option [ngValue]="null">Seleccionar proveedor…</option>
+                @for (sup of activeSuppliers(); track sup.supplier_id) {
+                  <option [value]="sup.supplier_id">{{ sup.display_name }}</option>
+                }
+              </select>
+              @if (fieldErrors().supplier) {
+                <small id="supplier-error" class="field-error" role="alert">{{
+                  fieldErrors().supplier
+                }}</small>
+              }
+            </label>
+          </div>
+        </section>
+        <details class="review-section">
+          <summary>Mensaje original <span class="optional">Referencia del bot</span></summary>
+          <div class="raw-message">{{ rawText() || '(Sin texto)' }}</div>
+        </details>
+        <details class="review-section">
+          <summary>Más acciones <span class="optional">Opciones avanzadas</span></summary>
+          <div class="inline-actions">
+            <button type="button" class="btn" (click)="mergeDialog.showModal()">
+              Fusionar con producto existente
+            </button>
+            <button
+              type="button"
+              class="btn danger"
+              (click)="reject()"
+              [disabled]="finalActionBusy()"
+            >
+              Rechazar producto
+            </button>
+          </div>
+          <dl class="technical-data">
+            <dt>ID del producto</dt>
+            <dd>{{ id }}</dd>
+            <dt>Mensaje de origen</dt>
+            <dd>{{ d.raw_post_id }}</dd>
+            <dt>Esquema</dt>
+            <dd>{{ d.schema_version }}</dd>
+          </dl>
+        </details>
+      </div>
+    </fieldset>
+    <div class="actions-shell">
+      <div class="action-context">
+        <review-icon name="check" /><span>Revisa los datos antes de publicar</span>
+      </div>
+      @if (finalActionBusy()) {
+        <p role="status" class="action-status">
+          {{
+            publishing()
+              ? 'Guardando y publicando…'
+              : saving()
+                ? 'Guardando cambios…'
+                : 'Rechazando…'
+          }}
+        </p>
+      }
+      <div class="actions-bar">
+        <button
+          type="button"
+          class="btn"
+          (click)="save()"
+          [disabled]="finalActionBusy() || mergeApplying() || categoryProposalSaving()"
+        >
+          <review-icon name="save" />{{ saving() ? 'Guardando…' : 'Guardar' }}
+        </button>
+        <button
+          type="button"
+          class="btn btn-primary"
+          (click)="validate()"
+          [disabled]="finalActionBusy() || mergeApplying() || categoryProposalSaving()"
+        >
+          <review-icon name="check" />{{ publishing() ? 'Publicando…' : 'Validar y publicar' }}
+        </button>
       </div>
     </div>
-
-    <section class="card card-secondary">
-      <h2 class="section-title">Mensaje original (solo lectura)</h2>
-      <div class="raw-message">
-        {{ rawText() || "(sin texto)" }}
+    <dialog
+      #mergeDialog
+      class="review-dialog"
+      aria-labelledby="merge-title"
+      (cancel)="mergeApplying() && $event.preventDefault()"
+    >
+      <div class="section-header">
+        <h2 id="merge-title">Fusionar producto</h2>
+        <button
+          type="button"
+          class="btn"
+          (click)="mergeDialog.close()"
+          [disabled]="mergeApplying()"
+        >
+          Cerrar
+        </button>
       </div>
-      <small class="hint">ID: {{ id }}</small>
-    </section>
-
-    <section class="card card-merge">
-      <h2 class="section-title">Fusionar Con Producto Validado</h2>
       <p class="hint">
-        Usa este bloque para aplicar cambios del producto en validacion sobre un producto ya publicado, sin sobreescribir todo.
+        Usa este bloque para aplicar cambios del producto en validacion sobre un producto ya
+        publicado, sin sobreescribir todo.
       </p>
 
       <div class="form-group">
-        <label class="label">Buscar producto destino</label>
+        <label class="label" for="merge-search">Buscar producto destino</label>
         <input
           type="text"
           class="input"
+          id="merge-search"
           [ngModel]="mergeSearch()"
           (ngModelChange)="mergeSearch.set($event)"
           placeholder="Titulo, proveedor o ID"
@@ -601,9 +841,10 @@
       </div>
 
       <div class="form-group">
-        <label class="label">Producto destino *</label>
+        <label class="label" for="merge-target">Producto destino *</label>
         <select
           class="input"
+          id="merge-target"
           [ngModel]="mergeSelectedTargetId() || ''"
           (ngModelChange)="onMergeTargetChange($event)"
         >
@@ -615,7 +856,9 @@
         @if (mergeTargetsLoading()) {
           <small class="hint">Cargando productos validados...</small>
         } @else {
-          <small class="hint">{{ filteredMergeTargets().length }} producto(s) disponible(s) para fusion.</small>
+          <small class="hint"
+            >{{ filteredMergeTargets().length }} producto(s) disponible(s) para fusion.</small
+          >
         }
       </div>
 
@@ -645,10 +888,18 @@
 
         @if (mergePreview(); as preview) {
           <div class="merge-preview-grid">
-            <div class="merge-preview-chip">Imagenes nuevas detectadas: <strong>{{ preview.newImages }}</strong></div>
-            <div class="merge-preview-chip">Colores nuevos detectados: <strong>{{ preview.newColors }}</strong></div>
-            <div class="merge-preview-chip">Variantes nuevas detectadas: <strong>{{ preview.newVariants }}</strong></div>
-            <div class="merge-preview-chip">Variantes coincidentes: <strong>{{ preview.matchedVariants }}</strong></div>
+            <div class="merge-preview-chip">
+              Imagenes nuevas detectadas: <strong>{{ preview.newImages }}</strong>
+            </div>
+            <div class="merge-preview-chip">
+              Colores nuevos detectados: <strong>{{ preview.newColors }}</strong>
+            </div>
+            <div class="merge-preview-chip">
+              Variantes nuevas detectadas: <strong>{{ preview.newVariants }}</strong>
+            </div>
+            <div class="merge-preview-chip">
+              Variantes coincidentes: <strong>{{ preview.matchedVariants }}</strong>
+            </div>
           </div>
         }
 
@@ -718,7 +969,9 @@
               type="checkbox"
               class="checkbox"
               [checked]="mergeOptionEnabled('updateExistingVariantStock')"
-              (change)="onMergeOptionChange('updateExistingVariantStock', $any($event.target).checked)"
+              (change)="
+                onMergeOptionChange('updateExistingVariantStock', $any($event.target).checked)
+              "
             />
             <span>Actualizar stock en variantes coincidentes</span>
           </label>
@@ -728,7 +981,9 @@
               type="checkbox"
               class="checkbox"
               [checked]="mergeOptionEnabled('updateExistingVariantPrices')"
-              (change)="onMergeOptionChange('updateExistingVariantPrices', $any($event.target).checked)"
+              (change)="
+                onMergeOptionChange('updateExistingVariantPrices', $any($event.target).checked)
+              "
             />
             <span>Actualizar precios en variantes coincidentes</span>
           </label>
@@ -738,7 +993,9 @@
               type="checkbox"
               class="checkbox"
               [checked]="mergeOptionEnabled('updateExistingVariantNotes')"
-              (change)="onMergeOptionChange('updateExistingVariantNotes', $any($event.target).checked)"
+              (change)="
+                onMergeOptionChange('updateExistingVariantNotes', $any($event.target).checked)
+              "
             />
             <span>Actualizar notas en variantes coincidentes</span>
           </label>
@@ -759,149 +1016,180 @@
           }
         </button>
       </div>
-    </section>
-
-    <div class="actions-shell">
-      @if (finalActionBusy()) {
-        <p class="action-status" role="status" aria-live="polite">
-          <span class="btn-spinner" aria-hidden="true"></span>
-          @if (publishing()) {
-            Guardando y publicando el producto. No cierres esta pantalla...
-          } @else if (saving()) {
-            Guardando los cambios...
-          } @else {
-            Rechazando el producto...
-          }
-        </p>
-      }
-      <div class="actions-bar">
-        <button type="button" class="btn btn-secondary" [disabled]="finalActionBusy()" [attr.aria-busy]="saving()" (click)="save()">
-          {{ saving() ? "Guardando..." : "Guardar cambios" }}
-        </button>
-        <button type="button" class="btn btn-primary" [disabled]="finalActionBusy()" [attr.aria-busy]="publishing()" (click)="validate()">
-          {{ publishing() ? "Publicando..." : "Validar y publicar" }}
-        </button>
-        <button type="button" class="btn btn-danger-outline" [disabled]="finalActionBusy()" [attr.aria-busy]="rejecting()" (click)="reject()">
-          {{ rejecting() ? "Rechazando..." : "Rechazar" }}
-        </button>
-      </div>
-    </div>
+    </dialog>
   }
-</div>
-
+</article>
+<dialog
+  #lightbox
+  class="lightbox"
+  aria-labelledby="lightbox-title"
+  (keydown)="onLightboxKey($event)"
+  (close)="resetLightbox()"
+>
+  <div class="lightbox-toolbar">
+    <div>
+      <h2 id="lightbox-title">{{ imageColorLabel(galleryImages()[lightboxIndex()] || '') }}</h2>
+      <p aria-live="polite">
+        {{ lightboxIndex() + 1 }} / {{ galleryImages().length }} fotos
+        {{ coverUrl() === galleryImages()[lightboxIndex()] ? ' · Portada' : '' }}
+      </p>
+    </div>
+    <div class="inline-actions">
+      <button
+        type="button"
+        class="btn-icon"
+        (click)="toggleLightboxZoom()"
+        [attr.aria-label]="lightboxZoom() > 1 ? 'Restablecer zoom' : 'Ampliar imagen al doble'"
+        [attr.aria-pressed]="lightboxZoom() > 1"
+      >
+        <review-icon name="zoom" /></button
+      ><button
+        type="button"
+        class="btn-icon"
+        (click)="lightbox.close()"
+        aria-label="Cerrar visor"
+        autofocus
+      >
+        <review-icon name="close" />
+      </button>
+    </div>
+  </div>
+  <div
+    class="lightbox-stage"
+    [class.zoomed]="lightboxZoom() > 1"
+    (pointerdown)="startImageGesture($event)"
+    (pointermove)="moveImageGesture($event)"
+    (pointerup)="endImageGesture($event)"
+    (pointercancel)="cancelImageGesture()"
+    (dblclick)="toggleLightboxZoom()"
+  >
+    @if (galleryImages()[lightboxIndex()]; as url) {
+      <img
+        class="lightbox-image"
+        [src]="url"
+        [alt]="imageColorLabel(url)"
+        draggable="false"
+        [style.transform]="
+          'translate(' +
+          lightboxPan().x +
+          'px,' +
+          lightboxPan().y +
+          'px) scale(' +
+          lightboxZoom() +
+          ')'
+        "
+      />
+    }
+  </div>
+  <div class="lightbox-nav">
+    <button
+      type="button"
+      class="btn-icon"
+      (click)="stepLightbox(-1)"
+      [disabled]="galleryImages().length < 2"
+      aria-label="Foto anterior"
+    >
+      <review-icon name="left" /></button
+    ><span>{{
+      lightboxZoom() > 1
+        ? 'Arrastra para explorar · Botón de zoom para reducir'
+        : 'Desliza para cambiar · Botón de zoom para ampliar'
+    }}</span
+    ><button
+      type="button"
+      class="btn-icon"
+      (click)="stepLightbox(1)"
+      [disabled]="galleryImages().length < 2"
+      aria-label="Foto siguiente"
+    >
+      <review-icon name="right" />
+    </button>
+  </div>
+</dialog>
 @if (showImagePicker()) {
-  <div class="modal-overlay" (click)="closeImagePicker()">
-    <div class="modal-content" (click)="$event.stopPropagation()">
-      @if (currentVariantIndex >= 0) {
-        <h3>Seleccionar Color Global</h3>
-        <div class="images-grid">
-          @for (color of getGlobalColorOptions(); track color.name) {
-            <button type="button" class="image-card-clickable" (click)="assignGlobalColorToCurrentVariant(color.name)">
-              @if (hasColorImage(color.image_url)) {
-                <img [src]="color.image_url!" class="image-thumb" alt="{{ color.name }}"/>
-              } @else {
-                <div class="gallery-item-placeholder">
-                  <span class="placeholder-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M4 7h4l2-2h4l2 2h4v12H4z"></path>
-                      <circle cx="12" cy="13" r="3"></circle>
-                    </svg>
-                  </span>
-                  <span class="placeholder-text">Sin imagen</span>
-                </div>
-              }
-              <div class="image-color-badge">{{ color.name }}</div>
-            </button>
-          }
-        </div>
-      } @else {
-        <h3>Seleccionar o Subir Imagen</h3>
-
-        <div class="upload-section">
-          <label class="upload-button">
-            <input
-              type="file"
-              accept="image/*"
-              (change)="uploadNewImage($event)"
-              [disabled]="uploading()"
-              style="display: none;"
-            />
-            @if (uploading()) {
-              <span class="btn btn-primary" style="pointer-events: none;">Subiendo...</span>
-            } @else {
-              <span class="btn btn-primary">Subir Nueva Imagen</span>
+  <dialog
+    reviewDialog
+    class="review-dialog"
+    aria-labelledby="picker-title"
+    (close)="closeImagePicker()"
+    (cancel)="uploading() && $event.preventDefault()"
+  >
+    <div class="section-header">
+      <h2 id="picker-title">
+        {{ currentVariantIndex >= 0 ? 'Seleccionar color' : 'Seleccionar foto' }}
+      </h2>
+      <button type="button" class="btn" (click)="closeImagePicker()" [disabled]="uploading()">
+        Cerrar
+      </button>
+    </div>
+    @if (currentVariantIndex >= 0) {
+      <div class="picker-grid">
+        @for (color of getGlobalColorOptions(); track color.name) {
+          <button
+            type="button"
+            class="picker-image"
+            (click)="assignGlobalColorToCurrentVariant(color.name)"
+          >
+            @if (color.image_url) {
+              <img [src]="color.image_url" alt="" />
             }
-          </label>
-          @if (uploadError()) {
-            <div class="upload-error">{{ uploadError() }}</div>
-          }
-        </div>
-
-        <div class="divider-text">
-          <span>O selecciona una existente</span>
-        </div>
-
-        <div class="images-grid">
-          @for (img of visibleRawImages(); track img) {
-            <button type="button" class="image-card-clickable" (click)="assignImageToColor(img)">
-              <img [src]="img" class="image-thumb" alt="Imagen"/>
-              @if (imageColors[img]) {
-                <div class="image-color-badge">{{ imageColors[img] }}</div>
-              }
-            </button>
-          }
-        </div>
+            <span>{{ color.name }}</span>
+          </button>
+        }
+      </div>
+      @if (!getGlobalColorOptions().length) {
+        <p>Define primero un color del producto.</p>
       }
-
-      <button type="button" class="btn btn-secondary" (click)="closeImagePicker()">Cancelar</button>
-    </div>
-  </div>
+    } @else {
+      <label class="field"
+        >Subir una foto<input
+          class="input"
+          type="file"
+          accept="image/*"
+          (change)="uploadNewImage($event)"
+          [disabled]="uploading()"
+        />
+      </label>
+      @if (uploading()) {
+        <p role="status">Subiendo imagen…</p>
+      }
+      @if (uploadError()) {
+        <p role="alert" class="field-error">{{ uploadError() }}</p>
+      }
+      <div class="picker-grid">
+        @for (url of galleryImages(); track url) {
+          <button
+            type="button"
+            class="picker-image"
+            (click)="assignImageToColor(url)"
+            [disabled]="uploading()"
+          >
+            <img [src]="url" alt="" />
+            <span>{{ imageColorLabel(url) }}</span>
+          </button>
+        }
+      </div>
+    }
+  </dialog>
 }
-
 @if (popupState(); as popup) {
-  <div class="popup-backdrop" (click)="closePopupFromBackdrop()">
-    <div class="popup-card" role="dialog" aria-modal="true" aria-labelledby="review-popup-title" (click)="$event.stopPropagation()">
-      <div class="popup-header">
-        <div
-          class="popup-icon"
-          [class.popup-icon-success]="popup.kind === 'success'"
-          [class.popup-icon-warning]="popup.kind === 'warning'"
-          [class.popup-icon-error]="popup.kind === 'error'"
-        >
-          @if (popup.kind === "success") {
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
-              <path d="m5 13 4 4L19 7"></path>
-            </svg>
-          } @else if (popup.kind === "warning") {
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
-              <path d="M12 3 2.8 19h18.4L12 3z"></path>
-              <path d="M12 9v4"></path>
-              <circle cx="12" cy="16.5" r="0.8" fill="currentColor"></circle>
-            </svg>
-          } @else if (popup.kind === "error") {
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
-              <circle cx="12" cy="12" r="9"></circle>
-              <path d="M9 9l6 6"></path>
-              <path d="M15 9l-6 6"></path>
-            </svg>
-          } @else {
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
-              <circle cx="12" cy="12" r="9"></circle>
-              <path d="M12 8.5v.01"></path>
-              <path d="M12 11.5v5"></path>
-            </svg>
-          }
-        </div>
-
-        <div class="popup-copy">
-          <h3 id="review-popup-title">{{ popup.title }}</h3>
-          <p class="popup-message">{{ popup.message }}</p>
-        </div>
-      </div>
-
-      <div class="popup-actions">
-        <button type="button" class="btn btn-primary" (click)="confirmPopup()">{{ popup.confirmText }}</button>
-      </div>
+  <aside
+    class="review-notice"
+    [attr.data-kind]="popup.kind"
+    [attr.role]="popup.kind === 'error' ? 'alert' : 'status'"
+    aria-atomic="true"
+  >
+    <div>
+      <strong>{{ popup.title }}</strong>
+      <p>{{ popup.message }}</p>
     </div>
-  </div>
+    <button
+      type="button"
+      class="btn-icon subtle"
+      (click)="confirmPopup()"
+      aria-label="Cerrar notificación"
+    >
+      <review-icon name="close" />
+    </button>
+  </aside>
 }

@@ -1,3 +1,4 @@
+import { assertUniqueVariants, normalizeKeywords, normalizeSupplierSku } from "./listing-metadata";
 import { Injectable, computed, inject, signal } from "@angular/core";
 import { FIRESTORE } from "./firebase.providers";
 import {
@@ -260,6 +261,10 @@ export class NormalizedListingsService {
 
   async updateListing(id: string, patch: PartialNormalizedUpdate): Promise<void> {
     const ref = doc(this.colRef, id);
+    if (patch.listing) {
+      assertUniqueVariants(patch.listing.items);
+      patch = { ...patch, listing: { ...patch.listing, keywords: normalizeKeywords(patch.listing.keywords), supplierSku: normalizeSupplierSku(patch.listing.supplierSku) } };
+    }
     const skuPatch = patch.listing
       ? { variant_skus_normalized: this.variantSkuIndexFromListing(patch.listing) }
       : {};
@@ -316,6 +321,10 @@ export class NormalizedListingsService {
     } = {},
   ): Promise<void> {
     const ref = doc(this.colRef, id);
+    if (patch.listing) {
+      assertUniqueVariants(patch.listing.items);
+      patch = { ...patch, listing: { ...patch.listing, keywords: normalizeKeywords(patch.listing.keywords), supplierSku: normalizeSupplierSku(patch.listing.supplierSku) } };
+    }
     const skuPatch = patch.listing
       ? { variant_skus_normalized: this.variantSkuIndexFromListing(patch.listing) }
       : {};
@@ -350,6 +359,7 @@ export class NormalizedListingsService {
     const ref = doc(this.colRef, id);
     const snap = await getDoc(ref);
     const current = snap.exists() ? snap.data() as NormalizedListingDoc : null;
+    if (current?.listing) assertUniqueVariants(current.listing.items);
     await updateDoc(ref, {
       business_id: normalizeBusinessId(current?.business_id || "bm"),
       "workflow.status": "validated",
