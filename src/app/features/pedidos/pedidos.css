@@ -147,59 +147,6 @@
   background: #fff;
 }
 
-.autocomplete {
-  position: relative;
-}
-
-.auto-list {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  right: 0;
-  border-radius: 14px;
-  border: 1px solid var(--ios-border);
-  background: #ffffff;
-  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.14);
-  overflow: hidden;
-  z-index: 12;
-  max-height: 240px;
-  overflow-y: auto;
-}
-
-.auto-list button {
-  width: 100%;
-  border: 0;
-  background: transparent;
-  text-align: left;
-  padding: 9px 12px;
-  cursor: pointer;
-}
-
-.auto-list button:hover {
-  background: rgba(0, 122, 255, 0.08);
-}
-
-.auto-name {
-  font-size: 0.88rem;
-  color: #0f172a;
-  font-weight: 620;
-}
-
-.auto-meta {
-  margin-top: 2px;
-  color: #64748b;
-  font-size: 0.79rem;
-}
-
-.auto-empty {
-  padding: 9px 12px;
-}
-
-.auto-empty-text {
-  color: #6b7280;
-  font-size: 0.85rem;
-}
-
 .route-pill {
   border: 1px solid var(--ios-border);
   border-radius: 14px;
