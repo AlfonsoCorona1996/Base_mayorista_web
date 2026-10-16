@@ -39,7 +39,10 @@ import {
   supplierOperationReservedForOrderId,
 } from "./supplier-operation-state";
 import { financePeriodDocumentId, ledgerEntryPayload, monthIdFromDateInput } from "./finance-ledger";
-import { PerfMetricsService, firebaseErrorCode } from "./perf-metrics.service";
+import { LONG_TASK_MS, OrdersSnapshotInference, PerfMetricsService, firebaseErrorCode, roundMs } from "./perf-metrics.service";
+import { OrdersSnapshotEvent, OrdersSnapshotIndex } from "./orders-snapshot-index";
+
+export type { OrdersSnapshotChange, OrdersSnapshotDoc, OrdersSnapshotEvent } from "./orders-snapshot-index";
 
 /**
  * Sincronización del listener de pedidos:
@@ -49,13 +52,6 @@ import { PerfMetricsService, firebaseErrorCode } from "./perf-metrics.service";
  * - error: el listener se cerró con error; los datos previos se conservan.
  */
 export type OrdersSyncState = "idle" | "loading" | "cache" | "server" | "error";
-
-export interface OrdersSnapshotEvent {
-  docs: Array<{ id: string; data(): Record<string, unknown> }>;
-  fromCache: boolean;
-  /** Documentos agregados, modificados o eliminados; 0 si solo cambió metadata. */
-  changedDocs: number;
-}
 
 /** Listener de pedidos aislado en un token para poder simularlo en pruebas. */
 export interface OrdersSnapshotSource {
@@ -75,7 +71,16 @@ export const ORDERS_SNAPSHOT_SOURCE = new InjectionToken<OrdersSnapshotSource>("
         // Sin metadata Firestore no avisa cuando un snapshot de caché queda
         // confirmado por el servidor sin cambios de datos.
         { includeMetadataChanges: true },
-        (snap) => next({ docs: snap.docs, fromCache: snap.metadata.fromCache, changedDocs: snap.docChanges().length }),
+        (snap) =>
+          next({
+            // `snap.docs` crea un envoltorio por documento: solo se pide al construir el estado completo.
+            docs: () => snap.docs,
+            size: snap.size,
+            fromCache: snap.metadata.fromCache,
+            hasPendingWrites: snap.metadata.hasPendingWrites,
+            // Sin opciones excluye los cambios que solo afectan a metadata.
+            changes: snap.docChanges(),
+          }),
         error,
       ),
   }),
@@ -504,6 +509,14 @@ export class OrdersService {
     this.loadError.set(null);
     this.syncState.set("loading");
     const allowedBusinesses = this.businessScope.availableBusinessIds();
+    const originNavigationId = this.perf.currentNavigationId();
+    // Índice propio de este listener: un listener nuevo siempre parte de un estado completo.
+    const index = new OrdersSnapshotIndex<Order>(
+      (id, data, fallbackIso) => this.normalize(id, data, fallbackIso),
+      () => this.perf.now(),
+    );
+    // Documentos con escrituras locales sin confirmar; solo alimenta la inferencia de las métricas.
+    const pendingIds = new Set<string>();
 
     const firstSnapshot = new Promise<void>((resolve) => {
       let hasSnapshot = false;
@@ -515,17 +528,12 @@ export class OrdersService {
         (event) => {
           // Un callback de un listener ya reemplazado no debe pisar datos nuevos.
           if (!isCurrent()) return;
-          if (!hasSnapshot || event.changedDocs > 0) {
-            const normalizationStartedAt = this.perf.now();
-            const rows: Order[] = event.docs
-              .map((d) => this.normalize(d.id, d.data() as any))
-              .sort((a, b) => (a.updated_at > b.updated_at ? -1 : 1));
-            this.rows.set(rows);
-            this.perf.record("orders_normalization_ms", normalizationStartedAt, {
-              result: "success", load_id: loadId, docs: rows.length,
-            });
-          }
           // Si solo cambió la metadata (caché -> servidor) no se re-normalizan los pedidos.
+          if (!hasSnapshot || event.changes.length > 0) {
+            this.applySnapshot(event, !hasSnapshot, index, pendingIds, loadId, originNavigationId);
+          } else if (!event.hasPendingWrites) {
+            pendingIds.clear();
+          }
           const source = event.fromCache ? "cache" : "server";
           this.loadError.set(null);
           this.syncState.set(source);
@@ -572,6 +580,57 @@ export class OrdersService {
 
     if (this.unsubscribeOrders && isCurrent()) this.firstSnapshotPromise = firstSnapshot;
     return firstSnapshot;
+  }
+
+  /**
+   * Aplica un snapshot con cambios de datos: completo si es el primero del
+   * listener e incremental (`docChanges()`) en los siguientes. `rows` se
+   * reconstruye siempre desde el índice, nunca sobre sí misma, porque también
+   * recibe actualizaciones optimistas que el snapshot debe reemplazar.
+   */
+  private applySnapshot(
+    event: OrdersSnapshotEvent,
+    initial: boolean,
+    index: OrdersSnapshotIndex<Order>,
+    pendingIds: Set<string>,
+    loadId: string,
+    originNavigationId: number | null,
+  ): void {
+    const startedAt = this.perf.now();
+    const metricsEnabled = this.perf.isEnabled();
+    const inferredCause = metricsEnabled ? inferSnapshotCause(event, initial, pendingIds) : undefined;
+    const { rows, stats } = index.apply(event, initial);
+    const publishStartedAt = this.perf.now();
+    this.rows.set(rows);
+    const publishMs = this.perf.now() - publishStartedAt;
+    if (!metricsEnabled) return;
+
+    trackPendingDocs(event, initial || stats.mode === "resync", pendingIds);
+    const totalMs = this.perf.now() - startedAt;
+    this.perf.record("orders_normalization_ms", startedAt, {
+      result: "success",
+      load_id: loadId,
+      listener_id: loadId,
+      origin_navigation_id: originNavigationId,
+      apply_mode: stats.mode,
+      added: stats.added,
+      modified: stats.modified,
+      removed: stats.removed,
+      docs: stats.docs,
+      convert_ms: roundMs(stats.convert_ms),
+      normalize_ms: roundMs(stats.normalize_ms),
+      index_ms: roundMs(stats.index_ms),
+      sort_ms: roundMs(stats.sort_ms),
+      publish_ms: roundMs(publishMs),
+      from_cache: event.fromCache,
+      has_pending_writes: event.hasPendingWrites,
+      pending_docs: stats.pending_docs,
+      updated_at_pending: stats.updated_at_pending,
+      updated_at_missing: stats.updated_at_missing,
+      visible: typeof document === "undefined" ? undefined : document.visibilityState === "visible",
+      long_task: totalMs >= LONG_TASK_MS,
+      inferred_cause: inferredCause,
+    });
   }
 
   /** Detiene el listener activo (usar al destruir contextos de prueba). */
@@ -2007,9 +2066,15 @@ export class OrdersService {
     }
   }
 
-  private normalize(id: string, data: any): Order {
+  /**
+   * @param fallbackIso Valor provisional para fechas ausentes o pendientes de
+   *   `serverTimestamp()`. El listener pasa el momento en que observó el
+   *   snapshot, para que un pedido sin cambios conserve su valor entre
+   *   snapshots. Sin él se usa la hora actual, como siempre.
+   */
+  private normalize(id: string, data: any, fallbackIso?: string): Order {
     const toIso = (val: any) => {
-      if (!val) return new Date().toISOString();
+      if (!val) return fallbackIso ?? new Date().toISOString();
       if (val.toDate) return val.toDate().toISOString();
       return String(val);
     };
@@ -2222,3 +2287,33 @@ export type RegisterCollectionOptions = {
   accountId?: string | null;
   discountAmount?: number | null;
 };
+
+/**
+ * Inferencia del origen de un snapshot para las métricas (ver
+ * `OrdersSnapshotInference`). Usa solo señales observables: primer snapshot,
+ * `hasPendingWrites` de los documentos cambiados y si esos documentos tenían
+ * escrituras pendientes en el snapshot anterior.
+ */
+function inferSnapshotCause(event: OrdersSnapshotEvent, initial: boolean, pendingIds: Set<string>): OrdersSnapshotInference {
+  if (initial) return "initial";
+  if (event.changes.some((change) => change.type !== "removed" && change.doc.metadata?.hasPendingWrites)) return "local_pending";
+  if (event.changes.some((change) => pendingIds.has(change.doc.id))) return "pending_resolved";
+  return "unattributed";
+}
+
+/** Actualiza qué documentos tienen escrituras locales sin confirmar tras un snapshot con cambios. */
+function trackPendingDocs(event: OrdersSnapshotEvent, rebuilt: boolean, pendingIds: Set<string>): void {
+  if (!event.hasPendingWrites) {
+    pendingIds.clear();
+    return;
+  }
+  if (rebuilt) {
+    pendingIds.clear();
+    for (const doc of event.docs()) if (doc.metadata?.hasPendingWrites) pendingIds.add(doc.id);
+    return;
+  }
+  for (const change of event.changes) {
+    if (change.type !== "removed" && change.doc.metadata?.hasPendingWrites) pendingIds.add(change.doc.id);
+    else pendingIds.delete(change.doc.id);
+  }
+}

@@ -3,34 +3,12 @@ import { TestBed } from "@angular/core/testing";
 import { UserAdminApiService } from "../services/user-admin-api.service";
 import { BusinessScopeService } from "./business-scope.service";
 import { InventoryService } from "./inventory.service";
-import { ORDERS_SNAPSHOT_SOURCE, OrdersService, OrdersSnapshotEvent, OrdersSnapshotSource } from "./orders.service";
+import { ORDERS_SNAPSHOT_SOURCE, OrdersService } from "./orders.service";
+import { FakeOrderDoc, FakeOrdersSource } from "./orders-snapshot.fake";
 import { BusinessId } from "./rbac.constants";
 import { SupplierOperationsService } from "./supplier-operations.service";
 
-interface FakeListener {
-  businessIds: BusinessId[];
-  next: (event: OrdersSnapshotEvent) => void;
-  error: (error: unknown) => void;
-  unsubscribed: boolean;
-}
-
-class FakeOrdersSource implements OrdersSnapshotSource {
-  listeners: FakeListener[] = [];
-
-  listen(businessIds: BusinessId[], next: FakeListener["next"], error: FakeListener["error"]) {
-    const listener: FakeListener = { businessIds, next, error, unsubscribed: false };
-    this.listeners.push(listener);
-    return () => {
-      listener.unsubscribed = true;
-    };
-  }
-
-  get active(): FakeListener[] {
-    return this.listeners.filter((listener) => !listener.unsubscribed);
-  }
-}
-
-function orderDoc(id: string, businessId: BusinessId = "bm") {
+function orderDoc(id: string, businessId: BusinessId = "bm", pending = false): FakeOrderDoc {
   const data = {
     order_id: id,
     business_id: businessId,
@@ -41,11 +19,12 @@ function orderDoc(id: string, businessId: BusinessId = "bm") {
     items: [],
     packages: [],
   };
-  return { id, data: () => data };
+  return { id, data, pending };
 }
 
-function snapshot(ids: string[], fromCache: boolean, changedDocs = ids.length): OrdersSnapshotEvent {
-  return { docs: ids.map((id) => orderDoc(id)), fromCache, changedDocs };
+/** Resultado completo de la consulta; el simulador calcula `docChanges()` como Firestore. */
+function docs(ids: string[]): FakeOrderDoc[] {
+  return ids.map((id) => orderDoc(id));
 }
 
 describe("OrdersService - listener de pedidos: errores, caché y reintentos", () => {
@@ -85,7 +64,7 @@ describe("OrdersService - listener de pedidos: errores, caché y reintentos", ()
 
   it("E. un error posterior conserva los pedidos ya recibidos", async () => {
     const load = service.loadFromFirestore();
-    source.listeners[0].next(snapshot(["P-1", "P-22"], false));
+    source.listeners[0].emit(docs(["P-1", "P-22"]));
     await load;
 
     source.listeners[0].error({ code: "unavailable" });
@@ -102,7 +81,7 @@ describe("OrdersService - listener de pedidos: errores, caché y reintentos", ()
     await Promise.resolve();
     expect(secondDone).withContext("no debe resolver antes de tener datos").toBeFalse();
 
-    source.listeners[0].next(snapshot(["P-1"], false));
+    source.listeners[0].emit(docs(["P-1"]));
     await Promise.all([first, second]);
     expect(secondDone).toBeTrue();
 
@@ -127,7 +106,7 @@ describe("OrdersService - listener de pedidos: errores, caché y reintentos", ()
 
   it("J. un primer snapshot de caché no se confunde con la confirmación del servidor", async () => {
     const load = service.loadFromFirestore();
-    source.listeners[0].next(snapshot(["P-1"], true));
+    source.listeners[0].emit(docs(["P-1"]), { fromCache: true });
     await load;
 
     expect(service.loading()).toBeFalse();
@@ -135,35 +114,35 @@ describe("OrdersService - listener de pedidos: errores, caché y reintentos", ()
 
     const rowsBefore = service.list();
     // Confirmación del servidor sin cambios de datos: solo cambia la metadata.
-    source.listeners[0].next(snapshot(["P-1"], false, 0));
+    source.listeners[0].emit(docs(["P-1"]));
     expect(service.syncState()).toBe("server");
     expect(service.list()).withContext("no se re-normaliza todo por un cambio de metadata").toBe(rowsBefore);
   });
 
   it("J. un snapshot vacío de caché no equivale a 'sin pedidos' confirmado", async () => {
     const load = service.loadFromFirestore();
-    source.listeners[0].next(snapshot([], true, 0));
+    source.listeners[0].emit([], { fromCache: true });
     await load;
 
     expect(service.list()).toEqual([]);
     expect(service.syncState()).toBe("cache");
 
-    source.listeners[0].next(snapshot(["P-1"], false, 1));
+    source.listeners[0].emit(docs(["P-1"]));
     expect(service.syncState()).toBe("server");
     expect(service.list().length).toBe(1);
   });
 
   it("H. los callbacks de un listener reemplazado no pisan los datos nuevos", async () => {
     const first = service.loadFromFirestore();
-    source.listeners[0].next(snapshot(["P-OLD"], false));
+    source.listeners[0].emit(docs(["P-OLD"]));
     await first;
 
     service.stopListening();
     const second = service.loadFromFirestore();
-    source.listeners[1].next(snapshot(["P-NEW"], false));
+    source.listeners[1].emit(docs(["P-NEW"]));
     await second;
 
-    source.listeners[0].next(snapshot(["P-OLD", "P-OLD2"], false));
+    source.listeners[0].emit(docs(["P-OLD", "P-OLD2"]));
     source.listeners[0].error({ code: "unavailable" });
 
     expect(service.list().map((order) => order.order_id)).toEqual(["P-NEW"]);
@@ -173,37 +152,37 @@ describe("OrdersService - listener de pedidos: errores, caché y reintentos", ()
 
   it("4. tras la confirmación del servidor siguen aplicándose altas, cambios y bajas", async () => {
     const load = service.loadFromFirestore();
-    source.listeners[0].next(snapshot(["P-1"], true));
+    source.listeners[0].emit(docs(["P-1"]), { fromCache: true });
     await load;
-    source.listeners[0].next(snapshot(["P-1"], false, 0));
+    source.listeners[0].emit(docs(["P-1"]));
 
-    source.listeners[0].next(snapshot(["P-1", "P-22"], false, 1));
+    source.listeners[0].emit(docs(["P-1", "P-22"]));
     expect(service.list().map((o) => o.order_id).sort()).toEqual(["P-1", "P-22"]);
 
-    source.listeners[0].next(snapshot(["P-22"], false, 1));
+    source.listeners[0].emit(docs(["P-22"]));
     expect(service.list().map((o) => o.order_id)).toEqual(["P-22"]);
   });
 
   it("4. una escritura local pendiente (aún en caché) se aplica aunque ya hubo servidor", async () => {
     const load = service.loadFromFirestore();
-    source.listeners[0].next(snapshot(["P-1"], false));
+    source.listeners[0].emit(docs(["P-1"]));
     await load;
 
-    source.listeners[0].next(snapshot(["P-1", "P-NEW"], true, 1));
+    source.listeners[0].emit([orderDoc("P-1"), orderDoc("P-NEW", "bm", true)], { fromCache: true });
     expect(service.list().length).toBe(2);
     expect(service.syncState()).toBe("cache");
 
     // Confirmación de esa escritura sin cambios de datos: se conserva lo aplicado.
-    source.listeners[0].next(snapshot(["P-1", "P-NEW"], false, 0));
+    source.listeners[0].emit(docs(["P-1", "P-NEW"]));
     expect(service.list().length).toBe(2);
     expect(service.syncState()).toBe("server");
   });
 
   it("los cambios de datos en tiempo real siguen actualizando el listado", async () => {
     const load = service.loadFromFirestore();
-    source.listeners[0].next(snapshot(["P-1"], false));
+    source.listeners[0].emit(docs(["P-1"]));
     await load;
-    source.listeners[0].next(snapshot(["P-1", "P-22"], false, 1));
+    source.listeners[0].emit(docs(["P-1", "P-22"]));
     expect(service.list().length).toBe(2);
   });
 });
