@@ -16,7 +16,6 @@
     <div>
       <p class="eyebrow">WHATSAPP <span class="breadcrumb-slash">/</span> VALIDACIÓN</p>
       <h1>{{ draft()?.listing?.title || 'Revisar producto' }}</h1>
-      <p class="hint">Revisión del producto</p>
     </div>
   </header>
   @if (error()) {
@@ -44,7 +43,10 @@
       <span>{{ d.product_colors.length }} colores</span>
       <span>{{ d.listing.items.length }} variantes</span>
     </div>
-    <fieldset class="review-fields" [disabled]="finalActionBusy() || mergeApplying()">
+    <fieldset
+      class="review-fields"
+      [disabled]="finalActionBusy() || mergeApplying() || categoryProposalSaving()"
+    >
       <legend class="sr-only">Datos del producto</legend>
       <section class="review-section gallery-section" aria-labelledby="photos-title">
         <div class="section-header">
@@ -62,6 +64,10 @@
           </button>
         </div>
         @if (previewImage(); as url) {
+          <p class="photo-caption">
+            <span>{{ imageColorLabel(url) }}</span
+            ><span>{{ galleryImages().indexOf(url) + 1 }} / {{ galleryImages().length }}</span>
+          </p>
           <button
             type="button"
             class="photo-open hero-photo"
@@ -74,10 +80,6 @@
             }
             <span class="expand-photo"><review-icon name="expand" /></span>
           </button>
-          <p class="photo-caption">
-            <span>{{ imageColorLabel(url) }}</span
-            ><span>{{ galleryImages().indexOf(url) + 1 }} / {{ galleryImages().length }}</span>
-          </p>
         } @else {
           <div class="empty-photo">
             <review-icon name="image" />
@@ -96,6 +98,7 @@
           @for (color of d.product_colors; track $index; let i = $index) {
             <div
               class="color-card"
+              [class.is-cover]="!!color.image_url && coverUrl() === color.image_url"
               [class.selected]="!!color.image_url && previewImage() === color.image_url"
             >
               <button
@@ -113,6 +116,11 @@
               >
                 @if (color.image_url) {
                   <img [src]="color.image_url" [alt]="color.name" loading="lazy" />
+                  @if (coverUrl() === color.image_url) {
+                    <span class="thumbnail-cover-mark" aria-hidden="true"
+                      ><review-icon name="check"
+                    /></span>
+                  }
                 } @else {
                   <review-icon name="image" />
                 }
@@ -127,13 +135,17 @@
                   (blur)="onGlobalColorBlur(i)"
                   placeholder="Nombre del color"
                 />
-                <span class="color-meta">{{
-                  !color.image_url
-                    ? 'Sin fotografía'
-                    : coverUrl() === color.image_url
-                      ? 'Portada del producto'
-                      : 'Fotografía asignada'
-                }}</span>
+                <span class="color-meta">
+                  @if (color.image_url && coverUrl() === color.image_url) {
+                    <strong class="cover-label"><review-icon name="check" /> Portada</strong>
+                  } @else if (!color.image_url) {
+                    Sin fotografía
+                  } @else if (color.review_required) {
+                    Revisar asociación
+                  } @else if (previewImage() === color.image_url) {
+                    En vista
+                  }
+                </span>
               </label>
               <button
                 type="button"
@@ -187,12 +199,24 @@
             </div>
           }
         </div>
+        @if (colorReviewNeeded()) {
+          <div class="color-review" role="status">
+            <strong>Revisar fotos y colores</strong>
+            <p>
+              Hay colores sin foto, con una foto compartida o con una asociación dudosa. Comprueba
+              cada uno.
+            </p>
+            <button type="button" id="color-confirm" class="btn" (click)="confirmColors()">
+              Confirmar fotos y colores
+            </button>
+          </div>
+        }
         <div class="inline-actions add-colors">
           <button type="button" class="btn subtle" (click)="addGlobalColorWithImage()">
-            <review-icon name="plus" /> Color con foto
+            <review-icon name="plus" /> Añadir color con foto
           </button>
           <button type="button" class="btn subtle" (click)="addGlobalColorWithoutImage()">
-            <review-icon name="plus" /> Sin foto
+            <review-icon name="plus" /> Añadir color sin foto
           </button>
         </div>
         @if (unassignedImages().length) {
@@ -202,7 +226,7 @@
             </h3>
             <div class="photo-gallery">
               @for (url of unassignedImages(); track url) {
-                <figure class="extra-photo">
+                <figure class="extra-photo" [class.is-cover]="coverUrl() === url">
                   <button
                     type="button"
                     class="photo-open"
@@ -210,6 +234,9 @@
                     aria-label="Ver foto adicional"
                   >
                     <img [src]="url" alt="Foto adicional del producto" loading="lazy" />
+                    @if (coverUrl() === url) {
+                      <span class="cover-badge"><review-icon name="check" /> Portada</span>
+                    }
                   </button>
                   <details
                     class="context-menu"
@@ -268,14 +295,14 @@
               >Nombre del producto
               <textarea
                 class="input"
-                [(ngModel)]="d.listing.title"
+                [ngModel]="d.listing.title"
                 placeholder="Nombre y modelo"
                 rows="2"
                 id="product-title"
                 [class.input-error]="fieldErrors().title"
                 [attr.aria-invalid]="!!fieldErrors().title"
                 aria-describedby="title-error"
-                (ngModelChange)="clearFieldError('title')"
+                (ngModelChange)="setTitle($event)"
                 required
               ></textarea>
             </label>
@@ -292,14 +319,17 @@
                 placeholder="Código de la etiqueta del proveedor"
                 aria-describedby="product-label-code-help"
               />
-              <small id="product-label-code-help" class="hint">
+            </label>
+            <details class="field-help">
+              <summary>¿Qué es el código etiqueta?</summary>
+              <p id="product-label-code-help">
                 Identificador del producto usado por el proveedor. El SKU interno del sistema se
                 genera por separado.
-              </small>
-            </label>
+              </p>
+            </details>
             <div class="field">
               <label for="keyword-add"
-                >Palabras clave <span class="optional">Para encontrar el producto</span>
+                >Palabras clave <span class="optional">· Opcional</span>
               </label>
               <div class="chips">
                 @for (keyword of d.listing.keywords || []; track $index; let i = $index) {
@@ -339,14 +369,63 @@
                   Añadir
                 </button>
               </div>
-              @if (!d.listing.keywords?.length) {
-                <small class="hint"
-                  >Sin palabras clave. Añade solo términos que describan este producto.</small
-                >
-              }
             </div>
-            <div class="field">
-              <label for="category-search">Categoría</label>
+            @if (d.listing.attributes?.length) {
+              <details class="attribute-details">
+                <summary>Revisar características ({{ d.listing.attributes!.length }})</summary>
+                <div class="identity-fields">
+                  @for (attribute of d.listing.attributes; track $index; let i = $index) {
+                    <label class="field"
+                      >{{ attributeLabels[attribute.kind] }}
+                      <input
+                        class="input"
+                        #attributeValue
+                        [value]="attribute.value"
+                        (change)="editAttribute(i, attributeValue.value)"
+                      />
+                    </label>
+                  }
+                </div>
+              </details>
+            }
+          </div>
+        </section>
+        <section class="review-section category-section" aria-labelledby="category-title">
+          <div class="section-header">
+            <h2 id="category-title"><review-icon name="layers" /> Categoría</h2>
+            <span class="review-state" [class.confirmed]="categoryConfirmed()" role="status">{{
+              categoryConfirmed() ? 'Confirmada' : 'Pendiente de validar'
+            }}</span>
+          </div>
+          @if (d.listing.category_hint && !editableCategoryProposal()) {
+            <p class="category-path">{{ d.listing.category_hint }}</p>
+            <div class="inline-actions">
+              @if (!categoryConfirmed()) {
+                <button
+                  type="button"
+                  id="category-confirm"
+                  class="btn btn-primary"
+                  (click)="confirmCategory()"
+                >
+                  Confirmar categoría
+                </button>
+              }
+              <button
+                type="button"
+                class="btn subtle"
+                id="category-change"
+                (click)="changeCategory()"
+              >
+                Cambiar categoría
+              </button>
+            </div>
+          }
+          @if (fieldErrors().category) {
+            <p id="category-error" class="field-error" role="alert">{{ fieldErrors().category }}</p>
+          }
+          <div class="identity-fields">
+            <div class="field" [hidden]="!!d.listing.category_hint && !showCategoryDropdown()">
+              <label for="category-search">Buscar categoría</label>
               <input
                 id="category-search"
                 [class.input-error]="fieldErrors().category"
@@ -360,17 +439,6 @@
                 [attr.aria-expanded]="showCategoryDropdown()"
                 aria-controls="category-results"
               />
-              <small class="category-selected" [class.unselected]="!d.listing.category_hint">
-                @if (d.listing.category_hint) {
-                  <review-icon name="check" />
-                }
-                {{ d.listing.category_hint || 'Sin categoría seleccionada' }}</small
-              >
-              @if (fieldErrors().category) {
-                <p id="category-error" class="field-error" role="alert">
-                  {{ fieldErrors().category }}
-                </p>
-              }
               @if (showCategoryDropdown()) {
                 <div id="category-results" class="category-results">
                   <div class="section-header">
@@ -436,7 +504,7 @@
                       (click)="createInlineCategory()"
                       [disabled]="categoryProposalSaving() || !newCategoryName.trim()"
                     >
-                      {{ categoryProposalSaving() ? 'Creando…' : 'Crear y utilizar' }}
+                      {{ categoryProposalSaving() ? 'Creando…' : 'Crear categoría y aceptar' }}
                     </button>
                   </details>
                 </div>
@@ -446,20 +514,20 @@
           @if (editableCategoryProposal()) {
             <div class="category-proposal">
               <p>
-                <strong>Sugerencia del bot:</strong> {{ editableCategoryProposal() }}
-                {{ categoryExists(editableCategoryProposal()) ? '' : 'no existe todavía.' }}
+                <strong>Categoría propuesta:</strong> {{ editableCategoryProposal() }}
+                {{ categoryExists(editableCategoryProposal()) ? '' : 'Se creará al aceptar.' }}
               </p>
-              <label class="field"
-                >Ruta de la categoría<input
-                  class="input"
-                  [ngModel]="editableCategoryProposal()"
-                  (ngModelChange)="editableCategoryProposal.set($event)"
-                />
-              </label>
-              <small class="hint"
-                >Cada nivel antes del último será su categoría padre. Se reutilizarán las
-                coincidencias existentes.</small
-              >
+              <details class="field-help">
+                <summary>Editar propuesta</summary>
+                <label class="field"
+                  >Ruta de la categoría<input
+                    class="input"
+                    [ngModel]="editableCategoryProposal()"
+                    (ngModelChange)="editCategoryProposal($event)"
+                  />
+                </label>
+                <p>Los niveles se separan con &gt;. Se reutilizan las categorías existentes.</p>
+              </details>
               <div class="inline-actions">
                 <button
                   type="button"
@@ -471,12 +539,12 @@
                     categoryProposalSaving()
                       ? 'Aplicando…'
                       : categoryExists(editableCategoryProposal())
-                        ? 'Usar categoría'
-                        : 'Crear y utilizar'
+                        ? 'Confirmar categoría'
+                        : 'Crear categoría y aceptar'
                   }}
                 </button>
                 <button type="button" class="btn" (click)="dismissCategoryProposal()">
-                  Descartar sugerencia
+                  Descartar propuesta
                 </button>
               </div>
             </div>
@@ -608,9 +676,10 @@
                         </button>
                       </div>
                     }
-                    <button type="button" class="btn" (click)="assignColorToVariant(i)">
+                    <button type="button" class="btn" (click)="assignColorToVariant(i)" [disabled]="!getGlobalColorOptions().length">
                       Asignar color
                     </button>
+                    @if (!getGlobalColorOptions().length) { <p class="hint">Primero añadir un color al producto.</p> }
                   } @else {
                     <p class="hint">Se aplican los colores globales del producto.</p>
                   }
@@ -632,7 +701,7 @@
                     class="btn btn-primary"
                     (click)="expandedVariant.set(null)"
                   >
-                    Listo
+                    Terminar edición
                   </button>
                 </div>
               </dialog>
@@ -652,22 +721,22 @@
           @if (useSharedPrices()) {
             <div class="field-grid price-fields">
               <label class="field"
-                >Costo (MXN)<input
-                  class="input"
-                  inputmode="decimal"
-                  [ngModel]="getSharedPriceInputValue('costo')"
-                  (ngModelChange)="onSharedPriceInputChange('costo', $event)"
-                  (blur)="onSharedPriceInputBlur('costo')"
-                  [class.input-error]="isSharedPriceLossRisk()"
-                />
-              </label>
-              <label class="field"
                 >Precio de venta (MXN)<input
                   class="input"
                   inputmode="decimal"
                   [ngModel]="getSharedPriceInputValue('final')"
                   (ngModelChange)="onSharedPriceInputChange('final', $event)"
                   (blur)="onSharedPriceInputBlur('final')"
+                  [class.input-error]="isSharedPriceLossRisk()"
+                />
+              </label>
+              <label class="field"
+                >Costo (MXN)<input
+                  class="input"
+                  inputmode="decimal"
+                  [ngModel]="getSharedPriceInputValue('costo')"
+                  (ngModelChange)="onSharedPriceInputChange('costo', $event)"
+                  (blur)="onSharedPriceInputBlur('costo')"
                   [class.input-error]="isSharedPriceLossRisk()"
                 />
               </label>
@@ -684,21 +753,21 @@
                 <h3>{{ variant.variant_name || 'Sin nombre' }}</h3>
                 <div class="field-grid price-fields">
                   <label class="field"
-                    >Costo ({{ variant.prices.currency }})<input
-                      class="input"
-                      inputmode="decimal"
-                      [ngModel]="getPriceInputValue(i, 'costo')"
-                      (ngModelChange)="onPriceInputChange(i, 'costo', $event)"
-                      (blur)="onPriceInputBlur(i, 'costo')"
-                    />
-                  </label>
-                  <label class="field"
                     >Precio de venta ({{ variant.prices.currency }})<input
                       class="input"
                       inputmode="decimal"
                       [ngModel]="getPriceInputValue(i, 'final')"
                       (ngModelChange)="onPriceInputChange(i, 'final', $event)"
                       (blur)="onPriceInputBlur(i, 'final')"
+                    />
+                  </label>
+                  <label class="field"
+                    >Costo ({{ variant.prices.currency }})<input
+                      class="input"
+                      inputmode="decimal"
+                      [ngModel]="getPriceInputValue(i, 'costo')"
+                      (ngModelChange)="onPriceInputChange(i, 'costo', $event)"
+                      (blur)="onPriceInputBlur(i, 'costo')"
                     />
                   </label>
                 </div>
@@ -743,11 +812,11 @@
           </div>
         </section>
         <details class="review-section">
-          <summary>Mensaje original <span class="optional">Referencia del bot</span></summary>
+          <summary>Mensaje original</summary>
           <div class="raw-message">{{ rawText() || '(Sin texto)' }}</div>
         </details>
         <details class="review-section">
-          <summary>Más acciones <span class="optional">Opciones avanzadas</span></summary>
+          <summary>Más acciones</summary>
           <div class="inline-actions">
             <button type="button" class="btn" (click)="mergeDialog.showModal()">
               Fusionar con producto existente
@@ -773,9 +842,15 @@
       </div>
     </fieldset>
     <div class="actions-shell">
-      <div class="action-context">
-        <review-icon name="check" /><span>Revisa los datos antes de publicar</span>
-      </div>
+      <p class="action-context" id="publish-requirements" role="status">
+        @if (!categoryConfirmed() || colorReviewNeeded()) {
+          Para publicar: {{ !categoryConfirmed() ? 'confirmar la categoría' : ''
+          }}{{ !categoryConfirmed() && colorReviewNeeded() ? ' y ' : ''
+          }}{{ colorReviewNeeded() ? 'revisar fotos y colores' : '' }}.
+        } @else {
+          <review-icon name="check" /> Categoría confirmada
+        }
+      </p>
       @if (finalActionBusy()) {
         <p role="status" class="action-status">
           {{
@@ -794,15 +869,22 @@
           (click)="save()"
           [disabled]="finalActionBusy() || mergeApplying() || categoryProposalSaving()"
         >
-          <review-icon name="save" />{{ saving() ? 'Guardando…' : 'Guardar' }}
+          <review-icon name="save" />{{ saving() ? 'Guardando…' : 'Guardar cambios' }}
         </button>
         <button
           type="button"
           class="btn btn-primary"
           (click)="validate()"
-          [disabled]="finalActionBusy() || mergeApplying() || categoryProposalSaving()"
+          aria-describedby="publish-requirements"
+          [disabled]="
+            finalActionBusy() ||
+            mergeApplying() ||
+            categoryProposalSaving() ||
+            !categoryConfirmed() ||
+            colorReviewNeeded()
+          "
         >
-          <review-icon name="check" />{{ publishing() ? 'Publicando…' : 'Validar y publicar' }}
+          <review-icon name="check" />{{ publishing() ? 'Publicando…' : 'Publicar producto' }}
         </button>
       </div>
     </div>
@@ -810,7 +892,7 @@
       #mergeDialog
       class="review-dialog"
       aria-labelledby="merge-title"
-      (cancel)="mergeApplying() && $event.preventDefault()"
+      (cancel)="mergeApplying() ? $event.preventDefault() : null"
     >
       <div class="section-header">
         <h2 id="merge-title">Fusionar producto</h2>
@@ -824,8 +906,8 @@
         </button>
       </div>
       <p class="hint">
-        Usa este bloque para aplicar cambios del producto en validacion sobre un producto ya
-        publicado, sin sobreescribir todo.
+        Elegir un producto publicado y los datos que recibirá. Al completar la fusión, este producto
+        quedará marcado como rechazado.
       </p>
 
       <div class="form-group">
@@ -836,12 +918,12 @@
           id="merge-search"
           [ngModel]="mergeSearch()"
           (ngModelChange)="mergeSearch.set($event)"
-          placeholder="Titulo, proveedor o ID"
+          placeholder="Título, proveedor o ID"
         />
       </div>
 
       <div class="form-group">
-        <label class="label" for="merge-target">Producto destino *</label>
+        <label class="label" for="merge-target">Producto destino</label>
         <select
           class="input"
           id="merge-target"
@@ -857,7 +939,7 @@
           <small class="hint">Cargando productos validados...</small>
         } @else {
           <small class="hint"
-            >{{ filteredMergeTargets().length }} producto(s) disponible(s) para fusion.</small
+            >{{ filteredMergeTargets().length }} productos disponibles para fusionar.</small
           >
         }
       </div>
@@ -869,19 +951,19 @@
       } @else if (mergeTargetDoc(); as target) {
         <div class="review-summary merge-summary">
           <article class="summary-item">
-            <span class="summary-label">Destino Variantes</span>
+            <span class="summary-label">Variantes</span>
             <strong>{{ target.listing.items.length }}</strong>
           </article>
           <article class="summary-item">
-            <span class="summary-label">Destino Colores</span>
+            <span class="summary-label">Colores</span>
             <strong>{{ (target.product_colors || []).length }}</strong>
           </article>
           <article class="summary-item">
-            <span class="summary-label">Destino Imagenes</span>
+            <span class="summary-label">Fotos</span>
             <strong>{{ (target.cover_images || []).length }}</strong>
           </article>
           <article class="summary-item">
-            <span class="summary-label">Destino ID</span>
+            <span class="summary-label">Código interno</span>
             <strong>{{ target.normalized_id }}</strong>
           </article>
         </div>
@@ -889,13 +971,13 @@
         @if (mergePreview(); as preview) {
           <div class="merge-preview-grid">
             <div class="merge-preview-chip">
-              Imagenes nuevas detectadas: <strong>{{ preview.newImages }}</strong>
+              Fotos nuevas: <strong>{{ preview.newImages }}</strong>
             </div>
             <div class="merge-preview-chip">
-              Colores nuevos detectados: <strong>{{ preview.newColors }}</strong>
+              Colores nuevos: <strong>{{ preview.newColors }}</strong>
             </div>
             <div class="merge-preview-chip">
-              Variantes nuevas detectadas: <strong>{{ preview.newVariants }}</strong>
+              Variantes nuevas: <strong>{{ preview.newVariants }}</strong>
             </div>
             <div class="merge-preview-chip">
               Variantes coincidentes: <strong>{{ preview.matchedVariants }}</strong>
@@ -921,7 +1003,7 @@
               [checked]="mergeOptionEnabled('title')"
               (change)="onMergeOptionChange('title', $any($event.target).checked)"
             />
-            <span>Actualizar titulo del destino</span>
+            <span>Actualizar título del destino</span>
           </label>
 
           <label class="checkbox-label">
@@ -931,7 +1013,7 @@
               [checked]="mergeOptionEnabled('category')"
               (change)="onMergeOptionChange('category', $any($event.target).checked)"
             />
-            <span>Actualizar categoria del destino</span>
+            <span>Actualizar categoría del destino</span>
           </label>
 
           <label class="checkbox-label">
@@ -941,7 +1023,7 @@
               [checked]="mergeOptionEnabled('images')"
               (change)="onMergeOptionChange('images', $any($event.target).checked)"
             />
-            <span>Agregar imagenes nuevas (union)</span>
+            <span>Añadir fotos nuevas</span>
           </label>
 
           <label class="checkbox-label">
@@ -951,7 +1033,7 @@
               [checked]="mergeOptionEnabled('globalColors')"
               (change)="onMergeOptionChange('globalColors', $any($event.target).checked)"
             />
-            <span>Agregar colores globales nuevos (union)</span>
+            <span>Añadir colores nuevos</span>
           </label>
 
           <label class="checkbox-label">
@@ -961,7 +1043,7 @@
               [checked]="mergeOptionEnabled('appendVariants')"
               (change)="onMergeOptionChange('appendVariants', $any($event.target).checked)"
             />
-            <span>Agregar variantes nuevas (por SKU/nombre)</span>
+            <span>Añadir variantes nuevas</span>
           </label>
 
           <label class="checkbox-label">
@@ -973,7 +1055,7 @@
                 onMergeOptionChange('updateExistingVariantStock', $any($event.target).checked)
               "
             />
-            <span>Actualizar stock en variantes coincidentes</span>
+            <span>Actualizar disponibilidad en variantes coincidentes</span>
           </label>
 
           <label class="checkbox-label">
@@ -1010,9 +1092,9 @@
           (click)="mergeIntoSelectedProduct()"
         >
           @if (mergeApplying()) {
-            Aplicando fusion...
+            Fusionando productos…
           } @else {
-            Aplicar Fusion Controlada
+            Fusionar productos
           }
         </button>
       </div>
@@ -1109,65 +1191,141 @@
 @if (showImagePicker()) {
   <dialog
     reviewDialog
-    class="review-dialog"
+    class="review-dialog image-picker-dialog"
     aria-labelledby="picker-title"
     (close)="closeImagePicker()"
-    (cancel)="uploading() && $event.preventDefault()"
+    (cancel)="uploading() ? $event.preventDefault() : null"
   >
     <div class="section-header">
-      <h2 id="picker-title">
-        {{ currentVariantIndex >= 0 ? 'Seleccionar color' : 'Seleccionar foto' }}
-      </h2>
-      <button type="button" class="btn" (click)="closeImagePicker()" [disabled]="uploading()">
-        Cerrar
+      <h2 id="picker-title">{{ imagePickerTitle() }}</h2>
+      <button
+        type="button"
+        class="btn-icon subtle"
+        (click)="closeImagePicker()"
+        [disabled]="uploading()"
+        aria-label="Cerrar selector de fotos"
+      >
+        <review-icon name="close" />
       </button>
     </div>
-    @if (currentVariantIndex >= 0) {
-      <div class="picker-grid">
-        @for (color of getGlobalColorOptions(); track color.name) {
-          <button
-            type="button"
-            class="picker-image"
-            (click)="assignGlobalColorToCurrentVariant(color.name)"
-          >
-            @if (color.image_url) {
-              <img [src]="color.image_url" alt="" />
-            }
-            <span>{{ color.name }}</span>
-          </button>
-        }
-      </div>
-      @if (!getGlobalColorOptions().length) {
-        <p>Define primero un color del producto.</p>
-      }
-    } @else {
-      <label class="field"
-        >Subir una foto<input
-          class="input"
-          type="file"
-          accept="image/*"
-          (change)="uploadNewImage($event)"
-          [disabled]="uploading()"
-        />
-      </label>
-      @if (uploading()) {
-        <p role="status">Subiendo imagen…</p>
-      }
-      @if (uploadError()) {
-        <p role="alert" class="field-error">{{ uploadError() }}</p>
-      }
-      <div class="picker-grid">
-        @for (url of galleryImages(); track url) {
-          <button
-            type="button"
-            class="picker-image"
-            (click)="assignImageToColor(url)"
+    <div class="picker-body">
+      @if (isAddingColor()) {
+        <label class="field" for="new-color-name"
+          >Nombre del color
+          <input
+            id="new-color-name"
+            class="input"
+            [(ngModel)]="newColorName"
+            (ngModelChange)="newColorError.set(null)"
+            (keydown.enter)="submitNewColor(); $event.preventDefault()"
+            placeholder="Ej. Azul marino"
+            maxlength="100"
             [disabled]="uploading()"
-          >
-            <img [src]="url" alt="" />
-            <span>{{ imageColorLabel(url) }}</span>
-          </button>
+            [attr.aria-invalid]="!!newColorError()"
+            [attr.aria-describedby]="newColorError() ? 'new-color-error' : null"
+          />
+        </label>
+        @if (newColorError()) {
+          <p id="new-color-error" class="field-error" role="alert">{{ newColorError() }}</p>
         }
+      }
+      @if (currentVariantIndex >= 0) {
+        <div class="picker-grid">
+          @for (color of getGlobalColorOptions(); track color.name) {
+            <button
+              type="button"
+              class="picker-image"
+              (click)="assignGlobalColorToCurrentVariant(color.name)"
+            >
+              <span class="picker-image-name">{{ color.name }}</span>
+              <span class="picker-media">
+                @if (color.image_url) {
+                  <img [src]="color.image_url" alt="" />
+                } @else {
+                  <review-icon name="image" />
+                }
+              </span>
+            </button>
+          }
+        </div>
+        @if (!getGlobalColorOptions().length) {
+          <p>No hay colores disponibles para asignar.</p>
+        }
+      } @else if (currentVariantIndex !== -5) {
+        <div class="section-header picker-photo-heading">
+          <h3>{{ isAddingColor() ? 'Foto del color' : 'Fotos del producto' }}</h3>
+          <input
+            #photoUpload
+            class="sr-only"
+            type="file"
+            accept="image/*"
+            aria-label="Subir una foto"
+            tabindex="-1"
+            (change)="uploadNewImage($event)"
+            [disabled]="uploading()"
+          />
+          <button type="button" class="btn" (click)="photoUpload.click()" [disabled]="uploading()">
+            <review-icon name="plus" /> Subir foto
+          </button>
+        </div>
+        @if (uploading()) {
+          <p role="status">Subiendo foto…</p>
+        }
+        @if (uploadError()) {
+          <p role="alert" class="field-error">{{ uploadError() }}</p>
+        }
+        @if (!galleryImages().length) {
+          <p class="picker-empty">Todavía no hay fotos. Sube una foto para continuar.</p>
+        }
+        <div class="picker-grid" aria-label="Fotos disponibles">
+          @for (url of galleryImages(); track url; let i = $index) {
+            <button
+              type="button"
+              class="picker-image"
+              [class.is-selected]="isAddingColor() && newColorImage() === url"
+              [class.is-cover]="currentVariantIndex === -2 && coverUrl() === url"
+              [attr.aria-pressed]="isAddingColor() ? newColorImage() === url : null"
+              [attr.aria-label]="'Seleccionar foto: ' + imageColorLabel(url)"
+              (click)="assignImageToColor(url)"
+              [disabled]="uploading()"
+            >
+              <span class="picker-image-name">{{
+                imageColorLabel(url) === 'Sin color asignado'
+                  ? 'Foto ' + (i + 1)
+                  : imageColorLabel(url)
+              }}</span>
+              <span class="picker-media">
+                <img [src]="url" alt="" />
+                @if (currentVariantIndex === -2 && coverUrl() === url) {
+                  <strong class="picker-marker"><review-icon name="check" /> Portada actual</strong>
+                }
+                @if (isAddingColor() && newColorImage() === url) {
+                  <strong class="picker-marker"><review-icon name="check" /> Seleccionada</strong>
+                }
+              </span>
+            </button>
+          }
+        </div>
+      }
+    </div>
+    @if (isAddingColor()) {
+      <div class="dialog-footer picker-footer">
+        <button
+          type="button"
+          class="btn subtle"
+          (click)="closeImagePicker()"
+          [disabled]="uploading()"
+        >
+          Cancelar
+        </button>
+        <button
+          type="button"
+          class="btn btn-primary"
+          (click)="submitNewColor()"
+          [disabled]="!canAddNewColor()"
+        >
+          Añadir color
+        </button>
       </div>
     }
   </dialog>

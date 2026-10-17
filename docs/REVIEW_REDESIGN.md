@@ -32,7 +32,7 @@ El contrato de WhatsApp no tiene referencias de proveedor por variante. `catalog
 - La selección de productos en Pedidos ya utilizaba `semantic_tags`, `search_aliases` y `search_blob`; ahora incorpora ambos campos directamente. Así los cambios manuales son consultables sin depender de regenerar un blob antiguo.
 - `services/customer_ai_catalog.service.js` añade ambos campos a su texto de búsqueda normalizado.
 - La portada pública no ofrece un buscador; no se modificó. La búsqueda de productos importados continúa usando su contrato existente.
-- No se añaden consultas `where` ni índices compuestos para estos campos. No hace falta backfill para que los documentos antiguos funcionen.
+- La búsqueda de catálogo sigue en memoria. La reutilización de categorías del normalizador consulta la referencia exacta y filtra proveedor y negocio antes de reutilizarla; no requiere índice compuesto. No hay backfill automático.
 - Las reglas actuales permiten actualizar el mapa `listing` a los roles autorizados; no contienen una lista cerrada de campos. No se ampliaron permisos. Crear o reactivar categorías sigue requiriendo administrador según `firestore.rules`.
 
 ## Categorías
@@ -83,3 +83,59 @@ No hay scripts de lint configurados. El backend no tiene script de build/typeche
 - Frontend: 347/349 pruebas correctas; los dos fallos son las expectativas de versión descritas arriba. Las pruebas de Review, categorías y metadatos pasan.
 - Capturas de la vista de prueba: [móvil](review-validation/review-390x844.png), [galería móvil](review-validation/review-390-gallery.png) y [escritorio](review-validation/review-1440x900.png). [Mediciones de los nueve tamaños](review-validation/viewport-results.json): sin desbordamiento horizontal.
 - Build de producción y TypeScript de aplicación/pruebas: correctos. El build conserva advertencias por bundle inicial (817,12 kB frente a 800 kB), CSS de fuente y dependencias CommonJS.
+
+
+## Revisión de UX y clasificación — octubre 2026
+
+Punto de retorno anterior al cambio: commit `398f118`. Los archivos de Pedidos, rendimiento y configuración que ya estaban modificados quedaron fuera de ese commit y de este rediseño.
+
+### Decisiones visuales
+
+Se conserva la composición de dos columnas en tablet/escritorio y una columna en móvil. El título general precede a las fotos, y el nombre del color precede a su imagen. Producto mantiene nombre, código etiqueta y palabras clave en ese orden. La ayuda del código se consulta con un desplegable; las características extraídas también pueden revisarse y corregirse en un desplegable. Categoría ahora es una sección de decisión visible, independiente del buscador. Precios muestra primero venta y después costo; clienta conserva su cálculo del 75%.
+
+Acciones en infinitivo, un primario por sección como máximo, secundarias con borde y ghost para apoyo. La barra inferior explica qué falta para publicar y reduce texto redundante. La confirmación usa texto además de color. El foco pasa a «Cambiar categoría» después de confirmar por teclado.
+
+### Estado y persistencia
+
+- `listing.categoryReview`: `{status: 'pending' | 'confirmed', path, confirmedBy?, confirmedAt?}`. La confirmación es válida solo para esa ruta; una ruta distinta o una propuesta pendiente la invalida. Documentos anteriores sin marca requieren confirmación al volver a publicar.
+- Categoría existente: confirmar o cambiar directamente. Nueva: «Crear categoría y aceptar» o «Descartar propuesta», sin abrir submenús. Crear sí escribe la categoría en Firebase en ese momento (con los permisos existentes); el producto y su confirmación se guardan con Guardar/Publicar. Descartar solo modifica el borrador.
+- Publicar verifica categoría tanto en Review como en `NormalizedListingsService`. Guardar borrador sigue permitido mientras haya pendientes. No se cambiaron permisos ni se desplegaron reglas nuevas.
+- `listing.attributes`: tipo, público, marca, material, estampado, patrón, textura, corte y detalle, con fuente y evidencia cuando provienen de extracción. Se pueden corregir o vaciar manualmente. Esas correcciones no regeneran automáticamente el título ni sustituyen palabras clave ya revisadas.
+- `extractionOverrides` protege también título, atributos, categoría y colores. El backend descarta supuestas confirmaciones generadas por el modelo y conserva decisiones humanas leyendo la versión actual dentro de la transacción.
+- `product_colors[].review_required` señala asociación dudosa, identidad desconocida o discrepancia de URL/ID. La UI también señala colores sin foto y fotos compartidas. `listing.colorReview` confirma el conjunto de nombres/fotos mediante una firma; editar el conjunto invalida esa confirmación. Un color sin foto puede ser legítimo y se puede confirmar expresamente.
+
+### Extracción y categoría en backend
+
+`category_routing.js` normaliza equivalencias acotadas (pantalón/pantalones, caballero/hombre, jeans/mezclilla). Solo resuelve por reglas cuando la información respalda una ruta sin hojas competidoras. No inventa tejido ni público. Ordena candidatas por relevancia; si no hay coincidencias amplía al catálogo. La coincidencia final y las propuestas se contrastan con todo el catálogo activo.
+
+Cuando hay proveedor conocido y código explícito, se puede reutilizar una ruta de productos publicados y confirmados del mismo proveedor, negocio y código. Referencias conflictivas o categorías inactivas no se reutilizan. Una consulta truncada tampoco se usa para decidir. Muchos mensajes nuevos no tienen aún proveedor asignado: en ese caso se omite esta reutilización.
+
+La clasificación comparte la llamada que extrae imágenes, variantes y precios. Resolver la categoría por reglas reduce contexto de categorías; no significa que la normalización completa deje de necesitar IA. No se añadió una llamada exclusiva para categoría. Se mantiene el límite existente de contexto y las reparaciones existentes.
+
+`product_attributes.js` valida fuentes, IDs, extractos de texto, negaciones y tipos antes de construir título y palabras clave. Los sinónimos se limitan a equivalencias comerciales explícitas. La evidencia visual procede de la lectura del modelo: validar su estructura no demuestra que el modelo haya visto correctamente la imagen. No se infiere composición o marca por el aspecto.
+
+Los IDs estables evitan depender del orden de fotos. Las pruebas cubren inversión, referencias desconocidas y fotos compartidas. Sigue pendiente evaluar exactitud perceptual con fotografías reales; esto no garantiza detectar una predicción incorrecta que use un ID válido.
+
+### Medir modelos antes de cambiar
+
+Sigue el modelo configurado por `OPENAI_MODEL` (valor por defecto local `gpt-5.2`). Cada respuesta registra `normalization_ai_usage`, ID de publicación, fase, modelo devuelto, intentos, duración y uso de tokens. Sumar extracción y reparaciones para comparar el costo completo. Las llamadas fallidas sin uso reportado no permiten calcular un costo exacto.
+
+Herramienta offline en backend: `node normalization_evaluation.js reviewed-runs.json`. Requiere los mismos IDs de casos para cada modelo y rechaza duplicados. Cada fila contiene `id`, `model`, `expected: {category, colors: {image_id: nombre}}`, `actual` con la misma forma, `duration_ms`, `calls: [{prompt_tokens, completion_tokens}]`, y opcionalmente `human_correction_required` y `cost_usd`. Devuelve exactitud de categoría/asociaciones de color, proporción de correcciones humanas, tokens, mediana de latencia y costo reportado. Costos no aportados quedan en null; no inventa tarifas ni una estimación.
+
+Para la comparación real: muestra revisada de casos claros, ambiguos, sin texto, varias fotos, referencias repetidas y fallos conocidos de color; misma muestra y misma configuración para ambos modelos. Revisar títulos, atributos inventados y tiempo humano de corrección, además de la precisión automática. No se ejecutó una comparación pagada ni se eligió un sustituto sin esos resultados.
+
+### Validación de esta iteración
+
+Capturas y medidas en `docs/review-validation/ux-pass/`. Se prueba la plantilla real de Angular con servicios simulados; no son operaciones en Firebase de producción. El checkbox tiene un glifo menor de 44 px dentro de una etiqueta táctil de al menos 44 px.
+
+### Ajustes de detalle y modal de colores
+
+La portada lleva una insignia azul con check y un borde persistente en su miniatura. La fila de la foto que se está viendo usa un fondo suave y «En vista»: ambos estados se distinguen sin leer todas las notas. La ayuda de código etiqueta se presenta con sangría, fondo suave y borde lateral, agrupada con su desplegable.
+
+«Añadir color» pide el nombre dentro del modal, permite seleccionar una foto existente o subir otra, y confirma la creación con una sola acción primaria. Se eliminaron los prompts del navegador de este flujo. Seleccionar una foto no crea un color ni cambia la portada; cancelar tampoco crea el color. Una foto ya subida permanece disponible en la galería. Los nombres vacíos o duplicados no se aceptan. La modalidad sin foto conserva la misma estructura.
+
+Las tarjetas muestran el nombre antes de la imagen y mantienen áreas de imagen iguales. La selección se indica con borde y check; «Portada actual» solo aparece al elegir portada. El cuerpo del selector es la única zona desplazable: encabezado y acciones permanecen visibles sin cubrir fotos. Subida, error y ausencia de imágenes tienen estados explícitos. Escape cierra los diálogos cuando no hay una operación en curso; se corrigió el retorno `false` involuntario del manejador Angular que impedía ese cierre.
+
+La auditoría de `ux-overlays/` abrió 31 estados de modales y submenús en los cinco tamaños exigidos (155 capturas), incluyendo selectores anidados, variantes, categorías, ayuda, menús de fotos, fusión y visor. No se detectaron desbordamientos horizontales, controles visibles tapados ni objetivos táctiles inferiores a 44 px en las regiones medidas. Son pruebas locales con servicios simulados, no una validación de Firebase/Storage de producción.
+
+Pruebas dirigidas: 43/43 correctas (Review, metadatos y categorías). Suite completa ejecutada: 359/361; las dos fallas existentes de `app-version.service.spec.ts` esperan 2.2.3 aunque el proyecto declara 2.3.0. Backend: 92/92. No hay script de lint. La compilación final de producción terminó correctamente; conserva advertencias de tamaño y dependencias CommonJS. También se verificó el espacio CSS equivalente a zoom de 200%, con confirmación por teclado y foco restaurado.

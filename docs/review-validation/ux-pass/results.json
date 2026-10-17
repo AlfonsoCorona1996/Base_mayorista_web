@@ -1,0 +1,57 @@
+[
+  {
+    "width": 1440,
+    "scrollWidth": 1440,
+    "smallControls": [
+      {
+        "tag": "INPUT",
+        "text": ""
+      }
+    ]
+  },
+  {
+    "width": 1024,
+    "scrollWidth": 1024,
+    "smallControls": [
+      {
+        "tag": "INPUT",
+        "text": ""
+      }
+    ]
+  },
+  {
+    "width": 768,
+    "scrollWidth": 768,
+    "smallControls": [
+      {
+        "tag": "INPUT",
+        "text": ""
+      }
+    ]
+  },
+  {
+    "width": 390,
+    "scrollWidth": 390,
+    "smallControls": [
+      {
+        "tag": "INPUT",
+        "text": ""
+      }
+    ]
+  },
+  {
+    "width": 360,
+    "scrollWidth": 360,
+    "smallControls": [
+      {
+        "tag": "INPUT",
+        "text": ""
+      }
+    ]
+  },
+  {
+    "width": 720,
+    "height": 450,
+    "note": "Espacio CSS equivalente a 1440 x 900 con zoom 200%; confirmación por teclado y foco restaurado."
+  }
+]

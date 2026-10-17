@@ -2,7 +2,60 @@
 export interface ListingMetadata {
   keywords?: string[];
   supplierSku?: string | null;
-  extractionOverrides?: { keywords?: boolean; supplierSku?: boolean };
+  attributes?: ProductAttribute[];
+  categoryReview?: {
+    status: 'pending' | 'confirmed';
+    path: string | null;
+    confirmedBy?: string | null;
+    confirmedAt?: string | null;
+  };
+  colorReview?: { signature: string; confirmedBy: string; confirmedAt: string };
+  extractionOverrides?: {
+    keywords?: boolean;
+    supplierSku?: boolean;
+    title?: boolean;
+    category?: boolean;
+    attributes?: boolean;
+    colors?: boolean;
+  };
+}
+
+export interface ProductAttribute {
+  kind:
+    | 'type'
+    | 'audience'
+    | 'brand'
+    | 'material'
+    | 'print'
+    | 'pattern'
+    | 'texture'
+    | 'cut'
+    | 'detail';
+  value: string;
+  source?: 'text' | 'image' | 'manual';
+  image_id?: string | null;
+  evidence?: string;
+}
+
+export function isCategoryConfirmed(
+  listing: ListingMetadata & { category_hint?: string | null; category_proposed?: string | null },
+): boolean {
+  return (
+    !!listing.category_hint &&
+    !listing.category_proposed &&
+    listing.categoryReview?.status === 'confirmed' &&
+    listing.categoryReview.path === listing.category_hint
+  );
+}
+
+export function colorMappingSignature(
+  colors: ReadonlyArray<{ name: string; image_url: string | null }>,
+): string {
+  return JSON.stringify(
+    colors
+      .map(({ name, image_url }) => [name.trim(), image_url])
+      .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
+  );
 }
 
 export function normalizeKeywords(value: unknown): string[] {
@@ -75,12 +128,15 @@ export function mergeListingMetadata(
     );
   }
   if (!current && incoming && target.extractionOverrides?.supplierSku) {
-    throw new Error('El SKU del destino se dejó vacío manualmente. Resuelve la referencia antes de fusionar.');
+    throw new Error(
+      'El SKU del destino se dejó vacío manualmente. Resuelve la referencia antes de fusionar.',
+    );
   }
   return {
     keywords: normalizeKeywords([...(target.keywords || []), ...(source.keywords || [])]),
     supplierSku: current ?? (target.extractionOverrides?.supplierSku ? null : incoming),
     extractionOverrides: {
+      ...target.extractionOverrides,
       keywords: true,
       supplierSku: !!(
         target.extractionOverrides?.supplierSku || source.extractionOverrides?.supplierSku

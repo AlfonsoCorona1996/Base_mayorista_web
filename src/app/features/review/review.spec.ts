@@ -66,6 +66,7 @@ describe("ReviewPage publication", () => {
     });
     const page = TestBed.inject(ReviewPage);
     page.draft.set(validDraft());
+    page.confirmCategory();
 
     const firstClick = page.validate();
     expect(page.publishing()).toBe(true);

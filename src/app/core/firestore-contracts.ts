@@ -79,6 +79,7 @@ export interface ItemPricesV3 {
  * Un color se define una vez y se referencia en múltiples variantes
  */
 export interface ProductColor {
+  review_required?: boolean;
   image_id?: string | null;
   name: string;
   image_url: string | null;
