@@ -1,6 +1,6 @@
 import { ReviewDialogDirective } from "./review-dialog.directive";
 import { ReviewIcon } from './review-icon';
-import { assertUniqueVariants, mergeListingMetadata, normalizeKeywords, normalizeSupplierSku, normalizeVariantName } from "../../core/listing-metadata";
+import { isCategoryConfirmed, colorMappingSignature, ProductAttribute, assertUniqueVariants, mergeListingMetadata, normalizeKeywords, normalizeSupplierSku, normalizeVariantName } from "../../core/listing-metadata";
 // review.ts - Versión mejorada con UX completa
 import { Component, computed, inject, signal, ChangeDetectionStrategy, ElementRef } from "@angular/core";
 import { ActivatedRoute, Router } from "@angular/router";
@@ -94,6 +94,73 @@ export default class ReviewPage {
   private auth = inject(AuthService);
   private categoriesService = inject(CategoriesService);
   private suppliersService = inject(SuppliersService);
+
+  categoryConfirmed = computed(() => {
+    const listing = this.draft()?.listing;
+    return !!listing && isCategoryConfirmed(listing);
+  });
+  colorReviewNeeded = computed(() => {
+    const d = this.draft();
+    if (!d) return false;
+    const colors = d.product_colors;
+    const ambiguous = colors.some(c => c.review_required || !c.image_url ||
+      colors.some(other => other !== c && other.image_url === c.image_url && other.name !== c.name));
+    return ambiguous && d.listing.colorReview?.signature !== colorMappingSignature(colors);
+  });
+  confirmColors() {
+    const d = this.draft();
+    const uid = this.auth.uid();
+    if (!d || !uid) return;
+    d.listing.colorReview = { signature: colorMappingSignature(d.product_colors), confirmedBy: uid, confirmedAt: new Date().toISOString() };
+    d.listing.extractionOverrides = { ...d.listing.extractionOverrides, colors: true };
+    this.touchDraft();
+  }
+  confirmCategory() {
+    const d = this.draft();
+    const uid = this.auth.uid();
+    if (!d?.listing.category_hint || d.listing.category_proposed || !uid) return;
+    d.listing.categoryReview = { status: 'confirmed', path: d.listing.category_hint, confirmedBy: uid, confirmedAt: new Date().toISOString() };
+    d.listing.extractionOverrides = { ...d.listing.extractionOverrides, category: true };
+    this.clearFieldError('category');
+    const moveFocus = this.element.nativeElement.ownerDocument.activeElement?.id === 'category-confirm';
+    this.touchDraft();
+    if (moveFocus) setTimeout(() => this.element.nativeElement.querySelector<HTMLButtonElement>('#category-change')?.focus());
+  }
+  editCategoryProposal(value: string) {
+    const d = this.draft();
+    if (!d) return;
+    this.editableCategoryProposal.set(value);
+    d.listing.category_proposed = value.trim() || null;
+    d.listing.categoryReview = { status: 'pending', path: d.listing.category_hint };
+    d.listing.extractionOverrides = { ...d.listing.extractionOverrides, category: true };
+    this.touchDraft();
+  }
+  changeCategory() {
+    this.categorySearch = '';
+    this.onCategorySearch();
+    this.showCategoryDropdown.set(true);
+    setTimeout(() => this.element.nativeElement.querySelector<HTMLInputElement>('#category-search')?.focus());
+  }
+  setTitle(value: string) {
+    const d = this.draft();
+    if (!d) return;
+    d.listing.title = value;
+    d.listing.extractionOverrides = { ...d.listing.extractionOverrides, title: true };
+    this.clearFieldError('title');
+    this.touchDraft();
+  }
+  readonly attributeLabels: Record<ProductAttribute['kind'], string> = {
+    type: 'Tipo de producto', audience: 'Público', brand: 'Marca', material: 'Material',
+    print: 'Estampado', pattern: 'Patrón', texture: 'Textura', cut: 'Corte', detail: 'Detalle'
+  };
+  editAttribute(index: number, value: string) {
+    const d = this.draft();
+    const attribute = d?.listing.attributes?.[index];
+    if (!d || !attribute) return;
+    d.listing.attributes = d.listing.attributes!.flatMap((entry, i) => i !== index ? [entry] : value.trim() ? [{ kind: entry.kind, value: value.trim(), source: 'manual' as const }] : []);
+    d.listing.extractionOverrides = { ...d.listing.extractionOverrides, attributes: true };
+    this.touchDraft();
+  }
 
   keywordInput = '';
   variantInput = '';
@@ -624,6 +691,7 @@ export default class ReviewPage {
       const title = (incoming.listing.title || "").trim();
       if (title) {
         merged.listing.title = title;
+        merged.listing.extractionOverrides = { ...merged.listing.extractionOverrides, title: true };
       }
     }
 
@@ -631,6 +699,8 @@ export default class ReviewPage {
       const category = (incoming.listing.category_hint || "").trim();
       if (category) {
         merged.listing.category_hint = category;
+        merged.listing.categoryReview = { status: "pending", path: category };
+        merged.listing.extractionOverrides = { ...merged.listing.extractionOverrides, category: true };
       }
     }
 
@@ -647,6 +717,7 @@ export default class ReviewPage {
 
     if (options.globalColors) {
       merged.product_colors = this.mergeProductColors(merged.product_colors || [], incoming.product_colors || []);
+      merged.listing.extractionOverrides = { ...merged.listing.extractionOverrides, colors: true };
     }
 
     const targetIndex = this.buildVariantIndex(merged.listing.items);
@@ -989,6 +1060,7 @@ export default class ReviewPage {
     this.categorySearch = cat.fullPath;
     this.showCategoryDropdown.set(false);
     this.draft.set({ ...d });
+    this.confirmCategory();
   }
 
   /** Segmentos del breadcrumb de la propuesta editable */
@@ -1019,8 +1091,9 @@ export default class ReviewPage {
       this.editableCategoryProposal.set("");
       this.showCategoryDropdown.set(false);
       this.draft.set({ ...d });
+      this.confirmCategory();
       this.showInfoPopup(
-        `Categoría "${finalPath}" creada y asignada correctamente.`,
+        `Categoría "${finalPath}" confirmada para este producto.`,
         "Categoría registrada",
         "success"
       );
@@ -1035,8 +1108,11 @@ export default class ReviewPage {
     const d = this.draft();
     if (!d) return;
     d.listing.category_proposed = null;
+    d.listing.categoryReview = { status: "pending", path: d.listing.category_hint };
+    d.listing.extractionOverrides = { ...d.listing.extractionOverrides, category: true };
     this.editableCategoryProposal.set("");
     this.draft.set({ ...d });
+    this.changeCategory();
   }
 
   chooseExistingCategoryFromProposal() {
@@ -1120,12 +1196,42 @@ export default class ReviewPage {
   /**
    * COLORES GLOBALES: Agrega un color global CON imagen
    */
-  addGlobalColorWithImage() {
-    // Simplemente abrir el selector de imágenes disponibles
-    // El color se agregará con el nombre que tenga en imageColors
-    this.currentVariantIndex = -3; // Valor especial para "agregar color global"
+  newColorName = '';
+  newColorImage = signal<string | null>(null);
+  newColorError = signal<string | null>(null);
+  isAddingColor(): boolean { return this.currentVariantIndex === -3 || this.currentVariantIndex === -5; }
+  addGlobalColorWithImage() { this.openNewColor(-3); }
+  private openNewColor(mode: -3 | -5) {
+    this.newColorName = '';
+    this.newColorImage.set(null);
+    this.newColorError.set(null);
+    this.uploadError.set(null);
+    this.currentVariantIndex = mode;
     this.currentColorIndex = -1;
     this.showImagePicker.set(true);
+    setTimeout(() => this.element.nativeElement.querySelector<HTMLInputElement>('#new-color-name')?.focus());
+  }
+  canAddNewColor(): boolean {
+    return !!this.newColorName.trim() && (this.currentVariantIndex === -5 || !!this.newColorImage()) && !this.uploading();
+  }
+  submitNewColor() {
+    const d = this.draft();
+    if (!d || !this.isAddingColor() || this.uploading()) return;
+    const name = this.newColorName.trim().replace(/\s+/g, ' ');
+    if (!name) { this.newColorError.set('Escribe el nombre del color.'); return; }
+    if (d.product_colors.some(color => color.name.trim().localeCompare(name, 'es', { sensitivity: 'base' }) === 0)) {
+      this.newColorError.set('Ya existe un color con ese nombre.'); return;
+    }
+    const image = this.currentVariantIndex === -5 ? null : this.newColorImage();
+    if (this.currentVariantIndex === -3 && !image) { this.newColorError.set('Selecciona una foto para este color.'); return; }
+    d.product_colors.push({ name, image_url: image, image_id: null });
+    d.listing.extractionOverrides = { ...d.listing.extractionOverrides, colors: true };
+    this.addColorReferencesToSharedItems(d, name, image);
+    this.ensureGlobalColorsInAllVariants(d);
+    this.syncGlobalColorsToVariantsIfNeeded();
+    this.draft.set({ ...d });
+    if (image) this.selectedPreview.set(image);
+    this.closeImagePicker();
   }
 
   openGlobalColorImageSelector(colorIndex: number) {
@@ -1141,25 +1247,7 @@ export default class ReviewPage {
   /**
    * COLORES GLOBALES: Agrega un color global SIN imagen
    */
-  addGlobalColorWithoutImage() {
-    const colorName = prompt("Nombre del color (ej: multicolor, estampado):");
-    if (!colorName) return;
-
-    const d = this.draft();
-    if (!d) return;
-
-    if (!d.product_colors) d.product_colors = [];
-    d.product_colors.push({
-      name: colorName.trim(),
-      image_url: null
-    });
-    this.addColorReferencesToSharedItems(d, colorName, null);
-    this.ensureGlobalColorsInAllVariants(d);
-    this.syncGlobalColorsToVariantsIfNeeded();
-
-    this.draft.set({ ...d });
-    console.log("✅ Color global sin imagen creado:", colorName);
-  }
+  addGlobalColorWithoutImage() { this.openNewColor(-5); }
 
   removeGlobalColorAt(index: number) {
     const d = this.draft();
@@ -1844,20 +1932,8 @@ export default class ReviewPage {
 
     // Caso especial 2: Agregar color global con imagen
     if (this.currentVariantIndex === -3) {
-      const colorName = (prompt("Nombre del color para esta imagen:") || "").trim();
-      if (!colorName) return;
-
-      if (!d.product_colors) d.product_colors = [];
-      d.product_colors.push({
-        name: colorName,
-        image_url: imageUrl
-      });
-      this.addColorReferencesToSharedItems(d, colorName, imageUrl);
-      this.ensureGlobalColorsInAllVariants(d);
-
-      this.draft.set({ ...d });
-      this.closeImagePicker();
-      console.log("✅ Color global con imagen agregado:", colorName);
+      this.newColorImage.set(imageUrl);
+      this.newColorError.set(null);
       return;
     }
 
@@ -1932,6 +2008,14 @@ export default class ReviewPage {
     }
   }
 
+  imagePickerTitle(): string {
+    if (this.currentVariantIndex >= 0) return `Asignar color a ${this.draft()?.listing.items[this.currentVariantIndex]?.variant_name || 'variante'}`;
+    if (this.currentVariantIndex === -2) return 'Elegir portada';
+    if (this.isAddingColor()) return this.currentVariantIndex === -5 ? 'Añadir color sin foto' : 'Añadir color con foto';
+    if (this.currentVariantIndex === -4) return `Cambiar foto de ${this.draft()?.product_colors[this.currentColorIndex]?.name || 'color'}`;
+    return 'Seleccionar foto';
+  }
+
   closeImagePicker() {
     this.showImagePicker.set(false);
     this.currentVariantIndex = -1;
@@ -2003,6 +2087,7 @@ export default class ReviewPage {
 
         if (d && color) {
           color.image_url = downloadURL;
+          color.image_id = null;
           this.addColorReferencesToSharedItems(d, colorName, downloadURL);
           this.syncGlobalColorsToVariantsIfNeeded();
           this.draft.set({ ...d });
@@ -2015,31 +2100,11 @@ export default class ReviewPage {
         return;
       }
       
-      // Solicitar nombre del color
-      const colorName = prompt('Nombre del color para esta imagen:') || 'Nuevo color';
-      this.imageColors[downloadURL] = colorName;
-      console.log('✅ Color asignado:', colorName);
-
-      // Si estamos en modo de agregar color global, seleccionar automáticamente
       if (this.currentVariantIndex === -3) {
-        const d = this.draft();
-        if (d) {
-          if (!d.product_colors) d.product_colors = [];
-          d.product_colors.push({
-            name: colorName.trim() || "Nuevo color",
-            image_url: downloadURL
-          });
-          this.addColorReferencesToSharedItems(d, colorName, downloadURL);
-          this.syncGlobalColorsToVariantsIfNeeded();
-          this.draft.set({ ...d });
-        }
-        this.closeImagePicker();
+        this.newColorImage.set(downloadURL);
+        this.newColorError.set(null);
       }
-
       this.uploading.set(false);
-      this.showInfoPopup(`Imagen subida exitosamente: ${colorName}`, "Carga completada", "success");
-
-      // Limpiar input
       input.value = '';
 
     } catch (error: any) {
@@ -2100,6 +2165,9 @@ export default class ReviewPage {
       return null;
     }
 
+    if (this.doc() && colorMappingSignature(d.product_colors) !== colorMappingSignature(this.doc()!.product_colors || [])) {
+      d.listing.extractionOverrides = { ...d.listing.extractionOverrides, colors: true };
+    }
     this.normalizeColorReferencesForSave(d);
     this.ensureVariantSkus(d);
     this.draft.set({ ...d });
@@ -2117,7 +2185,7 @@ export default class ReviewPage {
   }
 
   async save() {
-    if (this.finalActionBusy()) return;
+    if (this.finalActionBusy() || this.categoryProposalSaving() || this.mergeApplying()) return;
     this.saving.set(true);
     this.error.set(null);
     try {
@@ -2141,7 +2209,7 @@ export default class ReviewPage {
   }
 
   async validate() {
-    if (this.finalActionBusy()) return;
+    if (this.finalActionBusy() || this.categoryProposalSaving() || this.mergeApplying()) return;
     try {
       const uid = this.auth.uid();
       if (!uid) {
@@ -2159,13 +2227,23 @@ export default class ReviewPage {
         return;
       }
 
-      if (!d.listing.title) {
+      if (!d.listing.title?.trim()) {
         this.focusField('title', '#product-title', 'Escribe el nombre del producto.');
         return;
       }
 
       if (!d.listing.category_hint) {
         this.focusField('category', '#category-search', 'Selecciona una categoría para publicar.');
+        return;
+      }
+
+      if (!isCategoryConfirmed(d.listing)) {
+        this.focusField('category', '#category-confirm', 'Confirma la categoría antes de publicar.');
+        return;
+      }
+      if (this.colorReviewNeeded()) {
+        this.showInfoPopup('Revisa las fotos y confirma sus colores antes de publicar.', 'Colores pendientes', 'warning');
+        this.element.nativeElement.querySelector<HTMLElement>('#color-confirm')?.focus();
         return;
       }
 
@@ -2224,7 +2302,7 @@ export default class ReviewPage {
   }
 
   async reject() {
-    if (this.finalActionBusy()) return;
+    if (this.finalActionBusy() || this.categoryProposalSaving() || this.mergeApplying()) return;
     if (!confirm("¿Rechazar este listing? (No se borrará, quedará marcado como rechazado)")) return;
     this.rejecting.set(true);
     try {

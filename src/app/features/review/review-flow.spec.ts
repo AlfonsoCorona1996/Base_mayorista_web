@@ -135,10 +135,67 @@ describe('Review flujo rápido', () => {
     expect(patch.cover_images).toEqual([photo, secondPhoto]);
     expect(patch.listing?.items[0].sku).toBe('INTERNAL-6');
     page.confirmPopup();
+    page.confirmCategory();
     await page.validate();
     patch = listings.saveReviewDecision.calls.mostRecent().args[1];
     expect(patch.listing?.supplierSku).toBe('0002-B');
     expect(listings.saveReviewDecision.calls.mostRecent().args[3]?.validatedBy).toBe('user');
+  });
+
+  it('requiere confirmación explícita, la guarda y la invalida para otra ruta', async () => {
+    expect(page.categoryConfirmed()).toBeFalse();
+    await page.validate();
+    expect(listings.saveReviewDecision).not.toHaveBeenCalled();
+    expect(page.fieldErrors().category).toContain('Confirma');
+    page.confirmCategory();
+    expect(page.categoryConfirmed()).toBeTrue();
+    await page.save();
+    expect(listings.saveReviewDecision.calls.mostRecent().args[1].listing?.categoryReview?.confirmedBy).toBe('user');
+    page.draft.set({ ...page.draft()!, listing: { ...page.draft()!.listing, category_hint: 'Otra' } });
+    expect(page.categoryConfirmed()).toBeFalse();
+  });
+
+  it('muestra y descarta la propuesta sin crear categorías ni abrir menús', () => {
+    page.draft()!.listing.category_hint = null;
+    page.draft()!.listing.category_proposed = 'Ropa > Nueva';
+    page.editableCategoryProposal.set('Ropa > Nueva');
+    fixture.detectChanges();
+    const proposal = fixture.nativeElement.querySelector('.category-proposal') as HTMLElement;
+    expect(proposal.closest('details')).toBeNull();
+    expect(proposal.textContent).toContain('Crear categoría y aceptar');
+    page.dismissCategoryProposal();
+    expect(categories.ensurePath).not.toHaveBeenCalled();
+    expect(page.draft()!.listing.category_proposed).toBeNull();
+    expect(page.categoryConfirmed()).toBeFalse();
+  });
+
+  it('conserva la propuesta si Firebase rechaza la creación', async () => {
+    page.editableCategoryProposal.set('Ropa > Nueva');
+    categories.ensurePath.and.rejectWith(new Error('Sin permiso'));
+    await page.acceptCategoryProposal();
+    expect(page.editableCategoryProposal()).toBe('Ropa > Nueva');
+    expect(page.categoryConfirmed()).toBeFalse();
+    expect(page.categoryProposalSaving()).toBeFalse();
+  });
+
+  it('requiere revisar asociaciones dudosas y vuelve a pedirlo al editar el color', () => {
+    const value = draft();
+    value.product_colors[0].review_required = true;
+    page.draft.set(value);
+    expect(page.colorReviewNeeded()).toBeTrue();
+    page.confirmColors();
+    expect(page.colorReviewNeeded()).toBeFalse();
+    page.draft.set({ ...value, product_colors: [{ ...value.product_colors[0], name: 'Azul cielo' }] });
+    expect(page.colorReviewNeeded()).toBeTrue();
+  });
+
+  it('protege nombre y características corregidos manualmente', () => {
+    page.setTitle('Pantalón recto de mezclilla');
+    page.draft()!.listing.attributes = [{ kind: 'material', value: 'algodón', source: 'text' }];
+    page.editAttribute(0, 'mezclilla');
+    expect(page.draft()!.listing.extractionOverrides?.title).toBeTrue();
+    expect(page.draft()!.listing.extractionOverrides?.attributes).toBeTrue();
+    expect(page.draft()!.listing.attributes?.[0].source).toBe('manual');
   });
 
   it('conserva stock desconocido y permite restaurar una foto excluida', () => {
@@ -203,6 +260,70 @@ describe('Review flujo rápido', () => {
     expect(categories.ensurePath).toHaveBeenCalledWith('RÓPA');
     expect(page.draft()!.listing.category_proposed).toBeNull();
     expect(page.editableCategoryProposal()).toBe('');
+  });
+
+  it('selecciona foto sin crear el color hasta confirmar y conserva la portada', () => {
+    const prompt = spyOn(window, 'prompt');
+    page.addGlobalColorWithImage();
+    page.newColorName = 'Rojo vino';
+    expect(page.canAddNewColor()).toBeFalse();
+    page.assignImageToColor(photo);
+    expect(page.draft()!.product_colors.length).toBe(1);
+    expect(page.canAddNewColor()).toBeTrue();
+    page.submitNewColor();
+    expect(page.draft()!.product_colors.length).toBe(2);
+    expect(page.draft()!.product_colors[1]).toEqual({ name: 'Rojo vino', image_url: photo, image_id: null });
+    expect(page.draft()!.cover_images[0]).toBe(photo);
+    expect(page.showImagePicker()).toBeFalse();
+    expect(prompt).not.toHaveBeenCalled();
+  });
+
+  it('rechaza colores duplicados y cancelar no modifica los colores', () => {
+    page.addGlobalColorWithImage();
+    page.newColorName = '  AZUL MARINO  ';
+    page.assignImageToColor(photo);
+    page.submitNewColor();
+    expect(page.newColorError()).toContain('Ya existe');
+    expect(page.draft()!.product_colors.length).toBe(1);
+    page.closeImagePicker();
+    expect(page.draft()!.product_colors.length).toBe(1);
+  });
+
+  it('crea un color sin foto mediante el mismo formulario y protege la edición', () => {
+    page.addGlobalColorWithoutImage();
+    page.submitNewColor();
+    expect(page.newColorError()).toContain('nombre');
+    page.newColorName = '  Verde   olivo  ';
+    page.submitNewColor();
+    expect(page.draft()!.product_colors[1].name).toBe('Verde olivo');
+    expect(page.draft()!.product_colors[1].image_url).toBeNull();
+    expect(page.draft()!.listing.extractionOverrides?.colors).toBeTrue();
+  });
+
+  it('permite cancelar selectores y fusión con Escape salvo durante una escritura', () => {
+    page.openCoverSelector();
+    fixture.detectChanges();
+    const picker = fixture.nativeElement.querySelector('dialog[aria-labelledby="picker-title"]') as HTMLDialogElement;
+    const cancelPicker = new Event('cancel', { cancelable: true });
+    picker.dispatchEvent(cancelPicker);
+    expect(cancelPicker.defaultPrevented).toBeFalse();
+    page.uploading.set(true);
+    fixture.detectChanges();
+    const busyPicker = new Event('cancel', { cancelable: true });
+    picker.dispatchEvent(busyPicker);
+    expect(busyPicker.defaultPrevented).toBeTrue();
+    page.uploading.set(false);
+    page.closeImagePicker();
+    fixture.detectChanges();
+    const merge = fixture.nativeElement.querySelector('dialog[aria-labelledby="merge-title"]') as HTMLDialogElement;
+    const cancelMerge = new Event('cancel', { cancelable: true });
+    merge.dispatchEvent(cancelMerge);
+    expect(cancelMerge.defaultPrevented).toBeFalse();
+    page.mergeApplying.set(true);
+    fixture.detectChanges();
+    const busyMerge = new Event('cancel', { cancelable: true });
+    merge.dispatchEvent(busyMerge);
+    expect(busyMerge.defaultPrevented).toBeTrue();
   });
 
   it('abre la galería, navega, contiene foco y devuelve foco al cerrar', async () => {

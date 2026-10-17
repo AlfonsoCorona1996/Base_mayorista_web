@@ -1513,7 +1513,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     const semanticTags = Array.isArray(listing?.semantic_tags) ? listing.semantic_tags : [];
     const searchAliases = Array.isArray(listing?.search_aliases) ? listing.search_aliases : [];
     const searchBlob = typeof listing?.search_blob === "string" ? listing.search_blob : "";
-    return [...semanticTags, ...searchAliases, searchBlob]
+    return [...semanticTags, ...searchAliases, ...(Array.isArray(listing?.keywords) ? listing.keywords : []), listing?.supplierSku, searchBlob]
       .map((value) => String(value || "").trim())
       .filter(Boolean);
   }

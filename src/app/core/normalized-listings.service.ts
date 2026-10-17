@@ -1,4 +1,4 @@
-import { assertUniqueVariants, normalizeKeywords, normalizeSupplierSku } from "./listing-metadata";
+import { isCategoryConfirmed, assertUniqueVariants, normalizeKeywords, normalizeSupplierSku } from "./listing-metadata";
 import { Injectable, computed, inject, signal } from "@angular/core";
 import { FIRESTORE } from "./firebase.providers";
 import {
@@ -346,6 +346,7 @@ export class NormalizedListingsService {
     }
 
     if (options.validatedBy) {
+      if (!patch.listing || !isCategoryConfirmed(patch.listing)) throw new Error('Confirma la categoría antes de publicar.');
       update["business_id"] = normalizeBusinessId(options.businessId || "bm");
       update["workflow.status"] = "validated";
       update["workflow.validated_by"] = options.validatedBy;
@@ -359,7 +360,8 @@ export class NormalizedListingsService {
     const ref = doc(this.colRef, id);
     const snap = await getDoc(ref);
     const current = snap.exists() ? snap.data() as NormalizedListingDoc : null;
-    if (current?.listing) assertUniqueVariants(current.listing.items);
+    if (!current?.listing || !isCategoryConfirmed(current.listing)) throw new Error("Confirma la categoría antes de publicar.");
+    assertUniqueVariants(current.listing.items);
     await updateDoc(ref, {
       business_id: normalizeBusinessId(current?.business_id || "bm"),
       "workflow.status": "validated",

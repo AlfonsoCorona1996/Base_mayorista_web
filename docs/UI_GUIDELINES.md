@@ -193,3 +193,24 @@ npm run build
 ```
 
 Si se agrega un script de lint en el futuro, ejecútalo también. Corrige errores introducidos por la tarea, revisa el diff completo y confirma que no se modificaron pantallas, lógica o archivos ajenos al alcance.
+
+
+## Jerarquía, lenguaje y decisiones (aplicación en Review)
+
+- Máximo un botón primario por sección; no es obligatorio que todas tengan uno. El relleno azul identifica el siguiente compromiso; un botón con borde es secundario y ghost es una acción de apoyo. Rojo identifica acciones destructivas, nunca el avance normal.
+- Al publicar, la acción principal es «Publicar producto». Mientras falte una validación se explica el requisito y se prioriza su resolución junto al dato. «Guardar cambios» conserva jerarquía secundaria.
+- Botones en infinitivo + objeto cuando aporte claridad: «Confirmar categoría», «Cambiar categoría», «Publicar producto». El valor se expresa en el contexto; no convertir cada botón en una frase larga. Los mensajes pueden usar imperativo cuando dan una instrucción concreta; no mezclar conjugaciones entre botones equivalentes.
+- Mostrar contexto antes de contenido: nombre del producto antes de sus fotos y nombre del color antes de la imagen seleccionada. Mantener el orden de lectura y foco del DOM.
+- Aplicar proximidad: 8 px entre etiqueta y control, 16 px entre campos y más separación o un divisor entre tareas independientes. Espacios distintos comunican relaciones distintas; no uniformarlos por estética.
+- Preguntar «¿hace falta para decidir ahora?» ante cada texto. La explicación del código y los detalles técnicos van en desplegables. Etiquetas, errores, importes, categoría pendiente y condiciones para publicar siempre son visibles.
+- Favorecer reconocimiento sobre memoria: mostrar la ruta completa de categoría, miniatura junto al color y verbo específico junto a su objeto. Un dato extraído no equivale a una decisión confirmada.
+- Prevenir errores: conservar borradores, bloquear doble envío, hacer explícita la creación de categorías y permitir cambiar o descartar sugerencias. Comunicar resultado y progreso sin interrumpir innecesariamente.
+- Una acción que desaparece al completarse debe conservar un destino de foco lógico. Los cambios de validación se anuncian con estado textual; el color solo refuerza el significado.
+- El mínimo táctil de este proyecto sigue siendo 44 px. WCAG 2.2 AA contempla 24 px con condiciones y excepciones; no confundir ese mínimo normativo con nuestro objetivo de comodidad.
+
+Fuentes consultadas:
+- GOV.UK, botones y acción principal: https://design-system.service.gov.uk/components/button/
+- Nielsen Norman Group, jerarquía visual: https://www.nngroup.com/articles/visual-hierarchy-ux-definition/
+- Nielsen Norman Group, revelación progresiva: https://www.nngroup.com/articles/progressive-disclosure/
+- Nielsen Norman Group, proximidad entre objetos y acciones: https://www.nngroup.com/articles/closeness-of-actions-and-objects-gui/
+- W3C, tamaño de objetivos: https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum
