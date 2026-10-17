@@ -1,0 +1,151 @@
+@if (!sheetMode()) {
+  <div class="picker-inline" (focusout)="onInlineFocusOut($event)">
+    <div class="field with-icon">
+      <span class="material-symbols-rounded" aria-hidden="true">person_search</span>
+      <input
+        #inlineInput
+        class="input"
+        type="text"
+        role="combobox"
+        autocomplete="off"
+        aria-label="Buscar clienta"
+        aria-autocomplete="list"
+        [attr.aria-expanded]="inlineListVisible()"
+        [attr.aria-controls]="listboxId"
+        [attr.aria-activedescendant]="inlineListVisible() ? activeOptionId() : null"
+        [placeholder]="placeholder()"
+        [value]="query()"
+        (input)="onInlineInput($any($event.target).value)"
+        (focus)="openList()"
+        (click)="openList()"
+        (keydown)="onKeydown($event)"
+      />
+    </div>
+
+    @if (inlineListVisible()) {
+      <!-- pointerdown sin acción por defecto: tocar la lista no quita el foco del campo. -->
+      <div class="picker-popover" (pointerdown)="$event.preventDefault()">
+        <ng-container *ngTemplateOutlet="results" />
+      </div>
+    }
+  </div>
+} @else {
+  <button
+    #trigger
+    type="button"
+    class="field with-icon picker-trigger"
+    aria-haspopup="dialog"
+    [attr.aria-expanded]="sheetOpen()"
+    [attr.aria-label]="selectedName() ? 'Clienta: ' + selectedName() + '. Cambiar clienta' : 'Buscar clienta'"
+    (click)="openSheet()"
+  >
+    <span class="material-symbols-rounded" aria-hidden="true">person_search</span>
+    <span class="picker-trigger-text" [class.picker-trigger-placeholder]="!selectedName()">
+      {{ selectedName() || placeholder() }}
+    </span>
+    <span class="material-symbols-rounded picker-trigger-chevron" aria-hidden="true">expand_more</span>
+  </button>
+
+  @if (sheetOpen()) {
+    <div
+      class="picker-backdrop"
+      [style.top.px]="viewportTop()"
+      [style.height]="viewportHeight() === null ? null : viewportHeight() + 'px'"
+      (pointerdown)="onBackdropPointerDown($event)"
+    >
+      <section
+        #sheet
+        class="picker-sheet"
+        role="dialog"
+        aria-modal="true"
+        [attr.aria-labelledby]="sheetTitleId"
+        (keydown)="onSheetKeydown($event)"
+      >
+        <header class="picker-sheet-head">
+          <div class="picker-sheet-handle" aria-hidden="true"></div>
+          <h2 [id]="sheetTitleId">Elegir clienta</h2>
+          <button type="button" class="picker-close" aria-label="Cerrar buscador de clientas" (click)="closeSheet()">
+            <span class="material-symbols-rounded" aria-hidden="true">close</span>
+          </button>
+        </header>
+
+        <div class="field with-icon picker-search">
+          <span class="material-symbols-rounded" aria-hidden="true">search</span>
+          <input
+            #sheetInput
+            class="input"
+            type="text"
+            role="combobox"
+            autocomplete="off"
+            enterkeyhint="search"
+            aria-label="Buscar clienta por nombre o WhatsApp"
+            aria-autocomplete="list"
+            aria-expanded="true"
+            [attr.aria-controls]="listboxId"
+            [attr.aria-activedescendant]="activeOptionId()"
+            [attr.aria-describedby]="statusId"
+            [placeholder]="placeholder()"
+            [value]="query()"
+            (input)="onSheetInput($any($event.target).value)"
+            (keydown)="onKeydown($event)"
+          />
+          @if (query()) {
+            <button type="button" class="picker-clear" aria-label="Borrar búsqueda" (click)="clearSheetQuery()">
+              <span class="material-symbols-rounded" aria-hidden="true">cancel</span>
+            </button>
+          }
+        </div>
+
+        @if (selectedName(); as name) {
+          <p class="picker-current">Seleccionada: <strong>{{ name }}</strong></p>
+        }
+
+        <div class="picker-sheet-body">
+          <ng-container *ngTemplateOutlet="results" />
+        </div>
+      </section>
+    </div>
+  }
+}
+
+<ng-template #results>
+  @switch (state()) {
+    @case ("results") {
+      <ul class="picker-options" role="listbox" [id]="listboxId" aria-label="Clientas encontradas">
+        @for (option of options(); track option.id; let index = $index) {
+          <li
+            class="picker-option"
+            role="option"
+            [id]="optionId(index)"
+            [attr.aria-selected]="index === activeIndex()"
+            [class.picker-option-active]="index === activeIndex()"
+            (click)="choose(option)"
+          >
+            <span class="picker-option-name">{{ option.name }}</span>
+            @if (option.detail) {
+              <span class="picker-option-detail">{{ option.detail }}</span>
+            }
+          </li>
+        }
+      </ul>
+    }
+    @case ("loading") {
+      <p class="picker-status" role="status" [id]="statusId">
+        <span class="picker-spinner" aria-hidden="true"></span>
+        Cargando clientas…
+      </p>
+    }
+    @case ("error") {
+      <div class="picker-status picker-status-error" role="alert" [id]="statusId">
+        <span>No se pudieron cargar las clientas.</span>
+        <button type="button" class="picker-retry" (click)="retryLoad()">Reintentar</button>
+      </div>
+    }
+    @case ("no-results") {
+      <p class="picker-status" role="status" [id]="statusId">No existe una clienta con ese nombre.</p>
+    }
+    @default {
+      <p class="picker-status picker-status-hint" role="status" [id]="statusId">Escribe al menos 2 letras del nombre o del WhatsApp.</p>
+    }
+  }
+</ng-template>

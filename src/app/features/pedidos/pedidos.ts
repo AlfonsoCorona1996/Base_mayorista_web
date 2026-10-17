@@ -22,6 +22,7 @@ import { Shipment, ShipmentBusinessSummary, ShipmentItem, ShipmentsService } fro
 import { AuthzService } from "../../core/authz.service";
 import { canMarkOrderAsPaidFromTable } from "./order-table-bulk-actions";
 import { PerfMetricsService } from "../../core/perf-metrics.service";
+import { CustomerPickerComponent, CustomerPickerOption } from "./customer-picker/customer-picker.component";
 
 type IntentFilter =
   | "hoy"
@@ -80,7 +81,7 @@ type PedidosUiStateSnapshot = {
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   selector: "app-pedidos",
-  imports: [FormsModule, DatePipe, CurrencyPipe, NgClass],
+  imports: [FormsModule, DatePipe, CurrencyPipe, NgClass, CustomerPickerComponent],
   templateUrl: "./pedidos.html",
   styleUrl: "./pedidos.css",
 })
@@ -110,7 +111,6 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   newCustomerId = signal<string>("");
   newBusinessId = signal<BusinessId>("bm");
   customerQuery = signal<string>("");
-  showCustomerList = signal(false);
   newNotes = signal<string>("");
   error = signal<string | null>(null);
   loading = computed(() => this.orders.loading());
@@ -222,6 +222,53 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     }
   >();
 
+  /**
+   * Cachés por pedido para la plantilla y los filtros. Un `Order` no se modifica en
+   * sitio: cada cambio de Firestore o actualización optimista crea un objeto nuevo, y
+   * R2 conserva el mismo objeto solo si el pedido no cambió. Por eso la identidad del
+   * pedido invalida la entrada. Lo que además depende de otras señales (clientas,
+   * rutas, embarques) vive en un computed que se recrea cuando esas señales cambian.
+   */
+  private readonly orderAmountsCache = new WeakMap<Order, { netAmount: number; balanceDue: number }>();
+  private readonly createdDateKeyCache = new WeakMap<Order, string | null>();
+  private readonly intentFlagsCache = new WeakMap<Order, { day: string; flags: Record<IntentFilter, boolean> }>();
+  private readonly tableDateShortCache = new Map<string, string>();
+  private readonly customerNameById = computed(() => {
+    const map = new Map<string, string>();
+    for (const row of this.customers.customers()) {
+      // Primera coincidencia, como CustomersService.getById().
+      if (map.has(row.customer_id)) continue;
+      map.set(row.customer_id, [row.first_name, row.last_name].filter(Boolean).join(" ").trim() || "Cliente sin nombre");
+    }
+    return map;
+  });
+  private readonly routeNameById = computed(() => {
+    const map = new Map<string, string>();
+    for (const route of this.routes.routes()) {
+      if (!map.has(route.route_id)) map.set(route.route_id, route.name);
+    }
+    return map;
+  });
+  /** Embarque activo más antiguo de cada pedido (mismo criterio que antes: orden estable por `created_at`). */
+  private readonly activeShipmentByOrder = computed(() => {
+    const map = new Map<string, Shipment>();
+    const sorted = [...this.shipments.activeShipments()].sort((a, b) => a.created_at.localeCompare(b.created_at));
+    for (const shipment of sorted) {
+      for (const item of shipment.items || []) {
+        if (item.order_id && !map.has(item.order_id)) map.set(item.order_id, shipment);
+      }
+    }
+    return map;
+  });
+  private readonly statusPillsCache = computed(() => {
+    this.activeShipmentByOrder();
+    return new WeakMap<Order, TableStatusPill[]>();
+  });
+  private readonly searchTextCache = computed(() => {
+    this.customerNameById();
+    return new WeakMap<Order, { normalized: string; compact: string }>();
+  });
+
   constructor() {
     effect(() => {
       if (!this.uiStateHydrated()) return;
@@ -272,12 +319,14 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
       cerrados: 0,
     };
 
+    const day = this.toDateInputValue(new Date());
     for (const order of this.list()) {
       if (route !== "todos" && order.route_id !== route) continue;
       if (!this.matchesSearchTerm(order, term)) continue;
 
+      const flags = this.orderIntentFlags(order, day);
       for (const intent of this.intentsForCount) {
-        if (this.matchesIntent(order, intent)) counts[intent] += 1;
+        if (flags[intent]) counts[intent] += 1;
       }
     }
 
@@ -288,10 +337,11 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     const term = this.normalizeSearchTerm(this.search());
     const intent = this.intentFilter();
     const route = this.routeFilter();
+    const day = this.toDateInputValue(new Date());
 
     return this.list()
       .filter((order) => {
-        if (!this.matchesIntent(order, intent)) return false;
+        if (!this.matchesIntentForDay(order, intent, day)) return false;
         if (route !== "todos" && order.route_id !== route) return false;
         return this.matchesSearchTerm(order, term);
       })
@@ -314,7 +364,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     return this.list().filter((order) => {
       if (route !== "todos" && order.route_id !== route) return false;
       if (!this.matchesSearchTerm(order, term)) return false;
-      const createdDate = this.toLocalDateInputValueFromString(order.created_at);
+      const createdDate = this.createdDateKey(order);
       if (!createdDate) return false;
       if (from && createdDate < from) return false;
       if (to && createdDate > to) return false;
@@ -480,10 +530,10 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     return routes.size;
   });
   tableShipmentSaleTotal = computed(() =>
-    this.tableShipmentEligibleRows().reduce((sum, order) => sum + calculateOrderFinancials(order).netAmount, 0)
+    this.tableShipmentEligibleRows().reduce((sum, order) => sum + this.orderAmounts(order).netAmount, 0)
   );
   tableShipmentBalanceDue = computed(() =>
-    this.tableShipmentEligibleRows().reduce((sum, order) => sum + calculateOrderFinancials(order).balanceDue, 0)
+    this.tableShipmentEligibleRows().reduce((sum, order) => sum + this.orderAmounts(order).balanceDue, 0)
   );
   bitacoraRouteOptions = computed<TableMenuOption[]>(() => {
     const map = new Map<string, TableMenuOption>();
@@ -1394,13 +1444,23 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     await this.applyTableBulkAction("mark_entregado", undefined, true);
   }
 
+  /** Píldoras de estado de una fila o tarjeta. Se calculan una vez por versión del pedido. */
   tableOrderStatusPills(order: Order): TableStatusPill[] {
+    const cache = this.statusPillsCache();
+    const cached = cache.get(order);
+    if (cached) return cached;
+    const pills = this.buildTableOrderStatusPills(order);
+    cache.set(order, pills);
+    return pills;
+  }
+
+  private buildTableOrderStatusPills(order: Order): TableStatusPill[] {
     const pills: TableStatusPill[] = [];
     const activeShipment = this.activeShipmentForOrder(order.order_id);
     const deliveryStatus = order.delivery_status || null;
     const holderLocation = order.current_holder_location || null;
     const paymentStatus = order.customer_payment_status || null;
-    const balanceDue = calculateOrderFinancials(order).balanceDue;
+    const balanceDue = this.orderAmounts(order).balanceDue;
 
     if (deliveryStatus === "delivered" || ["entregado", "entregado_parcial"].includes(order.status)) {
       pills.push({ label: "Entregado", className: "trow-status--paid" });
@@ -1435,10 +1495,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private activeShipmentForOrder(orderId: string): Shipment | null {
-    const candidates = this.shipments.activeShipments()
-      .filter((shipment) => (shipment.items || []).some((item) => item.order_id === orderId))
-      .sort((a, b) => a.created_at.localeCompare(b.created_at));
-    return candidates[0] || null;
+    return this.activeShipmentByOrder().get(orderId) ?? null;
   }
 
   private shipmentStatusPill(shipment: Shipment): TableStatusPill {
@@ -1465,15 +1522,34 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   formatTableDateShort(input: string): string {
+    const cached = this.tableDateShortCache.get(input);
+    if (cached !== undefined) return cached;
     const value = new Date(input);
-    if (Number.isNaN(value.getTime())) return "--";
-    const day = String(value.getDate()).padStart(2, "0");
-    const monthAbbr = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"][value.getMonth()];
-    return `${day}-${monthAbbr}`;
+    let result = "--";
+    if (!Number.isNaN(value.getTime())) {
+      const day = String(value.getDate()).padStart(2, "0");
+      const monthAbbr = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"][value.getMonth()];
+      result = `${day}-${monthAbbr}`;
+    }
+    // Una entrada por fecha distinta; el límite solo evita crecer sin fin en sesiones muy largas.
+    if (this.tableDateShortCache.size >= 5000) this.tableDateShortCache.clear();
+    this.tableDateShortCache.set(input, result);
+    return result;
   }
 
   tableOrderClientTotal(order: Order): number {
-    return calculateOrderFinancials(order).netAmount;
+    return this.orderAmounts(order).netAmount;
+  }
+
+  /** Importes de `calculateOrderFinancials` que usa la pantalla, una vez por versión del pedido. */
+  private orderAmounts(order: Order): { netAmount: number; balanceDue: number } {
+    let amounts = this.orderAmountsCache.get(order);
+    if (!amounts) {
+      const financials = calculateOrderFinancials(order);
+      amounts = { netAmount: financials.netAmount, balanceDue: financials.balanceDue };
+      this.orderAmountsCache.set(order, amounts);
+    }
+    return amounts;
   }
 
   isTableOrderPaid(order: Order): boolean {
@@ -1520,8 +1596,20 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     if (this.customers.customersLoaded()) return "no-results";
     return this.customers.customersStatus() === "error" ? "error" : "loading";
   });
+  /** Opciones que muestra el buscador de clientas (mismo texto que antes: nombre y WhatsApp). */
+  customerPickerOptions = computed<CustomerPickerOption[]>(() =>
+    this.customerSuggestions().map((c) => ({
+      id: c.customer_id,
+      name: [c.first_name, c.last_name].filter(Boolean).join(" ").trim() || "Cliente sin nombre",
+      detail: c.whatsapp || "",
+    })),
+  );
   allRoutes = computed(() => this.routes.routes());
   selectedCustomer = computed(() => this.customers.getById(this.newCustomerId() || ""));
+  selectedCustomerName = computed(() => {
+    const customer = this.selectedCustomer();
+    return customer ? this.customerName(customer.customer_id) : null;
+  });
   canCreateOrder = computed(() => !!this.selectedCustomer());
   inferredRouteId = computed(() => this.selectedCustomer()?.route_id || "sin_ruta");
   inferredRouteName = computed(() => {
@@ -1650,7 +1738,8 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
         // participa en nombres, buscador ni ruta, así que no se espera aquí.
         this.loadCustomersForSearch(pageStartedAt),
         this.routes.loadFromFirestore().catch(() => null),
-        this.followups.loadFromFirestore().catch(() => null),
+        // Pedidos no lee la lista de seguimientos: solo crea o completa recordatorios
+        // de cobro, que hacen sus propias lecturas. Clientas y la ficha la cargan al entrar.
       ]);
       // Si ya se salió de la pantalla no se abre un listener nuevo sin dueño.
       if (this.destroyed) return;
@@ -1746,11 +1835,6 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   pickCustomer(id: string) {
     this.newCustomerId.set(id);
     this.customerQuery.set(this.customerName(id));
-    this.showCustomerList.set(false);
-  }
-
-  closeCustomerListSoon() {
-    setTimeout(() => this.showCustomerList.set(false), 120);
   }
 
   async createOrder() {
@@ -2071,6 +2155,24 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
       && value.getDate() === today.getDate();
   }
 
+  /**
+   * Resultado de `matchesIntent` para las intenciones del contador, una vez por versión
+   * del pedido y por día local (la intención "hoy" depende de la fecha actual).
+   */
+  private orderIntentFlags(order: Order, day: string): Record<IntentFilter, boolean> {
+    const cached = this.intentFlagsCache.get(order);
+    if (cached && cached.day === day) return cached.flags;
+    const flags = {} as Record<IntentFilter, boolean>;
+    for (const intent of this.intentsForCount) flags[intent] = this.matchesIntent(order, intent);
+    this.intentFlagsCache.set(order, { day, flags });
+    return flags;
+  }
+
+  private matchesIntentForDay(order: Order, intent: IntentFilter, day: string): boolean {
+    if (this.intentsForCount.includes(intent)) return this.orderIntentFlags(order, day)[intent];
+    return this.matchesIntent(order, intent);
+  }
+
   matchesIntent(order: Order, intent: IntentFilter): boolean {
     switch (intent) {
       case "hoy":
@@ -2187,20 +2289,31 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
 
   private matchesSearchTerm(order: Order, term: string): boolean {
     if (!term) return true;
-    const searchableParts = [
-      order.order_id,
-      this.customerName(order.customer_id),
-      order.route_id || "",
-      order.items.map((i) => i.title).join(" "),
-    ];
-    const blob = this.normalizeSearchTerm(searchableParts.join(" "));
-    if (blob.includes(term)) return true;
+    const cache = this.searchTextCache();
+    let text = cache.get(order);
+    if (!text) {
+      const searchable = [
+        order.order_id,
+        this.customerName(order.customer_id),
+        order.route_id || "",
+        order.items.map((i) => i.title).join(" "),
+      ].join(" ");
+      text = { normalized: this.normalizeSearchTerm(searchable), compact: this.compactSearchValue(searchable) };
+      cache.set(order, text);
+    }
+    if (text.normalized.includes(term)) return true;
 
     // Also match IDs even when users type without separators (e.g. P2401 vs P-2401).
     const compactTerm = this.compactSearchValue(term);
     if (!compactTerm) return false;
-    const compactBlob = this.compactSearchValue(searchableParts.join(" "));
-    return compactBlob.includes(compactTerm);
+    return text.compact.includes(compactTerm);
+  }
+
+  private createdDateKey(order: Order): string | null {
+    if (this.createdDateKeyCache.has(order)) return this.createdDateKeyCache.get(order) ?? null;
+    const key = this.toLocalDateInputValueFromString(order.created_at);
+    this.createdDateKeyCache.set(order, key);
+    return key;
   }
 
   updatedAtRelative(dateInput: string): string {
@@ -2523,9 +2636,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   customerName(customerId: string): string {
-    const row = this.customers.getById(customerId);
-    if (!row) return "Cliente sin nombre";
-    return [row.first_name, row.last_name].filter(Boolean).join(" ").trim() || "Cliente sin nombre";
+    return this.customerNameById().get(customerId) ?? "Cliente sin nombre";
   }
 
   /**
@@ -2533,13 +2644,13 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
    * orden y datos guardados, distingue clienta aún no cargada de clienta inexistente.
    */
   customerDisplayName(customerId: string): string {
-    if (this.customers.getById(customerId) || this.customers.customersLoaded()) return this.customerName(customerId);
+    if (this.customerNameById().has(customerId) || this.customers.customersLoaded()) return this.customerName(customerId);
     return this.customers.customersStatus() === "error" ? "Clienta no disponible" : "Cargando clienta…";
   }
 
   routeName(routeId: string | null): string {
     if (!routeId || routeId === "sin_ruta") return "Sin ruta";
-    return this.routes.getById(routeId)?.name || routeId;
+    return this.routeNameById().get(routeId) || routeId;
   }
 
   startBulkNoteMode() {

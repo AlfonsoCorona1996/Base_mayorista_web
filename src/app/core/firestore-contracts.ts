@@ -1,3 +1,4 @@
+import type { ListingMetadata } from "./listing-metadata";
 /**
  * Contratos de datos de Firestore
  * Basados en la implementación real del backend (whatsapp-bot)
@@ -78,6 +79,7 @@ export interface ItemPricesV3 {
  * Un color se define una vez y se referencia en múltiples variantes
  */
 export interface ProductColor {
+  image_id?: string | null;
   name: string;
   image_url: string | null;
 }
@@ -124,7 +126,7 @@ export interface PriceTierGlobal {
   tier_name: string; // "publico", "asociada", "mayoreo", etc.
 }
 
-export interface NormalizedListing {
+export interface NormalizedListing extends ListingMetadata {
   title: string | null;
   category_hint: string | null;
   category_proposed?: string | null;
@@ -135,7 +137,7 @@ export interface NormalizedListing {
   items: NormalizedItem[];
 }
 
-export interface NormalizedListingV3 {
+export interface NormalizedListingV3 extends ListingMetadata {
   title: string | null;
   category_hint: string | null;
   category_proposed?: string | null;

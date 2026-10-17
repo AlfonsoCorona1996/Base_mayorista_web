@@ -26,43 +26,16 @@
     </div>
 
     <div class="qc-grid">
-      <div class="autocomplete field with-icon">
-        <span class="material-symbols-rounded" aria-hidden="true">person_search</span>
-        <input
-          class="input"
-          type="text"
-          placeholder="Busca por nombre o WhatsApp"
-          [(ngModel)]="customerQuery"
-          (focus)="showCustomerList.set(true)"
-          (blur)="closeCustomerListSoon()"
-          (ngModelChange)="newCustomerId.set(''); showCustomerList.set(true)"
-        />
-
-        @if (showCustomerList() && customerSuggestions().length > 0) {
-          <div class="auto-list" (mousedown)="$event.preventDefault()">
-            @for (c of customerSuggestions(); track c.customer_id) {
-              <button type="button" (click)="pickCustomer(c.customer_id)">
-                <div class="auto-name">{{ c.first_name }} {{ c.last_name }}</div>
-                <div class="auto-meta">{{ c.whatsapp }}</div>
-              </button>
-            }
-          </div>
-        } @else if (showCustomerList() && customerSearchState() !== 'idle') {
-          <div class="auto-list auto-empty" role="status" (mousedown)="$event.preventDefault()">
-            @switch (customerSearchState()) {
-              @case ('loading') {
-                <div class="auto-empty-text">Cargando clientas…</div>
-              }
-              @case ('error') {
-                <div class="auto-empty-text">No se pudieron cargar las clientas.</div>
-              }
-              @default {
-                <div class="auto-empty-text">No existe una clienta con ese nombre.</div>
-              }
-            }
-          </div>
-        }
-      </div>
+      <app-customer-picker
+        class="qc-customer"
+        [(query)]="customerQuery"
+        [options]="customerPickerOptions()"
+        [state]="customerSearchState()"
+        [selectedName]="selectedCustomerName()"
+        (picked)="pickCustomer($event)"
+        (selectionCleared)="newCustomerId.set('')"
+        (retry)="retryCustomers()"
+      />
 
       <div class="route-pill">
         <span class="material-symbols-rounded" aria-hidden="true">route</span>

@@ -1,5 +1,8 @@
+import { ReviewDialogDirective } from "./review-dialog.directive";
+import { ReviewIcon } from './review-icon';
+import { assertUniqueVariants, mergeListingMetadata, normalizeKeywords, normalizeSupplierSku, normalizeVariantName } from "../../core/listing-metadata";
 // review.ts - Versión mejorada con UX completa
-import { Component, computed, inject, signal, ChangeDetectionStrategy } from "@angular/core";
+import { Component, computed, inject, signal, ChangeDetectionStrategy, ElementRef } from "@angular/core";
 import { ActivatedRoute, Router } from "@angular/router";
 import { FormsModule } from "@angular/forms";
 import { NormalizedListingsService } from "../../core/normalized-listings.service";
@@ -14,6 +17,7 @@ import type {
   NormalizedItemV3,
   NormalizedListingDocV3,
   RawPost,
+  ProductColor,
   StockState,
 } from "../../core/firestore-contracts";
 import { isNormalizedListingDocV3 } from "../../core/firestore-contracts";
@@ -51,11 +55,38 @@ interface MergePreview {
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   selector: "app-review",
-  imports: [FormsModule],
+  imports: [FormsModule, ReviewDialogDirective, ReviewIcon],
   templateUrl: "./review.html",
   styleUrl: "./review.css",
 })
 export default class ReviewPage {
+  private readonly element = inject<ElementRef<HTMLElement>>(ElementRef);
+  fieldErrors = signal<{ supplier?: string; title?: string; category?: string }>({});
+  clearFieldError(field: 'supplier' | 'title' | 'category') {
+    this.fieldErrors.update(errors => ({ ...errors, [field]: undefined }));
+  }
+  private focusField(field: 'supplier' | 'title' | 'category', id: string, message: string) {
+    this.fieldErrors.update(errors => ({ ...errors, [field]: message }));
+    // Defer until the contextual error and invalid state have been rendered.
+    setTimeout(() => {
+      const control = this.element.nativeElement.querySelector<HTMLElement>(id);
+      control?.scrollIntoView({ block: 'center' });
+      control?.focus({ preventScroll: true });
+    });
+  }
+  stockLabel(state: StockState) {
+    return this.stockOptions.find(option => option.value === state)?.label || 'Sin confirmar';
+  }
+  confirmRemoveVariant(index: number) {
+    const name = this.draft()?.listing.items[index]?.variant_name || 'sin nombre';
+    if (confirm(`¿Eliminar la variante "${name}" y sus datos?`)) this.removeVariant(index);
+  }
+  closeImageMenu(event: Event, menu: HTMLDetailsElement) {
+    event.preventDefault();
+    event.stopPropagation();
+    menu.open = false;
+    menu.querySelector('summary')?.focus();
+  }
   private readonly requiredSchemaVersion = "normalized_v3.0";
   private route = inject(ActivatedRoute);
   private router = inject(Router);
@@ -63,6 +94,151 @@ export default class ReviewPage {
   private auth = inject(AuthService);
   private categoriesService = inject(CategoriesService);
   private suppliersService = inject(SuppliersService);
+
+  keywordInput = '';
+  variantInput = '';
+  variantError = signal<string | null>(null);
+  expandedVariant = signal<string | null>(null);
+  categoryParentId = '';
+  newCategoryName = '';
+  categoryParent = signal<string | null>(null);
+  categoryChildren = computed(() => this.categoryParent() ? this.categoriesService.getChildren(this.categoryParent()!) : this.categoriesService.getRoots());
+  allCategories() { return this.categoriesService.getAll(); }
+  categoryExists(path: string) { return !!this.categoriesService.getByPath(path); }
+  browseCategory(id: string | null) { this.categoryParent.set(id); }
+  async createInlineCategory() {
+    if (this.categoryProposalSaving() || !this.newCategoryName.trim()) return;
+    this.categoryProposalSaving.set(true);
+    try {
+      const id = await this.categoriesService.addCategory(this.newCategoryName, this.categoryParentId || null);
+      const category = this.categoriesService.getById(id);
+      if (category) this.selectCategory(category);
+      this.newCategoryName = '';
+    } catch (error: unknown) {
+      this.showInfoPopup(error instanceof Error ? error.message : String(error), 'Categoría', 'error');
+    } finally { this.categoryProposalSaving.set(false); }
+  }
+
+  setKeywords(values: string[]) {
+    const d = this.draft();
+    if (!d) return;
+    d.listing.keywords = normalizeKeywords(values);
+    d.listing.extractionOverrides = { ...d.listing.extractionOverrides, keywords: true };
+    this.touchDraft();
+  }
+  addKeyword() {
+    if (!this.keywordInput.trim()) return;
+    this.setKeywords([...(this.draft()?.listing.keywords || []), this.keywordInput]);
+    this.keywordInput = '';
+  }
+  editKeyword(index: number, value: string) {
+    const values = [...(this.draft()?.listing.keywords || [])];
+    values[index] = value;
+    this.setKeywords(values);
+  }
+  removeKeyword(index: number) { this.setKeywords((this.draft()?.listing.keywords || []).filter((_, i) => i !== index)); }
+  setSupplierSku(value: string) {
+    const d = this.draft();
+    if (!d) return;
+    d.listing.supplierSku = normalizeSupplierSku(value);
+    d.listing.extractionOverrides = { ...d.listing.extractionOverrides, supplierSku: true };
+    this.touchDraft();
+  }
+  renameVariant(index: number, value: string) {
+    const d = this.draft();
+    if (!d) return;
+    const proposed = d.listing.items.map((item, i) => i === index ? { ...item, variant_name: value } : item);
+    try {
+      assertUniqueVariants(proposed);
+      if (!value.trim()) throw new Error('Escribe un nombre de variante.');
+      d.listing.items[index].variant_name = value.trim();
+      this.variantError.set(null);
+      this.touchDraft();
+    } catch (error: unknown) { this.variantError.set(error instanceof Error ? error.message : String(error)); }
+  }
+
+  lightboxIndex = signal(0);
+  selectedPreview = signal<string | null>(null);
+  previewImage = computed(() => {
+    const images = this.galleryImages();
+    const selected = this.selectedPreview();
+    return selected && images.includes(selected) ? selected : this.coverUrl() || images[0] || null;
+  });
+  unassignedImages = computed(() => this.galleryImages().filter(url =>
+    !this.draft()?.product_colors.some(color => color.image_url === url)));
+  lightboxZoom = signal(1);
+  lightboxPan = signal({ x: 0, y: 0 });
+  private imageGesture: { id: number; x: number; y: number; panX: number; panY: number } | null = null;
+  resetLightbox() {
+    this.lightboxZoom.set(1);
+    this.lightboxPan.set({ x: 0, y: 0 });
+    this.imageGesture = null;
+  }
+  toggleLightboxZoom() {
+    this.lightboxZoom.update(zoom => zoom === 1 ? 2 : 1);
+    this.lightboxPan.set({ x: 0, y: 0 });
+  }
+  startImageGesture(event: PointerEvent) {
+    if (!event.isPrimary || event.button !== 0) return;
+    const stage = event.currentTarget as HTMLElement;
+    stage.setPointerCapture(event.pointerId);
+    this.imageGesture = { id: event.pointerId, x: event.clientX, y: event.clientY, panX: this.lightboxPan().x, panY: this.lightboxPan().y };
+  }
+  moveImageGesture(event: PointerEvent) {
+    const gesture = this.imageGesture;
+    if (!gesture || gesture.id !== event.pointerId || this.lightboxZoom() === 1) return;
+    const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    const clamp = (value: number, size: number) => Math.max(-size / 2, Math.min(size / 2, value));
+    this.lightboxPan.set({ x: clamp(gesture.panX + event.clientX - gesture.x, bounds.width), y: clamp(gesture.panY + event.clientY - gesture.y, bounds.height) });
+  }
+  endImageGesture(event: PointerEvent) {
+    const gesture = this.imageGesture;
+    if (!gesture || gesture.id !== event.pointerId) return;
+    const dx = event.clientX - gesture.x;
+    const dy = event.clientY - gesture.y;
+    if (this.lightboxZoom() === 1 && Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy)) this.stepLightbox(dx < 0 ? 1 : -1);
+    this.imageGesture = null;
+  }
+  cancelImageGesture() { this.imageGesture = null; }
+  onLightboxKey(event: KeyboardEvent) {
+    if (event.key === '+' || event.key === '-' || event.key === '0') {
+      event.preventDefault();
+      if (event.key === '+') this.lightboxZoom.set(2);
+      else this.resetLightbox();
+      return;
+    }
+    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
+    event.preventDefault();
+    if (this.lightboxZoom() === 1) {
+      if (event.key === 'ArrowLeft') this.stepLightbox(-1);
+      if (event.key === 'ArrowRight') this.stepLightbox(1);
+      return;
+    }
+    const stage = this.element.nativeElement.querySelector('.lightbox-stage');
+    const bounds = stage?.getBoundingClientRect();
+    if (!bounds) return;
+    this.lightboxPan.update(pan => ({
+      x: Math.max(-bounds.width / 2, Math.min(bounds.width / 2, pan.x + (event.key === 'ArrowLeft' ? 48 : event.key === 'ArrowRight' ? -48 : 0))),
+      y: Math.max(-bounds.height / 2, Math.min(bounds.height / 2, pan.y + (event.key === 'ArrowUp' ? 48 : event.key === 'ArrowDown' ? -48 : 0))),
+    }));
+  }
+  galleryImages = computed(() => [...new Set([
+    ...this.visibleRawImages(), ...(this.draft()?.cover_images || []),
+    ...(this.draft()?.product_colors || []).map((color) => color.image_url || ''),
+  ])].filter((url) => !!url && !this.excludedImages().includes(url)));
+  openLightbox(dialog: HTMLDialogElement, url: string) {
+    this.resetLightbox();
+    this.lightboxIndex.set(Math.max(0, this.galleryImages().indexOf(url)));
+    dialog.showModal();
+  }
+  stepLightbox(step: number) {
+    this.resetLightbox();
+    const count = this.galleryImages().length;
+    if (count) this.lightboxIndex.update((index) => (index + step + count) % count);
+  }
+  imageColorLabel(url: string): string {
+    return (this.draft()?.product_colors || []).filter((color) => color.image_url === url).map((color) => color.name).join(', ') || 'Sin color asignado';
+  }
 
   id = this.route.snapshot.paramMap.get("id")!;
 
@@ -263,6 +439,7 @@ export default class ReviewPage {
       }
       clone.preview_image_url = clone.preview_image_url ?? null;
 
+      this.normalizeV3Draft(clone, true);
       this.draft.set(clone);
       this.excludedImages.set(clone.review.excluded_image_urls || []);
 
@@ -275,8 +452,6 @@ export default class ReviewPage {
         this.draft.set({ ...this.draft()!, preview_image_url: first });
       }
 
-      // v3: Normalizar estructura editable de variantes/precios/colores
-      this.normalizeV3Draft(clone);
       this.initializeSharedPriceInputs();
 
       // Inicializar colores desde variantes existentes (ahora con product_colors si es v1.1)
@@ -385,6 +560,7 @@ export default class ReviewPage {
     const sourceDraft = this.draft();
     const targetId = this.mergeSelectedTargetId();
 
+    if (this.mergeApplying() || this.finalActionBusy()) return;
     if (!sourceDraft || !targetId) {
       this.showInfoPopup("Selecciona un producto validado destino para fusionar.", "Fusion", "warning");
       return;
@@ -438,6 +614,7 @@ export default class ReviewPage {
 
     this.normalizeV3Draft(incoming);
     this.normalizeV3Draft(merged);
+    Object.assign(merged.listing, mergeListingMetadata(merged.listing, incoming.listing, merged.supplier_id === incoming.supplier_id));
 
     if (options.supplier && incoming.supplier_id) {
       merged.supplier_id = incoming.supplier_id;
@@ -505,6 +682,7 @@ export default class ReviewPage {
       merged.cover_images = [merged.preview_image_url];
     }
 
+    assertUniqueVariants(merged.listing.items);
     this.ensureVariantSkus(merged);
     return merged;
   }
@@ -615,8 +793,8 @@ export default class ReviewPage {
     return out;
   }
 
-  private mergeProductColors(base: Array<{ name: string; image_url: string | null }>, incoming: Array<{ name: string; image_url: string | null }>) {
-    const map = new Map<string, { name: string; image_url: string | null }>();
+  private mergeProductColors(base: ProductColor[], incoming: ProductColor[]) {
+    const map = new Map<string, ProductColor>();
 
     [...(base || []), ...(incoming || [])].forEach((entry) => {
       const name = (entry.name || "").trim();
@@ -626,12 +804,13 @@ export default class ReviewPage {
       const existing = map.get(key);
 
       if (!existing) {
-        map.set(key, { name, image_url: imageUrl });
+        map.set(key, { ...entry, name, image_url: imageUrl });
         return;
       }
 
       if (!existing.image_url && imageUrl) {
         existing.image_url = imageUrl;
+        existing.image_id = entry.image_id ?? null;
       }
     });
 
@@ -713,7 +892,7 @@ export default class ReviewPage {
     const sku = (item.sku || "").trim().toUpperCase();
     if (sku) keys.push(`sku:${sku}`);
 
-    const name = (item.variant_name || "").trim().toLowerCase();
+    const name = normalizeVariantName(item.variant_name);
     if (name) keys.push(`name:${name}`);
 
     const variantId = (item.variant_id || "").trim().toLowerCase();
@@ -800,11 +979,13 @@ export default class ReviewPage {
   }
 
   selectCategory(cat: Category) {
+    this.clearFieldError('category');
     const d = this.draft();
     if (!d) return;
 
     d.listing.category_hint = cat.fullPath;
     d.listing.category_proposed = null;
+    this.editableCategoryProposal.set("");
     this.categorySearch = cat.fullPath;
     this.showCategoryDropdown.set(false);
     this.draft.set({ ...d });
@@ -820,7 +1001,7 @@ export default class ReviewPage {
 
   async acceptCategoryProposal() {
     const d = this.draft();
-    if (!d) return;
+    if (!d || this.categoryProposalSaving()) return;
 
     // Usar la ruta editable (el usuario pudo haberla modificado)
     const proposedPath = this.editableCategoryProposal().trim();
@@ -870,6 +1051,7 @@ export default class ReviewPage {
   // PROVEEDORES
   // ==========================================================================
   onSupplierChange() {
+    this.clearFieldError('supplier');
     const d = this.draft();
     if (!d) return;
 
@@ -896,7 +1078,7 @@ export default class ReviewPage {
     }
 
     d.preview_image_url = url ?? null;
-    d.cover_images = url ? [url] : [];
+    d.cover_images = url ? this.normalizeImageArray([url, ...(d.cover_images || [])]) : [];
     this.draft.set({ ...d });
   }
 
@@ -910,15 +1092,23 @@ export default class ReviewPage {
 
     const d = this.draft()!;
     
-    // Si quitaste la portada, muévete a otra visible
-    if (this.coverUrl() === url) {
-      const nextCover = this.visibleRawImages().filter(u => u !== url)[0] || null;
+    d.cover_images = (d.cover_images || []).filter((image) => image !== url);
+    d.product_colors.forEach((color) => {
+      if (color.image_url === url) { color.image_url = null; color.image_id = null; }
+    });
+    if (d.preview_image_url === url || !d.cover_images.length) {
+      const nextCover = d.cover_images[0] || this.visibleRawImages()[0] || null;
       d.preview_image_url = nextCover;
-      d.cover_images = nextCover ? [nextCover] : [];
+      d.cover_images = this.normalizeImageArray([nextCover, ...d.cover_images]);
     }
 
     this.draft.set({ ...d });
     console.log("🗑️ Imagen eliminada de galería:", url);
+  }
+
+  restoreImage(url: string) {
+    this.excludedImages.update((images) => images.filter((image) => image !== url));
+    if (!this.draft()?.cover_images.length) this.setCover(url);
   }
 
   openCoverSelector() {
@@ -1134,6 +1324,7 @@ export default class ReviewPage {
   private normalizeColorReferencesForSave(d: NormalizedListingDocV3) {
     const normalizedColors = (d.product_colors || [])
       .map(c => ({
+        ...c,
         name: (c.name || "").trim(),
         image_url: c.image_url ?? null
       }))
@@ -1235,7 +1426,16 @@ export default class ReviewPage {
     return isNormalizedListingDocV3(doc) && doc.schema_version === this.requiredSchemaVersion;
   }
 
-  private normalizeV3Draft(d: NormalizedListingDocV3): void {
+  private normalizeV3Draft(d: NormalizedListingDocV3, defaultAvailability = false): void {
+    const normalizeState = (value: unknown): StockState => {
+      const state = this.normalizeStockState(value);
+      // Default only the editable Review draft; retain explicit availability and merge data.
+      return defaultAvailability && (!state || state === "unknown_qty")
+        ? "in_stock"
+        : state || "unknown_qty";
+    };
+    d.listing.keywords = normalizeKeywords(d.listing.keywords);
+    d.listing.supplierSku = normalizeSupplierSku(d.listing.supplierSku);
     if (!Array.isArray(d.cover_images)) {
       d.cover_images = d.preview_image_url ? [d.preview_image_url] : [];
     }
@@ -1249,10 +1449,10 @@ export default class ReviewPage {
       }
 
       const names = new Set<string>();
-      item.color_stock = item.color_stock
+      item.color_stock = (item.color_stock || [])
         .map((entry) => ({
           color_name: (entry?.color_name || "").trim(),
-          stock_state: this.normalizeStockState(entry?.stock_state) || "unknown_qty",
+          stock_state: normalizeState(entry?.stock_state),
         }))
         .filter((entry) => {
           if (!entry.color_name || names.has(entry.color_name)) return false;
@@ -1260,8 +1460,7 @@ export default class ReviewPage {
           return true;
         });
 
-      const normalizedState = this.normalizeStockState(item.stock_state);
-      item.stock_state = !normalizedState || normalizedState === "unknown_qty" ? "in_stock" : normalizedState;
+      item.stock_state = normalizeState(item.stock_state);
 
       const price = item.prices as ItemPricesV3;
       const fallbackCurrency =
@@ -1298,7 +1497,7 @@ export default class ReviewPage {
   }
 
   private allVariantsShareSamePrices(d: NormalizedListingDocV3): boolean {
-    if (!d.listing.items || d.listing.items.length < 2) return false;
+    if (!d.listing.items || d.listing.items.length === 0) return false;
     const first = d.listing.items[0];
     const firstCost = this.toValidNumber(first.prices?.precio_costo);
     const firstFinal = this.toValidNumber(first.prices?.precio_final);
@@ -1558,12 +1757,22 @@ export default class ReviewPage {
   addVariant() {
     const d = this.draft();
     if (!d) return;
+    const name = this.variantInput.trim();
+    try {
+      if (!name) throw new Error('Escribe la talla o variante que quieres añadir.');
+      assertUniqueVariants([...d.listing.items, { variant_name: name }]);
+    } catch (error: unknown) {
+      this.variantError.set(error instanceof Error ? error.message : String(error));
+      return;
+    }
+    this.variantError.set(null);
+    this.variantInput = '';
 
     const newVariant: NormalizedItemV3 = {
-      variant_id: `variant_${d.listing.items.length + 1}`,
-      variant_name: null,
+      variant_id: `variant_${crypto.randomUUID()}`,
+      variant_name: name,
       sku: null,
-      stock_state: "unknown_qty",
+      stock_state: "in_stock",
       notes: null,
       color_stock: [],
       prices: {
@@ -1573,8 +1782,6 @@ export default class ReviewPage {
         currency: "MXN",
       },
     };
-
-    newVariant.stock_state = "in_stock";
 
     d.listing.items.push(newVariant);
     if (this.useSharedPrices()) {
@@ -1599,10 +1806,10 @@ export default class ReviewPage {
       return;
     }
 
-    if (confirm("¿Eliminar esta variante?")) {
-      d.listing.items.splice(index, 1);
-      this.draft.set({ ...d });
-    }
+    d.listing.items.splice(index, 1);
+    this.priceInputBuffers = {};
+    this.expandedVariant.set(null);
+    this.draft.set({ ...d });
   }
 
   /**
@@ -1660,6 +1867,7 @@ export default class ReviewPage {
       if (!color) return;
 
       color.image_url = imageUrl;
+      color.image_id = null;
       const colorName = (color.name || "").trim();
       if (colorName) {
         this.imageColors[imageUrl] = colorName;
@@ -1868,9 +2076,12 @@ export default class ReviewPage {
       throw new Error(`Esquema no soportado. Se requiere ${this.requiredSchemaVersion}.`);
     }
 
+    assertUniqueVariants(d.listing.items);
+    d.listing.keywords = normalizeKeywords(d.listing.keywords);
+    d.listing.supplierSku = normalizeSupplierSku(d.listing.supplierSku);
     const cover = d.cover_images?.[0] ?? d.preview_image_url ?? null;
     d.preview_image_url = cover;
-    d.cover_images = cover ? [cover] : [];
+    d.cover_images = this.normalizeImageArray([cover, ...(d.cover_images || [])]);
 
     if (d.listing.items.length === 0) {
       this.showInfoPopup("Agrega al menos una variante antes de guardar.", "Validacion", "warning");
@@ -1944,17 +2155,17 @@ export default class ReviewPage {
 
       // Validaciones pre-validación
       if (!d.supplier_id) {
-        this.showInfoPopup("Selecciona un proveedor.", "Validacion", "warning");
+        this.focusField('supplier', '#supplier-select', 'Selecciona un proveedor para publicar.');
         return;
       }
 
       if (!d.listing.title) {
-        this.showInfoPopup("Agrega un titulo.", "Validacion", "warning");
+        this.focusField('title', '#product-title', 'Escribe el nombre del producto.');
         return;
       }
 
       if (!d.listing.category_hint) {
-        this.showInfoPopup("Selecciona una categoria.", "Validacion", "warning");
+        this.focusField('category', '#category-search', 'Selecciona una categoría para publicar.');
         return;
       }
 
@@ -2041,37 +2252,7 @@ export default class ReviewPage {
   }
 
   private async ensureCategoryPathExists(fullPathInput: string): Promise<string> {
-    const segments = String(fullPathInput || "")
-      .split(">")
-      .map((segment) => segment.trim())
-      .filter(Boolean);
-
-    if (segments.length === 0) {
-      throw new Error("La propuesta de categoria no es valida.");
-    }
-
-    await this.categoriesService.loadCategories();
-
-    let parentId: string | null = null;
-    let currentPath = "";
-
-    for (const segment of segments) {
-      currentPath = currentPath ? `${currentPath} > ${segment}` : segment;
-
-      let existing = this.categoriesService.getByPath(currentPath);
-      if (!existing) {
-        await this.categoriesService.addCategory(segment, parentId);
-        existing = this.categoriesService.getByPath(currentPath);
-      }
-
-      if (!existing) {
-        throw new Error(`No se pudo crear/obtener la categoria: ${currentPath}`);
-      }
-
-      parentId = existing.id;
-    }
-
-    return currentPath;
+    return this.categoriesService.ensurePath(fullPathInput);
   }
   
   // ============================================================================

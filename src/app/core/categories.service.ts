@@ -1,3 +1,4 @@
+import { normalizeSearch } from "./listing-metadata";
 import { Injectable, signal } from "@angular/core";
 import {
   collection,
@@ -6,7 +7,7 @@ import {
   orderBy,
   query,
   serverTimestamp,
-  setDoc,
+  runTransaction,
   updateDoc,
   where,
   writeBatch,
@@ -69,12 +70,12 @@ export class CategoriesService {
     const all = this.allCategories();
     if (!searchQuery || searchQuery.trim().length === 0) return all;
 
-    const q = searchQuery.toLowerCase().trim();
-    return all.filter((category) => category.name.toLowerCase().includes(q) || category.fullPath.toLowerCase().includes(q));
+    const q = normalizeSearch(searchQuery);
+    return all.filter((category) => normalizeSearch(category.name).includes(q) || normalizeSearch(category.fullPath).includes(q));
   }
 
   getByPath(fullPath: string): Category | null {
-    return this.allCategories().find((category) => category.fullPath === fullPath) || null;
+    return this.allCategories().find((category) => this.pathKey(category.fullPath) === this.pathKey(fullPath)) || null;
   }
 
   getById(id: string): Category | null {
@@ -94,7 +95,7 @@ export class CategoriesService {
   }
 
   async addCategory(name: string, parentId: string | null): Promise<string> {
-    const nextName = name.trim();
+    const nextName = name.trim().replace(/\s+/g, " ");
     if (!nextName) throw new Error("El nombre de categoria es obligatorio");
 
     const all = await this.listAllFromFirestore();
@@ -107,6 +108,13 @@ export class CategoriesService {
 
     const level = parent ? parent.level + 1 : 0;
     const fullPath = parent ? `${parent.fullPath} > ${nextName}` : nextName;
+
+    const equivalent = all.find((category) => category.parentId === parentId && normalizeSearch(category.name) === normalizeSearch(nextName));
+    if (equivalent) {
+      if (!equivalent.active) await this.updateCategory(equivalent.id, { active: true });
+      await this.refreshCache();
+      return equivalent.id;
+    }
 
     const slug = this.slugify(nextName) || "categoria";
     const candidate = parentId ? `${parentId}-${slug}` : slug;
@@ -124,9 +132,40 @@ export class CategoriesService {
       updated_at: serverTimestamp(),
     };
 
-    await setDoc(doc(FIRESTORE, "categories", finalId), payload);
+    await runTransaction(FIRESTORE, async (transaction) => {
+      const categoryRef = doc(FIRESTORE, "categories", finalId);
+      const existing = await transaction.get(categoryRef);
+      if (existing.exists()) {
+        const current = existing.data();
+        if (this.pathKey(String(current['fullPath'] || '')) !== this.pathKey(fullPath)) {
+          throw new Error('Otra categoría usa este identificador. Actualiza la lista e intenta de nuevo.');
+        }
+        if (!current['active']) transaction.update(categoryRef, { active: true });
+        return;
+      }
+      transaction.set(categoryRef, payload);
+    });
     await this.refreshCache();
     return finalId;
+  }
+
+  private pathKey(path: string): string {
+    return path.split('>').map(normalizeSearch).filter(Boolean).join(' > ');
+  }
+
+  async ensurePath(fullPath: string): Promise<string> {
+    const segments = fullPath.split('>').map((part) => part.trim()).filter(Boolean);
+    if (!segments.length) throw new Error('Escribe una categoría.');
+    let parentId: string | null = null;
+    let canonicalPath = '';
+    for (const segment of segments) {
+      const id = await this.addCategory(segment, parentId);
+      const category = this.getById(id);
+      if (!category) throw new Error('No se pudo obtener la categoría creada.');
+      parentId = category.id;
+      canonicalPath = category.fullPath;
+    }
+    return canonicalPath;
   }
 
   async updateCategory(id: string, updates: Partial<Category>): Promise<void> {

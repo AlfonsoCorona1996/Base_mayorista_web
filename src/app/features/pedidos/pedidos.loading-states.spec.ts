@@ -3,6 +3,7 @@ import { ComponentFixture, TestBed } from "@angular/core/testing";
 import { ActivatedRoute, Router, convertToParamMap } from "@angular/router";
 import PedidosPage from "./pedidos";
 import { SalesNoteRenderService } from "./sales-note-render.service";
+import { CUSTOMER_PICKER_SHEET_MEDIA } from "./customer-picker/customer-picker.component";
 import { AuthzService } from "../../core/authz.service";
 import { BusinessScopeService } from "../../core/business-scope.service";
 import { CustomerFollowupsService } from "../../core/customer-followups.service";
@@ -32,7 +33,7 @@ function deferred<T>(): Deferred<T> {
 
 function customersResult(): RawQueryResult {
   const docs = [
-    { customer_id: "c-ana", business_id: "bm", first_name: "Ana", last_name: "Lopez", whatsapp: "5551", active: true },
+    { customer_id: "c-ana", business_id: "bm", first_name: "Ana", last_name: "Lopez", whatsapp: "5551", active: true, route_id: "r-norte" },
     { customer_id: "c-bety", business_id: "bm", first_name: "Bety", last_name: "Ruiz", whatsapp: "5552", active: true },
   ];
   return { fromCache: false, docs: docs.map((data) => ({ id: data.customer_id, data: () => data })) };
@@ -78,6 +79,9 @@ describe("PedidosPage - disponibilidad de clientas y pedidos", () => {
   let ordersSync: ReturnType<typeof signal<OrdersSyncState>>;
   let ordersLoad: jasmine.Spy;
   let shipmentsWatch: jasmine.Spy;
+  let followupsLoad: jasmine.Spy;
+  let createDraft: jasmine.Spy;
+  let navigate: jasmine.Spy;
 
   beforeEach(async () => {
     window.localStorage.removeItem("pedidos.ui-state.v1");
@@ -98,12 +102,17 @@ describe("PedidosPage - disponibilidad de clientas y pedidos", () => {
     ordersSync = signal<OrdersSyncState>("loading");
     ordersLoad = jasmine.createSpy("loadFromFirestore").and.resolveTo();
     shipmentsWatch = jasmine.createSpy("watch");
+    followupsLoad = jasmine.createSpy("followups.loadFromFirestore").and.resolveTo();
+    createDraft = jasmine.createSpy("createDraft").and.resolveTo("P-NUEVO");
+    navigate = jasmine.createSpy("navigate");
     const available = signal<BusinessId[]>(["bm"]);
 
     await TestBed.configureTestingModule({
       imports: [PedidosPage],
       providers: [
         { provide: CUSTOMERS_DATA_SOURCE, useValue: source },
+        // Campo anclado de escritorio: el iframe de Karma es estrecho y activaría la hoja móvil.
+        { provide: CUSTOMER_PICKER_SHEET_MEDIA, useValue: "not all" },
         {
           provide: BusinessScopeService,
           useValue: {
@@ -126,20 +135,28 @@ describe("PedidosPage - disponibilidad de clientas y pedidos", () => {
             loadError: ordersError,
             syncState: ordersSync,
             loadFromFirestore: ordersLoad,
+            createDraft: createDraft,
           },
         },
-        { provide: RoutesService, useValue: { routes: signal([]), getById: () => null, loadFromFirestore: jasmine.createSpy().and.resolveTo() } },
+        {
+          provide: RoutesService,
+          useValue: {
+            routes: signal([{ route_id: "r-norte", name: "Ruta Norte" }]),
+            getById: (id: string) => (id === "r-norte" ? { route_id: "r-norte", name: "Ruta Norte" } : null),
+            loadFromFirestore: jasmine.createSpy().and.resolveTo(),
+          },
+        },
         { provide: InventoryService, useValue: { items: signal([]) } },
         { provide: NormalizedListingsService, useValue: {} },
         { provide: SalesNoteRenderService, useValue: {} },
-        { provide: CustomerFollowupsService, useValue: { loadFromFirestore: jasmine.createSpy().and.resolveTo() } },
+        { provide: CustomerFollowupsService, useValue: { loadFromFirestore: followupsLoad } },
         { provide: ShipmentsService, useValue: { activeShipments: signal([]), watch: shipmentsWatch } },
         { provide: AuthzService, useValue: { canCap: () => true } },
         {
           provide: Router,
           useValue: {
             getCurrentNavigation: () => null,
-            navigate: jasmine.createSpy("navigate"),
+            navigate,
             navigateByUrl: jasmine.createSpy("navigateByUrl"),
             createUrlTree: jasmine.createSpy("createUrlTree"),
           },
@@ -174,9 +191,12 @@ describe("PedidosPage - disponibilidad de clientas y pedidos", () => {
     return (fixture.nativeElement as HTMLElement).textContent || "";
   }
 
+  /** Escribe en el buscador como la usuaria (campo anclado: el navegador de pruebas es de escritorio). */
   function typeCustomer(term: string): void {
-    component.customerQuery.set(term);
-    component.showCustomerList.set(true);
+    const input = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>("app-customer-picker input[role='combobox']");
+    if (!input) throw new Error("buscador de clientas no renderizado");
+    input.value = term;
+    input.dispatchEvent(new Event("input"));
   }
 
   function retryButtons(): HTMLButtonElement[] {
@@ -310,5 +330,57 @@ describe("PedidosPage - disponibilidad de clientas y pedidos", () => {
     await settle();
     await settle();
     expect(shipmentsWatch).toHaveBeenCalledTimes(1);
+  });
+
+  it("R4(a). entrar a Pedidos no consulta la lista de seguimientos, que la pantalla no lee", async () => {
+    fixture.detectChanges();
+    customerQueries[0].resolve(customersResult());
+    await settle();
+    await settle();
+
+    expect(ordersLoad).toHaveBeenCalledTimes(1);
+    expect(shipmentsWatch).toHaveBeenCalledTimes(1);
+    expect(followupsLoad).not.toHaveBeenCalled();
+  });
+
+  it("FIX 02. elegir clienta con el teclado autollena la ruta y Crear usa esa selección", async () => {
+    fixture.detectChanges();
+    customerQueries[0].resolve(customersResult());
+    await render();
+    typeCustomer("ana");
+    await render();
+    const input = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>("app-customer-picker input[role='combobox']")!;
+    const create = () => (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(".qc-head .btn.primary")!;
+    expect(create().disabled).withContext("sin clienta elegida no se puede crear").toBeTrue();
+
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true }));
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    await render();
+
+    expect(component.newCustomerId()).toBe("c-ana");
+    expect(input.value).toBe("Ana Lopez");
+    expect((fixture.nativeElement as HTMLElement).querySelector(".route-pill")?.textContent).toContain("Ruta Norte");
+    expect(create().disabled).toBeFalse();
+
+    create().click();
+    await render();
+    expect(createDraft).toHaveBeenCalledOnceWith("c-ana", "r-norte", "", "bm");
+    expect(navigate).toHaveBeenCalledWith(["/main/pedidos", "P-NUEVO"]);
+    expect(source.fetchAllCustomers).toHaveBeenCalledTimes(1);
+  });
+
+  it("FIX 02. volver a escribir después de elegir invalida la selección anterior", async () => {
+    fixture.detectChanges();
+    customerQueries[0].resolve(customersResult());
+    await render();
+    component.pickCustomer("c-ana");
+    await render();
+    expect(component.canCreateOrder()).toBeTrue();
+
+    typeCustomer("bety");
+    await render();
+    expect(component.newCustomerId()).toBe("");
+    expect(component.canCreateOrder()).toBeFalse();
+    expect((fixture.nativeElement as HTMLElement).querySelector(".route-pill")?.textContent).toContain("Sin ruta asignada");
   });
 });

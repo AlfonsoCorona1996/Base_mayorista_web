@@ -9,6 +9,7 @@ import { routes } from "./app.routes";
 import { authInterceptor } from "./core/interceptors/auth.interceptor";
 import { retryInterceptor } from "./core/interceptors/retry.interceptor";
 import { errorLoggingInterceptor } from "./core/interceptors/error-logging.interceptor";
+import { providePerfNavigationTracking } from "./core/perf-metrics.service";
 
 registerLocaleData(localeEsMx);
 
@@ -18,6 +19,8 @@ export const appConfig: ApplicationConfig = {
     provideZonelessChangeDetection(),
     { provide: LOCALE_ID, useValue: "es-MX" },
     provideRouter(routes),
+    // Solo se suscribe al Router si las métricas de rendimiento están activas.
+    providePerfNavigationTracking(),
     provideHttpClient(
       withInterceptors([authInterceptor, retryInterceptor, errorLoggingInterceptor]),
     ),

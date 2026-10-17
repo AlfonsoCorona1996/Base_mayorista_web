@@ -1,4 +1,5 @@
 import { TestBed } from "@angular/core/testing";
+import { ElementRef } from '@angular/core';
 import { ActivatedRoute, Router } from "@angular/router";
 import { AuthService } from "../../core/auth.service";
 import { CategoriesService } from "../../core/categories.service";
@@ -44,7 +45,7 @@ function validDraft(): NormalizedListingDocV3 {
 describe("ReviewPage publication", () => {
   it("guarda y publica en una sola llamada y bloquea el doble clic", async () => {
     let finishWrite!: () => void;
-    const listings = jasmine.createSpyObj<NormalizedListingsService>("NormalizedListingsService", ["saveReviewDecision"]);
+    const listings = jasmine.createSpyObj<NormalizedListingsService>("NormalizedListingsService", ["saveReviewDecision", "invalidateAllValidated"]);
     listings.saveReviewDecision.and.returnValue(new Promise<void>((resolve) => {
       finishWrite = resolve;
     }));
@@ -54,6 +55,7 @@ describe("ReviewPage publication", () => {
     TestBed.configureTestingModule({
       providers: [
         ReviewPage,
+        { provide: ElementRef, useValue: new ElementRef(document.createElement('app-review')) },
         { provide: ActivatedRoute, useValue: { snapshot: { paramMap: { get: () => "listing-1" } } } },
         { provide: Router, useValue: router },
         { provide: NormalizedListingsService, useValue: listings },
@@ -109,6 +111,7 @@ describe("ReviewPage fusion controlada", () => {
     TestBed.configureTestingModule({
       providers: [
         ReviewPage,
+        { provide: ElementRef, useValue: new ElementRef(document.createElement('app-review')) },
         { provide: ActivatedRoute, useValue: { snapshot: { paramMap: { get: () => "listing-source" } } } },
         { provide: Router, useValue: jasmine.createSpyObj<Router>("Router", ["navigateByUrl"]) },
         { provide: NormalizedListingsService, useValue: {} },
