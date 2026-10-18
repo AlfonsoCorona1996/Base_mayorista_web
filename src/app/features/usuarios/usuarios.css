@@ -20,6 +20,8 @@
 
 .users-page {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   align-content: start;
   gap: 16px;
   padding: 24px;
@@ -53,9 +55,9 @@
 .icon-btn {
   border: 1px solid var(--border);
   background: var(--card);
-  width: 40px;
-  min-width: 40px;
-  height: 40px;
+  width: var(--ui-touch-target-min, 44px);
+  min-width: var(--ui-touch-target-min, 44px);
+  height: var(--ui-touch-target-min, 44px);
   border-radius: 999px;
   display: grid;
   place-items: center;
@@ -102,7 +104,7 @@
 .tab-btn {
   border: 0;
   background: transparent;
-  min-height: 38px;
+  min-height: var(--ui-touch-target-min, 44px);
   padding: 0 14px;
   border-radius: 999px;
   color: var(--muted);
@@ -127,6 +129,7 @@
 }
 
 .card {
+  min-width: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--card);
@@ -188,6 +191,7 @@
 }
 
 .create-card {
+  min-width: 0;
   border: 1px solid rgba(37, 99, 235, 0.18);
   border-radius: var(--radius2);
   background: linear-gradient(180deg, rgba(37, 99, 235, 0.08), rgba(37, 99, 235, 0.03));
@@ -284,11 +288,13 @@
 }
 
 .user-list {
+  min-width: 0;
   display: grid;
   gap: 12px;
 }
 
 .user-card {
+  min-width: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius2);
   background: var(--card);
@@ -344,12 +350,11 @@
   font-size: 1rem;
   font-weight: 680;
   letter-spacing: -0.01em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
 .identity-sub {
+  overflow-wrap: anywhere;
   margin: 2px 0 0;
   color: var(--muted);
   font-size: 0.77rem;
@@ -512,7 +517,7 @@
   border-radius: 999px;
   background: var(--card);
   color: #475569;
-  min-height: 32px;
+  min-height: var(--ui-touch-target-min, 44px);
   padding: 0 11px;
   font-size: 0.78rem;
   font-weight: 700;
@@ -806,6 +811,7 @@
 }
 
 .temp-password {
+  overflow-wrap: anywhere;
   border: 1px solid #c7d2fe;
   background: #eef2ff;
   color: #3730a3;
@@ -843,7 +849,8 @@ label {
 
 .input {
   width: 100%;
-  min-height: 42px;
+  min-height: var(--ui-touch-target-min, 44px);
+  font-size: 16px;
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 0 12px;
@@ -863,7 +870,7 @@ label {
   background: var(--card);
   color: var(--text);
   border-radius: 12px;
-  min-height: 38px;
+  min-height: var(--ui-touch-target-min, 44px);
   padding: 0 14px;
   font-size: 0.84rem;
   font-weight: 650;
@@ -877,6 +884,11 @@ label {
 .btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
 .btn-primary {

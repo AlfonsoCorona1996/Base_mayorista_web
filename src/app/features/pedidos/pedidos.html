@@ -184,11 +184,18 @@
 
   @if (viewMode() === 'cards') {
     @if (filtered(); as filteredOrders) {
-    <div class="orders-grid">
-      @for (order of filteredOrders; track order.order_id) {
+    <!-- R4: solo se montan las tarjetas cercanas al área visible; el padding conserva el alto del resto. -->
+    <div
+      class="orders-grid"
+      #cardsGrid
+      [style.padding-top.px]="cardsVirtual.range().padTop"
+      [style.padding-bottom.px]="cardsVirtual.range().padBottom"
+    >
+      @for (order of cardsVisible(); track order.order_id) {
         @if (orderMeta(order); as meta) {
           <article
             class="order-card surface-card"
+            [attr.data-vid]="order.order_id"
             [ngClass]="businessScope.isBothMode() ? orderBusinessClass(order) : ''"
             [class.order-card--bulk]="bulkNoteMode()"
             [attr.role]="bulkNoteMode() ? 'button' : 'link'"
@@ -542,10 +549,11 @@
       }
 
       <!-- Tabla -->
-      <div class="table-scroll">
-        <table class="orders-table">
+      <div class="table-scroll" #tableScroll>
+        <!-- R4: filas virtualizadas. aria-rowcount/rowindex informan el total aunque solo se monten las cercanas. -->
+        <table class="orders-table" [attr.aria-rowcount]="tableRows().length + 1">
           <thead>
-            <tr>
+            <tr aria-rowindex="1">
               <th class="th-select-col">
                 <div class="th-select-wrap">
                   @if (tableSelectionMode()) {
@@ -555,7 +563,7 @@
                       [checked]="tableAllVisibleSelected()"
                       (click)="onTableSelectionCheckboxClick($event)"
                       (change)="toggleTableSelectAllVisible($any($event.target).checked, $event)"
-                      aria-label="Seleccionar filas visibles"
+                      aria-label="Seleccionar todos los resultados filtrados"
                     />
                   }
                   <button type="button" class="th-select-trigger" (click)="toggleTableSelectionMode($event)" aria-label="Modo seleccion">
@@ -706,9 +714,12 @@
               <th></th>
             </tr>
           </thead>
-          <tbody>
-            @for (order of tableRows(); track order.order_id) {
-              <tr class="trow" [ngClass]="businessScope.isBothMode() ? orderBusinessClass(order) : ''" [class.trow--paid-row]="order.status === 'pagado'" [class.trow--selection-mode]="tableSelectionMode()" (click)="onTableRowActivate(order, $event)">
+          <tbody #tableBody>
+            @if (tableVirtual.range().padTop > 0) {
+              <tr class="trow-spacer" aria-hidden="true"><td colspan="9" [style.height.px]="tableVirtual.range().padTop"></td></tr>
+            }
+            @for (order of tableVisibleRows(); track order.order_id; let rowIndex = $index) {
+              <tr class="trow" [attr.data-vid]="order.order_id" [attr.aria-rowindex]="tableVirtual.range().start + rowIndex + 2" [ngClass]="businessScope.isBothMode() ? orderBusinessClass(order) : ''" [class.trow--paid-row]="order.status === 'pagado'" [class.trow--selection-mode]="tableSelectionMode()" (click)="onTableRowActivate(order, $event)">
                 <td class="td-select-col">
                   @if (tableSelectionMode()) {
                     <input
@@ -787,6 +798,9 @@
                 </td>
               </tr>
               }
+            }
+            @if (tableVirtual.range().padBottom > 0) {
+              <tr class="trow-spacer" aria-hidden="true"><td colspan="9" [style.height.px]="tableVirtual.range().padBottom"></td></tr>
             }
           </tbody>
         </table>

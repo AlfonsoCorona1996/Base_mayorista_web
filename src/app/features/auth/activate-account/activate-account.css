@@ -11,6 +11,9 @@
 }
 
 .activate-card {
+  box-sizing: border-box;
+  min-width: 0;
+  overflow-wrap: anywhere;
   width: min(100%, 420px);
   border: 1px solid #dbe7f6;
   border-radius: 20px;
@@ -46,7 +49,8 @@ label {
 
 .input {
   width: 100%;
-  min-height: 42px;
+  min-height: var(--ui-touch-target-min, 44px);
+  font-size: 16px;
   border: 1px solid #cbd5e1;
   border-radius: 12px;
   padding: 0 12px;
@@ -58,7 +62,7 @@ label {
   background: #0b2a4a;
   color: #ffffff;
   border-radius: 999px;
-  min-height: 42px;
+  min-height: var(--ui-touch-target-min, 44px);
   padding: 0 16px;
   font-weight: 700;
   cursor: pointer;
@@ -91,4 +95,10 @@ label {
   margin: 0;
   color: #b91c1c;
   font-size: 0.8rem;
+}
+
+.input:focus-visible,
+.btn:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
 }

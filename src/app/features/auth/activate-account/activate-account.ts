@@ -1,7 +1,6 @@
 import { Component, inject, signal, ChangeDetectionStrategy } from "@angular/core";
 import { FormsModule } from "@angular/forms";
 import { Router } from "@angular/router";
-import { updatePassword } from "firebase/auth";
 import { FIREBASE_AUTH } from "../../../core/firebase.providers";
 import { AccessService } from "../../../core/access.service";
 import { AuthService } from "../../../core/auth.service";
@@ -42,6 +41,7 @@ export default class ActivateAccountPage {
   private passwordError(value: string): string | null {
     if (!value) return "La contrasena es obligatoria.";
     if (value.length < 8) return "Usa al menos 8 caracteres.";
+    if (value.length > 128) return "Usa como maximo 128 caracteres.";
     return null;
   }
 
@@ -64,6 +64,7 @@ export default class ActivateAccountPage {
   }
 
   async submit() {
+    if (this.loading()) return;
     this.submitAttempted = true;
     this.error.set(null);
     this.success.set(null);
@@ -81,31 +82,22 @@ export default class ActivateAccountPage {
 
     this.loading.set(true);
     try {
-      await updatePassword(current, this.password);
-      await current.getIdToken(true);
-
-      const completeResult = await this.tryCompleteFirstLogin(current.uid);
-      if (!completeResult.ok) {
-        const boot = await this.userAdminApi.getSessionBootstrap().catch(() => null);
-        if (!boot || boot.mustChangePassword) {
-          if (boot?.isActive && boot.invitePending === false && boot.mustChangePassword) {
-            throw new Error(
-              "Backend devolvio estado inconsistente: mustChangePassword=true pero complete-first-login responde conflicto.",
-            );
-          }
-          throw new Error(completeResult.message || "No se pudo cerrar el estado de primer login.");
-        }
-      }
-
+      // El servidor cambia la contraseña antes de cerrar el primer acceso.
+      // Un cliente no puede activar la cuenta enviando solo su uid.
+      await this.userAdminApi.completeFirstLogin(this.password);
+      await this.auth.login(current.email || "", this.password);
+      this.password = "";
+      this.confirmPassword = "";
+      this.submitAttempted = false;
       this.auth.invalidateAccessCache();
       const status = await this.auth.getAccessStatus();
-      if (status.mustChangePassword) {
+      if (status.mustChangePassword || status.invitePending || !status.isActive) {
         throw new Error("No se pudo cerrar el estado de primer login.");
       }
       this.success.set("Contrasena actualizada.");
       await this.redirectToFirstAllowedRoute();
-    } catch (error: any) {
-      this.error.set(error?.message || "No se pudo actualizar la contrasena.");
+    } catch (error: unknown) {
+      this.error.set(error instanceof Error ? error.message : "No se pudo actualizar la contrasena.");
     } finally {
       this.loading.set(false);
     }
@@ -114,32 +106,6 @@ export default class ActivateAccountPage {
   private async redirectToFirstAllowedRoute() {
     await this.access.refreshProfile({ force: true });
     const target = this.access.firstAllowedRoute();
-    await this.router.navigateByUrl(target === "/login" ? "/main/dashboard" : target);
-  }
-
-  private async tryCompleteFirstLogin(uid: string): Promise<{ ok: true } | { ok: false; message: string }> {
-    try {
-      await this.userAdminApi.completeFirstLogin(uid);
-      return { ok: true };
-    } catch (firstError: any) {
-      const firstMessage = String(firstError?.message || "");
-      const messageLower = firstMessage.toLowerCase();
-      const shouldRetryWithoutUid =
-        messageLower.includes("first-login pending state") || messageLower.includes("invalid_state") || messageLower.includes("409");
-
-      if (!shouldRetryWithoutUid) return { ok: false, message: firstMessage || "No se pudo cerrar el estado de primer login." };
-
-      try {
-        const current = FIREBASE_AUTH.currentUser;
-        if (current) await current.getIdToken(true);
-        await this.userAdminApi.completeFirstLogin();
-        return { ok: true };
-      } catch (secondError: any) {
-        return {
-          ok: false,
-          message: String(secondError?.message || firstMessage || "No se pudo cerrar el estado de primer login."),
-        };
-      }
-    }
+    await this.router.navigateByUrl(target);
   }
 }

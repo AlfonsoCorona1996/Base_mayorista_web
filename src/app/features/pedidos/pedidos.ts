@@ -1,4 +1,4 @@
-﻿import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, QueryList, ViewChildren, computed, inject, signal, effect, ChangeDetectionStrategy, DestroyRef, HostListener } from "@angular/core";
+﻿import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, QueryList, ViewChildren, computed, inject, signal, effect, ChangeDetectionStrategy, DestroyRef, HostListener, afterEveryRender, untracked, viewChild } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { CurrencyPipe, DatePipe, NgClass } from "@angular/common";
 import { FormsModule } from "@angular/forms";
@@ -23,6 +23,7 @@ import { AuthzService } from "../../core/authz.service";
 import { canMarkOrderAsPaidFromTable } from "./order-table-bulk-actions";
 import { PerfMetricsService } from "../../core/perf-metrics.service";
 import { CustomerPickerComponent, CustomerPickerOption } from "./customer-picker/customer-picker.component";
+import { VirtualGridController, VirtualListChange } from "./virtual-grid";
 
 type IntentFilter =
   | "hoy"
@@ -269,7 +270,74 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     return new WeakMap<Order, { normalized: string; compact: string }>();
   });
 
+  /**
+   * R4: virtualización de presentación. Solo cambia qué filas y tarjetas se montan;
+   * filtros, contadores, selección, exportaciones y acciones usan las listas completas
+   * (`tableRows()`, `filtered()`, `tableSelectedRows()`).
+   */
+  readonly tableVirtual = new VirtualGridController({ estimate: 72, overscanPx: 640, initialCount: 30 });
+  readonly cardsVirtual = new VirtualGridController({ estimate: 280, overscanPx: 1200, initialCount: 12 });
+  private readonly tableScrollEl = viewChild<ElementRef<HTMLElement>>("tableScroll");
+  private readonly tableBodyEl = viewChild<ElementRef<HTMLElement>>("tableBody");
+  private readonly cardsGridEl = viewChild<ElementRef<HTMLElement>>("cardsGrid");
+  /** Filtros, búsqueda, orden y negocio: si cambian, la lista vuelve al inicio. Un snapshot no los cambia. */
+  private readonly tableListKey = computed(() => JSON.stringify([
+    this.search(), this.routeFilter(), this.tableDateFrom(), this.tableDateTo(), this.tableRouteSelections(),
+    this.tableStatusSelections(), this.tableSortCol(), this.tableSortDir(), this.businessScope.activeBusinessIds(),
+  ]));
+  private readonly cardsListKey = computed(() => JSON.stringify([
+    this.search(), this.intentFilter(), this.routeFilter(), this.businessScope.activeBusinessIds(),
+  ]));
+  private lastTableListKey: string | null = null;
+  private lastCardsListKey: string | null = null;
+  /** Ancho máximo visto por columna de la tabla y ancho del contenedor en que se midió. */
+  private tableColumnWidths: number[] = [];
+  private tableColumnsContainerWidth = 0;
+
   constructor() {
+    // R4: la lista completa alimenta la virtualización solo en la vista activa (los computed siguen perezosos).
+    effect(() => {
+      if (this.viewMode() !== "table") {
+        this.lastTableListKey = null;
+        return;
+      }
+      const ids = this.tableRows().map((order) => order.order_id);
+      const key = this.tableListKey();
+      const change: VirtualListChange = this.lastTableListKey !== null && this.lastTableListKey !== key ? "reset" : "keep";
+      this.lastTableListKey = key;
+      untracked(() => this.tableVirtual.setItems(ids, change));
+    });
+    effect(() => {
+      if (this.viewMode() !== "cards") {
+        this.lastCardsListKey = null;
+        return;
+      }
+      const ids = this.filtered().map((order) => order.order_id);
+      const key = this.cardsListKey();
+      const change: VirtualListChange = this.lastCardsListKey !== null && this.lastCardsListKey !== key ? "reset" : "keep";
+      this.lastCardsListKey = key;
+      untracked(() => this.cardsVirtual.setItems(ids, change));
+    });
+    effect((onCleanup) => {
+      const scroller = this.tableScrollEl()?.nativeElement;
+      const body = this.tableBodyEl()?.nativeElement;
+      if (!scroller || !body) return;
+      // El encabezado es sticky dentro del contenedor: las filas visibles empiezan debajo de él.
+      this.tableVirtual.bind(body, scroller, () => scroller.querySelector("thead")?.getBoundingClientRect().height ?? 0);
+      onCleanup(() => this.tableVirtual.unbind());
+    });
+    effect((onCleanup) => {
+      const grid = this.cardsGridEl()?.nativeElement;
+      if (!grid) return;
+      this.cardsVirtual.bind(grid);
+      onCleanup(() => this.cardsVirtual.unbind());
+    });
+    afterEveryRender(() => {
+      this.tableVirtual.afterRender();
+      this.cardsVirtual.afterRender();
+      this.stabilizeTableColumns();
+    });
+
     effect(() => {
       if (!this.uiStateHydrated()) return;
       this.saveUiStateSnapshot(this.captureUiStateSnapshot());
@@ -470,6 +538,42 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
       if (va > vb) return dir === "asc" ? 1 : -1;
       return 0;
     });
+  });
+
+  /**
+   * R4: con `table-layout: auto` el ancho de cada columna depende de las filas montadas,
+   * así que al desplazarse podían moverse. Cada columna conserva el mayor ancho visto
+   * (solo crece) mientras el contenedor mantenga su ancho; si cambia, se vuelve a medir.
+   */
+  private stabilizeTableColumns(): void {
+    const scroller = this.tableScrollEl()?.nativeElement;
+    if (!scroller) return;
+    const headers = Array.from(scroller.querySelectorAll<HTMLElement>(".orders-table thead th"));
+    const containerWidth = scroller.clientWidth;
+    if (Math.abs(containerWidth - this.tableColumnsContainerWidth) > 1) {
+      this.tableColumnsContainerWidth = containerWidth;
+      this.tableColumnWidths = [];
+      for (const header of headers) header.style.minWidth = "";
+    }
+    headers.forEach((header, index) => {
+      const width = Math.ceil(header.getBoundingClientRect().width);
+      if (width > (this.tableColumnWidths[index] ?? 0)) {
+        this.tableColumnWidths[index] = width;
+        header.style.minWidth = `${width}px`;
+      }
+    });
+  }
+
+  /** Filas montadas de la tabla (R4). `tableRows()` sigue siendo la lista completa. */
+  tableVisibleRows = computed(() => {
+    const range = this.tableVirtual.range();
+    return this.tableRows().slice(range.start, range.end);
+  });
+
+  /** Tarjetas montadas (R4). `filtered()` sigue siendo la lista completa. */
+  cardsVisible = computed(() => {
+    const range = this.cardsVirtual.range();
+    return this.filtered().slice(range.start, range.end);
   });
 
   tableRangeCompactSummary = computed(() => {

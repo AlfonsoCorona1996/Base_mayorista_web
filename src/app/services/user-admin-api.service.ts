@@ -85,10 +85,10 @@ export type RegeneratePasswordResult = {
 
 export type CompleteFirstLoginResult = {
   uid: string;
-  active: boolean;
-  invite_pending: boolean;
-  must_change_password: boolean;
-  accepted_at: string | null;
+  isActive: boolean;
+  invitePending: boolean;
+  mustChangePassword: boolean;
+  acceptedAt: string | null;
 };
 
 export type ListManagedUserRow = {
@@ -230,10 +230,11 @@ export class UserAdminApiService {
       body: JSON.stringify({
         email: loginMode === "email" ? email : undefined,
         display_name: input.displayName.trim(),
-        username: input.username.trim().toLowerCase(),
+        username: input.username.trim(),
         role: input.roleId,
         login_mode: loginMode,
         permissions: this.normalizePermissions(input.permissions, input.roleId),
+        businessMemberships: input.businessMemberships,
       }),
     });
 
@@ -291,7 +292,7 @@ export class UserAdminApiService {
     const payload = {
       uid: input.uid,
       display_name: input.displayName.trim(),
-      username: input.username.trim().toLowerCase(),
+      username: input.username.trim(),
       email: input.email ? input.email.trim().toLowerCase() : null,
     };
     if (!environment.production) {
@@ -331,10 +332,10 @@ export class UserAdminApiService {
     };
   }
 
-  async completeFirstLogin(uid?: string): Promise<CompleteFirstLoginResult> {
+  async completeFirstLogin(password: string): Promise<CompleteFirstLoginResult> {
     return this.request<CompleteFirstLoginResult>("/admin/users/complete-first-login", {
       method: "POST",
-      body: JSON.stringify(uid ? { uid } : {}),
+      body: JSON.stringify({ password }),
     });
   }
 

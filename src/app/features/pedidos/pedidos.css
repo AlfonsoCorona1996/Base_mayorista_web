@@ -349,6 +349,8 @@
   display: grid;
   gap: 12px;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  /* R4: el anclaje de scroll lo hace la virtualización; el nativo duplicaría la corrección. */
+  overflow-anchor: none;
 }
 
 .bulk-note-bar {
@@ -1588,6 +1590,14 @@
   max-block-size: min(62vh, 680px);
   position: relative;
   scrollbar-gutter: stable;
+  /* R4: el anclaje de scroll lo hace la virtualización; el nativo duplicaría la corrección. */
+  overflow-anchor: none;
+}
+
+/* R4: espaciadores que sustituyen a las filas no montadas. */
+.orders-table tbody tr.trow-spacer td {
+  padding: 0;
+  border: 0;
 }
 
 .orders-table {

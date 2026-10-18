@@ -26,6 +26,7 @@ export const routes: Routes = [
   {
     path: "main",
     canActivate: [adminGuard],
+    canActivateChild: [adminGuard],
     loadComponent: () => import("./features/main/main-layout").then((m) => m.default),
     children: [
       {

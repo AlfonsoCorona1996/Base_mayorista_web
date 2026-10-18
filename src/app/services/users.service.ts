@@ -61,7 +61,7 @@ export class UsersService {
     }
     const roleId = normalizeRoleId(bootstrap.roleId || "operativo");
     const username =
-      normalizeUsername(bootstrap.username) || normalizeUsername(user.displayName || bootstrap.email?.split("@")[0] || uid.slice(0, 10));
+      bootstrap.username.trim() || normalizeUsername(user.displayName || bootstrap.email?.split("@")[0] || uid.slice(0, 10));
     const authEmail = (user.email || bootstrap.email || buildUsernameAuthEmail(username)).trim().toLowerCase();
     const loginType: UserLoginType = isUsernameAuthEmail(authEmail) ? "username" : "email";
     const sections = this.resolveSectionsMap({}, roleId, {}, bootstrap.sections || null);

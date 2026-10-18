@@ -1,6 +1,6 @@
 import { Component, computed, inject, signal, ChangeDetectionStrategy } from "@angular/core";
 import { FormsModule } from "@angular/forms";
-import { collection, doc, getDocs, serverTimestamp, setDoc } from "firebase/firestore";
+import { collection, getDocs } from "firebase/firestore";
 import { environment } from "../../../environments/environment";
 import { AuthzService } from "../../core/authz.service";
 import { FIRESTORE } from "../../core/firebase.providers";
@@ -213,7 +213,7 @@ export default class UsuariosPage {
 
   private mapApiRowToUser(row: ListManagedUserRow, storedBusinessMemberships: unknown = null): UserDoc {
     const roleId = this.isRoleId(row.roleId) ? row.roleId : "operativo";
-    const username = normalizeUsername(row.username);
+    const username = row.username.trim();
     const loginType: UserLoginType = row.email ? "email" : "username";
     const sections = this.normalizeSectionsFromApi(row.sections, roleId);
     const capabilities = normalizeCapabilitiesMap(row.capabilities || buildRolePreset(roleId).capabilities);
@@ -445,7 +445,7 @@ export default class UsuariosPage {
   }
 
   updateEditUsername(value: string) {
-    this.editDraft.update((draft) => (draft ? { ...draft, username: normalizeUsername(value) } : draft));
+    this.editDraft.update((draft) => (draft ? { ...draft, username: value.trim() } : draft));
   }
 
   updateEditRoleId(value: string) {
@@ -556,7 +556,7 @@ export default class UsuariosPage {
   }
 
   async createUser() {
-    if (!this.canManageUsers()) return;
+    if (!this.canManageUsers() || this.saving()) return;
     this.error.set(null);
     this.success.set(null);
     this.tempPasswordOut.set(null);
@@ -569,7 +569,7 @@ export default class UsuariosPage {
 
     const payload: CreateManagedUserInput = {
       displayName: this.newDisplayName().trim(),
-      username: normalizeUsername(this.newUsername()),
+      username: this.newUsername().trim(),
       loginType: this.newLoginType(),
       roleId: this.newRoleId(),
       email: this.newLoginType() === "email" ? this.newEmail().trim().toLowerCase() : undefined,
@@ -581,13 +581,13 @@ export default class UsuariosPage {
     this.saving.set(true);
     try {
       const result = await this.userAdminApi.createManagedUser(payload);
-      await this.saveBusinessMembershipsDirect(result.uid, payload.businessMemberships || {});
       this.success.set("Usuario creado.");
       if (result.temporaryPassword) {
         this.tempPasswordOut.set({ uid: result.uid, password: result.temporaryPassword });
       }
       this.resetCreateForm();
       await this.reload();
+      this.success.set("Usuario creado.");
     } catch (error: any) {
       this.error.set(error?.message || "No se pudo crear el usuario.");
     } finally {
@@ -624,13 +624,14 @@ export default class UsuariosPage {
         draft.roleId !== row.roleId ||
         draft.isActive !== row.isActive ||
         Boolean(sectionOverridesPayload) ||
-        Boolean(capabilityOverridesPayload);
+        Boolean(capabilityOverridesPayload) ||
+        businessMembershipsChanged;
 
       if (profileChanged) {
         await this.userAdminApi.updateManagedUserProfile({
           uid: row.uid,
           displayName: draft.displayName.trim(),
-          username: normalizeUsername(draft.username),
+          username: draft.username.trim(),
           email: draft.loginType === "email" ? draft.email.trim().toLowerCase() : null,
         });
       }
@@ -650,9 +651,6 @@ export default class UsuariosPage {
           accessPayload.businessMemberships = nextBusinessMemberships;
         }
         await this.userAdminApi.updateManagedUser(row.uid, accessPayload);
-      }
-      if (businessMembershipsChanged) {
-        await this.saveBusinessMembershipsDirect(row.uid, nextBusinessMemberships);
       }
       const nextRow = this.buildUserFromDraft(row, { ...draft, businessMemberships: nextBusinessMemberships });
       this.users.update((current) =>
@@ -959,17 +957,6 @@ export default class UsuariosPage {
     return out;
   }
 
-  private async saveBusinessMembershipsDirect(uid: string, memberships: BusinessMembershipsMap): Promise<void> {
-    await setDoc(
-      doc(FIRESTORE, "users", uid),
-      {
-        businessMemberships: this.toPlainBusinessMemberships(memberships),
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
-  }
-
   private buildAdminPermissions(roleId: RoleId, sectionOverrides: SectionOverridesMap): AdminPermissionsPayload {
     return {
       dashboard: this.resolveSectionValue(roleId, sectionOverrides, "sections.dashboard"),
@@ -1003,7 +990,12 @@ export default class UsuariosPage {
     const loginType = this.newLoginType();
     const email = this.newEmail().trim().toLowerCase();
     if (!displayName) return "El nombre es obligatorio.";
-    if (!username || username.length < 3) return "El usuario debe tener al menos 3 caracteres validos.";
+    if (!/^[a-zA-Z0-9._-]{3,64}$/.test(this.newUsername().trim())) {
+      return "Usa entre 3 y 64 letras, numeros, puntos, guiones o guiones bajos para el usuario.";
+    }
+    if (this.users().some((row) => normalizeUsername(row.username) === username)) {
+      return "El nombre de usuario ya existe.";
+    }
     if (loginType === "email") {
       if (!email) return "El correo es obligatorio para este tipo de usuario.";
       if (!this.isValidEmail(email)) return "Ingresa un correo valido.";
@@ -1105,8 +1097,8 @@ export default class UsuariosPage {
     const nextDisplayName = draft.displayName.trim();
     if (currentDisplayName !== nextDisplayName) return true;
 
-    const currentUsername = normalizeUsername(row.username);
-    const nextUsername = normalizeUsername(draft.username);
+    const currentUsername = row.username.trim();
+    const nextUsername = draft.username.trim();
     if (currentUsername !== nextUsername) return true;
 
     const currentEmail = row.loginType === "email" ? row.email.trim().toLowerCase() : null;
@@ -1117,7 +1109,7 @@ export default class UsuariosPage {
   }
 
   private buildUserFromDraft(row: UserDoc, draft: UserDraft): UserDoc {
-    const username = normalizeUsername(draft.username);
+    const username = draft.username.trim();
     const loginType = draft.loginType;
     const email = loginType === "email" ? draft.email.trim().toLowerCase() : "";
     const authEmail = loginType === "email" ? email : buildUsernameAuthEmail(username);

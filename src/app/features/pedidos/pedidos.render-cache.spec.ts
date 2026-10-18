@@ -195,7 +195,9 @@ describe("PedidosPage - cachés por pedido de la plantilla (R3)", () => {
     await showTable(orders);
     const build = spyOn(component as unknown as { buildTableOrderStatusPills(order: Order): unknown }, "buildTableOrderStatusPills").and.callThrough();
 
-    const changed = replaceOrder("P-010", { status: "pagado", customer_payment_status: "collected", totals: { total_amount: 999, paid_amount: 999, balance_due: 0 } });
+    // Un pedido montado (R4 solo monta las filas cercanas al área visible).
+    const mountedId = component.tableVisibleRows()[1].order_id;
+    const changed = replaceOrder(mountedId, { status: "pagado", customer_payment_status: "collected", totals: { total_amount: 999, paid_amount: 999, balance_due: 0 } });
     await render();
 
     expect(build).toHaveBeenCalledTimes(1);

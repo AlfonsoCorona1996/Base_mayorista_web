@@ -10,7 +10,11 @@ service cloud.firestore {
     }
 
     function isActiveUser() {
-      return isSignedIn() && userDoc().exists() && userDoc().data.isActive == true;
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && userDoc().data.isActive == true
+        && userDoc().data.get("mustChangePassword", userDoc().data.get("must_change_password", false)) == false
+        && userDoc().data.get("invitePending", userDoc().data.get("invite_pending", false)) == false;
     }
 
     function roleId() {
@@ -35,8 +39,9 @@ service cloud.firestore {
 
     function hasSection(sectionKey) {
       return isActiveUser()
-        && userDoc().data.sections != null
-        && userDoc().data.sections[sectionKey] == true;
+        && userDoc().data.get("sections", {}).get(
+          sectionKey, userDoc().data.get("sections", {}).get(sectionKey.replace("sections[.]", ""), false)
+        ) == true;
     }
 
     function hasCapability(capabilityKey) {
@@ -97,28 +102,10 @@ service cloud.firestore {
     }
 
     match /users/{uid} {
-      allow read: if isActiveUser();
-      allow create: if isSuperAdmin() || (isSignedIn() && request.auth.uid == uid);
-      allow update: if isSuperAdmin()
-        || (
-          isAdmin()
-          && request.resource.data.roleId != "super_admin"
-          && resource.data.roleId != "super_admin"
-        )
-        || (
-          isSignedIn()
-          && request.auth.uid == uid
-          && (
-            onlyChanges(["displayName", "updatedAt"])
-            || (
-              resource.data.mustChangePassword == true
-              && onlyChanges(["isActive", "mustChangePassword", "updatedAt"])
-              && request.resource.data.isActive == true
-              && request.resource.data.mustChangePassword == false
-            )
-          )
-        );
-      allow delete: if isSuperAdmin();
+      allow get: if (isSignedIn() && request.auth.uid == uid) || isSuperAdmin();
+      allow list: if isSuperAdmin();
+      // El Admin SDK del backend es el unico escritor de perfiles y permisos.
+      allow create, update, delete: if false;
     }
 
     match /roles/{roleId} {

@@ -45,11 +45,11 @@
   }
 
   @if (error()) {
-    <div class="alert alert-error">{{ error() }}</div>
+    <div class="alert alert-error" role="alert">{{ error() }}</div>
   }
 
   @if (success()) {
-    <div class="alert alert-success">{{ success() }}</div>
+    <div class="alert alert-success" role="status">{{ success() }}</div>
   }
 
   @if (tab() === "users") {
@@ -85,7 +85,7 @@
               </label>
               <label class="create-field create-field-username">
                 Usuario
-                <input class="input" [ngModel]="newUsername()" (ngModelChange)="newUsername.set($event)" />
+                <input class="input" [ngModel]="newUsername()" (ngModelChange)="newUsername.set($event)" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="64" />
               </label>
               <label class="create-field create-field-login">
                 Tipo de acceso
@@ -119,6 +119,10 @@
                 </label>
               }
             </div>
+
+            @if (newLoginType() === "username") {
+              <p>Se generará una contraseña temporal. Deberá cambiarla al iniciar sesión para acceder al sistema.</p>
+            }
 
             <div class="business-access-editor">
               <span class="business-access-title">Negocios</span>
