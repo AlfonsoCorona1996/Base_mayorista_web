@@ -1,567 +1,754 @@
-<section class="detail-page">
-  <header class="detail-header surface-card">
-    <div class="header-leading">
-      <button type="button" class="btn btn-ghost" (click)="goCatalog()">
-        <span class="material-symbols-rounded" aria-hidden="true">arrow_back</span>
-        Volver al catalogo
-      </button>
-
-      <div class="header-copy">
-        <p class="header-kicker">Ficha de producto</p>
-        <h1>Detalle y control comercial</h1>
-      </div>
-    </div>
-
-    <div class="header-actions">
-      <button type="button" class="btn btn-soft" (click)="toggleEditMode()">
-        <span class="material-symbols-rounded" aria-hidden="true">{{ editing() ? "lock" : "edit" }}</span>
-        {{ editing() ? "Bloquear edicion" : "Editar producto" }}
-      </button>
-
-      <button type="button" class="btn btn-danger" (click)="markAllOutOfStock()">
-        <span class="material-symbols-rounded" aria-hidden="true">block</span>
-        Marcar todo agotado
-      </button>
-
-      <button type="button" class="btn btn-soft" (click)="markAllInStock()">
-        <span class="material-symbols-rounded" aria-hidden="true">check_circle</span>
-        Marcar todo disponible
-      </button>
-
-      <button type="button" class="btn btn-primary" (click)="saveInventory()" [disabled]="saving() || loading()">
-        <span class="material-symbols-rounded" aria-hidden="true">save</span>
-        {{ saving() ? "Guardando..." : "Guardar cambios" }}
-      </button>
-    </div>
-  </header>
-
-  @if (error()) {
-    <div class="notice notice-error">
-      <span class="material-symbols-rounded" aria-hidden="true">error</span>
-      <p><strong>Error:</strong> {{ error() }}</p>
-    </div>
-  }
-
-  @if (saveMessage()) {
-    <div class="notice notice-success">
-      <span class="material-symbols-rounded" aria-hidden="true">check_circle</span>
-      <p>{{ saveMessage() }}</p>
-    </div>
-  }
-
-  @if (loading()) {
-    <section class="loading-state surface-card">
-      <div class="spinner" aria-hidden="true"></div>
-      <p>Cargando producto...</p>
-    </section>
-  } @else if (doc(); as d) {
-    <section class="summary-card surface-card">
-      <div class="summary-media">
-        @if (coverUrl()) {
-          <img [src]="coverUrl()" alt="{{ d.listing.title || 'Producto' }}" class="summary-image" />
-        } @else {
-          <div class="summary-image-placeholder">Sin imagen</div>
-        }
-      </div>
-
-      <div class="summary-content">
-        <div class="summary-title-block">
-          @if (editing()) {
-            <label class="label" for="product-title">
-              <span class="material-symbols-rounded" aria-hidden="true">title</span>
-              Titulo del producto
-            </label>
-            <label class="field" for="product-title">
-              <input
-                id="product-title"
-                type="text"
-                class="input"
-                [ngModel]="d.listing.title || ''"
-                (ngModelChange)="onListingFieldChange('title', $event)"
-                placeholder="Ej. Bolsa piel trenzada"
-              />
-            </label>
-          } @else {
-            <h2 class="summary-title">{{ d.listing.title || "(sin titulo)" }}</h2>
-          }
-
-          <p class="summary-id">ID: {{ d.normalized_id }}</p>
+<section class="detail-page" aria-labelledby="page-title">
+  <header class="detail-header">
+    <button
+      type="button"
+      class="btn-icon"
+      (click)="goCatalog()"
+      aria-label="Volver al catálogo"
+      [disabled]="saving()"
+    >
+      <review-icon name="left" />
+    </button>
+    <div class="header-copy">
+      <p class="eyebrow">CATÁLOGO <span aria-hidden="true">/</span> PRODUCTO</p>
+      <h1 id="page-title">
+        {{ loading() ? 'Cargando producto…' : doc()?.listing?.title || 'Producto sin nombre' }}
+      </h1>
+      @if (doc(); as d) {
+        <div class="header-meta">
+          <span [class]="'stock-pill ' + stockClass(productStockState())"
+            >{{ stockLabel(productStockState()) }} con proveedor</span
+          >
+          <span>{{ d.listing.items.length }} variantes</span
+          ><span>{{ (d.product_colors || []).length }} colores</span>
         </div>
-
-        <div class="summary-meta-grid">
-          <div class="meta-pill">
-            <span class="material-symbols-rounded" aria-hidden="true">storefront</span>
-            <div>
-              <p class="meta-label">Proveedor</p>
-              <p class="meta-value">{{ supplierName() }}</p>
-            </div>
-          </div>
-
-          <div class="meta-pill">
-            <span class="material-symbols-rounded" aria-hidden="true">category</span>
-            <div>
-              <p class="meta-label">Categoria</p>
-              @if (editing()) {
-                <label class="field field-compact" for="product-category">
-                  <input
-                    id="product-category"
-                    type="text"
-                    class="input"
-                    [ngModel]="d.listing.category_hint || ''"
-                    (ngModelChange)="onListingFieldChange('category_hint', $event)"
-                    placeholder="Ej. Bolsas"
-                  />
-                </label>
-              } @else {
-                <p class="meta-value">{{ d.listing.category_hint || "Sin categoria" }}</p>
-              }
-            </div>
-          </div>
-
-          <div class="meta-pill">
-            <span class="material-symbols-rounded" aria-hidden="true">deployed_code</span>
-            <div>
-              <p class="meta-label">Variantes</p>
-              <p class="meta-value">{{ d.listing.items.length }}</p>
-            </div>
-          </div>
-
-          <div class="meta-pill">
-            <span class="material-symbols-rounded" aria-hidden="true">payments</span>
-            <div>
-              <p class="meta-label">Moneda</p>
-              <p class="meta-value">{{ preferredCurrency() }}</p>
-            </div>
-          </div>
-        </div>
-
-        <div class="summary-stock">
-          <span class="material-symbols-rounded" aria-hidden="true">inventory</span>
-          Estado general
-          <span class="stock-pill" [class]="'stock-pill ' + stockClass(productStockState())">
-            {{ stockLabel(productStockState()) }}
-          </span>
-        </div>
-      </div>
-    </section>
-
-    @if (features.enabled('inventoryProductsV2')) {
-    <section class="surface-card commercial-overview">
-      <div class="section-head">
-        <h2><span class="material-symbols-rounded" aria-hidden="true">query_stats</span> Desempeño e inventario propio</h2>
-        <p>El estado del proveedor se mantiene separado de las existencias que realmente tienes.</p>
-      </div>
-      <div class="pricing-grid">
-        <article class="price-kpi"><p class="price-kpi-label">Venta neta</p><p class="price-kpi-value">{{ formatMoney(productAnalytics().sales, preferredCurrency()) }}</p></article>
-        <article class="price-kpi"><p class="price-kpi-label">Ganancia</p><p class="price-kpi-value">{{ formatMoney(productAnalytics().profit, preferredCurrency()) }}</p></article>
-        <article class="price-kpi"><p class="price-kpi-label">Unidades netas</p><p class="price-kpi-value">{{ productAnalytics().units }}</p></article>
-        <article class="price-kpi"><p class="price-kpi-label">Devoluciones</p><p class="price-kpi-value">{{ productAnalytics().returns }}</p></article>
-        <article class="price-kpi"><p class="price-kpi-label">Clientas únicas</p><p class="price-kpi-value">{{ productAnalytics().customers }}</p></article>
-        <article class="price-kpi"><p class="price-kpi-label">Tu stock</p><p class="price-kpi-value">{{ productAnalytics().available }} disponible · {{ productAnalytics().reserved }} reservado · {{ productAnalytics().review }} por revisar</p></article>
-        <article class="price-kpi"><p class="price-kpi-label">Última venta</p><p class="price-kpi-value">{{ formatDate(productAnalytics().lastSale) }}</p></article>
-      </div>
-    </section>
+      }
+    </div>
+    @if (doc() && !loading()) {
+      <button
+        type="button"
+        class="btn edit-toggle"
+        (click)="toggleEditMode()"
+        [disabled]="saving()"
+        [attr.aria-pressed]="editing()"
+      >
+        {{ editing() ? 'Ver ficha' : 'Editar producto' }}
+      </button>
     }
-
-    <section class="assets-grid">
-      <article class="surface-card assets-card">
-        <div class="section-head section-head-inline">
-          <h2>
-            <span class="material-symbols-rounded" aria-hidden="true">photo_library</span>
-            Imagenes del producto
-          </h2>
-
-          @if (editing()) {
-            <button type="button" class="btn btn-soft btn-xs" (click)="addCoverImage()">
-              <span class="material-symbols-rounded" aria-hidden="true">add_photo_alternate</span>
-              Agregar
-            </button>
-          }
-        </div>
-
-        @if ((d.cover_images || []).length === 0) {
-          <p class="muted">No hay imagenes capturadas para este producto.</p>
-        } @else {
-          <div class="asset-rows">
-            @for (imageUrl of (d.cover_images || []); track $index; let ci = $index) {
-              <div class="asset-row">
-                <div class="asset-thumb">
-                  @if (imageUrl) {
-                    <img [src]="imageUrl" alt="Imagen {{ ci + 1 }} del producto" />
-                  } @else {
-                    <span class="material-symbols-rounded" aria-hidden="true">image</span>
-                  }
-                </div>
-
-                <div class="asset-main">
-                  @if (editing()) {
-                    <label class="field field-compact">
-                      <span class="material-symbols-rounded" aria-hidden="true">link</span>
-                      <input
-                        type="text"
-                        class="input"
-                        [ngModel]="imageUrl"
-                        (ngModelChange)="onCoverImageChange(ci, $event)"
-                        placeholder="https://.../imagen.jpg"
-                      />
-                    </label>
-                  } @else {
-                    <p class="value">{{ imageUrl || "Sin URL" }}</p>
-                  }
-
-                  <div class="asset-actions">
-                    <button
-                      type="button"
-                      class="btn btn-soft btn-xs"
-                      [disabled]="!imageUrl || ci === 0"
-                      (click)="setCoverImageAsPrimary(ci)"
-                    >
-                      <span class="material-symbols-rounded" aria-hidden="true">star</span>
-                      Portada
-                    </button>
-
-                    @if (editing()) {
-                      <button type="button" class="btn btn-danger btn-xs" (click)="removeCoverImage(ci)">
-                        <span class="material-symbols-rounded" aria-hidden="true">delete</span>
-                        Quitar
-                      </button>
-                    }
-                  </div>
-                </div>
-              </div>
-            }
-          </div>
-        }
-      </article>
-
-      <article class="surface-card assets-card">
-        <div class="section-head section-head-inline">
-          <h2>
-            <span class="material-symbols-rounded" aria-hidden="true">palette</span>
-            Colores globales
-          </h2>
-
-          @if (editing()) {
-            <button type="button" class="btn btn-soft btn-xs" (click)="addProductColor()">
-              <span class="material-symbols-rounded" aria-hidden="true">add</span>
-              Agregar color
-            </button>
-          }
-        </div>
-
-        @if ((d.product_colors || []).length === 0) {
-          <p class="muted">No hay colores globales definidos.</p>
-        } @else {
-          <div class="asset-rows">
-            @for (productColor of (d.product_colors || []); track $index; let pi = $index) {
-              <div class="asset-row color-asset-row">
-                <div class="asset-thumb">
-                  @if (productColor.image_url) {
-                    <img [src]="productColor.image_url" alt="Color {{ productColor.name || pi + 1 }}" />
-                  } @else {
-                    <span class="material-symbols-rounded" aria-hidden="true">palette</span>
-                  }
-                </div>
-
-                <div class="asset-main">
-                  @if (editing()) {
-                    <div class="asset-form-grid">
-                      <label class="field field-compact">
-                        <span class="material-symbols-rounded" aria-hidden="true">label</span>
-                        <input
-                          type="text"
-                          class="input"
-                          [ngModel]="productColor.name || ''"
-                          (ngModelChange)="onProductColorFieldChange(pi, 'name', $event)"
-                          placeholder="Nombre del color"
-                        />
-                      </label>
-
-                      <label class="field field-compact">
-                        <span class="material-symbols-rounded" aria-hidden="true">image</span>
-                        <input
-                          type="text"
-                          class="input"
-                          [ngModel]="productColor.image_url || ''"
-                          (ngModelChange)="onProductColorFieldChange(pi, 'image_url', $event)"
-                          placeholder="URL de imagen del color"
-                        />
-                      </label>
-                    </div>
-                  } @else {
-                    <p class="value">
-                      {{ productColor.name || "Sin nombre" }}
-                      @if (productColor.image_url) {
-                        <span class="asset-meta"> con imagen</span>
-                      }
-                    </p>
-                  }
-
-                  @if (editing()) {
-                    <div class="asset-actions">
-                      <button type="button" class="btn btn-danger btn-xs" (click)="removeProductColor(pi)">
-                        <span class="material-symbols-rounded" aria-hidden="true">delete</span>
-                        Quitar
-                      </button>
-                    </div>
-                  }
-                </div>
-              </div>
-            }
-          </div>
-        }
-      </article>
-    </section>
-
-    <section class="pricing-overview surface-card">
-      <div class="section-head">
-        <h2>
-          <span class="material-symbols-rounded" aria-hidden="true">monitoring</span>
-          Resumen de precios
-        </h2>
-        <p>Visibilidad de costo, precio clienta y precio final por variante.</p>
-      </div>
-
-      <div class="pricing-grid">
-        @for (metric of priceOverview(); track metric.key) {
-          <article class="price-kpi" [class.price-kpi-empty]="!metric.hasData">
-            <p class="price-kpi-label">
-              <span class="material-symbols-rounded" aria-hidden="true">{{ metric.icon }}</span>
-              {{ metric.label }}
-            </p>
-            <p class="price-kpi-value">{{ metric.valueLabel }}</p>
-            <p class="price-kpi-help">{{ metric.helperLabel }}</p>
-          </article>
-        }
-      </div>
-    </section>
-
-    <div class="section-head section-head-inline">
-      <h2>
-        <span class="material-symbols-rounded" aria-hidden="true">deployed_code</span>
-        Variantes del producto
-      </h2>
-
-      @if (editing()) {
-        <button type="button" class="btn btn-soft btn-xs" (click)="addVariant()">
-          <span class="material-symbols-rounded" aria-hidden="true">add</span>
-          Agregar variante
+  </header>
+  @if (error()) {
+    <div class="notice notice-error" role="alert">
+      <p>{{ error() }}</p>
+      @if (!doc()) {
+        <button type="button" class="btn" (click)="retryLoad()" [disabled]="loading()">
+          Reintentar
         </button>
       }
     </div>
-
-    <section class="variants-grid">
-      @for (item of d.listing.items; track (item.sku || item.variant_name || $index); let i = $index) {
-        <article class="variant-card surface-card">
-          <div class="variant-head">
-            <div class="variant-heading-copy">
-              @if (editing()) {
-                <label class="label" [attr.for]="'variant-name-' + i">
-                  <span class="material-symbols-rounded" aria-hidden="true">sell</span>
-                  Nombre de variante
-                </label>
-                <label class="field" [attr.for]="'variant-name-' + i">
-                  <input
-                    [id]="'variant-name-' + i"
-                    type="text"
-                    class="input"
-                    [ngModel]="item.variant_name || ''"
-                    (ngModelChange)="onVariantFieldChange(i, 'variant_name', $event)"
-                    placeholder="Ej. Talla 24"
-                  />
-                </label>
-              } @else {
-                <h3>
-                  <span class="material-symbols-rounded" aria-hidden="true">sell</span>
-                  {{ variantLabel(item, i) }}
-                </h3>
-              }
-              <p class="variant-index">Variante {{ i + 1 }}</p>
-            </div>
-
-            <button type="button" class="btn btn-danger btn-xs" (click)="setVariantOutOfStock(i)">
-              <span class="material-symbols-rounded" aria-hidden="true">block</span>
-              Agotar variante
-            </button>
+  }
+  @if (loading()) {
+    <div class="empty-state surface" role="status">
+      <span class="spinner" aria-hidden="true"></span>
+      <p>Cargando la ficha del producto…</p>
+    </div>
+  } @else if (doc(); as d) {
+    <fieldset class="product-sheet surface" [disabled]="saving()" aria-label="Ficha del producto">
+      <section class="gallery-section sheet-section" aria-labelledby="photos-title">
+        <div class="section-head">
+          <h2 id="photos-title">
+            <review-icon name="image" /> Fotos y colores
+            <span class="count">{{ galleryImages().length }}</span>
+          </h2>
+        </div>
+        @if (displayedImage(); as image) {
+          <div class="photo-caption">
+            <span>{{ photoLabel(image) }}</span>
+            @if (image === coverUrl()) {
+              <span class="cover-label"><review-icon name="check" /> Portada</span>
+            }
           </div>
-
-          <div class="variant-base-grid">
-            <div class="variant-row">
-              <label class="label" [attr.for]="'variant-sku-' + i">
-                <span class="material-symbols-rounded" aria-hidden="true">barcode</span>
-                SKU
-              </label>
-
-              @if (editing()) {
-                <label class="field" [attr.for]="'variant-sku-' + i">
-                  <input
-                    [id]="'variant-sku-' + i"
-                    type="text"
-                    class="input"
-                    [ngModel]="item.sku || ''"
-                    (ngModelChange)="onVariantFieldChange(i, 'sku', $event)"
-                    placeholder="SKU opcional"
-                  />
-                </label>
-              } @else {
-                <p class="value">{{ item.sku || "Sin SKU" }}</p>
-              }
-            </div>
-
-            <div class="variant-row">
-              <label class="label" [attr.for]="'variant-state-' + i">
-                <span class="material-symbols-rounded" aria-hidden="true">tune</span>
-                Estado variante
-              </label>
-              <label class="field select-field" [attr.for]="'variant-state-' + i">
-                <span class="material-symbols-rounded" aria-hidden="true">inventory</span>
-                <select
-                  [id]="'variant-state-' + i"
-                  class="input"
-                  [ngModel]="item.stock_state"
-                  (ngModelChange)="onVariantStateChange(i, $event)"
+          <button
+            type="button"
+            class="hero-photo"
+            (click)="showLightbox.set(true); imageZoomed.set(false)"
+            [attr.aria-label]="'Ampliar foto: ' + photoLabel(image)"
+          >
+            <img
+              [src]="image"
+              [alt]="(d.listing.title || 'Producto') + ' · ' + photoLabel(image)"
+            /><span class="expand-mark"><review-icon name="expand" /></span>
+          </button>
+          @if (galleryImages().length > 1) {
+            <div class="photo-thumbnails" aria-label="Fotos del producto">
+              @for (url of galleryImages(); track url) {
+                <button
+                  type="button"
+                  class="photo-thumbnail"
+                  [class.selected]="url === image"
+                  [class.is-cover]="url === coverUrl()"
+                  [attr.aria-pressed]="url === image"
+                  [attr.aria-label]="
+                    'Ver ' + photoLabel(url) + (url === coverUrl() ? ', portada' : '')
+                  "
+                  (click)="selectImage(url)"
                 >
-                  @for (opt of stockStates; track opt.value) {
-                    <option [ngValue]="opt.value">{{ opt.label }}</option>
+                  <img [src]="url" alt="" loading="lazy" />
+                  @if (url === coverUrl()) {
+                    <span class="thumbnail-cover"
+                      ><review-icon name="check" /><span>Portada</span></span
+                    >
                   }
-                </select>
-              </label>
-            </div>
-          </div>
-
-          <div class="prices-section">
-            <h4>
-              <span class="material-symbols-rounded" aria-hidden="true">paid</span>
-              Bloque de precios
-            </h4>
-
-            <div class="price-fields-grid">
-              @for (field of priceFields(); track field.key) {
-                <div class="price-field-card">
-                  <label class="label" [attr.for]="'price-' + field.key + '-' + i">
-                    <span class="material-symbols-rounded" aria-hidden="true">{{ field.icon }}</span>
-                    {{ field.label }}
-                  </label>
-
-                  @if (editing()) {
-                    <label class="field" [attr.for]="'price-' + field.key + '-' + i">
-                      <span class="material-symbols-rounded" aria-hidden="true">attach_money</span>
-                      <input
-                        [id]="'price-' + field.key + '-' + i"
-                        class="input"
-                        type="text"
-                        inputmode="decimal"
-                        [ngModel]="getPriceInputValue(i, item, field.key)"
-                        (ngModelChange)="onVariantPriceInputChange(i, field.key, $event)"
-                        (blur)="onVariantPriceInputBlur(i, field.key)"
-                        placeholder="0.00"
-                      />
-                    </label>
-                  } @else {
-                    <p class="price-read">{{ formatMoney(getPriceValue(item, field.key), item.prices.currency || preferredCurrency()) }}</p>
-                  }
-                </div>
-              }
-            </div>
-
-            @if (priceIssue(item); as issue) {
-              <p class="price-warning">
-                <span class="material-symbols-rounded" aria-hidden="true">warning</span>
-                {{ issue }}
-              </p>
-            }
-          </div>
-
-          <div class="notes-section">
-            <label class="label" [attr.for]="'variant-notes-' + i">
-              <span class="material-symbols-rounded" aria-hidden="true">notes</span>
-              Notas
-            </label>
-
-            @if (editing()) {
-              <label class="field field-textarea" [attr.for]="'variant-notes-' + i">
-                <textarea
-                  [id]="'variant-notes-' + i"
-                  class="input textarea"
-                  [ngModel]="item.notes || ''"
-                  (ngModelChange)="onVariantFieldChange(i, 'notes', $event)"
-                  rows="3"
-                  placeholder="Notas internas de esta variante"
-                ></textarea>
-              </label>
-            } @else {
-              <p class="value">{{ item.notes || "Sin notas" }}</p>
-            }
-          </div>
-
-          <div class="colors-section">
-            <div class="colors-section-head">
-              <h4>
-                <span class="material-symbols-rounded" aria-hidden="true">palette</span>
-                Stock por color
-              </h4>
-
-              @if (editing()) {
-                <button type="button" class="btn btn-soft btn-xs" (click)="addVariantColor(i)">
-                  <span class="material-symbols-rounded" aria-hidden="true">add</span>
-                  Agregar color
                 </button>
               }
             </div>
-
-            @if ((item.color_stock || []).length === 0) {
-              <p class="muted">Esta variante no tiene colores definidos.</p>
+          }
+        } @else {
+          <div class="empty-photo">
+            <review-icon name="image" />
+            <p>Sin fotos del producto</p>
+          </div>
+        }
+        <div class="color-list">
+          <h3>
+            Colores del producto <span class="count">{{ (d.product_colors || []).length }}</span>
+          </h3>
+          @for (color of d.product_colors || []; track $index) {
+            <button
+              type="button"
+              class="color-option"
+              [class.selected]="!!color.image_url && color.image_url === displayedImage()"
+              [disabled]="!color.image_url"
+              [attr.aria-pressed]="!!color.image_url && color.image_url === displayedImage()"
+              (click)="selectImage(color.image_url!)"
+            >
+              <span
+                class="color-thumb"
+                [class.is-cover]="!!color.image_url && color.image_url === coverUrl()"
+              >
+                @if (color.image_url) {
+                  <img [src]="color.image_url" alt="" loading="lazy" />
+                } @else {
+                  <review-icon name="image" />
+                }
+              </span>
+              <span class="color-copy"
+                ><span>{{ color.name || 'Sin nombre' }}</span>
+                @if (color.image_url && color.image_url === coverUrl()) {
+                  <span class="cover-label"><review-icon name="check" /> Portada</span>
+                } @else if (!color.image_url) {
+                  <span class="hint">Sin foto</span>
+                }
+              </span>
+              @if (color.image_url && color.image_url === displayedImage()) {
+                <span class="hint in-view">En vista</span>
+              }
+            </button>
+          } @empty {
+            <p class="hint">Sin colores registrados.</p>
+          }
+        </div>
+        @if (editing()) {
+          <button type="button" class="btn gallery-edit" (click)="showAssets.set(true)">
+            Editar fotos y colores
+          </button>
+        }
+      </section>
+      <div class="product-panel">
+        <section class="sheet-section" aria-labelledby="product-section-title">
+          <h2 id="product-section-title"><review-icon name="box" /> Producto</h2>
+          @if (editing()) {
+            <label class="field" for="product-title"
+              >Nombre del producto<textarea
+                id="product-title"
+                class="input product-name"
+                rows="2"
+                [ngModel]="d.listing.title || ''"
+                (ngModelChange)="onListingFieldChange('title', $event)"
+                placeholder="Nombre del producto"
+              ></textarea>
+            </label>
+          }
+          @if (d.listing.supplierSku) {
+            <div class="field">
+              <span class="label">Código etiqueta</span>
+              <p class="value">{{ d.listing.supplierSku }}</p>
+            </div>
+            <details class="field-help">
+              <summary>¿Qué es el código etiqueta?</summary>
+              <p>
+                Identificador del producto usado por el proveedor. El SKU interno del sistema se
+                consulta en cada variante.
+              </p>
+            </details>
+          }
+          @if (d.listing.keywords?.length) {
+            <div class="field">
+              <span class="label">Palabras clave</span>
+              <ul class="keyword-list">
+                @for (keyword of d.listing.keywords; track $index) {
+                  <li>{{ keyword }}</li>
+                }
+              </ul>
+            </div>
+          }
+          <div class="field">
+            @if (editing()) {
+              <label for="product-category">Categoría</label
+              ><input
+                id="product-category"
+                class="input"
+                [ngModel]="d.listing.category_hint || ''"
+                (ngModelChange)="onListingFieldChange('category_hint', $event)"
+                placeholder="Ej. Ropa / Mujer / Pantalones"
+              />
             } @else {
-              <div class="color-rows">
-                @for (color of (item.color_stock || []); track (color.color_name || ci); let ci = $index) {
-                  <div class="color-row">
-                    @if (editing()) {
-                      <label class="field field-compact">
-                        <span class="material-symbols-rounded" aria-hidden="true">lens</span>
-                        <input
-                          type="text"
-                          class="input"
-                          [ngModel]="color.color_name || ''"
-                          (ngModelChange)="onColorNameChange(i, ci, $event)"
-                          placeholder="Nombre del color"
-                        />
-                      </label>
-                    } @else {
-                      <span class="color-name">
-                        <span class="material-symbols-rounded" aria-hidden="true">lens</span>
-                        {{ color.color_name }}
-                        @if (getColorImageUrl(color.color_name)) {
-                          <span class="asset-meta">con imagen</span>
-                        }
-                      </span>
-                    }
-
-                    <label class="field select-field">
-                      <span class="material-symbols-rounded" aria-hidden="true">inventory</span>
+              <span class="label">Categoría</span>
+              <p class="value">{{ d.listing.category_hint || 'Sin categoría' }}</p>
+            }
+          </div>
+          <div class="supplier-line">
+            <review-icon name="truck" />
+            <div>
+              <span class="label">Proveedor</span>
+              <p class="value">{{ supplierName() }}</p>
+            </div>
+          </div>
+        </section>
+        <section class="sheet-section" aria-labelledby="prices-title">
+          <div class="section-head">
+            <h2 id="prices-title"><review-icon name="tag" /> Precios</h2>
+            <span class="hint">{{ preferredCurrency() }}</span>
+          </div>
+          <dl class="price-overview">
+            @for (metric of priceOverview(); track metric.key) {
+              <div [class.client-price]="metric.key === 'precio_clienta'">
+                <dt>{{ metric.label }}</dt>
+                <dd>{{ metric.valueLabel }}</dd>
+              </div>
+            }
+          </dl>
+          <details class="field-help price-help">
+            <summary>Detalle de precios por variante</summary>
+            <div class="help-note">
+              @for (metric of priceOverview(); track metric.key) {
+                <p>
+                  <strong>{{ metric.label }}:</strong> {{ metric.helperLabel }}
+                </p>
+              }
+              <p>Los importes se editan en cada variante.</p>
+            </div>
+          </details>
+        </section>
+        <section class="sheet-section variants-section" aria-labelledby="variants-title">
+          <div class="section-head">
+            <h2 id="variants-title">
+              <review-icon name="layers" /> Variantes
+              <span class="count">{{ d.listing.items.length }}</span>
+            </h2>
+            @if (editing()) {
+              <button type="button" class="btn subtle" (click)="addVariant()">
+                <review-icon name="plus" /> Añadir variante
+              </button>
+            }
+          </div>
+          <div class="availability-heading">
+            <span class="label">Disponibilidad con proveedor</span>
+            <details class="bulk-actions">
+              <summary>Actualizar todas</summary>
+              <div class="bulk-options">
+                <button type="button" class="btn" (click)="markAllInStock()">
+                  Marcar todas disponibles
+                </button>
+                <button type="button" class="btn danger" (click)="markAllOutOfStock()">
+                  Marcar todas agotadas
+                </button>
+              </div>
+            </details>
+          </div>
+          <div class="variants-list">
+            @for (item of d.listing.items; track $index; let i = $index) {
+              <details class="variant" [open]="!item.variant_name">
+                <summary class="variant-summary">
+                  <span class="variant-name">{{ variantLabel(item, i) }}</span
+                  ><span [class]="'stock-pill ' + stockClass(item.stock_state)">{{
+                    stockLabel(item.stock_state)
+                  }}</span
+                  ><review-icon name="right" />
+                </summary>
+                <div class="variant-body">
+                  @if (editing()) {
+                    <label class="field" [for]="'variant-name-' + i"
+                      >Nombre o talla<input
+                        class="input"
+                        [id]="'variant-name-' + i"
+                        [ngModel]="item.variant_name || ''"
+                        (ngModelChange)="onVariantFieldChange(i, 'variant_name', $event)"
+                        placeholder="Ej. CH o Unitalla"
+                    /></label>
+                  }
+                  <div class="variant-availability">
+                    <label class="field" [for]="'variant-state-' + i"
+                      >Disponibilidad
                       <select
                         class="input"
-                        [ngModel]="color.stock_state"
-                        (ngModelChange)="onColorStateChange(i, ci, $event)"
+                        [id]="'variant-state-' + i"
+                        [ngModel]="item.stock_state"
+                        (ngModelChange)="onVariantStateChange(i, $event)"
                       >
                         @for (opt of stockStates; track opt.value) {
                           <option [ngValue]="opt.value">{{ opt.label }}</option>
                         }
-                      </select>
-                    </label>
-
-                    @if (editing()) {
-                      <button type="button" class="btn btn-danger btn-xs color-remove-btn" (click)="removeVariantColor(i, ci)">
-                        <span class="material-symbols-rounded" aria-hidden="true">delete</span>
-                        Quitar
-                      </button>
+                      </select> </label
+                    ><button
+                      type="button"
+                      class="btn subtle danger"
+                      (click)="setVariantOutOfStock(i)"
+                      [disabled]="item.stock_state === 'out_of_stock'"
+                    >
+                      Marcar agotada
+                    </button>
+                  </div>
+                  <div class="variant-prices">
+                    @for (field of priceFields(); track field.key) {
+                      <div class="field" [class.client-price]="field.key === 'precio_clienta'">
+                        @if (editing()) {
+                          <label [for]="'price-' + field.key + '-' + i"
+                            >{{ field.label }} ({{
+                              item.prices.currency || preferredCurrency()
+                            }})</label
+                          >
+                          <input
+                            class="input"
+                            [id]="'price-' + field.key + '-' + i"
+                            type="text"
+                            inputmode="decimal"
+                            [ngModel]="getPriceInputValue(i, item, field.key)"
+                            (ngModelChange)="onVariantPriceInputChange(i, field.key, $event)"
+                            (blur)="onVariantPriceInputBlur(i, field.key)"
+                            placeholder="0.00"
+                          />
+                        } @else {
+                          <span class="label">{{ field.label }}</span>
+                          <p class="price-value">
+                            {{
+                              formatMoney(
+                                getPriceValue(item, field.key),
+                                item.prices.currency || preferredCurrency()
+                              )
+                            }}
+                          </p>
+                        }
+                      </div>
                     }
                   </div>
-                }
+                  @if (priceIssue(item); as issue) {
+                    <p class="notice notice-warning">{{ issue }}</p>
+                  }
+                  <div class="variant-colors">
+                    <div class="section-head">
+                      <h3>Disponibilidad por color</h3>
+                      @if (editing()) {
+                        <button type="button" class="btn subtle" (click)="addVariantColor(i)">
+                          <review-icon name="plus" /> Añadir color
+                        </button>
+                      }
+                    </div>
+                    @for (color of item.color_stock || []; track $index; let ci = $index) {
+                      <div class="variant-color">
+                        <div class="variant-color-name">
+                          @if (getColorImageUrl(color.color_name); as url) {
+                            <img [src]="url" alt="" loading="lazy" />
+                          }
+                          @if (editing()) {
+                            <label class="field" [for]="'color-name-' + i + '-' + ci"
+                              >Color<input
+                                class="input"
+                                [id]="'color-name-' + i + '-' + ci"
+                                [ngModel]="color.color_name"
+                                (ngModelChange)="onColorNameChange(i, ci, $event)"
+                            /></label>
+                          } @else {
+                            <span>{{ color.color_name }}</span>
+                          }
+                        </div>
+                        <label class="field" [for]="'color-state-' + i + '-' + ci"
+                          ><span class="sr-only"
+                            >Disponibilidad de {{ color.color_name }} en
+                            {{ variantLabel(item, i) }}</span
+                          >
+                          <select
+                            class="input"
+                            [id]="'color-state-' + i + '-' + ci"
+                            [ngModel]="color.stock_state"
+                            (ngModelChange)="onColorStateChange(i, ci, $event)"
+                          >
+                            @for (opt of stockStates; track opt.value) {
+                              <option [ngValue]="opt.value">{{ opt.label }}</option>
+                            }
+                          </select>
+                        </label>
+                        @if (editing()) {
+                          <button
+                            type="button"
+                            class="btn subtle danger color-remove"
+                            (click)="removeVariantColor(i, ci)"
+                            [attr.aria-label]="
+                              'Quitar ' + color.color_name + ' de ' + variantLabel(item, i)
+                            "
+                          >
+                            Quitar
+                          </button>
+                        }
+                      </div>
+                    } @empty {
+                      <p class="hint">Sin colores registrados en esta variante.</p>
+                    }
+                  </div>
+                  <details class="variant-details">
+                    <summary>SKU interno y notas</summary>
+                    <div class="details-content">
+                      <div class="field">
+                        @if (editing()) {
+                          <label [for]="'variant-sku-' + i">SKU interno</label
+                          ><input
+                            class="input"
+                            [id]="'variant-sku-' + i"
+                            [ngModel]="item.sku || ''"
+                            (ngModelChange)="onVariantFieldChange(i, 'sku', $event)"
+                            placeholder="SKU de la variante"
+                          />
+                        } @else {
+                          <span class="label">SKU interno</span>
+                          <p class="value">{{ item.sku || 'Sin SKU' }}</p>
+                        }
+                      </div>
+                      <div class="field">
+                        @if (editing()) {
+                          <label [for]="'variant-notes-' + i">Notas</label
+                          ><textarea
+                            class="input"
+                            rows="3"
+                            [id]="'variant-notes-' + i"
+                            [ngModel]="item.notes || ''"
+                            (ngModelChange)="onVariantFieldChange(i, 'notes', $event)"
+                            placeholder="Notas de esta variante"
+                          ></textarea>
+                        } @else {
+                          <span class="label">Notas</span>
+                          <p class="value">{{ item.notes || 'Sin notas' }}</p>
+                        }
+                      </div>
+                    </div>
+                  </details>
+                </div>
+              </details>
+            } @empty {
+              <div class="empty-note">
+                <p>Este producto todavía no tiene variantes.</p>
+                <p class="hint">Activa «Editar producto» para añadir una.</p>
               </div>
             }
           </div>
-        </article>
-      }
-    </section>
+        </section>
+      </div>
+    </fieldset>
+    @if (features.enabled('inventoryProductsV2')) {
+      <section class="surface performance-section" aria-labelledby="performance-title">
+        <div class="section-head">
+          <h2 id="performance-title"><review-icon name="box" /> Tu inventario y ventas</h2>
+        </div>
+        <div class="performance-grid">
+          <div class="own-inventory">
+            <h3>Inventario propio</h3>
+            <dl class="inventory-metrics">
+              <div>
+                <dt>Disponible</dt>
+                <dd>{{ productAnalytics().available }}</dd>
+              </div>
+              <div>
+                <dt>Reservado</dt>
+                <dd>{{ productAnalytics().reserved }}</dd>
+              </div>
+              <div>
+                <dt>Por revisar</dt>
+                <dd>{{ productAnalytics().review }}</dd>
+              </div>
+            </dl>
+            <details class="field-help">
+              <summary>¿Cómo se distingue del proveedor?</summary>
+              <p>
+                Estas son tus existencias. La disponibilidad de las variantes indica lo que puedes
+                solicitar al proveedor.
+              </p>
+            </details>
+          </div>
+          <div class="sales-summary">
+            <h3>Ventas acumuladas</h3>
+            <dl class="sales-metrics">
+              <div>
+                <dt>Venta neta</dt>
+                <dd>{{ formatMoney(productAnalytics().sales, preferredCurrency()) }}</dd>
+              </div>
+              <div>
+                <dt>Ganancia</dt>
+                <dd>{{ formatMoney(productAnalytics().profit, preferredCurrency()) }}</dd>
+              </div>
+            </dl>
+            <details class="sales-details">
+              <summary>Ver detalle de ventas</summary>
+              <dl class="detail-metrics">
+                <div>
+                  <dt>Unidades netas</dt>
+                  <dd>{{ productAnalytics().units }}</dd>
+                </div>
+                <div>
+                  <dt>Devoluciones</dt>
+                  <dd>{{ productAnalytics().returns }}</dd>
+                </div>
+                <div>
+                  <dt>Clientas únicas</dt>
+                  <dd>{{ productAnalytics().customers }}</dd>
+                </div>
+                <div>
+                  <dt>Última venta</dt>
+                  <dd>{{ formatDate(productAnalytics().lastSale) }}</dd>
+                </div>
+              </dl>
+            </details>
+          </div>
+        </div>
+      </section>
+    }
+    <details class="technical-details">
+      <summary>Información del registro</summary>
+      <dl class="detail-metrics">
+        <div>
+          <dt>ID del producto</dt>
+          <dd>{{ d.normalized_id }}</dd>
+        </div>
+        <div>
+          <dt>Esquema</dt>
+          <dd>{{ d.schema_version }}</dd>
+        </div>
+      </dl>
+    </details>
+    <footer class="actions-bar">
+      <p class="hint" role="status">
+        {{
+          saving() ? 'Guardando cambios…' : saveMessage() || 'Los cambios se aplican al guardar.'
+        }}
+      </p>
+      <button
+        type="button"
+        class="btn btn-primary"
+        (click)="saveInventory()"
+        [disabled]="saving() || loading()"
+      >
+        <review-icon name="save" /> {{ saving() ? 'Guardando…' : 'Guardar cambios' }}
+      </button>
+    </footer>
+  } @else if (!error()) {
+    <div class="empty-state surface">
+      <review-icon name="box" />
+      <p>No hay un producto para mostrar.</p>
+      <button type="button" class="btn" (click)="goCatalog()">Volver al catálogo</button>
+    </div>
   }
 </section>
+@if (showAssets() && doc(); as d) {
+  <dialog
+    reviewDialog
+    class="assets-dialog"
+    aria-labelledby="assets-title"
+    (close)="showAssets.set(false)"
+  >
+    <header class="dialog-header">
+      <h2 id="assets-title">Editar fotos y colores</h2>
+      <button
+        type="button"
+        class="btn-icon subtle"
+        (click)="showAssets.set(false)"
+        aria-label="Cerrar editor de fotos y colores"
+      >
+        <review-icon name="close" />
+      </button>
+    </header>
+    <div class="dialog-body">
+      <section class="asset-section">
+        <div class="section-head">
+          <h3>Fotos del producto</h3>
+          <button type="button" class="btn" (click)="addCoverImage()">
+            <review-icon name="plus" /> Añadir foto
+          </button>
+        </div>
+        @for (url of d.cover_images || []; track $index; let i = $index) {
+          <div class="asset-row">
+            <div class="asset-preview">
+              @if (url) {
+                <img [src]="url" [alt]="'Foto ' + (i + 1)" />
+              } @else {
+                <review-icon name="image" />
+              }
+            </div>
+            <div class="asset-content">
+              <div class="section-head">
+                <h3>Foto {{ i + 1 }}</h3>
+                @if (i === 0 && url) {
+                  <span class="cover-label"><review-icon name="check" /> Portada</span>
+                }
+              </div>
+              <label class="field" [for]="'photo-url-' + i"
+                >Enlace de la foto<input
+                  class="input"
+                  type="url"
+                  [id]="'photo-url-' + i"
+                  [ngModel]="url"
+                  (ngModelChange)="onCoverImageChange(i, $event)"
+                  placeholder="https://…"
+              /></label>
+              <div class="asset-actions">
+                <button
+                  type="button"
+                  class="btn subtle"
+                  [disabled]="!url || i === 0"
+                  (click)="setCoverImageAsPrimary(i)"
+                >
+                  Usar como portada</button
+                ><button
+                  type="button"
+                  class="btn subtle danger"
+                  (click)="removeCoverImage(i)"
+                  [attr.aria-label]="'Quitar foto ' + (i + 1)"
+                >
+                  Quitar
+                </button>
+              </div>
+            </div>
+          </div>
+        } @empty {
+          <p class="empty-note">Sin fotos registradas. Añade una foto mediante su enlace.</p>
+        }
+      </section>
+      <section class="asset-section">
+        <div class="section-head">
+          <h3>Colores del producto</h3>
+          <button type="button" class="btn" (click)="addProductColor()">
+            <review-icon name="plus" /> Añadir color
+          </button>
+        </div>
+        @for (color of d.product_colors || []; track $index; let i = $index) {
+          <div class="asset-row">
+            <div class="asset-preview">
+              @if (color.image_url) {
+                <img [src]="color.image_url" [alt]="color.name || 'Color sin nombre'" />
+              } @else {
+                <review-icon name="image" />
+              }
+            </div>
+            <div class="asset-content">
+              <label class="field" [for]="'product-color-' + i"
+                >Nombre del color<input
+                  class="input"
+                  [id]="'product-color-' + i"
+                  [ngModel]="color.name"
+                  (ngModelChange)="onProductColorFieldChange(i, 'name', $event)"
+              /></label>
+              <details class="color-photo-details">
+                <summary>Foto del color</summary>
+                <label class="field" [for]="'product-color-url-' + i"
+                  >Enlace de la foto<input
+                    class="input"
+                    type="url"
+                    [id]="'product-color-url-' + i"
+                    [ngModel]="color.image_url || ''"
+                    (ngModelChange)="onProductColorFieldChange(i, 'image_url', $event)"
+                    placeholder="https://…"
+                /></label>
+              </details>
+              <button
+                type="button"
+                class="btn subtle danger"
+                (click)="removeProductColor(i)"
+                [attr.aria-label]="'Quitar color ' + color.name"
+              >
+                Quitar color
+              </button>
+            </div>
+          </div>
+        } @empty {
+          <p class="empty-note">Sin colores registrados.</p>
+        }
+      </section>
+    </div>
+    <footer class="dialog-footer">
+      <p class="hint">Guarda los cambios al volver a la ficha.</p>
+      <button type="button" class="btn btn-primary" (click)="showAssets.set(false)">
+        Terminar edición
+      </button>
+    </footer>
+  </dialog>
+}
+@if (showLightbox() && displayedImage(); as image) {
+  <dialog
+    reviewDialog
+    class="lightbox"
+    aria-labelledby="lightbox-title"
+    (close)="showLightbox.set(false)"
+    (keydown.arrowleft)="moveImage(-1); $event.preventDefault()"
+    (keydown.arrowright)="moveImage(1); $event.preventDefault()"
+  >
+    <header class="dialog-header">
+      <div>
+        <h2 id="lightbox-title">{{ photoLabel(image) }}</h2>
+        <p class="hint">
+          {{ galleryImages().indexOf(image) + 1 }} / {{ galleryImages().length }} fotos
+        </p>
+      </div>
+      <div class="lightbox-actions">
+        <button
+          type="button"
+          class="btn-icon"
+          (click)="imageZoomed.set(!imageZoomed())"
+          [attr.aria-label]="imageZoomed() ? 'Reducir imagen' : 'Ampliar imagen al doble'"
+          [attr.aria-pressed]="imageZoomed()"
+        >
+          <review-icon name="zoom" /></button
+        ><button
+          type="button"
+          class="btn-icon"
+          (click)="showLightbox.set(false)"
+          aria-label="Cerrar visor"
+        >
+          <review-icon name="close" />
+        </button>
+      </div>
+    </header>
+    <div class="lightbox-media" [class.zoomed]="imageZoomed()">
+      <img
+        [src]="image"
+        [alt]="(doc()?.listing?.title || 'Producto') + ' · ' + photoLabel(image)"
+      />
+    </div>
+    <footer class="lightbox-footer">
+      <button
+        type="button"
+        class="btn-icon"
+        (click)="moveImage(-1)"
+        [disabled]="galleryImages().length < 2"
+        aria-label="Foto anterior"
+      >
+        <review-icon name="left" />
+      </button>
+      <p class="hint">{{ image === coverUrl() ? 'Portada del producto' : photoLabel(image) }}</p>
+      <button
+        type="button"
+        class="btn-icon"
+        (click)="moveImage(1)"
+        [disabled]="galleryImages().length < 2"
+        aria-label="Foto siguiente"
+      >
+        <review-icon name="right" />
+      </button>
+    </footer>
+  </dialog>
+}

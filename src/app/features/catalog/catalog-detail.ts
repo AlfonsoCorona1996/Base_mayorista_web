@@ -9,6 +9,8 @@ import { OrdersService } from "../../core/orders.service";
 import { InventoryService } from "../../core/inventory.service";
 import { calculateItemFinancials } from "../../core/order-financials";
 import { FeatureFlagsService } from "../../core/feature-flags.service";
+import { ReviewIcon } from "../review/review-icon";
+import { ReviewDialogDirective } from "../review/review-dialog.directive";
 
 type PriceFieldKey = "precio_costo" | "precio_clienta" | "precio_final";
 
@@ -16,7 +18,7 @@ type PriceFieldKey = "precio_costo" | "precio_clienta" | "precio_final";
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   selector: "app-catalog-detail",
-  imports: [FormsModule],
+  imports: [FormsModule, ReviewIcon, ReviewDialogDirective],
   templateUrl: "./catalog-detail.html",
   styleUrl: "./catalog-detail.css",
 })
@@ -25,15 +27,15 @@ export default class CatalogDetailPage {
 
   readonly stockStates: Array<{ value: StockState; label: string }> = [
     { value: "in_stock", label: "Disponible" },
-    { value: "last_pair", label: "Ultima pieza" },
+    { value: "last_pair", label: "Última pieza" },
     { value: "out_of_stock", label: "Agotado" },
     { value: "unknown_qty", label: "Sin confirmar" },
   ];
 
   private readonly basePriceFields: Array<{ key: PriceFieldKey; label: string; icon: string }> = [
+    { key: "precio_final", label: "Precio de venta", icon: "sell" },
     { key: "precio_costo", label: "Costo", icon: "payments" },
     { key: "precio_clienta", label: "Precio clienta", icon: "badge" },
-    { key: "precio_final", label: "Precio final", icon: "sell" },
   ];
 
   /** "Manuales Catálogo" ya no maneja precio final/público, solo costo y clienta. "Manuales BM" conserva los 3. */
@@ -48,6 +50,10 @@ export default class CatalogDetailPage {
   loading = signal(false);
   saving = signal(false);
   editing = signal(false);
+  selectedImage = signal<string | null>(null);
+  showAssets = signal(false);
+  showLightbox = signal(false);
+  imageZoomed = signal(false);
   error = signal<string | null>(null);
   saveMessage = signal<string | null>(null);
   private priceDraftByKey = signal<Record<string, string>>({});
@@ -134,6 +140,48 @@ export default class CatalogDetailPage {
     return this.firstNonEmpty(d.cover_images) || d.preview_image_url || null;
   });
 
+  galleryImages = computed(() => {
+    const d = this.doc();
+    const images = [
+      this.coverUrl(),
+      ...(d?.cover_images || []),
+      ...(d?.product_colors || []).map((color) => color.image_url),
+    ].filter((url): url is string => !!url?.trim());
+    return Array.from(new Set(images));
+  });
+
+  displayedImage = computed(() => {
+    const selected = this.selectedImage();
+    return selected && this.galleryImages().includes(selected)
+      ? selected
+      : this.galleryImages()[0] || null;
+  });
+
+  photoLabel(url: string | null): string {
+    if (!url) return "Sin foto";
+    const colors = this.doc()?.product_colors
+      .filter((color) => color.image_url === url)
+      .map((color) => color.name)
+      .filter(Boolean);
+    return colors?.length ? colors.join(" · ") : `Foto ${this.galleryImages().indexOf(url) + 1}`;
+  }
+
+  selectImage(url: string) {
+    this.selectedImage.set(url);
+    this.imageZoomed.set(false);
+  }
+
+  moveImage(direction: number) {
+    const images = this.galleryImages();
+    if (!images.length) return;
+    const index = images.indexOf(this.displayedImage() || "");
+    this.selectImage(images[(index + direction + images.length) % images.length]);
+  }
+
+  retryLoad() {
+    void this.load();
+  }
+
   productStockState = computed(() => {
     const d = this.doc();
     if (!d || d.listing.items.length === 0) return "unknown_qty" as StockState;
@@ -171,7 +219,7 @@ export default class CatalogDetailPage {
           ...field,
           hasData: false,
           valueLabel: "Sin dato",
-          helperLabel: "Captura precios para esta metrica.",
+          helperLabel: "Sin precios registrados en las variantes.",
         };
       }
 
@@ -273,7 +321,7 @@ export default class CatalogDetailPage {
     }
 
     if (!isCatalogo && final !== null && final < client) {
-      return "Precio final menor que precio clienta.";
+      return "Precio de venta menor que precio clienta.";
     }
 
     return null;
