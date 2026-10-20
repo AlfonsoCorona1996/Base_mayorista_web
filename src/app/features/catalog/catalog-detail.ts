@@ -7,7 +7,8 @@ import { NormalizedListingsService } from "../../core/normalized-listings.servic
 import { SuppliersService } from "../../core/suppliers.service";
 import { OrdersService } from "../../core/orders.service";
 import { InventoryService } from "../../core/inventory.service";
-import { calculateItemFinancials } from "../../core/order-financials";
+import { ProductSalesService } from "../../core/product-sales.service";
+import { emptyProductSales } from "../../core/product-sales";
 import { FeatureFlagsService } from "../../core/feature-flags.service";
 import { ReviewIcon } from "../review/review-icon";
 import { ReviewDialogDirective } from "../review/review-dialog.directive";
@@ -63,6 +64,7 @@ export default class CatalogDetailPage {
   private svc = inject(NormalizedListingsService);
   private suppliers = inject(SuppliersService);
   private orders = inject(OrdersService);
+  readonly sales = inject(ProductSalesService);
   private inventory = inject(InventoryService);
   private router = inject(Router);
   features = inject(FeatureFlagsService);
@@ -75,50 +77,19 @@ export default class CatalogDetailPage {
 
   productAnalytics = computed(() => {
     const product = this.doc();
-    if (!product) return { units: 0, sales: 0, profit: 0, returns: 0, customers: 0, available: 0, reserved: 0, review: 0, lastSale: null as string | null };
+    if (!product) return { ...emptyProductSales(), available: 0, reserved: 0, review: 0 };
     const skus = new Set(product.listing.items.map((item) => (item.sku || "").trim().toLowerCase()).filter(Boolean));
-    const completed = new Set(["entregado", "entregado_parcial", "closed", "pagado", "pago_pendiente", "pagado_parcial"]);
-    let units = 0;
-    let sales = 0;
-    let profit = 0;
-    let returns = 0;
-    let lastSale: string | null = null;
-    const customers = new Set<string>();
-
-    for (const order of this.orders.list()) {
-      if (!completed.has(String(order.status)) && !order.delivered_at) continue;
-      let matched = false;
-      for (const item of order.items || []) {
-        const sku = (item.sku || "").trim().toLowerCase();
-        if (item.product_id !== product.normalized_id && (!sku || !skus.has(sku))) continue;
-        const row = calculateItemFinancials(item);
-        units += row.netQty;
-        sales += row.netClient;
-        profit += row.netClient - row.netCost;
-        returns += row.returnedQty;
-        matched = true;
-      }
-      if (matched) {
-        customers.add(order.customer_id);
-        const value = order.delivered_at || order.updated_at || order.created_at;
-        if (!lastSale || new Date(value).getTime() > new Date(lastSale).getTime()) lastSale = value;
-      }
-    }
+    const sold = this.sales.statsFor(product);
 
     const stock = this.inventory.items().filter((item) => {
       const sku = (item.sku || "").trim().toLowerCase();
       return item.product_id === product.normalized_id || Boolean(sku && skus.has(sku));
     });
     return {
-      units,
-      sales,
-      profit,
-      returns,
-      customers: customers.size,
+      ...sold,
       available: stock.reduce((sum, row) => sum + Number(row.available_qty ?? 0), 0),
       reserved: stock.reduce((sum, row) => sum + Number(row.reserved_qty || 0), 0),
       review: stock.reduce((sum, row) => sum + Number(row.in_review_qty || 0), 0),
-      lastSale,
     };
   });
 

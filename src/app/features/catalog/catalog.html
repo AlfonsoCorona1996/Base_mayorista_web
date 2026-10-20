@@ -18,12 +18,21 @@
     </div>
 
     @if (activeTab() === 'catalog') {
-      <button type="button" class="btn btn-ghost" (click)="reload()" [disabled]="loading() || searchingAll()">
+      <button
+        type="button"
+        class="btn btn-ghost"
+        (click)="reload()"
+        [disabled]="loading() || searchingAll()"
+      >
         <span class="material-symbols-rounded" aria-hidden="true">refresh</span>
-        {{ loading() ? "Actualizando..." : searchingAll() ? "Buscando..." : "Actualizar" }}
+        {{ loading() ? 'Actualizando...' : searchingAll() ? 'Buscando...' : 'Actualizar' }}
       </button>
     } @else if (activeTab() === 'manuales_bm' || activeTab() === 'manuales_catalogo') {
-      <button type="button" class="btn btn-ghost" (click)="manualSvc.load(manualBusinessForActiveTab())">
+      <button
+        type="button"
+        class="btn btn-ghost"
+        (click)="manualSvc.load(manualBusinessForActiveTab())"
+      >
         <span class="material-symbols-rounded">refresh</span>
         Actualizar
       </button>
@@ -31,9 +40,15 @@
   </header>
 
   <!-- ── Tabs ────────────────────────────────────────────── -->
+  <app-product-sales-ranking />
   <nav class="catalog-tabs">
     @for (tab of visibleTabs(); track tab.id) {
-      <button type="button" class="catalog-tab" [class.active]="activeTab() === tab.id" (click)="setTab(tab.id)">
+      <button
+        type="button"
+        class="catalog-tab"
+        [class.active]="activeTab() === tab.id"
+        (click)="setTab(tab.id)"
+      >
         <span class="material-symbols-rounded">{{ tab.icon }}</span>
         {{ tab.label }}
       </button>
@@ -41,220 +56,279 @@
   </nav>
 
   @if (activeTab() === 'catalog') {
-
-  @if (error()) {
-    <div class="notice notice-error">
-      <span class="material-symbols-rounded" aria-hidden="true">error</span>
-      <p><strong>Error:</strong> {{ error() }}</p>
-    </div>
-  }
-
-  @if (loading()) {
-    <section class="loading-state surface-card">
-      <div class="spinner" aria-hidden="true"></div>
-      <p>Cargando catalogo...</p>
-    </section>
-  } @else {
-    <section class="filters-card surface-card">
-      <label class="field search-field" for="catalog-search">
-        <span class="material-symbols-rounded" aria-hidden="true">search</span>
-        <input
-          id="catalog-search"
-          type="text"
-          class="input"
-          [ngModel]="searchTerm()"
-          (ngModelChange)="searchTerm.set($event)"
-          placeholder="Buscar por nombre, proveedor, categoria o color"
-        />
-      </label>
-
-      <div class="filters-grid">
-        <label class="field select-field" for="supplier-filter">
-          <span class="material-symbols-rounded" aria-hidden="true">storefront</span>
-          <select id="supplier-filter" class="input" [ngModel]="supplierFilter()" (ngModelChange)="supplierFilter.set($event)">
-            <option value="">Proveedor (todos)</option>
-            @for (opt of suppliersOptions(); track opt.id) {
-              <option [value]="opt.id">{{ opt.label }}</option>
-            }
-          </select>
-        </label>
-
-        <label class="field select-field" for="category-filter">
-          <span class="material-symbols-rounded" aria-hidden="true">category</span>
-          <select id="category-filter" class="input" [ngModel]="categoryFilter()" (ngModelChange)="categoryFilter.set($event)">
-            <option value="">Categoria (todas)</option>
-            @for (opt of categoriesOptions(); track opt) {
-              <option [value]="opt">{{ opt }}</option>
-            }
-          </select>
-        </label>
-
-        <label class="field select-field" for="color-filter">
-          <span class="material-symbols-rounded" aria-hidden="true">palette</span>
-          <select id="color-filter" class="input" [ngModel]="colorFilter()" (ngModelChange)="colorFilter.set($event)">
-            <option value="">Color (todos)</option>
-            @for (opt of colorsOptions(); track opt) {
-              <option [value]="opt">{{ opt }}</option>
-            }
-          </select>
-        </label>
-
-        <label class="field select-field" for="status-filter">
-          <span class="material-symbols-rounded" aria-hidden="true">inventory</span>
-          <select id="status-filter" class="input" [ngModel]="statusFilter()" (ngModelChange)="onStatusFilterChange($event)">
-            @for (opt of stockFilterOptions; track opt.value) {
-              <option [ngValue]="opt.value">{{ opt.label }}</option>
-            }
-          </select>
-        </label>
-
-        <label class="field select-field" for="commercial-filter">
-          <span class="material-symbols-rounded" aria-hidden="true">query_stats</span>
-          <select id="commercial-filter" class="input" [ngModel]="commercialFilter()" (ngModelChange)="commercialFilter.set($event)">
-            <option value="">Indicador comercial (todos)</option>
-            <option value="unprofitable">Sin rentabilidad</option>
-            <option value="high_returns">Devolución alta</option>
-            <option value="low_stock">Bajo stock</option>
-            <option value="no_cost">Sin costo</option>
-            <option value="no_sku">Sin SKU</option>
-            <option value="slow">Baja rotación</option>
-            <option value="reorder">Reposición sugerida</option>
-          </select>
-        </label>
-
-        <label class="toggle-field" for="hide-out-of-stock">
-          <input
-            id="hide-out-of-stock"
-            type="checkbox"
-            [ngModel]="hideOutOfStock()"
-            (ngModelChange)="onToggleHideOutOfStock($event)"
-          />
-          <span class="toggle-switch" aria-hidden="true"></span>
-          <span class="toggle-copy">
-            <span class="material-symbols-rounded" aria-hidden="true">visibility_off</span>
-            Ocultar agotados
-          </span>
-        </label>
-
-        <button type="button" class="btn btn-ghost clear-btn" (click)="clearFilters()" [disabled]="!hasActiveFilters()">
-          <span class="material-symbols-rounded" aria-hidden="true">filter_alt_off</span>
-          Limpiar
-        </button>
+    @if (error()) {
+      <div class="notice notice-error">
+        <span class="material-symbols-rounded" aria-hidden="true">error</span>
+        <p><strong>Error:</strong> {{ error() }}</p>
       </div>
+    }
 
-      <p class="results-info" role="status" aria-live="polite">
-        <span class="material-symbols-rounded" aria-hidden="true">list_alt</span>
-        @if (searchingAll()) {
-          Buscando en todo el catálogo… {{ rows().length }} productos revisados
-        } @else {
-          Mostrando {{ filteredRows().length }} de {{ rows().length }} producto{{ rows().length !== 1 ? 's' : '' }}
-        }
-      </p>
-    </section>
-
-    @if (filteredRows().length === 0 && searchingAll()) {
-      <section class="loading-state surface-card" aria-live="polite">
+    @if (loading()) {
+      <section class="loading-state surface-card">
         <div class="spinner" aria-hidden="true"></div>
-        <p>Buscando coincidencias en todo el catálogo...</p>
-      </section>
-    } @else if (filteredRows().length === 0) {
-      <section class="empty-state surface-card">
-        <span class="material-symbols-rounded empty-icon" aria-hidden="true">inventory_2</span>
-        <h2>No hay productos para mostrar</h2>
-        <p>Valida un producto o ajusta filtros para verlo aqui.</p>
+        <p>Cargando catalogo...</p>
       </section>
     } @else {
-      <section class="catalog-grid">
-        @for (doc of filteredRows(); track doc.normalized_id) {
-          <article class="catalog-card surface-card" (click)="open(doc.normalized_id)">
-            <div class="card-image-wrap">
-              @if (getCoverImage(doc); as cover) {
-                <img [src]="cover" alt="{{ doc.listing.title || 'Producto' }}" class="card-image" />
-              } @else {
-                <div class="card-image-placeholder">Sin imagen</div>
+      <section class="filters-card surface-card">
+        <label class="field search-field" for="catalog-search">
+          <span class="material-symbols-rounded" aria-hidden="true">search</span>
+          <input
+            id="catalog-search"
+            type="text"
+            class="input"
+            [ngModel]="searchTerm()"
+            (ngModelChange)="searchTerm.set($event)"
+            placeholder="Buscar por nombre, proveedor, categoria o color"
+          />
+        </label>
+
+        <div class="filters-grid">
+          <label class="field select-field" for="supplier-filter">
+            <span class="material-symbols-rounded" aria-hidden="true">storefront</span>
+            <select
+              id="supplier-filter"
+              class="input"
+              [ngModel]="supplierFilter()"
+              (ngModelChange)="supplierFilter.set($event)"
+            >
+              <option value="">Proveedor (todos)</option>
+              @for (opt of suppliersOptions(); track opt.id) {
+                <option [value]="opt.id">{{ opt.label }}</option>
               }
-            </div>
+            </select>
+          </label>
 
-            <div class="card-content">
-              <div class="card-title-row">
-                <h3 class="card-title">{{ doc.listing.title || "(sin titulo)" }}</h3>
-                <span class="stock-pill" [class]="'stock-pill ' + stockClass(getStockState(doc))">
-                  {{ stockLabel(getStockState(doc)) }}
-                </span>
-              </div>
+          <label class="field select-field" for="category-filter">
+            <span class="material-symbols-rounded" aria-hidden="true">category</span>
+            <select
+              id="category-filter"
+              class="input"
+              [ngModel]="categoryFilter()"
+              (ngModelChange)="categoryFilter.set($event)"
+            >
+              <option value="">Categoria (todas)</option>
+              @for (opt of categoriesOptions(); track opt) {
+                <option [value]="opt">{{ opt }}</option>
+              }
+            </select>
+          </label>
 
-              <ul class="meta-list">
-                <li>
-                  <span class="material-symbols-rounded" aria-hidden="true">storefront</span>
-                  <span class="meta-value">{{ supplierName(doc.supplier_id) }}</span>
-                </li>
-                <li>
-                  <span class="material-symbols-rounded" aria-hidden="true">category</span>
-                  <span class="meta-value">{{ doc.listing.category_hint || "Sin categoria" }}</span>
-                </li>
-                <li>
-                  <span class="material-symbols-rounded" aria-hidden="true">deployed_code</span>
-                  <span class="meta-value">{{ doc.listing.items.length }} variante{{ doc.listing.items.length !== 1 ? 's' : '' }}</span>
-                </li>
-                @if (getColorNames(doc); as colors) {
-                  <li>
-                    <span class="material-symbols-rounded" aria-hidden="true">palette</span>
-                    <span class="meta-value">
-                      @if (colors.length > 0) {
-                        {{ colors.join(", ") }}
-                      } @else {
-                        Sin colores
-                      }
-                    </span>
-                  </li>
-                }
-              </ul>
-              <div class="product-commercial-line">
-                <span>{{ productStats(doc).units }} uds. netas</span>
-                <span>{{ productStats(doc).sales | currency:'MXN':'symbol':'1.0-0' }}</span>
-                <span>{{ productStats(doc).available }} en tu stock</span>
-                @if (productStats(doc).returned > 0) { <span>{{ productStats(doc).returned }} devueltas</span> }
-              </div>
-            </div>
+          <label class="field select-field" for="color-filter">
+            <span class="material-symbols-rounded" aria-hidden="true">palette</span>
+            <select
+              id="color-filter"
+              class="input"
+              [ngModel]="colorFilter()"
+              (ngModelChange)="colorFilter.set($event)"
+            >
+              <option value="">Color (todos)</option>
+              @for (opt of colorsOptions(); track opt) {
+                <option [value]="opt">{{ opt }}</option>
+              }
+            </select>
+          </label>
 
-            <div class="card-footer">
-              <span class="updated-at">
-                <span class="material-symbols-rounded" aria-hidden="true">schedule</span>
-                Actualizado {{ timeAgo(doc.updated_at ?? doc.created_at) }}
-              </span>
+          <label class="field select-field" for="status-filter">
+            <span class="material-symbols-rounded" aria-hidden="true">inventory</span>
+            <select
+              id="status-filter"
+              class="input"
+              [ngModel]="statusFilter()"
+              (ngModelChange)="onStatusFilterChange($event)"
+            >
+              @for (opt of stockFilterOptions; track opt.value) {
+                <option [ngValue]="opt.value">{{ opt.label }}</option>
+              }
+            </select>
+          </label>
 
-              <div class="card-footer-actions">
-                <button
-                  type="button"
-                  class="btn btn-danger"
-                  (click)="markProductOutOfStock(doc.normalized_id, $event)"
-                  [disabled]="isBusy(doc.normalized_id)"
-                >
-                  <span class="material-symbols-rounded" aria-hidden="true">block</span>
-                  {{ isBusy(doc.normalized_id) ? "Guardando..." : "Agotar" }}
-                </button>
-                <button type="button" class="btn btn-primary" (click)="open(doc.normalized_id); $event.stopPropagation()">
-                  <span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span>
-                  Gestionar
-                </button>
-              </div>
-            </div>
-          </article>
-        }
-      </section>
+          <label class="field select-field" for="commercial-filter">
+            <span class="material-symbols-rounded" aria-hidden="true">query_stats</span>
+            <select
+              id="commercial-filter"
+              class="input"
+              [ngModel]="commercialFilter()"
+              (ngModelChange)="commercialFilter.set($event)"
+            >
+              <option value="">Indicador comercial (todos)</option>
+              <option value="unprofitable">Sin rentabilidad</option>
+              <option value="high_returns">Devolución alta</option>
+              <option value="low_stock">Bajo stock</option>
+              <option value="no_cost">Sin costo</option>
+              <option value="no_sku">Sin SKU</option>
+              <option value="slow">Baja rotación</option>
+              <option value="reorder">Reposición sugerida</option>
+            </select>
+          </label>
 
-      @if (hasMore()) {
-        <div class="more-wrapper">
-          <button class="btn btn-ghost" (click)="loadMore()" [disabled]="loadingMore() || searchingAll()">
-            <span class="material-symbols-rounded" aria-hidden="true">expand_more</span>
-            {{ searchingAll() ? "Buscando..." : loadingMore() ? "Cargando..." : "Cargar mas" }}
+          <label class="toggle-field" for="hide-out-of-stock">
+            <input
+              id="hide-out-of-stock"
+              type="checkbox"
+              [ngModel]="hideOutOfStock()"
+              (ngModelChange)="onToggleHideOutOfStock($event)"
+            />
+            <span class="toggle-switch" aria-hidden="true"></span>
+            <span class="toggle-copy">
+              <span class="material-symbols-rounded" aria-hidden="true">visibility_off</span>
+              Ocultar agotados
+            </span>
+          </label>
+
+          <button
+            type="button"
+            class="btn btn-ghost clear-btn"
+            (click)="clearFilters()"
+            [disabled]="!hasActiveFilters()"
+          >
+            <span class="material-symbols-rounded" aria-hidden="true">filter_alt_off</span>
+            Limpiar
           </button>
         </div>
+
+        <p class="results-info" role="status" aria-live="polite">
+          <span class="material-symbols-rounded" aria-hidden="true">list_alt</span>
+          @if (searchingAll()) {
+            Buscando en todo el catálogo… {{ rows().length }} productos revisados
+          } @else {
+            Mostrando {{ filteredRows().length }} de {{ rows().length }} producto{{
+              rows().length !== 1 ? 's' : ''
+            }}
+          }
+        </p>
+      </section>
+
+      @if (filteredRows().length === 0 && searchingAll()) {
+        <section class="loading-state surface-card" aria-live="polite">
+          <div class="spinner" aria-hidden="true"></div>
+          <p>Buscando coincidencias en todo el catálogo...</p>
+        </section>
+      } @else if (filteredRows().length === 0) {
+        <section class="empty-state surface-card">
+          <span class="material-symbols-rounded empty-icon" aria-hidden="true">inventory_2</span>
+          <h2>No hay productos para mostrar</h2>
+          <p>Valida un producto o ajusta filtros para verlo aqui.</p>
+        </section>
+      } @else {
+        <section class="catalog-grid">
+          @for (doc of filteredRows(); track doc.normalized_id) {
+            <article class="catalog-card surface-card" (click)="open(doc.normalized_id)">
+              <div class="card-image-wrap">
+                @if (getCoverImage(doc); as cover) {
+                  <img
+                    [src]="cover"
+                    alt="{{ doc.listing.title || 'Producto' }}"
+                    class="card-image"
+                  />
+                } @else {
+                  <div class="card-image-placeholder">Sin imagen</div>
+                }
+              </div>
+
+              <div class="card-content">
+                <div class="card-title-row">
+                  <h3 class="card-title">{{ doc.listing.title || '(sin titulo)' }}</h3>
+                  <span class="stock-pill" [class]="'stock-pill ' + stockClass(getStockState(doc))">
+                    {{ stockLabel(getStockState(doc)) }}
+                  </span>
+                </div>
+
+                <ul class="meta-list">
+                  <li>
+                    <span class="material-symbols-rounded" aria-hidden="true">storefront</span>
+                    <span class="meta-value">{{ supplierName(doc.supplier_id) }}</span>
+                  </li>
+                  <li>
+                    <span class="material-symbols-rounded" aria-hidden="true">category</span>
+                    <span class="meta-value">{{
+                      doc.listing.category_hint || 'Sin categoria'
+                    }}</span>
+                  </li>
+                  <li>
+                    <span class="material-symbols-rounded" aria-hidden="true">deployed_code</span>
+                    <span class="meta-value"
+                      >{{ doc.listing.items.length }} variante{{
+                        doc.listing.items.length !== 1 ? 's' : ''
+                      }}</span
+                    >
+                  </li>
+                  @if (getColorNames(doc); as colors) {
+                    <li>
+                      <span class="material-symbols-rounded" aria-hidden="true">palette</span>
+                      <span class="meta-value">
+                        @if (colors.length > 0) {
+                          {{ colors.join(', ') }}
+                        } @else {
+                          Sin colores
+                        }
+                      </span>
+                    </li>
+                  }
+                </ul>
+                <div class="product-commercial-line">
+                  @if (sales.state() === 'server') {
+                    <span>{{ productStats(doc).units }} uds. netas</span>
+                    <span>{{
+                      productStats(doc).sales | currency: 'MXN' : 'symbol' : '1.0-0'
+                    }}</span>
+                  } @else {
+                    <span>{{
+                      sales.state() === 'error' ? 'Ventas no disponibles' : 'Cargando ventas…'
+                    }}</span>
+                  }
+                  <span>{{ productStats(doc).available }} en tu stock</span>
+                  @if (productStats(doc).returned > 0) {
+                    <span>{{ productStats(doc).returned }} devueltas</span>
+                  }
+                </div>
+              </div>
+
+              <div class="card-footer">
+                <span class="updated-at">
+                  <span class="material-symbols-rounded" aria-hidden="true">schedule</span>
+                  Actualizado {{ timeAgo(doc.updated_at ?? doc.created_at) }}
+                </span>
+
+                <div class="card-footer-actions">
+                  <button
+                    type="button"
+                    class="btn btn-danger"
+                    (click)="markProductOutOfStock(doc.normalized_id, $event)"
+                    [disabled]="isBusy(doc.normalized_id)"
+                  >
+                    <span class="material-symbols-rounded" aria-hidden="true">block</span>
+                    {{ isBusy(doc.normalized_id) ? 'Guardando...' : 'Agotar' }}
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-primary"
+                    (click)="open(doc.normalized_id); $event.stopPropagation()"
+                  >
+                    <span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span>
+                    Gestionar
+                  </button>
+                </div>
+              </div>
+            </article>
+          }
+        </section>
+
+        @if (hasMore()) {
+          <div class="more-wrapper">
+            <button
+              class="btn btn-ghost"
+              (click)="loadMore()"
+              [disabled]="loadingMore() || searchingAll()"
+            >
+              <span class="material-symbols-rounded" aria-hidden="true">expand_more</span>
+              {{ searchingAll() ? 'Buscando...' : loadingMore() ? 'Cargando...' : 'Cargar mas' }}
+            </button>
+          </div>
+        }
       }
     }
   }
-
-  } <!-- /catalog tab -->
+  <!-- /catalog tab -->
 
   @if (activeTab() === 'catalogo_excel') {
     <app-catalog-products-import />
@@ -264,7 +338,6 @@
        PESTAÑA: PRODUCTOS MANUALES
   ──────────────────────────────────────────────────────────── -->
   @if (activeTab() === 'manuales_bm' || activeTab() === 'manuales_catalogo') {
-
     @if (manualError()) {
       <div class="notice notice-error">
         <span class="material-symbols-rounded">error</span>
@@ -287,7 +360,9 @@
       </label>
       <p class="manual-count-hint">
         {{ manualFiltered().length }} productos manuales
-        @if (manualSearch()) { · filtrado de {{ manualSvc.entries().length }} }
+        @if (manualSearch()) {
+          · filtrado de {{ manualSvc.entries().length }}
+        }
       </p>
     </div>
 
@@ -300,7 +375,9 @@
       <div class="empty-state surface-card">
         <span class="material-symbols-rounded empty-icon">edit_note</span>
         <p>No hay productos en el historial manual.</p>
-        <p class="empty-hint">Aparecen aquí los productos que agregas manualmente al hacer un pedido.</p>
+        <p class="empty-hint">
+          Aparecen aquí los productos que agregas manualmente al hacer un pedido.
+        </p>
       </div>
     } @else {
       <section class="manual-grid">
@@ -325,12 +402,18 @@
               <div class="mc-prices">
                 @if (entry.price_clienta) {
                   <span class="mc-price">
-                    Precio clienta: <strong>{{ entry.price_clienta | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong>
+                    Precio clienta:
+                    <strong>{{
+                      entry.price_clienta | currency: 'MXN' : 'symbol-narrow' : '1.0-0'
+                    }}</strong>
                   </span>
                 }
                 @if (entry.price_cost) {
                   <span class="mc-price mc-price-cost">
-                    Costo: <strong>{{ entry.price_cost | currency:'MXN':'symbol-narrow':'1.0-0' }}</strong>
+                    Costo:
+                    <strong>{{
+                      entry.price_cost | currency: 'MXN' : 'symbol-narrow' : '1.0-0'
+                    }}</strong>
                   </span>
                 }
               </div>
@@ -342,25 +425,29 @@
                 @if (entry.last_used_at) {
                   <span class="mc-stat">
                     <span class="material-symbols-rounded">schedule</span>
-                    {{ entry.last_used_at | date:'d MMM yy' }}
+                    {{ entry.last_used_at | date: 'd MMM yy' }}
                   </span>
                 }
               </div>
             </div>
             <div class="mc-actions">
-              <button type="button"
+              <button
+                type="button"
                 class="btn btn-primary btn-sm"
                 [disabled]="isManualBusy(entry.id)"
                 (click)="promoteToReview(entry)"
-                title="Enviar a la cola de revisión para completar y publicar en catálogo">
+                title="Enviar a la cola de revisión para completar y publicar en catálogo"
+              >
                 <span class="material-symbols-rounded">upload</span>
                 Promover
               </button>
-              <button type="button"
+              <button
+                type="button"
                 class="btn btn-ghost btn-sm btn-danger"
                 [disabled]="isManualBusy(entry.id)"
                 (click)="deleteManual(entry)"
-                title="Eliminar del historial">
+                title="Eliminar del historial"
+              >
                 <span class="material-symbols-rounded">delete</span>
               </button>
             </div>
@@ -368,7 +455,6 @@
         }
       </section>
     }
-
-  } <!-- /manuales tab -->
-
+  }
+  <!-- /manuales tab -->
 </section>

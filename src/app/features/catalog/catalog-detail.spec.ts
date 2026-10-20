@@ -7,6 +7,7 @@ import { SuppliersService } from '../../core/suppliers.service';
 import { OrdersService } from '../../core/orders.service';
 import { InventoryService } from '../../core/inventory.service';
 import { FeatureFlagsService } from '../../core/feature-flags.service';
+import { BusinessScopeService } from '../../core/business-scope.service';
 import type { NormalizedListingDocV3 } from '../../core/firestore-contracts';
 
 describe('Catalog detail: presentation and editing', () => {
@@ -67,7 +68,20 @@ describe('Catalog detail: presentation and editing', () => {
           useValue: { getById: async () => structuredClone(sample), updateListing },
         },
         { provide: SuppliersService, useValue: { getById: () => ({ display_name: 'Proveedor' }) } },
-        { provide: OrdersService, useValue: { loadFromFirestore: () => {}, list: signal([]) } },
+        {
+          provide: OrdersService,
+          useValue: {
+            loadFromFirestore: () => {},
+            list: signal([]),
+            forBusiness: () => [],
+            syncState: signal('server'),
+            loadError: signal(null),
+          },
+        },
+        {
+          provide: BusinessScopeService,
+          useValue: { availableBusinessIds: () => ['bm'], activeBusinessIds: () => ['bm'] },
+        },
         { provide: InventoryService, useValue: { loadFromFirestore: () => {}, items: signal([]) } },
         { provide: FeatureFlagsService, useValue: { enabled: () => inventoryFeature() } },
       ],
@@ -148,5 +162,19 @@ describe('Catalog detail: presentation and editing', () => {
     expect(root.querySelector('.price-overview')?.textContent).not.toContain('Precio de venta');
     expect(root.querySelector('.price-overview')?.textContent).toContain('Precio clienta');
     expect(root.querySelector('.performance-section')).toBeNull();
+  });
+  it('shows loading and errors instead of a false zero sales value', () => {
+    const orders = TestBed.inject(OrdersService);
+    orders.syncState.set('loading');
+    fixture.detectChanges();
+    expect(root.querySelector('.sales-metrics')).toBeNull();
+    expect(root.querySelector('.sales-summary [role="status"]')?.textContent).toContain('Cargando');
+    orders.syncState.set('error');
+    orders.loadError.set('No se pudo consultar pedidos');
+    fixture.detectChanges();
+    expect(root.querySelector('.sales-metrics')).toBeNull();
+    expect(root.querySelector('.sales-summary [role="alert"]')?.textContent).toContain(
+      'No se pudieron',
+    );
   });
 });

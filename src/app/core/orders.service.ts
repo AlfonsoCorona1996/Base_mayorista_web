@@ -490,6 +490,12 @@ export class OrdersService {
     return this.rows().filter((order) => active.includes(order.business_id || "bm"));
   });
 
+  /** Product details use their own business, even when the global selector changes. */
+  forBusiness(businessId: BusinessId): Order[] {
+    if (!this.businessScope.availableBusinessIds().includes(businessId)) return [];
+    return this.rows().filter(order => (order.business_id || 'bm') === businessId);
+  }
+
   /**
    * Inicia un listener en tiempo real. Seguro llamarlo múltiples veces: solo abre un
    * listener, y mientras el primer snapshot no llega todas las llamadas comparten la

@@ -22,7 +22,7 @@
     </div>
   </header>
 
-  @if (error()) {
+  @if (error() && !movementDialogOpen()) {
     <div class="admin-feedback admin-feedback--error" role="alert"><span class="material-symbols-rounded" aria-hidden="true">error</span><span>{{ error() }}</span><button type="button" aria-label="Cerrar mensaje" (click)="error.set(null)">×</button></div>
   }
   @if (success()) {
@@ -543,47 +543,70 @@
 </main>
 
 @if (movementDialogOpen()) {
-  <div class="admin-dialog-backdrop" (click)="closeMovementDialog()">
-    <section class="admin-dialog" role="dialog" aria-modal="true" aria-labelledby="movement-dialog-title" (click)="$event.stopPropagation()">
+  <dialog #movementDialog class="admin-dialog movement-dialog" aria-labelledby="movement-dialog-title" aria-describedby="movement-dialog-description"
+    (cancel)="$event.preventDefault(); closeMovementDialog()" (click)="closeMovementDialog()">
+    <div class="movement-dialog__layout" (click)="$event.stopPropagation()">
       <header class="admin-dialog__header">
-        <div><p class="panel-kicker">{{ activeBusinessLabel() }}</p><h2 id="movement-dialog-title">Registrar movimiento</h2><p>El movimiento se guardará únicamente en el negocio activo.</p></div>
-        <button type="button" class="icon-button" aria-label="Cerrar" (click)="closeMovementDialog()"><span class="material-symbols-rounded" aria-hidden="true">close</span></button>
+        <div><p class="panel-kicker">{{ activeBusinessLabel() }}</p><h2 id="movement-dialog-title">Registrar movimiento</h2><p id="movement-dialog-description">El registro se guardará en este negocio. Los importes están en MXN.</p></div>
+        <button type="button" class="icon-button" aria-label="Cerrar registro de movimiento" [disabled]="movementSaving()" (click)="closeMovementDialog()"><span class="material-symbols-rounded" aria-hidden="true">close</span></button>
       </header>
-      <div class="dialog-tabs" role="tablist" aria-label="Tipo de movimiento">
-        <button type="button" role="tab" [attr.aria-selected]="movementDialogKind() === 'expense'" [class.is-active]="movementDialogKind() === 'expense'" (click)="openMovementDialog('expense')">Egreso</button>
-        <button type="button" role="tab" [attr.aria-selected]="movementDialogKind() === 'withdrawal'" [class.is-active]="movementDialogKind() === 'withdrawal'" (click)="openMovementDialog('withdrawal')">Retiro de socio</button>
-        <button type="button" role="tab" [attr.aria-selected]="movementDialogKind() === 'account'" [class.is-active]="movementDialogKind() === 'account'" (click)="openMovementDialog('account')">Cuenta</button>
+      <div class="movement-dialog__body">
+        <div class="dialog-tabs" role="group" aria-label="Tipo de movimiento">
+          <button type="button" [attr.aria-pressed]="movementDialogKind() === 'expense'" [class.is-active]="movementDialogKind() === 'expense'" [disabled]="movementSaving()" (click)="openMovementDialog('expense')">Egreso</button>
+          <button type="button" [attr.aria-pressed]="movementDialogKind() === 'withdrawal'" [class.is-active]="movementDialogKind() === 'withdrawal'" [disabled]="movementSaving()" (click)="openMovementDialog('withdrawal')">Retiro de socio</button>
+          <button type="button" [attr.aria-pressed]="movementDialogKind() === 'account'" [class.is-active]="movementDialogKind() === 'account'" [disabled]="movementSaving()" (click)="openMovementDialog('account')">Cuenta</button>
+        </div>
+        @if (movementDialogKind() === 'expense') {
+          <form id="movement-form" (ngSubmit)="saveMovement()" [attr.aria-busy]="movementSaving()">
+            <fieldset class="admin-form movement-fields" [disabled]="movementSaving()">
+              <legend class="movement-form__legend">Datos del egreso</legend>
+              <label class="admin-form__wide"><span>Categoría</span><select name="expenseCategory" aria-describedby="expense-category-hint" [ngModel]="expenseCategory()" (ngModelChange)="setExpenseCategory($event)">@for (option of expenseCategoryOptions; track option.id) {<option [value]="option.id">{{ option.label }}</option>}</select><small id="expense-category-hint" class="field-hint">{{ expenseCategoryHint(expenseCategory()) }}</small></label>
+              <label><span>Monto del egreso (MXN)</span><input name="expenseAmount" type="number" inputmode="decimal" min="0.01" step="0.01" [ngModel]="expenseAmount()" (ngModelChange)="setExpenseAmount($event)" required /></label>
+              <label><span>Fecha del egreso</span><input name="expenseDate" type="date" [ngModel]="expenseDate()" (ngModelChange)="setExpenseDate($event)" required /></label>
+              <label class="admin-form__wide"><span>Cuenta de salida</span><select name="expenseAccount" aria-describedby="expense-account-hint" [ngModel]="expenseAccountId()" (ngModelChange)="setExpenseAccountId($event)" required><option value="none" disabled>Selecciona una cuenta</option>@for (account of accounts(); track account.account_id) {<option [value]="account.account_id">{{ account.name }}</option>}</select><small id="expense-account-hint" class="field-hint">@if (movementSourceAccount(); as account) {Saldo registrado de {{ account.name }}: <strong>{{ formatMoney(account.balance) }}</strong>. El egreso se descontará de esta cuenta.} @else if (!accounts().length) {No hay cuentas registradas. Abre «Cuenta» para crear una.} @else {Selecciona la cuenta de donde sale el dinero.}</small></label>
+              <label class="admin-form__wide"><span>Ruta</span><select name="expenseRoute" [ngModel]="expenseRouteId()" (ngModelChange)="setExpenseRouteId($event)">@for (option of scopeOptions(); track option.id) { <option [value]="option.id">{{ option.name }}</option> }</select></label>
+              <label class="admin-form__wide"><span>Notas <span class="field-optional">(opcional)</span></span><textarea name="expenseNotes" rows="2" [ngModel]="expenseNotes()" (ngModelChange)="setExpenseNotes($event)"></textarea></label>
+            </fieldset>
+          </form>
+        } @else if (movementDialogKind() === 'withdrawal') {
+          <form id="movement-form" (ngSubmit)="saveMovement()" [attr.aria-busy]="movementSaving()">
+            <fieldset class="admin-form movement-fields" [disabled]="movementSaving()">
+              <legend class="movement-form__legend">Datos del retiro</legend>
+              <label><span>Socio o destino del retiro</span><select name="withdrawalPurpose" [ngModel]="withdrawalPurpose()" (ngModelChange)="setWithdrawalPurpose($event)"><option value="socio_blanca">Blanca Trejo</option><option value="socio_andrea_pepe">Andrea y Pepe</option><option value="persona">Persona</option><option value="sueldo">Sueldo</option><option value="gasto">Gasto</option><option value="inversion">Inversión</option><option value="ahorro">Ahorro</option><option value="otro">Otro</option></select></label>
+              <label><span>Fecha del retiro</span><input name="withdrawalDate" type="date" [ngModel]="withdrawalDate()" (ngModelChange)="setWithdrawalDate($event)" required /></label>
+              <div class="withdrawal-availability admin-form__wide" role="status" aria-atomic="true">
+                <div class="withdrawal-availability__heading"><span>{{ withdrawalPurpose() === 'socio_blanca' ? 'Disponible para Blanca Trejo' : withdrawalPurpose() === 'socio_andrea_pepe' ? 'Disponible para Andrea y Pepe' : 'Disponible para retirar' }}</span><strong>{{ formatMoney(withdrawalAvailableForSelectedPartner()) }} <small>MXN</small></strong></div>
+                <p id="withdrawal-available-hint">@if (withdrawalSelectedPartner()) {Su parte de la utilidad ya cobrada, menos los retiros que tiene registrados.} @else {Utilidad cobrada disponible después de los retiros registrados.} @if (withdrawalEditingId()) {Incluye el monto del retiro que estás editando.}</p>
+                <p class="withdrawal-availability__scope">{{ routeScope() === 'general' ? 'Todas las rutas' : routeName(routeScope()) }} · No incluye ganancias pendientes de cobro.</p>
+                @if (withdrawalAvailableForSelectedPartner() <= 0) {<p class="withdrawal-availability__notice">No hay utilidad cobrada disponible para este destino.</p>}
+              </div>
+              <label><span>Monto a retirar (MXN)</span><input name="withdrawalAmount" inputmode="decimal" placeholder="0.00" aria-describedby="withdrawal-amount-hint withdrawal-available-hint" [ngModel]="withdrawalAmountInput()" (ngModelChange)="setWithdrawalAmountInput($event)" required /><small id="withdrawal-amount-hint" class="field-hint">Dinero que vas a entregar. Debe ser mayor a cero y no superar el disponible.</small></label>
+              <label><span>Cuenta de salida</span><select name="withdrawalAccount" aria-describedby="withdrawal-account-hint" [ngModel]="withdrawalAccountId()" (ngModelChange)="setWithdrawalAccountId($event)" required><option value="none" disabled>Selecciona una cuenta</option>@for (account of accounts(); track account.account_id) {<option [value]="account.account_id">{{ account.name }}</option>}</select><small id="withdrawal-account-hint" class="field-hint">@if (movementSourceAccount(); as account) {Saldo registrado de {{ account.name }}: <strong>{{ formatMoney(account.balance) }}</strong>. El retiro se descontará de esta cuenta. @if (account.balance < 0) {Esta cuenta tiene saldo negativo; revisa sus movimientos.}} @else if (!accounts().length) {No hay cuentas registradas. Abre «Cuenta» para crear una.} @else {Selecciona la cuenta de donde sale el dinero.}</small></label>
+              <label class="admin-form__wide"><span>Notas <span class="field-optional">(opcional)</span></span><textarea name="withdrawalNotes" rows="2" [ngModel]="withdrawalNotes()" (ngModelChange)="setWithdrawalNotes($event)"></textarea></label>
+            </fieldset>
+          </form>
+        } @else {
+          <form id="movement-form" (ngSubmit)="saveMovement()" [attr.aria-busy]="movementSaving()">
+            <fieldset class="admin-form movement-fields" [disabled]="movementSaving()">
+              <legend class="movement-form__legend">Datos de la cuenta</legend>
+              <label class="admin-form__wide"><span>Nombre de la cuenta</span><input name="accountName" [ngModel]="accountName()" (ngModelChange)="setAccountName($event)" required /></label>
+              <label class="admin-form__wide"><span>Saldo conciliado (MXN)</span><input name="accountBalance" type="number" inputmode="decimal" step="0.01" aria-describedby="account-balance-hint" [ngModel]="accountBalance()" (ngModelChange)="setAccountBalance($event)" /><small id="account-balance-hint" class="field-hint">Saldo que confirmaste que tiene esta cuenta.</small></label>
+              <label class="admin-form__wide"><span>Notas <span class="field-optional">(opcional)</span></span><textarea name="accountNotes" rows="2" [ngModel]="accountNotes()" (ngModelChange)="setAccountNotes($event)"></textarea></label>
+            </fieldset>
+          </form>
+        }
       </div>
-      @if (movementDialogKind() === 'expense') {
-        <form class="admin-form" (ngSubmit)="submitExpense()">
-          <label class="admin-form__wide"><span>Categoría</span><select name="expenseCategory" [ngModel]="expenseCategory()" (ngModelChange)="setExpenseCategory($event)">@for (option of expenseCategoryOptions; track option.id) {<option [value]="option.id">{{ option.label }}</option>}</select><small class="field-hint">{{ expenseCategoryHint(expenseCategory()) }}</small></label>
-          <label><span>Monto</span><input name="expenseAmount" type="number" min="0.01" step="0.01" [ngModel]="expenseAmount()" (ngModelChange)="setExpenseAmount($event)" required /></label>
-          <label><span>Fecha</span><input name="expenseDate" type="date" [ngModel]="expenseDate()" (ngModelChange)="setExpenseDate($event)" required /></label>
-          <label><span>Cuenta de salida</span><select name="expenseAccount" [ngModel]="expenseAccountId()" (ngModelChange)="setExpenseAccountId($event)" required><option value="none" disabled>Selecciona una cuenta</option>@for (account of accounts(); track account.account_id) {<option [value]="account.account_id">{{ account.name }} · {{ formatMoney(account.balance) }}</option>}</select><small class="field-hint">El saldo y el libro se actualizarán juntos.</small></label>
-          <label><span>Ruta</span><select name="expenseRoute" [ngModel]="expenseRouteId()" (ngModelChange)="setExpenseRouteId($event)">@for (option of scopeOptions(); track option.id) { <option [value]="option.id">{{ option.name }}</option> }</select></label>
-          <label class="admin-form__wide"><span>Notas</span><textarea name="expenseNotes" rows="3" [ngModel]="expenseNotes()" (ngModelChange)="setExpenseNotes($event)"></textarea></label>
-          <div class="admin-dialog__actions"><button type="button" class="button button--secondary" (click)="closeMovementDialog()">Cancelar</button><button type="submit" class="button button--primary" [disabled]="!canCreateMovements()">Guardar egreso</button></div>
-        </form>
-      } @else if (movementDialogKind() === 'withdrawal') {
-        <form class="admin-form" (ngSubmit)="submitWithdrawal()">
-          <label><span>Socio o destino</span><select name="withdrawalPurpose" [ngModel]="withdrawalPurpose()" (ngModelChange)="setWithdrawalPurpose($event)"><option value="socio_blanca">Blanca Trejo</option><option value="socio_andrea_pepe">Andrea y Pepe</option><option value="persona">Persona</option><option value="sueldo">Sueldo</option><option value="gasto">Gasto</option><option value="inversion">Inversión</option><option value="ahorro">Ahorro</option><option value="otro">Otro</option></select></label>
-          <label><span>Monto</span><input name="withdrawalAmount" inputmode="decimal" [ngModel]="withdrawalAmountInput()" (ngModelChange)="setWithdrawalAmountInput($event)" required /></label>
-          <label><span>Fecha</span><input name="withdrawalDate" type="date" [ngModel]="withdrawalDate()" (ngModelChange)="setWithdrawalDate($event)" required /></label>
-          <label><span>Cuenta de salida</span><select name="withdrawalAccount" [ngModel]="withdrawalAccountId()" (ngModelChange)="setWithdrawalAccountId($event)" required><option value="none" disabled>Selecciona una cuenta</option>@for (account of accounts(); track account.account_id) {<option [value]="account.account_id">{{ account.name }} · {{ formatMoney(account.balance) }}</option>}</select><small class="field-hint">Un retiro de socio no se mezcla con gastos operativos.</small></label>
-          <label><span>Disponible para esta parte</span><input [value]="formatMoney(withdrawalAvailableForSelectedPartner())" readonly /></label>
-          <label class="admin-form__wide"><span>Notas</span><textarea name="withdrawalNotes" rows="3" [ngModel]="withdrawalNotes()" (ngModelChange)="setWithdrawalNotes($event)"></textarea></label>
-          <div class="admin-dialog__actions"><button type="button" class="button button--secondary" (click)="closeMovementDialog()">Cancelar</button><button type="submit" class="button button--primary" [disabled]="!canCreateMovements()">Registrar retiro</button></div>
-        </form>
-      } @else {
-        <form class="admin-form" (ngSubmit)="submitAccount()">
-          <label><span>Nombre de la cuenta</span><input name="accountName" [ngModel]="accountName()" (ngModelChange)="setAccountName($event)" required /></label>
-          <label><span>Saldo conciliado</span><input name="accountBalance" type="number" step="0.01" [ngModel]="accountBalance()" (ngModelChange)="setAccountBalance($event)" /></label>
-          <label class="admin-form__wide"><span>Notas</span><textarea name="accountNotes" rows="3" [ngModel]="accountNotes()" (ngModelChange)="setAccountNotes($event)"></textarea></label>
-          <div class="admin-dialog__actions"><button type="button" class="button button--secondary" (click)="closeMovementDialog()">Cancelar</button><button type="submit" class="button button--primary" [disabled]="!canCreateAccounts()">Guardar cuenta</button></div>
-        </form>
-      }
-    </section>
-  </div>
+      <footer class="admin-dialog__actions">
+        @if (error()) {
+          <div id="movement-error" class="admin-feedback admin-feedback--error" role="alert">{{ error() }}</div>
+        }
+        <button type="button" class="button button--secondary" [disabled]="movementSaving()" (click)="closeMovementDialog()">Cancelar</button>
+        <button type="submit" form="movement-form" class="button button--primary" [disabled]="movementSaving() || (movementDialogKind() === 'account' ? !canCreateAccounts() : !canCreateMovements())">
+          {{ movementSaving() ? 'Guardando…' : movementDialogKind() === 'withdrawal' ? 'Registrar retiro' : movementDialogKind() === 'expense' ? 'Guardar egreso' : 'Guardar cuenta' }}
+        </button>
+      </footer>
+    </div>
+  </dialog>
 }
 
 @if (cutDialogOpen()) {

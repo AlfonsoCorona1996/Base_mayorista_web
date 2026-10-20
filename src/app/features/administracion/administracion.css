@@ -213,6 +213,279 @@
   }
 }
 
+/* El diálogo nativo mantiene el foco dentro del registro de movimientos.
+   Solo el cuerpo se desplaza; encabezado y acciones conservan su espacio. */
+.movement-dialog {
+  --movement-border: #cbd5e1;
+  --movement-muted: #475569;
+  --movement-accent: #2454d6;
+  width: calc(100% - var(--ui-space-24));
+  max-width: var(--ui-modal-max-width-form);
+  max-height: calc(100dvh - var(--ui-space-24));
+  margin: auto;
+  padding: 0;
+  overflow: hidden;
+  border-radius: var(--ui-radius-lg);
+  color: #172033;
+  font: inherit;
+  z-index: var(--ui-z-modal);
+}
+
+.movement-dialog::backdrop {
+  background: rgba(15, 23, 42, 0.56);
+}
+
+.movement-dialog__layout {
+  display: flex;
+  flex-direction: column;
+  max-height: inherit;
+  min-width: 0;
+}
+
+.movement-dialog .admin-dialog__header {
+  flex: 0 0 auto;
+  gap: var(--ui-space-12);
+  padding: var(--ui-space-16);
+}
+
+.movement-dialog .admin-dialog__header > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.movement-dialog .admin-dialog__header h2 {
+  margin-top: var(--ui-space-4);
+  font-size: 1.25rem;
+  line-height: 1.3;
+}
+
+.movement-dialog .admin-dialog__header p:last-child {
+  margin-top: var(--ui-space-8);
+  color: var(--movement-muted);
+  line-height: 1.5;
+}
+
+.movement-dialog .icon-button {
+  width: var(--ui-touch-target-min);
+  height: var(--ui-touch-target-min);
+}
+
+.movement-dialog__body {
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding: var(--ui-space-16);
+}
+
+.movement-dialog .dialog-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ui-space-8);
+  padding: 0;
+  margin-bottom: var(--ui-space-16);
+  overflow: visible;
+}
+
+.movement-dialog .dialog-tabs button {
+  flex: 1 1 auto;
+  min-width: var(--ui-touch-target-min);
+  min-height: var(--ui-touch-target-min);
+  padding: var(--ui-space-8);
+  border-color: var(--movement-border);
+  border-radius: var(--ui-radius-sm);
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.movement-dialog .dialog-tabs button.is-active {
+  background: #eef2ff;
+  border-color: var(--movement-accent);
+  color: var(--movement-accent);
+  box-shadow: inset 0 -2px 0 var(--movement-accent);
+}
+
+.movement-dialog .movement-fields {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  gap: var(--ui-space-16);
+}
+
+.movement-form__legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.movement-dialog .admin-form label {
+  align-content: start;
+  min-width: 0;
+  gap: var(--ui-space-8);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.movement-dialog .admin-form input,
+.movement-dialog .admin-form select,
+.movement-dialog .admin-form textarea {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  min-height: var(--ui-control-height-comfortable);
+  padding: var(--ui-space-12);
+  border-radius: var(--ui-radius-sm);
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.movement-dialog .admin-form input[type="date"] {
+  appearance: none;
+}
+
+/* Iguala la caja de los controles nativos de fecha, texto y selección. */
+.movement-dialog .admin-form :is(input, select) {
+  height: var(--ui-control-height-comfortable);
+  padding-block: var(--ui-space-8);
+}
+
+.movement-dialog .admin-form textarea {
+  min-height: calc(2 * var(--ui-control-height));
+}
+
+.movement-dialog .field-hint,
+.withdrawal-availability p {
+  margin: 0;
+  color: var(--movement-muted);
+  font-size: 0.8125rem;
+  font-weight: 400;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.movement-dialog .field-optional {
+  color: var(--movement-muted);
+  font-weight: 400;
+}
+
+.withdrawal-availability {
+  display: grid;
+  gap: var(--ui-space-8);
+  min-width: 0;
+  padding: var(--ui-space-16);
+  border: 1px solid #e2e8f0;
+  border-radius: var(--ui-radius-md);
+  background: #f8fafc;
+}
+
+.withdrawal-availability__heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--ui-space-8) var(--ui-space-16);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.withdrawal-availability__heading > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.withdrawal-availability__heading strong {
+  font-size: 1.25rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.withdrawal-availability__heading small {
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.withdrawal-availability .withdrawal-availability__scope {
+  font-size: 0.75rem;
+}
+
+.withdrawal-availability .withdrawal-availability__notice {
+  padding-top: var(--ui-space-8);
+  border-top: 1px solid #e2e8f0;
+  color: #92400e;
+  font-weight: 600;
+}
+
+.movement-dialog .admin-feedback {
+  flex: 1 0 100%;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.movement-dialog .admin-dialog__actions {
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: var(--ui-space-12);
+  padding: var(--ui-space-16);
+  padding-bottom: max(var(--ui-space-16), env(safe-area-inset-bottom));
+  border-top: 1px solid #e2e8f0;
+  background: #fff;
+}
+
+.movement-dialog .admin-dialog__actions .button {
+  flex: 1 1 auto;
+  min-width: var(--ui-touch-target-min);
+  min-height: var(--ui-control-height-comfortable);
+  justify-content: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+.movement-dialog :is(input, select, textarea, button):focus-visible {
+  outline: 3px solid var(--movement-accent);
+  outline-offset: 2px;
+  border-color: var(--movement-accent);
+}
+
+@media (hover: hover) {
+  .movement-dialog .dialog-tabs button:hover:not(:disabled),
+  .movement-dialog .icon-button:hover:not(:disabled) {
+    background: #eef2ff;
+    border-color: var(--movement-accent);
+  }
+}
+
+@media (min-width: 768px) {
+  .movement-dialog {
+    max-height: calc(100dvh - var(--ui-space-48));
+  }
+
+  .movement-dialog .admin-dialog__header,
+  .movement-dialog__body,
+  .movement-dialog .admin-dialog__actions {
+    padding: var(--ui-space-16) var(--ui-space-24);
+  }
+
+  .movement-dialog .movement-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .movement-dialog .dialog-tabs button,
+  .movement-dialog .admin-dialog__actions .button {
+    flex: 0 1 auto;
+  }
+}
+
 /* ---------- Escalera de liquidez ---------- */
 .liquidity-ladder {
   display: grid;

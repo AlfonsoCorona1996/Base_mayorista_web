@@ -484,37 +484,62 @@
           </div>
           <div class="sales-summary">
             <h3>Ventas acumuladas</h3>
-            <dl class="sales-metrics">
-              <div>
-                <dt>Venta neta</dt>
-                <dd>{{ formatMoney(productAnalytics().sales, preferredCurrency()) }}</dd>
+            @if (sales.state() === 'error') {
+              <div class="notice notice-error" role="alert">
+                <p>No se pudieron actualizar las ventas.</p>
+                <button type="button" class="btn" (click)="sales.retry()">Reintentar</button>
               </div>
-              <div>
-                <dt>Ganancia</dt>
-                <dd>{{ formatMoney(productAnalytics().profit, preferredCurrency()) }}</dd>
-              </div>
-            </dl>
-            <details class="sales-details">
-              <summary>Ver detalle de ventas</summary>
-              <dl class="detail-metrics">
+            } @else if (sales.state() !== 'server') {
+              <p class="hint" role="status">
+                {{
+                  sales.state() === 'cache'
+                    ? 'Confirmando ventas con el servidor…'
+                    : 'Cargando ventas…'
+                }}
+              </p>
+            } @else {
+              <dl class="sales-metrics">
                 <div>
-                  <dt>Unidades netas</dt>
-                  <dd>{{ productAnalytics().units }}</dd>
+                  <dt>Venta neta</dt>
+                  <dd>{{ formatMoney(productAnalytics().sales, preferredCurrency()) }}</dd>
                 </div>
                 <div>
-                  <dt>Devoluciones</dt>
-                  <dd>{{ productAnalytics().returns }}</dd>
-                </div>
-                <div>
-                  <dt>Clientas únicas</dt>
-                  <dd>{{ productAnalytics().customers }}</dd>
-                </div>
-                <div>
-                  <dt>Última venta</dt>
-                  <dd>{{ formatDate(productAnalytics().lastSale) }}</dd>
+                  <dt>Ganancia</dt>
+                  <dd>{{ formatMoney(productAnalytics().profit, preferredCurrency()) }}</dd>
                 </div>
               </dl>
-            </details>
+              <details class="sales-details">
+                <summary>Ver detalle de ventas</summary>
+                <dl class="detail-metrics">
+                  <div>
+                    <dt>Unidades netas</dt>
+                    <dd>{{ productAnalytics().units }}</dd>
+                  </div>
+                  <div>
+                    <dt>Devoluciones</dt>
+                    <dd>{{ productAnalytics().returns }}</dd>
+                  </div>
+                  <div>
+                    <dt>Clientas únicas</dt>
+                    <dd>{{ productAnalytics().customers }}</dd>
+                  </div>
+                  <div>
+                    <dt>Última venta</dt>
+                    <dd>{{ formatDate(productAnalytics().lastSale) }}</dd>
+                  </div>
+                  <div>
+                    <dt>Unidades en pedidos en curso</dt>
+                    <dd>{{ productAnalytics().pendingUnits }}</dd>
+                  </div>
+                </dl>
+              </details>
+              @if (productAnalytics().missingCostUnits) {
+                <p class="hint">La ganancia está incompleta: hay unidades sin costo registrado.</p>
+              }
+              <button type="button" class="btn subtle" (click)="goCatalog()">
+                Ver productos estrella
+              </button>
+            }
           </div>
         </div>
       </section>

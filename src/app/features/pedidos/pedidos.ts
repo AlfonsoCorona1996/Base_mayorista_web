@@ -275,7 +275,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
    * filtros, contadores, selección, exportaciones y acciones usan las listas completas
    * (`tableRows()`, `filtered()`, `tableSelectedRows()`).
    */
-  readonly tableVirtual = new VirtualGridController({ estimate: 72, overscanPx: 640, initialCount: 30 });
+  readonly tableVirtual = new VirtualGridController({ estimate: 72, overscanPx: 960, initialCount: 30 });
   readonly cardsVirtual = new VirtualGridController({ estimate: 280, overscanPx: 1200, initialCount: 12 });
   private readonly tableScrollEl = viewChild<ElementRef<HTMLElement>>("tableScroll");
   private readonly tableBodyEl = viewChild<ElementRef<HTMLElement>>("tableBody");
@@ -293,6 +293,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   /** Ancho máximo visto por columna de la tabla y ancho del contenedor en que se midió. */
   private tableColumnWidths: number[] = [];
   private tableColumnsContainerWidth = 0;
+  private columnsFrame = 0;
 
   constructor() {
     // R4: la lista completa alimenta la virtualización solo en la vista activa (los computed siguen perezosos).
@@ -335,7 +336,13 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     afterEveryRender(() => {
       this.tableVirtual.afterRender();
       this.cardsVirtual.afterRender();
-      this.stabilizeTableColumns();
+      // En el frame siguiente, junto con la medición de filas: así comparten un solo layout de la tabla.
+      if (!this.columnsFrame && typeof requestAnimationFrame !== "undefined") {
+        this.columnsFrame = requestAnimationFrame(() => {
+          this.columnsFrame = 0;
+          this.stabilizeTableColumns();
+        });
+      }
     });
 
     effect(() => {
@@ -1924,6 +1931,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.destroyed = true;
+    if (this.columnsFrame) cancelAnimationFrame(this.columnsFrame);
     this.pillsResizeObserver?.disconnect();
     this.pillsResizeObserver = null;
     if (this.tableBulkProgressHideTimer) {

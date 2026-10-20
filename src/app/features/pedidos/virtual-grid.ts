@@ -58,6 +58,12 @@ export class VirtualGridController {
   private indexById = new Map<string, number>();
   private readonly heights = new Map<string, number>();
   private measuredSum = 0;
+  /**
+   * Alto estimado de lo no medido. Se fija con la primera muestra: si siguiera el
+   * promedio, medir cada fila nueva movería el espaciador y obligaría a repintar
+   * la página en cada frame de scroll.
+   */
+  private frozenEstimate: number | null = null;
   private cols = 1;
   private gap = 0;
   private contentWidth = 0;
@@ -235,18 +241,28 @@ export class VirtualGridController {
 
     const anchor = this.captureAnchor();
     this.rebuild();
-    if (anchor && this.indexById.has(anchor.id)) {
-      const row = this.rowOf(this.indexById.get(anchor.id)!);
-      const top = this.offsets[row] + anchor.delta;
-      const next = this.rangeForRegion(top, top + this.viewportHeight());
-      if (this.setRange(next)) {
-        this.pendingAnchor = anchor;
+    if (layoutChanged) {
+      // Otras columnas u otro ancho: el rango se recalcula desde la posición del ancla.
+      if (anchor && this.indexById.has(anchor.id)) {
+        const row = this.rowOf(this.indexById.get(anchor.id)!);
+        const top = this.offsets[row] + anchor.delta;
+        if (this.setRange(this.rangeForRegion(top, top + this.viewportHeight()))) this.pendingAnchor = anchor;
+        else this.restoreAnchor(anchor);
       } else {
-        this.restoreAnchor(anchor);
+        this.update(true);
       }
-    } else {
-      this.update(true);
+      return true;
     }
+    // Alturas nuevas: se conservan los mismos elementos montados y solo se ajustan los espaciadores.
+    // Si cambió algo por encima de lo visible, el ancla compensa; mover la ventana lo decide update().
+    const current = this.range();
+    const same = this.rangeForRows(this.rowOf(current.start), Math.ceil(current.end / this.cols));
+    if (this.setRange(same)) {
+      if (anchor) this.pendingAnchor = anchor;
+    } else if (anchor) {
+      this.restoreAnchor(anchor);
+    }
+    if (!this.pendingAnchor) this.update(false);
     return true;
   }
 
@@ -255,7 +271,8 @@ export class VirtualGridController {
     const region = this.visibleRegion();
     if (!region) return;
     const current = this.range();
-    const margin = this.options.overscanPx / 2;
+    // Histéresis: se recalcula cuando falta un cuarto del margen; cada actualización avanza ~3/4 del margen.
+    const margin = this.options.overscanPx / 4;
     const rows = this.rowCount();
     const startRow = this.rowOf(current.start);
     const endRow = Math.min(rows, Math.ceil(current.end / this.cols));
@@ -267,12 +284,11 @@ export class VirtualGridController {
 
   private setRange(next: VirtualRange): boolean {
     const current = this.range();
-    if (
-      current.start === next.start &&
-      current.end === next.end &&
-      Math.abs(current.padTop - next.padTop) < 0.5 &&
-      Math.abs(current.padBottom - next.padBottom) < 0.5
-    ) {
+    const sameWindow = current.start === next.start && current.end === next.end && Math.abs(current.padTop - next.padTop) < 0.5;
+    // El espaciador inferior queda por debajo de lo visible: si solo cambia él no se repinta
+    // (se corrige en la siguiente actualización). Al final de la lista sí debe ser exacto.
+    const bottomOnly = next.end < this.ids.length || Math.abs(current.padBottom - next.padBottom) < 0.5;
+    if (sameWindow && bottomOnly) {
       return false;
     }
     this.range.set(next);
@@ -353,10 +369,15 @@ export class VirtualGridController {
   private clearHeights(): void {
     this.heights.clear();
     this.measuredSum = 0;
+    this.frozenEstimate = null;
   }
 
   private estimate(): number {
-    return this.heights.size > 0 ? this.measuredSum / this.heights.size : this.options.estimate;
+    if (this.frozenEstimate !== null) return this.frozenEstimate;
+    if (this.heights.size === 0) return this.options.estimate;
+    const average = this.measuredSum / this.heights.size;
+    if (this.heights.size >= Math.min(12, this.ids.length)) this.frozenEstimate = average;
+    return average;
   }
 
   private rowCount(): number {

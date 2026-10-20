@@ -19,7 +19,8 @@ import type {
 import { isNormalizedListingDocV3 } from "../../core/firestore-contracts";
 import { OrdersService } from "../../core/orders.service";
 import { InventoryService } from "../../core/inventory.service";
-import { calculateItemFinancials } from "../../core/order-financials";
+import { ProductSalesRankingComponent } from "./product-sales-ranking";
+import { ProductSalesService } from "../../core/product-sales.service";
 
 type CommercialFilter = "" | "unprofitable" | "high_returns" | "low_stock" | "no_cost" | "no_sku" | "slow" | "reorder";
 
@@ -27,7 +28,7 @@ type CommercialFilter = "" | "unprofitable" | "high_returns" | "low_stock" | "no
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   selector: "app-catalog",
-  imports: [FormsModule, CurrencyPipe, DatePipe, CatalogProductsImportComponent],
+  imports: [FormsModule, CurrencyPipe, DatePipe, CatalogProductsImportComponent, ProductSalesRankingComponent],
   templateUrl: "./catalog.html",
   styleUrl: "./catalog.css",
 })
@@ -66,6 +67,7 @@ export default class CatalogPage {
   private suppliers = inject(SuppliersService);
   private router    = inject(Router);
   private orders = inject(OrdersService);
+  readonly sales = inject(ProductSalesService);
   private inventory = inject(InventoryService);
   readonly manualSvc = inject(ManualProductHistoryService);
   businessScope = inject(BusinessScopeService);
@@ -620,25 +622,10 @@ export default class CatalogPage {
 
   private calculateProductStats(product: NormalizedListingDocV3) {
     const skus = new Set(product.listing.items.map((item) => (item.sku || "").trim().toLowerCase()).filter(Boolean));
-    const completed = new Set(["entregado", "entregado_parcial", "closed", "pagado", "pago_pendiente", "pagado_parcial"]);
-    let units = 0;
-    let returned = 0;
-    let sales = 0;
-    let profit = 0;
-    let lastSaleMs = 0;
-    for (const order of this.orders.list()) {
-      if (!completed.has(String(order.status)) && !order.delivered_at) continue;
-      for (const item of order.items || []) {
-        const sku = (item.sku || "").trim().toLowerCase();
-        if (item.product_id !== product.normalized_id && (!sku || !skus.has(sku))) continue;
-        const row = calculateItemFinancials(item);
-        units += row.netQty;
-        returned += row.returnedQty;
-        sales += row.netClient;
-        profit += row.netClient - row.netCost;
-        lastSaleMs = Math.max(lastSaleMs, new Date(order.delivered_at || order.updated_at || order.created_at).getTime() || 0);
-      }
-    }
+    const sold = this.sales.statsFor(product);
+    const { units, sales, profit } = sold;
+    const returned = sold.returns;
+    const lastSaleMs = sold.lastSale ? Date.parse(sold.lastSale) : 0;
     const stock = this.inventory.items().filter((item) => item.product_id === product.normalized_id || skus.has((item.sku || "").trim().toLowerCase()));
     const available = stock.reduce((sum, item) => sum + Number(item.available_qty ?? 0), 0);
     const min = stock.reduce((sum, item) => sum + Number(item.min_stock || 0), 0);

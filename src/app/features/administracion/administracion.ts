@@ -1,5 +1,5 @@
 
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from "@angular/core";
+import { afterRenderEffect, ChangeDetectionStrategy, Component, computed, ElementRef, inject, signal, viewChild } from "@angular/core";
 import { FormsModule } from "@angular/forms";
 import { ActivatedRoute, Router } from "@angular/router";
 import { AuthzService } from "../../core/authz.service";
@@ -425,6 +425,24 @@ export default class AdministracionPage {
   lastUpdatedAt = signal<Date | null>(null);
   movementDialogOpen = signal(false);
   movementDialogKind = signal<"expense" | "withdrawal" | "account">("expense");
+  movementSaving = signal(false);
+  private readonly movementDialog = viewChild<ElementRef<HTMLDialogElement>>("movementDialog");
+  private readonly movementDialogEffect = afterRenderEffect((onCleanup) => {
+    const dialog = this.movementDialog()?.nativeElement;
+    if (!dialog) return;
+    const previousFocus = dialog.ownerDocument.activeElement;
+    const body = dialog.ownerDocument.body;
+    const previousOverflow = body.style.overflow;
+    body.style.overflow = "hidden";
+    dialog.showModal();
+    onCleanup(() => {
+      dialog.close();
+      body.style.overflow = previousOverflow;
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) {
+        previousFocus.focus({ preventScroll: true });
+      }
+    });
+  });
   cutDialogOpen = signal(false);
   collectionEventRows = signal<OrderCollectionEvent[]>([]);
 
@@ -984,6 +1002,11 @@ export default class AdministracionPage {
 
   withdrawalSelectedPartner = computed(() => this.asPartnerPurpose(this.withdrawalPurpose()));
 
+  movementSourceAccount = computed(() => {
+    const accountId = this.movementDialogKind() === "withdrawal" ? this.withdrawalAccountId() : this.expenseAccountId();
+    return this.accounts().find((account) => account.account_id === accountId) ?? null;
+  });
+
   withdrawalAvailableForForm = computed(() => {
     const editingId = this.withdrawalEditingId();
     if (!editingId) return this.withdrawalSummary().disponible;
@@ -1250,7 +1273,20 @@ export default class AdministracionPage {
   }
 
   closeMovementDialog(): void {
+    if (this.movementSaving()) return;
     this.movementDialogOpen.set(false);
+  }
+
+  async saveMovement(): Promise<void> {
+    if (this.movementSaving()) return;
+    this.movementSaving.set(true);
+    try {
+      if (this.movementDialogKind() === "expense") await this.submitExpense();
+      else if (this.movementDialogKind() === "withdrawal") await this.submitWithdrawal();
+      else await this.submitAccount();
+    } finally {
+      this.movementSaving.set(false);
+    }
   }
 
   openPartnerPayment(partner: PartnerWithdrawalPurpose): void {
