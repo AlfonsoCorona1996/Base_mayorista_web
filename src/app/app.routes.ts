@@ -1,4 +1,5 @@
-import { Routes, UrlMatcher } from '@angular/router';
+import { EnvironmentInjector, inject } from '@angular/core';
+import { ResolveFn, Routes, UrlMatcher } from '@angular/router';
 import { adminGuard } from "./core/admin.guard";
 import { permissionGuard } from "./core/permission.guard";
 import { authzGuard } from "./core/authz.guard";
@@ -7,6 +8,19 @@ const loginMatcher: UrlMatcher = (segments) => {
   if (!segments.length) return null;
   if (segments[0].path.toLowerCase() !== "login") return null;
   return { consumed: segments };
+};
+
+/**
+ * R5: los resolvers corren después de todos los guards (sesión, cuenta activa y permiso de
+ * Pedidos). Aquí se empiezan las mismas lecturas que hace Pedidos al iniciar, sin esperar a que
+ * termine la descarga y creación del componente. No bloquea la navegación.
+ */
+export const pedidosDataWarmup: ResolveFn<true> = () => {
+  const injector = inject(EnvironmentInjector);
+  import("./features/pedidos/pedidos-data-warmup")
+    .then((m) => m.startPedidosDataWarmup(injector))
+    .catch(() => undefined);
+  return true;
 };
 
 export const routes: Routes = [
@@ -133,6 +147,7 @@ export const routes: Routes = [
         path: "pedidos",
         canActivate: [permissionGuard],
         data: { permission: "pedidos" },
+        resolve: { dataWarmup: pedidosDataWarmup },
         loadComponent: () => import("./features/pedidos/pedidos").then((m) => m.default),
       },
       {

@@ -1,3 +1,4 @@
+import { normalizeUserGender, UserGender } from "../core/user-gender";
 import { Injectable, inject } from "@angular/core";
 import { HttpClient, HttpErrorResponse } from "@angular/common/http";
 import { catchError, lastValueFrom, throwError } from "rxjs";
@@ -41,6 +42,7 @@ export type AdminPermissionKey =
 export type AdminPermissionsPayload = Record<AdminPermissionKey, boolean>;
 
 export type CreateManagedUserInput = {
+  gender?: UserGender | null;
   displayName: string;
   username: string;
   loginType: UserLoginType;
@@ -72,6 +74,7 @@ export type UpdateManagedUserInput = {
 };
 
 export type UpdateProfileInput = {
+  gender?: UserGender | null;
   uid: string;
   displayName: string;
   username: string;
@@ -92,6 +95,7 @@ export type CompleteFirstLoginResult = {
 };
 
 export type ListManagedUserRow = {
+  gender?: UserGender | null;
   uid: string;
   email: string | null;
   username: string;
@@ -108,6 +112,7 @@ export type ListManagedUserRow = {
 };
 
 export type SessionBootstrapUser = {
+  gender?: UserGender | null;
   uid: string;
   email: string | null;
   username: string;
@@ -230,6 +235,7 @@ export class UserAdminApiService {
       body: JSON.stringify({
         email: loginMode === "email" ? email : undefined,
         display_name: input.displayName.trim(),
+        ...(input.gender !== undefined ? { gender: input.gender } : {}),
         username: input.username.trim(),
         role: input.roleId,
         login_mode: loginMode,
@@ -292,6 +298,7 @@ export class UserAdminApiService {
     const payload = {
       uid: input.uid,
       display_name: input.displayName.trim(),
+      ...(input.gender !== undefined ? { gender: input.gender } : {}),
       username: input.username.trim(),
       email: input.email ? input.email.trim().toLowerCase() : null,
     };
@@ -378,6 +385,7 @@ export class UserAdminApiService {
         email: string | null;
         username: string;
         displayName?: string | null;
+        gender?: UserGender | null;
         roleId: string;
         isActive: boolean;
         invitePending: boolean;
@@ -394,6 +402,7 @@ export class UserAdminApiService {
       email: result.user.email,
       username: result.user.username,
       displayName: result.user.displayName || null,
+      gender: normalizeUserGender(result.user.gender),
       roleId: result.user.roleId || "",
       isActive: Boolean(result.user.isActive),
       invitePending: Boolean(result.user.invitePending),
@@ -557,6 +566,7 @@ export class UserAdminApiService {
       email,
       username,
       displayName,
+      gender: normalizeUserGender(row["gender"]),
       roleId,
       isActive: Boolean(row["isActive"] ?? true),
       invitePending: Boolean(row["invitePending"] ?? false),

@@ -458,6 +458,7 @@ export default class AdministracionPage {
   expenseEditingId = signal<string | null>(null);
   expenseCategory = signal<FinanceExpenseCategory>("consumibles");
   expenseAmount = signal(0);
+  expenseAmountInput = signal("");
   expenseDate = signal(this.offsetDate(0));
   expenseRouteId = signal("general");
   expenseAccountId = signal("none");
@@ -1506,6 +1507,7 @@ export default class AdministracionPage {
     this.expenseEditingId.set(row.expense_id);
     this.expenseCategory.set(row.category);
     this.expenseAmount.set(row.amount);
+    this.expenseAmountInput.set(this.formatCurrencyInput(row.amount));
     this.expenseDate.set(this.normalizeDateInput(row.occurred_at, this.offsetDate(0)));
     this.expenseRouteId.set(row.route_id || "general");
     this.expenseAccountId.set(row.account_id || "none");
@@ -1518,6 +1520,7 @@ export default class AdministracionPage {
     this.expenseEditingId.set(null);
     this.expenseCategory.set("consumibles");
     this.expenseAmount.set(0);
+    this.expenseAmountInput.set("");
     this.expenseDate.set(this.offsetDate(0));
     this.expenseRouteId.set(this.selectedRouteId() || "general");
     this.expenseAccountId.set(this.defaultFinanceAccountId());
@@ -1533,8 +1536,10 @@ export default class AdministracionPage {
     }
   }
 
-  setExpenseAmount(value: unknown) {
-    this.expenseAmount.set(this.toSafeNumber(value));
+  setExpenseAmountInput(value: unknown) {
+    const normalized = this.normalizeCurrencyInput(String(value || ""));
+    this.expenseAmount.set(normalized.amount);
+    this.expenseAmountInput.set(normalized.formatted);
   }
 
   setExpenseDate(value: unknown) {
@@ -2700,7 +2705,12 @@ export default class AdministracionPage {
     if (!value) return null;
     if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
     if (typeof value === "string") {
-      const parsed = new Date(value);
+      // "YYYY-MM-DD" se interpreta como medianoche local; new Date() lo tomaría como UTC
+      // y en México movería los movimientos del día 1 al mes anterior.
+      const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+      const parsed = dateOnly
+        ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
+        : new Date(value);
       return Number.isNaN(parsed.getTime()) ? null : parsed;
     }
     if (typeof value === "object" && value !== null) {

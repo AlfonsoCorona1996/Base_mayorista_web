@@ -33,4 +33,22 @@ describe("UserAdminApiService: alta y primer acceso", () => {
     await service.completeFirstLogin("Nueva-password-de-prueba");
     expect(request).toHaveBeenCalledWith("/admin/users/complete-first-login", { method: "POST", body: JSON.stringify({ password: "Nueva-password-de-prueba" }) });
   });
+
+  it("guarda y permite borrar el género en la misma petición de perfil", async () => {
+    request.and.resolveTo({ ok: true });
+    await service.updateManagedUserProfile({ uid: "u1", displayName: "Andrea", username: "Andrea", gender: "female" });
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(request.calls.mostRecent().args[1].body as string).gender).toBe("female");
+    await service.updateManagedUserProfile({ uid: "u1", displayName: "Andrea", username: "Andrea", gender: null });
+    expect(JSON.parse(request.calls.mostRecent().args[1].body as string).gender).toBeNull();
+  });
+
+  it("recibe el género en el bootstrap existente y conserva su caché compartida", async () => {
+    request.and.resolveTo({ user: { uid: "u1", username: "Andrea", displayName: "Andrea", gender: "female", roleId: "operativo", isActive: true } });
+    const [first, second] = await Promise.all([service.getSessionBootstrap(), service.getSessionBootstrap()]);
+    expect(first.gender).toBe("female");
+    expect(second).toBe(first);
+    expect(await service.getSessionBootstrap()).toBe(first);
+    expect(request).toHaveBeenCalledTimes(1);
+  });
 });

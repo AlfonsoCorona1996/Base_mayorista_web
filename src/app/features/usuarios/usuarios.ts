@@ -1,3 +1,4 @@
+import { normalizeUserGender, UserGender } from "../../core/user-gender";
 import { Component, computed, inject, signal, ChangeDetectionStrategy } from "@angular/core";
 import { FormsModule } from "@angular/forms";
 import { collection, getDocs } from "firebase/firestore";
@@ -58,6 +59,7 @@ type UserPermissionGroup = {
 };
 
 type UserDraft = {
+  gender: UserGender | null;
   uid: string;
   email: string;
   authEmail: string;
@@ -143,6 +145,7 @@ export default class UsuariosPage {
   tempPasswordOut = signal<{ uid: string; password: string | null } | null>(null);
 
   newDisplayName = signal("");
+  newGender = signal<UserGender | null>(null);
   newEmail = signal("");
   newUsername = signal("");
   newRoleId = signal<RoleId>("operativo");
@@ -229,6 +232,7 @@ export default class UsuariosPage {
       authEmail: row.email || buildUsernameAuthEmail(username),
       username,
       loginType,
+      gender: normalizeUserGender(row.gender),
       displayName: row.displayName || username || row.uid,
       roleId,
       isActive: Boolean(row.isActive),
@@ -407,6 +411,7 @@ export default class UsuariosPage {
       authEmail: row.authEmail,
       username: row.username,
       loginType: row.loginType,
+      gender: normalizeUserGender(row.gender),
       displayName: row.displayName,
       roleId: row.roleId,
       isActive: row.isActive,
@@ -434,6 +439,10 @@ export default class UsuariosPage {
 
   isEditingRow(row: UserDoc): boolean {
     return this.editDraft()?.uid === row.uid;
+  }
+
+  updateEditGender(value: unknown) {
+    this.editDraft.update((draft) => draft ? { ...draft, gender: normalizeUserGender(value) } : draft);
   }
 
   updateEditDisplayName(value: string) {
@@ -569,6 +578,7 @@ export default class UsuariosPage {
 
     const payload: CreateManagedUserInput = {
       displayName: this.newDisplayName().trim(),
+      gender: this.newGender(),
       username: this.newUsername().trim(),
       loginType: this.newLoginType(),
       roleId: this.newRoleId(),
@@ -631,6 +641,7 @@ export default class UsuariosPage {
         await this.userAdminApi.updateManagedUserProfile({
           uid: row.uid,
           displayName: draft.displayName.trim(),
+          gender: draft.gender,
           username: draft.username.trim(),
           email: draft.loginType === "email" ? draft.email.trim().toLowerCase() : null,
         });
@@ -1096,6 +1107,7 @@ export default class UsuariosPage {
     const currentDisplayName = row.displayName.trim();
     const nextDisplayName = draft.displayName.trim();
     if (currentDisplayName !== nextDisplayName) return true;
+    if ((row.gender ?? null) !== draft.gender) return true;
 
     const currentUsername = row.username.trim();
     const nextUsername = draft.username.trim();
@@ -1120,6 +1132,7 @@ export default class UsuariosPage {
     return {
       ...row,
       displayName: draft.displayName.trim(),
+      gender: draft.gender,
       username,
       loginType,
       email,
@@ -1243,6 +1256,7 @@ export default class UsuariosPage {
 
   private resetCreateForm() {
     this.newDisplayName.set("");
+    this.newGender.set(null);
     this.newEmail.set("");
     this.newUsername.set("");
     this.newRoleId.set("operativo");

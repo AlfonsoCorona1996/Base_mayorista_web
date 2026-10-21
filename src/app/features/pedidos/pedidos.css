@@ -1171,6 +1171,7 @@
 }
 
 .tfilter-chip {
+  min-height: var(--ui-touch-target-min);
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -1201,6 +1202,7 @@
 }
 
 .tfilter-group {
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1219,8 +1221,10 @@
 .tfilter-label .material-symbols-rounded { font-size: 0.95rem; }
 
 .tfilter-input {
+  box-sizing: border-box;
+  max-width: 100%;
   width: 146px;
-  min-height: 34px;
+  min-height: var(--ui-touch-target-min);
   height: auto;
   padding: 0 10px;
   border: 1px solid #cfd9e6;
@@ -1446,13 +1450,13 @@
   .tfilter-dates {
     grid-column: 1 / -1;
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
     gap: 10px;
   }
 
   .tfilter-chip {
     justify-content: center;
-    min-height: 40px;
+    min-height: var(--ui-touch-target-min);
     padding: 4px 6px;
     gap: 4px;
     font-size: calc(0.8rem - 1px);
@@ -1491,7 +1495,7 @@
     min-width: 0;
     min-height: 46px;
     border-radius: 12px;
-    font-size: calc(1.02rem - 1px);
+    font-size: 16px;
     font-weight: 650;
   }
 
@@ -1500,7 +1504,7 @@
   .tfilter-input::-webkit-datetime-edit-month-field,
   .tfilter-input::-webkit-datetime-edit-day-field,
   .tfilter-input::-webkit-datetime-edit-year-field {
-    font-size: calc(1.02rem - 1px);
+    font-size: 16px;
   }
 
   .tfilter-footer {
@@ -1955,6 +1959,41 @@
 .td-total  { text-align: center; font-weight: 600; color: var(--ios-text); }
 .td-updated { white-space: nowrap; color: var(--ios-muted); font-size: 0.78rem; }
 .td-action { width: 32px; }
+
+.order-creator {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-8);
+  min-width: 0;
+}
+
+.creator-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 var(--ui-space-32);
+  width: var(--ui-space-32);
+  height: var(--ui-space-32);
+  border-radius: var(--ui-radius-pill);
+  background: #e2e8f0;
+  color: #334155;
+  font-weight: 700;
+}
+
+.creator-avatar--female { background: #fce7f3; color: #9d174d; }
+.creator-avatar--male { background: #dbeafe; color: #1e40af; }
+.creator-name { max-width: 12rem; overflow-wrap: anywhere; white-space: normal; }
+.creator-missing { color: var(--ios-muted); }
+
+.tfilter-chip:focus-visible,
+.tfilter-reset:focus-visible {
+  outline: 2px solid var(--ios-blue, #007aff);
+  outline-offset: 2px;
+}
+
+@media (min-width: 480px) and (max-width: 680px) {
+  .tfilter-dates { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 .orders-table td.td-customer { text-align: left; }
 .orders-table td.td-status { min-width: 146px; }
 

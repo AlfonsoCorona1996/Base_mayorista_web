@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideZonelessChangeDetection } from '@angular/core';
+import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '../../core/auth.service';
 import { CategoriesService, Category } from '../../core/categories.service';
@@ -80,6 +80,7 @@ describe('Review flujo rápido', () => {
       'loadCategories',
     ]);
     categories.loadCategories.and.resolveTo();
+    Object.assign(categories, { loadState: signal('ready') });
     categories.getAll.and.returnValue([category]);
     categories.getRoots.and.returnValue([category]);
     categories.getChildren.and.returnValue([]);
@@ -153,6 +154,36 @@ describe('Review flujo rápido', () => {
     expect(listings.saveReviewDecision.calls.mostRecent().args[1].listing?.categoryReview?.confirmedBy).toBe('user');
     page.draft.set({ ...page.draft()!, listing: { ...page.draft()!.listing, category_hint: 'Otra' } });
     expect(page.categoryConfirmed()).toBeFalse();
+  });
+
+  it('abre las raíces, recorre una rama y muestra el padre al crear una categoría', () => {
+    const child: Category = { ...category, id: 'kids', name: 'Niños', fullPath: 'Ropa > Niños', parentId: 'ropa', level: 1 };
+    categories.getChildren.and.callFake(id => id === 'ropa' ? [child] : []);
+    categories.getById.and.callFake(id => [category, child].find(row => row.id === id) || null);
+    page.changeCategory();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.category-options').textContent).toContain('Ropa');
+    page.browseCategory('ropa');
+    fixture.detectChanges();
+    expect(page.categoryChildren()).toEqual([child]);
+    expect(page.categoryParentId).toBe('ropa');
+    page.browseCategory('kids');
+    page.newCategoryName = 'Conjuntos';
+    expect(page.newCategoryPath()).toBe('Ropa > Niños > Conjuntos');
+    expect(page.categoryBreadcrumbs().map(row => row.name)).toEqual(['Ropa', 'Niños']);
+  });
+
+  it('permite alcanzar todos los resultados y anuncia errores de carga', () => {
+    const rows = Array.from({ length: 25 }, (_, index) => ({ ...category, id: String(index), name: `Tipo ${index}`, fullPath: `Ropa > Tipo ${index}` }));
+    categories.search.and.returnValue(rows);
+    page.changeCategory();
+    page.categorySearch = 'tipo'; page.onCategorySearch(); fixture.detectChanges();
+    expect(page.filteredCategories().length).toBe(20);
+    page.categorySearchLimit.update(page.increaseCategoryLimit); fixture.detectChanges();
+    expect(page.filteredCategories().length).toBe(25);
+    categories.loadState.set('error'); fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.category-load-error').textContent).toContain('Reintentar carga');
+    expect(fixture.nativeElement.querySelector('.category-options')).toBeNull();
   });
 
   it('muestra y descarta la propuesta sin crear categorías ni abrir menús', () => {
@@ -450,12 +481,13 @@ describe('Review flujo rápido', () => {
     page.draft.set(empty);
     page.rawImages.set([]);
     page.showCategoryDropdown.set(true);
-    page.filteredCategories.set([]);
+    categories.search.and.returnValue([]);
+    page.categorySearch = 'inexistente'; page.onCategorySearch();
     page.error.set('No se pudo guardar. Intenta de nuevo.');
     fixture.detectChanges();
     expect(root.textContent).toContain('No hay fotos disponibles');
     expect(root.textContent).toContain('Añade al menos una variante');
-    expect(root.textContent).toContain('Sin resultados');
+    expect(root.textContent).toContain('No hay categorías que coincidan');
     expect(root.querySelector('[role="alert"]')?.textContent).toContain('Intenta de nuevo');
     page.saving.set(true);
     fixture.detectChanges();
@@ -519,7 +551,8 @@ describe('Review flujo rápido', () => {
         }
         page.expandedVariant.set('v6');
         page.showCategoryDropdown.set(true);
-        page.filteredCategories.set([]);
+        categories.search.and.returnValue([]);
+        page.categorySearch = 'inexistente'; page.onCategorySearch();
         fixture.detectChanges();
         expect(view.documentElement.scrollWidth).toBeLessThanOrEqual(width);
       } finally {

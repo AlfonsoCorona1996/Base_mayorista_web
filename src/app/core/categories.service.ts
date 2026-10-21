@@ -1,4 +1,5 @@
 import { normalizeSearch } from "./listing-metadata";
+import { searchCategories, sortCategories } from './category-ordering';
 import { Injectable, signal } from "@angular/core";
 import {
   collection,
@@ -36,6 +37,8 @@ interface CategoryEditInput {
 export class CategoriesService {
   private allCategories = signal<Category[]>([]);
   private loaded = false;
+  readonly loadState = signal<'loading' | 'ready' | 'error'>('loading');
+  private loadPromise: Promise<void> | null = null;
 
   constructor() {
     this.loadCategories();
@@ -43,18 +46,25 @@ export class CategoriesService {
 
   async loadCategories(): Promise<void> {
     if (this.loaded) return;
+    if (this.loadPromise) return this.loadPromise;
+    this.loadPromise = this.fetchCategories();
+    try { await this.loadPromise; } finally { this.loadPromise = null; }
+  }
 
+  private async fetchCategories(): Promise<void> {
+    this.loadState.set('loading');
     try {
       const colRef = collection(FIRESTORE, "categories");
-      const q = query(colRef, where("active", "==", true), orderBy("order", "asc"));
+      const q = query(colRef, where("active", "==", true));
       const snapshot = await getDocs(q);
       const cats = snapshot.docs.map((entry) => this.normalizeCategory(entry.data() as Partial<Category>, entry.id));
 
-      this.allCategories.set(cats);
+      this.allCategories.set(sortCategories(cats));
       this.loaded = true;
+      this.loadState.set('ready');
     } catch (error) {
       console.error("Error cargando categorias desde Firestore:", error);
-      this.loadFallbackCategories();
+      this.loadState.set('error');
     }
   }
 
@@ -67,11 +77,7 @@ export class CategoriesService {
   }
 
   search(searchQuery: string): Category[] {
-    const all = this.allCategories();
-    if (!searchQuery || searchQuery.trim().length === 0) return all;
-
-    const q = normalizeSearch(searchQuery);
-    return all.filter((category) => normalizeSearch(category.name).includes(q) || normalizeSearch(category.fullPath).includes(q));
+    return searchCategories(this.allCategories(), searchQuery);
   }
 
   getByPath(fullPath: string): Category | null {
@@ -83,15 +89,15 @@ export class CategoriesService {
   }
 
   getChildren(parentId: string): Category[] {
-    return this.allCategories().filter((category) => category.parentId === parentId);
+    return sortCategories(this.allCategories().filter((category) => category.parentId === parentId));
   }
 
   getRoots(): Category[] {
-    return this.allCategories().filter((category) => category.level === 0);
+    return sortCategories(this.allCategories().filter((category) => category.parentId === null));
   }
 
   getAll(): Category[] {
-    return this.allCategories();
+    return sortCategories(this.allCategories());
   }
 
   async addCategory(name: string, parentId: string | null): Promise<string> {
@@ -260,57 +266,6 @@ export class CategoriesService {
 
   async deactivateCategory(id: string): Promise<void> {
     await this.updateCategory(id, { active: false });
-  }
-
-  private loadFallbackCategories() {
-    this.allCategories.set([
-      {
-        id: "hogar",
-        name: "Hogar",
-        fullPath: "Hogar",
-        parentId: null,
-        level: 0,
-        active: true,
-        order: 1,
-      },
-      {
-        id: "hogar-recamara",
-        name: "Recamara",
-        fullPath: "Hogar > Recamara",
-        parentId: "hogar",
-        level: 1,
-        active: true,
-        order: 1,
-      },
-      {
-        id: "hogar-recamara-cobertores",
-        name: "Cobertores",
-        fullPath: "Hogar > Recamara > Cobertores",
-        parentId: "hogar-recamara",
-        level: 2,
-        active: true,
-        order: 1,
-      },
-      {
-        id: "ropa",
-        name: "Ropa",
-        fullPath: "Ropa",
-        parentId: null,
-        level: 0,
-        active: true,
-        order: 2,
-      },
-      {
-        id: "ropa-mujer",
-        name: "Mujer",
-        fullPath: "Ropa > Mujer",
-        parentId: "ropa",
-        level: 1,
-        active: true,
-        order: 1,
-      },
-    ]);
-    this.loaded = true;
   }
 
   private buildChildrenMap(categories: Category[]): Map<string, Category[]> {

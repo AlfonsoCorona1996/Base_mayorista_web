@@ -392,7 +392,7 @@
         </section>
         <section class="review-section category-section" aria-labelledby="category-title">
           <div class="section-header">
-            <h2 id="category-title"><review-icon name="layers" /> Categoría</h2>
+            <h2 id="category-title" tabindex="-1"><review-icon name="layers" /> Categoría</h2>
             <span class="review-state" [class.confirmed]="categoryConfirmed()" role="status">{{
               categoryConfirmed() ? 'Confirmada' : 'Pendiente de validar'
             }}</span>
@@ -424,13 +424,13 @@
             <p id="category-error" class="field-error" role="alert">{{ fieldErrors().category }}</p>
           }
           <div class="identity-fields">
-            <div class="field" [hidden]="!!d.listing.category_hint && !showCategoryDropdown()">
+            <div class="field" [hidden]="!!d.listing.category_hint && !showCategoryDropdown()" (keydown.escape)="closeCategoryPicker(); $event.stopPropagation()">
               <label for="category-search">Buscar categoría</label>
               <input
                 id="category-search"
                 [class.input-error]="fieldErrors().category"
                 [attr.aria-invalid]="!!fieldErrors().category"
-                aria-describedby="category-error"
+                [attr.aria-describedby]="fieldErrors().category ? 'category-error' : null"
                 class="input"
                 [(ngModel)]="categorySearch"
                 (input)="onCategorySearch(); showCategoryDropdown.set(true)"
@@ -441,72 +441,89 @@
               />
               @if (showCategoryDropdown()) {
                 <div id="category-results" class="category-results">
-                  <div class="section-header">
-                    <strong>Categorías</strong>
-                    <button type="button" class="btn" (click)="showCategoryDropdown.set(false)">
+                  <div class="section-header category-picker-header">
+                    <strong id="category-browse-heading" tabindex="-1">{{ categorySearch.trim() ? 'Resultados de búsqueda' : 'Explorar categorías' }}</strong>
+                    <button type="button" class="btn" (click)="closeCategoryPicker()">
                       Cerrar
                     </button>
                   </div>
-                  @for (cat of filteredCategories(); track cat.id) {
-                    <button type="button" class="category-result" (click)="selectCategory(cat)">
-                      {{ cat.fullPath }}
-                    </button>
-                  }
-                  @if (!filteredCategories().length) {
-                    <p class="hint">Sin resultados. Puedes crear una categoría aquí.</p>
-                  }
-                  <details>
-                    <summary>Navegar por jerarquía</summary>
-                    <button type="button" class="btn" (click)="browseCategory(null)">
-                      Volver a raíces
-                    </button>
-                    @for (cat of categoryChildren(); track cat.id) {
-                      <div class="category-branch">
-                        <button type="button" class="category-result" (click)="selectCategory(cat)">
-                          {{ cat.fullPath }}
-                        </button>
-                        <button
-                          type="button"
-                          class="btn-icon"
-                          (click)="browseCategory(cat.id)"
-                          [attr.aria-label]="'Ver subcategorías de ' + cat.name"
-                        >
-                          ›
-                        </button>
-                      </div>
-                    }
-                    @if (!categoryChildren().length) {
-                      <p class="hint">Esta categoría no tiene subcategorías.</p>
-                    }
-                  </details>
-                  <details class="inline-create">
-                    <summary>Crear categoría</summary>
-                    <div class="field-grid">
-                      <label class="field"
-                        >Categoría padre<select class="input" [(ngModel)]="categoryParentId">
-                          <option value="">Ninguna (categoría raíz)</option>
-                          @for (cat of allCategories(); track cat.id) {
-                            <option [value]="cat.id">{{ cat.fullPath }}</option>
-                          }
-                        </select>
-                      </label>
-                      <label class="field"
-                        >Nombre<input
-                          class="input"
-                          [(ngModel)]="newCategoryName"
-                          placeholder="Nombre de la nueva categoría"
-                        />
-                      </label>
+                  @if (categoryLoadState() === 'loading') {
+                    <p class="hint" role="status">Cargando categorías…</p>
+                  } @else if (categoryLoadState() === 'error') {
+                    <div class="category-load-error" role="alert">
+                      <p>No se pudieron cargar las categorías.</p>
+                      <button type="button" class="btn" (click)="reloadCategories()">Reintentar carga</button>
                     </div>
-                    <button
-                      type="button"
-                      class="btn"
-                      (click)="createInlineCategory()"
-                      [disabled]="categoryProposalSaving() || !newCategoryName.trim()"
-                    >
-                      {{ categoryProposalSaving() ? 'Creando…' : 'Crear categoría y aceptar' }}
-                    </button>
-                  </details>
+                  } @else {
+                    @if (categorySearch.trim()) {
+                      <p class="hint" role="status">{{ categorySearchResults().length }} resultados · Ordenados por ruta</p>
+                      <ul class="category-options">
+                        @for (cat of filteredCategories(); track cat.id) {
+                          <li>
+                            <button type="button" class="category-result" (click)="selectCategory(cat)">
+                              <span class="category-option-text"><strong>{{ cat.name }}</strong><span class="category-option-path">{{ categoryParentPath(cat.fullPath) || 'Categoría principal' }}</span></span>
+                              @if (d.listing.category_hint === cat.fullPath) { <span class="category-current">Actual</span> }
+                            </button>
+                          </li>
+                        }
+                      </ul>
+                      @if (filteredCategories().length < categorySearchResults().length) {
+                        <button type="button" class="btn" (click)="categorySearchLimit.update(increaseCategoryLimit)">Mostrar más categorías</button>
+                      }
+                      @if (!categorySearchResults().length) {
+                        <p class="hint">No hay categorías que coincidan. Prueba otro término o crea una categoría.</p>
+                      }
+                      <button type="button" class="btn" (click)="browseCategory(null)">Explorar por niveles</button>
+                    } @else {
+                      <nav class="category-breadcrumbs" aria-label="Ruta de categorías">
+                        <button type="button" class="btn" (click)="browseCategory(null)" [attr.aria-current]="categoryParent() ? null : 'location'">Todas</button>
+                        @for (cat of categoryBreadcrumbs(); track cat.id) {
+                          <span aria-hidden="true">›</span>
+                          <button type="button" class="btn" (click)="browseCategory(cat.id)" [attr.aria-current]="categoryParent() === cat.id ? 'location' : null">{{ cat.name }}</button>
+                        }
+                      </nav>
+                      <p class="hint">{{ categoryParent() ? 'Subcategorías' : 'Categorías principales' }} · A–Z</p>
+                      @if (categoryParent(); as parentId) {
+                        <button type="button" class="btn category-use-parent" (click)="selectCurrentCategory()">Usar {{ categoryBreadcrumbs().at(-1)?.name }}</button>
+                      }
+                      <ul class="category-options">
+                        @for (cat of categoryChildren(); track cat.id) {
+                          <li>
+                            <button type="button" class="category-result" (click)="categoryHasChildren(cat.id) ? browseCategory(cat.id) : selectCategory(cat)">
+                              <span class="category-option-text"><strong>{{ cat.name }}</strong></span>
+                              @if (d.listing.category_hint === cat.fullPath) { <span class="category-current">Actual</span> }
+                              @if (categoryHasChildren(cat.id)) { <span class="category-next" aria-hidden="true">›</span><span class="sr-only">Ver subcategorías</span> }
+                            </button>
+                          </li>
+                        }
+                      </ul>
+                      @if (!categoryChildren().length) {
+                        <p class="hint">{{ categoryParent() ? 'Esta categoría no tiene subcategorías.' : 'Todavía no hay categorías activas.' }}</p>
+                      }
+                    }
+                    <details class="inline-create category-create">
+                      <summary>Crear categoría</summary>
+                      <div class="field-grid">
+                        <label class="field" for="category-create-parent">Ubicar dentro de
+                          <select id="category-create-parent" class="input" [(ngModel)]="categoryParentId">
+                            <option value="">Ninguna (categoría principal)</option>
+                            @for (group of categoryParentGroups(); track group.name) {
+                              <optgroup [label]="group.name">
+                                @for (cat of group.categories; track cat.id) { <option [value]="cat.id">{{ cat.fullPath }}</option> }
+                              </optgroup>
+                            }
+                          </select>
+                        </label>
+                        <label class="field" for="category-create-name">Nombre
+                          <input id="category-create-name" class="input" [(ngModel)]="newCategoryName" placeholder="Nombre de la nueva categoría" />
+                        </label>
+                      </div>
+                      @if (newCategoryName.trim()) { <p class="category-create-preview">Se creará: <strong>{{ newCategoryPath() }}</strong></p> }
+                      <button type="button" class="btn" (click)="createInlineCategory()" [disabled]="categoryProposalSaving() || !newCategoryName.trim()">
+                        {{ categoryProposalSaving() ? 'Creando…' : 'Crear categoría y aceptar' }}
+                      </button>
+                    </details>
+                  }
                 </div>
               }
             </div>

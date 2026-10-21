@@ -325,17 +325,48 @@ describe("PedidosPage - cachés por pedido de la plantilla (R3)", () => {
     expect(names).toEqual([...names].sort().reverse());
   });
 
-  it("el filtro de fechas de la tabla usa la fecha local de creación", async () => {
+  it("el filtro de fechas de la tabla usa la fecha local de actualización", async () => {
     await showTable(Array.from({ length: 12 }, (_, index) => makeOrder(index)));
-    component.tableDateFrom.set("2026-10-03");
-    component.tableDateTo.set("2026-10-04");
+    component.tableDateFrom.set("2026-10-12");
+    component.tableDateTo.set("2026-10-13");
     await render();
     const expected = component.list().filter((order) => {
-      const date = new Date(order.created_at);
+      const date = new Date(order.updated_at);
       const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-      return key >= "2026-10-03" && key <= "2026-10-04";
+      return key >= "2026-10-12" && key <= "2026-10-13";
     });
     expect(component.tableRows().length).toBe(expected.length);
     expect(component.tableRows().length).toBeGreaterThan(0);
+  });
+
+  it("Hoy incluye todo el día local y actualiza la caché cuando cambia el pedido", async () => {
+    const today = new Date();
+    const at = (day: number, hours: number, minutes = 0, seconds = 0, ms = 0) =>
+      new Date(today.getFullYear(), today.getMonth(), today.getDate() + day, hours, minutes, seconds, ms).toISOString();
+    await showTable([
+      makeOrder(1, { created_at: at(-10, 12), updated_at: at(0, 0) }),
+      makeOrder(2, { created_at: at(-10, 12), updated_at: at(0, 23, 59, 59, 999) }),
+      makeOrder(3, { created_at: at(0, 12), updated_at: at(-1, 23, 59, 59, 999) }),
+      makeOrder(4, { updated_at: at(1, 0) }),
+    ]);
+    component.applyTableRangePreset("today");
+    expect(component.tableRows().map((o) => o.order_id).sort()).toEqual(["P-001", "P-002"]);
+    replaceOrder("P-003", { updated_at: at(0, 12) });
+    expect(component.tableRows().map((o) => o.order_id).sort()).toEqual(["P-001", "P-002", "P-003"]);
+  });
+
+  it("muestra el creador del pedido sin consultas adicionales ni inferir género", async () => {
+    await showTable([
+      makeOrder(1, { created_by: { uid: "u1", name: "Jazmin", gender: "female" } }),
+      makeOrder(2, { created_by: { uid: "u2", name: "Jose Alfonso Corona", gender: "male" } }),
+      makeOrder(3),
+    ]);
+    const host: HTMLElement = fixture.nativeElement;
+    expect(host.querySelector(".creator-avatar--female")?.textContent?.trim()).toBe("J");
+    expect(host.querySelector(".creator-avatar--male")?.textContent?.trim()).toBe("J");
+    expect(host.querySelector(".creator-missing")?.textContent?.trim()).toBe("Sin registro");
+    expect(host.querySelector("thead th:nth-last-child(2)")?.textContent?.trim()).toBe("Creado por");
+    expect(host.querySelector("tbody tr.trow td:last-child")?.classList.contains("td-action")).toBeTrue();
+    expect(TestBed.inject(OrdersService).loadFromFirestore).toHaveBeenCalledTimes(1);
   });
 });

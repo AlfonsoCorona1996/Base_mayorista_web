@@ -94,12 +94,6 @@
                   <option value="username">Solo usuario</option>
                 </select>
               </label>
-              @if (newLoginType() === "email") {
-                <label class="create-field create-field-email">
-                  Correo
-                  <input class="input" [ngModel]="newEmail()" (ngModelChange)="newEmail.set($event)" />
-                </label>
-              }
               <label class="create-field create-field-role">
                 Rol
                 <select class="input" [ngModel]="newRoleId()" (ngModelChange)="newRoleId.set($event)">
@@ -108,6 +102,20 @@
                   }
                 </select>
               </label>
+              <label class="create-field create-field-gender">
+                Género
+                <select class="input" [ngModel]="newGender()" (ngModelChange)="newGender.set($event)">
+                  <option [ngValue]="null">Sin especificar</option>
+                  <option value="female">Mujer</option>
+                  <option value="male">Hombre</option>
+                </select>
+              </label>
+              @if (newLoginType() === "email") {
+                <label class="create-field create-field-email">
+                  Correo
+                  <input class="input" [ngModel]="newEmail()" (ngModelChange)="newEmail.set($event)" />
+                </label>
+              }
               @if (newLoginType() === "email") {
                 <label class="toggle-line create-field create-field-activation">
                   <input
@@ -273,6 +281,14 @@
                       <label>
                         Usuario
                         <input class="input" [ngModel]="editDraft()?.username" (ngModelChange)="updateEditUsername($event)" />
+                      </label>
+                      <label>
+                        Género
+                        <select class="input" [ngModel]="editDraft()?.gender" (ngModelChange)="updateEditGender($event)">
+                          <option [ngValue]="null">Sin especificar</option>
+                          <option value="female">Mujer</option>
+                          <option value="male">Hombre</option>
+                        </select>
                       </label>
                       <label>
                         Tipo de acceso

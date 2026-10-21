@@ -136,6 +136,12 @@ export class NormalizedListingsService {
   private static readonly ALL_VALIDATED_TTL_MS = 5 * 60_000;
   private static readonly ALL_VALIDATED_PAGE_SIZE = 300;
   private static readonly ALL_VALIDATED_MAX_PAGES = 40;
+  /**
+   * Tope por pagina. Una pestana abierta mucho tiempo puede dejar un getDocs colgado
+   * tras un corte de red; como la promesa en vuelo se comparte, el buscador quedaba
+   * vacio hasta recargar. Al vencer se rechaza y se libera la promesa en vuelo.
+   */
+  private static readonly ALL_VALIDATED_PAGE_TIMEOUT_MS = 20_000;
 
   private allValidatedCache = new Map<BusinessId, { rows: NormalizedListingDoc[]; at: number }>();
   private allValidatedInFlight = new Map<BusinessId, Promise<NormalizedListingDoc[]>>();
@@ -171,7 +177,10 @@ export class NormalizedListingsService {
       let cursor: QueryDocumentSnapshot<DocumentData> | null | undefined;
 
       for (let page = 0; page < NormalizedListingsService.ALL_VALIDATED_MAX_PAGES; page += 1) {
-        const result = await this.listValidatedForBusiness(scope, cursor);
+        const result = await this.withTimeout(
+          this.listValidatedForBusiness(scope, cursor),
+          NormalizedListingsService.ALL_VALIDATED_PAGE_TIMEOUT_MS,
+        );
         for (const row of result.docs) {
           if (!row?.normalized_id || seen.has(row.normalized_id)) continue;
           seen.add(row.normalized_id);
@@ -200,6 +209,14 @@ export class NormalizedListingsService {
       return;
     }
     this.allValidatedCache.delete(normalizeBusinessId(businessId));
+  }
+
+  private withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error("La carga del catalogo tardo demasiado.")), ms);
+    });
+    return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
   }
 
   private async listValidatedForBusiness(

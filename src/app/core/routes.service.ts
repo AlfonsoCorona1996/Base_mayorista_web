@@ -30,8 +30,19 @@ export class RoutesService {
   private colRef = collection(FIRESTORE, "routes");
   routes = signal<RoutePlan[]>([]);
   private perf = inject(PerfMetricsService);
+  private inflight: Promise<void> | null = null;
 
-  async loadFromFirestore(): Promise<void> {
+  /** Lee las rutas. Si ya hay una lectura en curso, la comparte en vez de repetirla. */
+  loadFromFirestore(): Promise<void> {
+    if (!this.inflight) {
+      this.inflight = this.fetchRoutes().finally(() => {
+        this.inflight = null;
+      });
+    }
+    return this.inflight;
+  }
+
+  private async fetchRoutes(): Promise<void> {
     const q = query(this.colRef, orderBy("name", "asc"));
     const startedAt = this.perf.now();
     let snap;
@@ -81,7 +92,8 @@ export class RoutesService {
     };
 
     await setDoc(doc(this.colRef, routeId), payload, { merge: true });
-    await this.loadFromFirestore();
+    // Tras escribir siempre se lee de nuevo: una lectura previa en curso no incluiría el cambio.
+    await this.fetchRoutes();
   }
 
   async setActive(routeId: string, active: boolean): Promise<void> {
@@ -89,7 +101,7 @@ export class RoutesService {
       active,
       updated_at: serverTimestamp(),
     });
-    await this.loadFromFirestore();
+    await this.fetchRoutes();
   }
 
   private normalizeRoute(data: Partial<RoutePlan>, fallbackId: string): RoutePlan {

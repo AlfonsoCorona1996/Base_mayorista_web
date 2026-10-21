@@ -404,7 +404,7 @@
       <div class="table-filters">
         <div class="tfilter-head">
           <span class="material-symbols-rounded tfilter-head-icon" aria-hidden="true">calendar_month</span>
-          <span class="tfilter-head-title">Rango de fechas</span>
+          <span class="tfilter-head-title">Fecha de actualización</span>
           <button
             type="button"
             class="tfilter-bulk-trigger"
@@ -446,10 +446,13 @@
             <button type="button" class="table-bulk-menu-item" (click)="applyTableBulkAction('mark_listo_ruta', $event)" [disabled]="!canApplyTableBulkAction('mark_listo_ruta')">
               Marcar listo para ruta ({{ tableMarkReadyForRouteEligibleRows().length }})
             </button>
+            <button type="button" class="table-bulk-menu-item" (click)="applyTableBulkAction('assign_run', $event)" [disabled]="!canApplyTableBulkAction('assign_run')">
+              Agregar a salida ({{ tableAssignRunEligibleRows().length }})
+            </button>
           </div>
         }
         <p class="tfilter-section-label">Rango rapido</p>
-        <div class="tfilter-presets" role="group" aria-label="Atajos de rango de fechas">
+        <div class="tfilter-presets" role="group" aria-label="Filtrar por fecha de actualización">
           <button type="button" class="tfilter-chip" [class.active]="isTableRangePresetActive('today')" (click)="applyTableRangePreset('today')">
             <span class="material-symbols-rounded" aria-hidden="true">today</span>
             Hoy
@@ -475,6 +478,7 @@
               type="date"
               class="input tfilter-input"
               [(ngModel)]="tableDateFrom"
+              [max]="tableDateTo() || null"
               (click)="openTableDatePicker($event)"
               (focus)="openTableDatePicker($event)"
             />
@@ -489,6 +493,7 @@
               type="date"
               class="input tfilter-input"
               [(ngModel)]="tableDateTo"
+              [min]="tableDateFrom() || null"
               (click)="openTableDatePicker($event)"
               (focus)="openTableDatePicker($event)"
             />
@@ -711,12 +716,13 @@
                   <span class="material-symbols-rounded sort-icon">{{ tableSortDir() === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</span>
                 }
               </th>
-              <th></th>
+              <th scope="col">Creado por</th>
+              <th aria-label="Abrir pedido"></th>
             </tr>
           </thead>
           <tbody #tableBody>
             @if (tableVirtual.range().padTop > 0) {
-              <tr class="trow-spacer" aria-hidden="true"><td colspan="9" [style.height.px]="tableVirtual.range().padTop"></td></tr>
+              <tr class="trow-spacer" aria-hidden="true"><td colspan="10" [style.height.px]="tableVirtual.range().padTop"></td></tr>
             }
             @for (order of tableVisibleRows(); track order.order_id; let rowIndex = $index) {
               <tr class="trow" [attr.data-vid]="order.order_id" [attr.aria-rowindex]="tableVirtual.range().start + rowIndex + 2" [ngClass]="businessScope.isBothMode() ? orderBusinessClass(order) : ''" [class.trow--paid-row]="order.status === 'pagado'" [class.trow--selection-mode]="tableSelectionMode()" (click)="onTableRowActivate(order, $event)">
@@ -758,6 +764,16 @@
                   </span>
                 </td>
                 <td class="td-updated">{{ order.updated_at | date:'dd/MM HH:mm' }}</td>
+                <td class="td-creator">
+                  @if (order.created_by; as creator) {
+                    <span class="order-creator">
+                      <span class="creator-avatar" [class.creator-avatar--female]="creator.gender === 'female'" [class.creator-avatar--male]="creator.gender === 'male'" aria-hidden="true">{{ creator.name.slice(0, 1).toUpperCase() }}</span>
+                      <span class="creator-name">{{ creator.name }}</span>
+                    </span>
+                  } @else {
+                    <span class="creator-missing">Sin registro</span>
+                  }
+                </td>
                 <td class="td-action">
                   <span class="material-symbols-rounded tc-arrow">chevron_right</span>
                 </td>
@@ -765,7 +781,7 @@
             } @empty {
               @if (ordersListState() !== 'ready') {
                 <tr>
-                  <td colspan="9" class="trow-empty">
+                  <td colspan="10" class="trow-empty">
                     <div class="trow-empty-content" role="status">
                       <p class="trow-empty-title">
                         @switch (ordersListState()) {
@@ -779,7 +795,7 @@
                 </tr>
               } @else {
               <tr>
-                <td colspan="9" class="trow-empty">
+                <td colspan="10" class="trow-empty">
                   <div class="trow-empty-content">
                     <span class="material-symbols-rounded">search_off</span>
                     <p class="trow-empty-title">Sin resultados para este rango</p>
@@ -800,7 +816,7 @@
               }
             }
             @if (tableVirtual.range().padBottom > 0) {
-              <tr class="trow-spacer" aria-hidden="true"><td colspan="9" [style.height.px]="tableVirtual.range().padBottom"></td></tr>
+              <tr class="trow-spacer" aria-hidden="true"><td colspan="10" [style.height.px]="tableVirtual.range().padBottom"></td></tr>
             }
           </tbody>
         </table>
@@ -833,6 +849,46 @@
             Confirmar entregas
           </button>
           <button type="button" class="btn ghost" (click)="closeBulkDeliveryConfirm($event)" [disabled]="tableBulkActionLoading()">
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (bulkAssignRunOpen()) {
+    <div class="sheet-backdrop" (click)="closeBulkAssignRun($event)">
+      <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="bulk-assign-run-title" (click)="$event.stopPropagation()">
+        <div class="sheet-handle" aria-hidden="true"></div>
+        <h2 id="bulk-assign-run-title">Agregar pedidos a salida</h2>
+        <p class="muted">
+          Cada pedido se agrega a la salida de su ruta en la fecha elegida. Si no hay una salida abierta ese día, se crea una.
+        </p>
+        <label class="sheet-field">
+          <span>Fecha de salida</span>
+          <input class="input" type="date" [(ngModel)]="bulkAssignRunDate" (click)="openTableDatePicker($event)" />
+        </label>
+        <div class="sheet-summary">
+          <span><strong>{{ tableAssignRunEligibleRows().length }}</strong> por agregar</span>
+          <span><strong>{{ tableSelectedCount() }}</strong> seleccionados</span>
+        </div>
+        @if (bulkAssignRunRoutes().length > 0) {
+          <div class="sheet-summary" aria-label="Pedidos por ruta">
+            @for (route of bulkAssignRunRoutes(); track route.routeName) {
+              <span><strong>{{ route.count }}</strong> {{ route.routeName }}</span>
+            }
+          </div>
+        }
+        @if (tableSelectedCount() > tableAssignRunEligibleRows().length) {
+          <div class="sheet-warning">
+            {{ tableSelectedCount() - tableAssignRunEligibleRows().length }} pedido(s) se omitirán porque no están en "Listo ruta", no tienen ruta, ya tienen salida o no tienes permiso.
+          </div>
+        }
+        <div class="sheet-actions">
+          <button type="button" class="btn primary" (click)="confirmBulkAssignRun($event)" [disabled]="tableBulkActionLoading() || tableAssignRunEligibleRows().length === 0 || !bulkAssignRunDate()">
+            Agregar a salida
+          </button>
+          <button type="button" class="btn ghost" (click)="closeBulkAssignRun($event)" [disabled]="tableBulkActionLoading()">
             Cancelar
           </button>
         </div>

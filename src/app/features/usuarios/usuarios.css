@@ -205,7 +205,7 @@
   grid-template-columns: repeat(12, minmax(0, 1fr));
   grid-template-areas:
     "name name name name user user user login login role role role"
-    "email email email email email email email activation activation activation activation activation";
+    "gender gender gender email email email email activation activation activation activation activation";
   gap: 10px;
   align-items: end;
 }
@@ -225,6 +225,8 @@
 .create-field-login {
   grid-area: login;
 }
+
+.create-field-gender { grid-area: gender; }
 
 .create-field-role {
   grid-area: role;
@@ -950,7 +952,7 @@ button:focus-visible {
     grid-template-areas:
       "name name name name user user user user"
       "login login login role role role role role"
-      "email email email email email activation activation activation";
+      "gender gender email email email activation activation activation";
   }
 }
 
@@ -1025,9 +1027,10 @@ button:focus-visible {
       "name"
       "user"
       "login"
+      "role"
+      "gender"
       "email"
-      "activation"
-      "role";
+      "activation";
   }
 
   .role-summary-chips {

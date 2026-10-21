@@ -41,6 +41,7 @@ import {
 import { financePeriodDocumentId, ledgerEntryPayload, monthIdFromDateInput } from "./finance-ledger";
 import { LONG_TASK_MS, OrdersSnapshotInference, PerfMetricsService, firebaseErrorCode, roundMs } from "./perf-metrics.service";
 import { OrdersSnapshotEvent, OrdersSnapshotIndex } from "./orders-snapshot-index";
+import { normalizeOrderCreator, OrderCreator } from "./order-creator";
 
 export type { OrdersSnapshotChange, OrdersSnapshotDoc, OrdersSnapshotEvent } from "./orders-snapshot-index";
 
@@ -329,6 +330,7 @@ interface OrderItemsMutationResponse {
 }
 
 export interface Order {
+  created_by?: OrderCreator | null;
   order_id: string;
   business_id: BusinessId;
   customer_id: string;
@@ -547,14 +549,14 @@ export class OrdersService {
           if (!hasSnapshot) {
             hasSnapshot = true;
             this.perf.record("orders_first_snapshot_ms", startedAt, {
-              result: "success", load_id: loadId, source, docs: event.docs.length,
+              result: "success", load_id: loadId, source, docs: event.size,
             });
             resolve();
           }
           if (!event.fromCache && !hasServerSnapshot) {
             hasServerSnapshot = true;
             this.perf.record("orders_server_snapshot_ms", startedAt, {
-              result: "success", load_id: loadId, source, docs: event.docs.length,
+              result: "success", load_id: loadId, source, docs: event.size,
             });
           }
         },
@@ -652,11 +654,15 @@ export class OrdersService {
     routeId: string | null,
     notes?: string,
     businessId?: BusinessId,
+    creator?: OrderCreator | null,
   ): Promise<string> {
     const now = new Date().toISOString();
     const orderId = makeOrderId();
     const resolvedBusinessId = normalizeBusinessId(businessId || this.businessScope.writeBusinessId());
     const draft: Order = {
+      created_by: normalizeOrderCreator(creator) ?? normalizeOrderCreator(FIREBASE_AUTH.currentUser
+        ? { uid: FIREBASE_AUTH.currentUser.uid, name: FIREBASE_AUTH.currentUser.displayName || FIREBASE_AUTH.currentUser.email || "Usuario" }
+        : null),
       order_id: orderId,
       business_id: resolvedBusinessId,
       customer_id: customerId,
@@ -2086,6 +2092,7 @@ export class OrdersService {
     };
     return {
       order_id: id,
+      created_by: normalizeOrderCreator(data.created_by),
       business_id: normalizeBusinessId(data.business_id),
       customer_id: data.customer_id || "",
       route_id: data.route_id ?? null,

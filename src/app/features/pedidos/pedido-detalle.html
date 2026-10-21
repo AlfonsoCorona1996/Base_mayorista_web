@@ -2473,7 +2473,7 @@
                 </div>
                 <small class="add-item-search-help">Escribe al menos 2 caracteres o escanea el código.</small>
               </div>
-              @if (showProductList() && (inventorySearchActive() || catalogSuggestions().length > 0 || catalogProductSuggestions().length > 0 || catalogProductSearching() || catalogProductSearchAttempted() || catalogProductSearchError())) {
+              @if (showProductList() && (inventorySearchActive() || catalogLocalSearchActive() || catalogSuggestions().length > 0 || catalogProductSuggestions().length > 0 || catalogProductSearching() || catalogProductSearchAttempted() || catalogProductSearchError())) {
                 <div class="listbox" role="listbox" aria-label="Resultados de productos">
                   @if (inventorySearchActive()) {
                     @if (inventorySourceLoading()) {
@@ -2526,10 +2526,21 @@
                       Buscando identificadores y variantes...
                     </div>
                   }
+                  @if (catalogLocalSearchActive() && catalogSourceLoading() && catalogSuggestions().length === 0) {
+                    <div class="listbox-option listbox-option--loading" role="status" aria-live="polite">
+                      <span class="material-symbols-rounded" aria-hidden="true">progress_activity</span>
+                      Cargando catálogo...
+                    </div>
+                  }
                   @if (catalogSourceError(); as catalogError) {
                     <div class="catalog-search-empty catalog-search-empty--error product-search-state" role="alert">
                       <span>{{ catalogError }}</span>
                       <button type="button" class="btn ghost" (click)="retryAddItemCatalog()">Reintentar</button>
+                    </div>
+                  }
+                  @if (catalogLocalSearchActive() && !catalogSourceLoading() && !catalogSourceError() && catalogSuggestions().length === 0) {
+                    <div class="catalog-search-empty" role="status" aria-live="polite">
+                      No encontramos productos con ese nombre en el catálogo.
                     </div>
                   }
                   @for (c of catalogSuggestions(); track c.doc.normalized_id) {

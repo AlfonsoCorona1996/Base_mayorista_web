@@ -1,4 +1,5 @@
 import { Timestamp } from "firebase/firestore";
+import type { UserGender } from "./user-gender";
 
 export const SECTION_KEYS = [
   "sections.dashboard",
@@ -128,6 +129,7 @@ export const USERNAME_AUTH_DOMAIN = "users.base-mayorista.local";
 export type UserLoginType = "email" | "username";
 
 export interface UserDoc {
+  gender?: UserGender | null;
   uid: string;
   email: string;
   authEmail: string;

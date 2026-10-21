@@ -181,7 +181,9 @@
       </div>
     </div>
     <div class="boot-center">
-      <img src="/BaseMayoristaLogo.png" alt="" />
+      <!-- R5: lazy. En /main este bloque está oculto (display: none) y la imagen (1024 px, 1,4 MB)
+           ya no compite con la app por la red; en login y páginas públicas se ve igual. -->
+      <img src="/BaseMayoristaLogo.png" alt="" loading="lazy" decoding="async" />
       <div class="boot-block"></div>
     </div>
   </div>

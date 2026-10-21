@@ -137,6 +137,7 @@ export default class ReviewPage {
   }
   changeCategory() {
     this.categorySearch = '';
+    this.browseCategory(null);
     this.onCategorySearch();
     this.showCategoryDropdown.set(true);
     setTimeout(() => this.element.nativeElement.querySelector<HTMLInputElement>('#category-search')?.focus());
@@ -169,10 +170,62 @@ export default class ReviewPage {
   categoryParentId = '';
   newCategoryName = '';
   categoryParent = signal<string | null>(null);
+  categoryLoadState = computed(() => this.categoriesService.loadState());
   categoryChildren = computed(() => this.categoryParent() ? this.categoriesService.getChildren(this.categoryParent()!) : this.categoriesService.getRoots());
+  categoryBreadcrumbs = computed(() => {
+    const chain: Category[] = [];
+    const visited = new Set<string>();
+    let id = this.categoryParent();
+    while (id && !visited.has(id)) {
+      visited.add(id);
+      const category = this.categoriesService.getById(id);
+      if (!category) break;
+      chain.unshift(category);
+      id = category.parentId;
+    }
+    return chain;
+  });
+  categorySearchLimit = signal(20);
+  readonly increaseCategoryLimit = (limit: number) => limit + 20;
+  categorySearchQuery = signal('');
+  categorySearchResults = computed(() => this.categoriesService.search(this.categorySearchQuery()));
+  categoryParentGroups = computed(() => {
+    const groups = new Map<string, Category[]>();
+    for (const category of this.categoriesService.getAll()) {
+      const root = category.fullPath.split('>')[0].trim();
+      if (!groups.has(root)) groups.set(root, []);
+      groups.get(root)!.push(category);
+    }
+    return [...groups].map(([name, categories]) => ({ name, categories }));
+  });
+  categoryHasChildren(id: string) { return this.categoriesService.getChildren(id).length > 0; }
+  categoryParentPath(path: string) { return path.split('>').slice(0, -1).map(part => part.trim()).join(' › '); }
+  newCategoryPath() {
+    const parent = this.categoriesService.getById(this.categoryParentId);
+    return [parent?.fullPath, this.newCategoryName.trim()].filter(Boolean).join(' > ');
+  }
+  selectCurrentCategory() {
+    const category = this.categoriesService.getById(this.categoryParent() || '');
+    if (category) this.selectCategory(category);
+  }
+  closeCategoryPicker() {
+    this.showCategoryDropdown.set(false);
+    setTimeout(() => {
+      const root = this.element.nativeElement;
+      (root.querySelector<HTMLElement>('#category-change') ?? root.querySelector<HTMLElement>('#category-title'))?.focus();
+    });
+  }
+  async reloadCategories() { await this.categoriesService.loadCategories(); this.onCategorySearch(); }
   allCategories() { return this.categoriesService.getAll(); }
   categoryExists(path: string) { return !!this.categoriesService.getByPath(path); }
-  browseCategory(id: string | null) { this.categoryParent.set(id); }
+  browseCategory(id: string | null) {
+    const navigating = this.element.nativeElement.ownerDocument.activeElement?.closest('.category-results');
+    this.categoryParent.set(id);
+    this.categoryParentId = id || '';
+    this.categorySearch = '';
+    this.onCategorySearch();
+    if (navigating) setTimeout(() => this.element.nativeElement.querySelector<HTMLElement>('#category-browse-heading')?.focus());
+  }
   async createInlineCategory() {
     if (this.categoryProposalSaving() || !this.newCategoryName.trim()) return;
     this.categoryProposalSaving.set(true);
@@ -332,7 +385,7 @@ export default class ReviewPage {
 
   // Categorías
   categorySearch = "";
-  filteredCategories = signal<Category[]>([]);
+  filteredCategories = computed(() => this.categorySearchResults().slice(0, this.categorySearchLimit()));
   showCategoryDropdown = signal(false);
   categoryProposalSaving = signal(false);
   // Propuesta IA: el usuario puede editar la ruta antes de crearla
@@ -1045,8 +1098,8 @@ export default class ReviewPage {
   // ==========================================================================
 
   onCategorySearch() {
-    const results = this.categoriesService.search(this.categorySearch);
-    this.filteredCategories.set(results.slice(0, 10)); // Top 10
+    this.categorySearchQuery.set(this.categorySearch);
+    this.categorySearchLimit.set(20);
   }
 
   selectCategory(cat: Category) {
@@ -1061,6 +1114,7 @@ export default class ReviewPage {
     this.showCategoryDropdown.set(false);
     this.draft.set({ ...d });
     this.confirmCategory();
+    setTimeout(() => this.element.nativeElement.querySelector<HTMLButtonElement>('#category-change')?.focus());
   }
 
   /** Segmentos del breadcrumb de la propuesta editable */

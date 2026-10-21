@@ -30,7 +30,11 @@ export type PerfMetricName =
   | "customers_publish_ms"
   | "customer_search_ready_ms"
   | "routes_query_ms"
-  | "followups_query_ms";
+  | "followups_query_ms"
+  // R5: desde el NavigationStart que llevó a Pedidos hasta el primer render con pedidos reales.
+  | "pedidos_first_list_ms"
+  // R5: igual, pero además con nombres de clientas y buscador disponibles (lista utilizable).
+  | "pedidos_useful_ms";
 
 export type PerfResult = "success" | "error";
 
@@ -189,6 +193,11 @@ export class PerfMetricsService {
   /** Navegación del Router en curso o la última completada; null si aún no hubo ninguna. */
   currentNavigationId(): number | null {
     return this.currentNavigation()?.id ?? null;
+  }
+
+  /** `now()` del NavigationStart en curso (o del último); null si las métricas están apagadas. */
+  currentNavigationStartedAt(): number | null {
+    return this.currentNavigation()?.started_at ?? null;
   }
 
   /** Lo llama el inicializador de `providePerfNavigationTracking` en cada `NavigationStart`. */

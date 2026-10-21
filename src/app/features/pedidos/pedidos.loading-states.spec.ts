@@ -151,7 +151,7 @@ describe("PedidosPage - disponibilidad de clientas y pedidos", () => {
         { provide: SalesNoteRenderService, useValue: {} },
         { provide: CustomerFollowupsService, useValue: { loadFromFirestore: followupsLoad } },
         { provide: ShipmentsService, useValue: { activeShipments: signal([]), watch: shipmentsWatch } },
-        { provide: AuthzService, useValue: { canCap: () => true } },
+        { provide: AuthzService, useValue: { canCap: () => true, currentUserSig: signal({ uid: "u-jazmin", displayName: "Jazmin", gender: "female" }) } },
         {
           provide: Router,
           useValue: {
@@ -364,7 +364,7 @@ describe("PedidosPage - disponibilidad de clientas y pedidos", () => {
 
     create().click();
     await render();
-    expect(createDraft).toHaveBeenCalledOnceWith("c-ana", "r-norte", "", "bm");
+    expect(createDraft).toHaveBeenCalledOnceWith("c-ana", "r-norte", "", "bm", { uid: "u-jazmin", name: "Jazmin", gender: "female" });
     expect(navigate).toHaveBeenCalledWith(["/main/pedidos", "P-NUEVO"]);
     expect(source.fetchAllCustomers).toHaveBeenCalledTimes(1);
   });

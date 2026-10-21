@@ -658,6 +658,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   inventorySourceLoading = signal(false);
   inventorySourceError = signal<string | null>(null);
   catalogLoaded = signal(false);
+  catalogSourceLoading = signal(false);
   catalogSourceError = signal<string | null>(null);
   showProductList = signal(false);
   returnModalOpen = signal(false);
@@ -728,6 +729,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   private waProgressTimer: ReturnType<typeof setTimeout> | null = null;
   private waStatusPollSeq = 0;
   private addItemSourcesRefreshPromise: Promise<void> | null = null;
+  private addItemCatalogLoadPromise: Promise<void> | null = null;
   private lastAddItemSourcesRefreshAt = 0;
   private popupAlertQueue: Array<{ title: string; message: string; resolve: () => void }> = [];
   private popupAlertResolver: (() => void) | null = null;
@@ -844,9 +846,15 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       return this.inventoryAvailableQty(item) <= 0 && blob.includes(term);
     }).length;
   });
+  /** Busqueda en memoria sobre el catalogo BM (pedidos BM, pestana Catalogo). */
+  catalogLocalSearchActive = computed(() => (
+    this.newItemSource() === "catalogo"
+    && !this.isCatalogoOrder()
+    && !this.crossBusinessCatalogMode()
+    && this.compactSearchText(this.newItemSearch()).length >= 2
+  ));
   catalogSuggestions = computed(() => {
-    if (this.newItemSource() !== "catalogo") return [];
-    if (this.isCatalogoOrder() || this.crossBusinessCatalogMode()) return [];
+    if (!this.catalogLocalSearchActive()) return [];
     const terms = this.buildCatalogSearchTerms(this.newItemSearch());
     if (terms.length === 0) return [];
     const tokens = this.catalogQueryTokens(this.newItemSearch());
@@ -4942,19 +4950,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         this.manualHistory.load(orderBusiness),
       ];
       if (orderBusiness === "bm") {
-        tasks.push(
-          this.catalog
-            .loadAllValidated("bm")
-            .then((docs) => {
-              this.catalogRows.set(docs);
-              this.catalogLoaded.set(true);
-              this.catalogSourceError.set(null);
-            })
-            .catch((error: unknown) => {
-              this.catalogSourceError.set("No se pudo cargar el catalogo. Intenta nuevamente.");
-              throw error;
-            }),
-        );
+        tasks.push(this.loadAddItemCatalog());
       } else {
         this.catalogRows.set([]);
         this.catalogLoaded.set(true);
@@ -4973,9 +4969,34 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     void this.refreshAddItemSources({ force: true });
   }
 
+  /**
+   * Carga del catalogo BM separada del resto de fuentes: si el inventario o el
+   * historial manual se atoran, reintentar el catalogo no debe esperar por ellos.
+   */
+  private loadAddItemCatalog(): Promise<void> {
+    if (this.addItemCatalogLoadPromise) return this.addItemCatalogLoadPromise;
+    this.catalogSourceLoading.set(true);
+    this.catalogSourceError.set(null);
+    this.addItemCatalogLoadPromise = this.catalog
+      .loadAllValidated("bm")
+      .then((docs) => {
+        this.catalogRows.set(docs);
+        this.catalogLoaded.set(true);
+      })
+      .catch((error: unknown) => {
+        this.catalogSourceError.set("No se pudo cargar el catalogo. Intenta nuevamente.");
+        throw error;
+      })
+      .finally(() => {
+        this.catalogSourceLoading.set(false);
+        this.addItemCatalogLoadPromise = null;
+      });
+    return this.addItemCatalogLoadPromise;
+  }
+
   retryAddItemCatalog(): void {
     this.catalog.invalidateAllValidated("bm");
-    void this.refreshAddItemSources({ force: true });
+    void this.loadAddItemCatalog().catch(() => undefined);
   }
 
   openAddItemModal() {
@@ -10227,7 +10248,11 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   isManualBelowCost(): boolean {
     const clientaPrice = this.newItemPriceClienta();
     const costPrice = this.newItemPriceCost();
-    return this.isManualSource()
+    // Al editar un item existente sin producto de catalogo cargado (inventario,
+    // catalogo sin resolver) no hay otro flujo de autorizacion: se usa este.
+    const usesManualAuthorization = this.isManualSource()
+      || (this.isEditMode() && !this.selectedCatalogProduct());
+    return usesManualAuthorization
       && clientaPrice !== null
       && clientaPrice > 0
       && costPrice !== null

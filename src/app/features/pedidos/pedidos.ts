@@ -3,9 +3,9 @@ import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { CurrencyPipe, DatePipe, NgClass } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { ActivatedRoute, Router } from "@angular/router";
-import JSZip from "jszip";
 import { getBlob, ref as storageRef } from "firebase/storage";
-import { PDFDocument, StandardFonts, rgb, type PDFFont } from "pdf-lib";
+// pdf-lib y JSZip solo se usan al exportar: se cargan bajo demanda para no pesar en la apertura (R5).
+import type { PDFFont } from "pdf-lib";
 import { CustomersService } from "../../core/customers.service";
 import { OrdersService, Order, OrderItem, OrderStatus, IncidentSeverity } from "../../core/orders.service";
 import { RoutesService } from "../../core/routes.service";
@@ -20,6 +20,7 @@ import { calculateOrderFinancials, netItemQty } from "../../core/order-financial
 import { CustomerFollowupsService } from "../../core/customer-followups.service";
 import { Shipment, ShipmentBusinessSummary, ShipmentItem, ShipmentsService } from "../../core/shipments.service";
 import { AuthzService } from "../../core/authz.service";
+import { DispatchOrderRow, RouteRunsService } from "../../services/route-runs.service";
 import { canMarkOrderAsPaidFromTable } from "./order-table-bulk-actions";
 import { PerfMetricsService } from "../../core/perf-metrics.service";
 import { CustomerPickerComponent, CustomerPickerOption } from "./customer-picker/customer-picker.component";
@@ -57,7 +58,7 @@ type TableRangePreset = "today" | "last7" | "last30";
 type TableSortColumn = "updated_at" | "created_at" | "status" | "customer" | "route" | "items" | "total";
 type TableMenuColumn = "route" | "status";
 type TableMenuOption = { value: string; label: string; count: number };
-type TableBulkAction = "create_bitacora" | "create_nota" | "create_embarque" | "mark_pagado" | "mark_entregado" | "mark_recibido" | "mark_listo_ruta";
+type TableBulkAction = "create_bitacora" | "create_nota" | "create_embarque" | "mark_pagado" | "mark_entregado" | "mark_recibido" | "mark_listo_ruta" | "assign_run";
 type TableStatusPill = { label: string; className: string };
 type BitacoraConfig = {
   includeProductCount: boolean;
@@ -96,6 +97,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   private followups = inject(CustomerFollowupsService);
   private shipments = inject(ShipmentsService);
   private authz = inject(AuthzService);
+  private routeRuns = inject(RouteRunsService);
   businessScope = inject(BusinessScopeService);
   private router = inject(Router);
   private activatedRoute = inject(ActivatedRoute);
@@ -179,6 +181,8 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   tableBulkResultVisible = signal(false);
   tableBulkResultText = signal("");
   bulkDeliveryConfirmOpen = signal(false);
+  bulkAssignRunOpen = signal(false);
+  bulkAssignRunDate = signal("");
   bitacoraConfigOpen = signal(false);
   bitacoraIncludeProductCount = signal(true);
   bitacoraIncludeProductDetail = signal(false);
@@ -231,7 +235,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
    * rutas, embarques) vive en un computed que se recrea cuando esas señales cambian.
    */
   private readonly orderAmountsCache = new WeakMap<Order, { netAmount: number; balanceDue: number }>();
-  private readonly createdDateKeyCache = new WeakMap<Order, string | null>();
+  private readonly updatedDateKeyCache = new WeakMap<Order, string | null>();
   private readonly intentFlagsCache = new WeakMap<Order, { day: string; flags: Record<IntentFilter, boolean> }>();
   private readonly tableDateShortCache = new Map<string, string>();
   private readonly customerNameById = computed(() => {
@@ -336,6 +340,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     afterEveryRender(() => {
       this.tableVirtual.afterRender();
       this.cardsVirtual.afterRender();
+      this.recordListMetrics();
       // En el frame siguiente, junto con la medición de filas: así comparten un solo layout de la tabla.
       if (!this.columnsFrame && typeof requestAnimationFrame !== "undefined") {
         this.columnsFrame = requestAnimationFrame(() => {
@@ -439,10 +444,10 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     return this.list().filter((order) => {
       if (route !== "todos" && order.route_id !== route) return false;
       if (!this.matchesSearchTerm(order, term)) return false;
-      const createdDate = this.createdDateKey(order);
-      if (!createdDate) return false;
-      if (from && createdDate < from) return false;
-      if (to && createdDate > to) return false;
+      const updatedDate = this.updatedDateKey(order);
+      if ((from || to) && !updatedDate) return false;
+      if (from && updatedDate && updatedDate < from) return false;
+      if (to && updatedDate && updatedDate > to) return false;
       return true;
     });
   });
@@ -621,6 +626,21 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   tableMarkReadyForRouteEligibleRows = computed(() =>
     this.tableSelectedRows().filter((order) => this.canMarkAsReadyForRouteFromBulk(order))
   );
+
+  tableAssignRunEligibleRows = computed(() =>
+    this.tableSelectedRows().filter((order) => this.canAssignRunFromBulk(order))
+  );
+
+  bulkAssignRunRoutes = computed(() => {
+    const map = new Map<string, { routeName: string; count: number }>();
+    for (const order of this.tableAssignRunEligibleRows()) {
+      const routeId = order.route_id || "";
+      const current = map.get(routeId);
+      if (current) current.count += 1;
+      else map.set(routeId, { routeName: this.routeName(order.route_id), count: 1 });
+    }
+    return [...map.values()].sort((a, b) => a.routeName.localeCompare(b.routeName, "es-MX"));
+  });
   activeShipmentOrderIds = computed(() => {
     const ids = new Set<string>();
     for (const shipment of this.shipments.activeShipments()) {
@@ -1076,6 +1096,9 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     if (action === "mark_listo_ruta") {
       return this.tableMarkReadyForRouteEligibleRows().length > 0;
     }
+    if (action === "assign_run") {
+      return this.tableAssignRunEligibleRows().length > 0;
+    }
     return this.tableMarkReceivedEligibleRows().length > 0;
   }
 
@@ -1092,6 +1115,10 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     }
     if (action === "mark_entregado" && !deliveryConfirmed) {
       this.openBulkDeliveryConfirm(event);
+      return;
+    }
+    if (action === "assign_run" && !deliveryConfirmed) {
+      this.openBulkAssignRun(event);
       return;
     }
 
@@ -1235,6 +1262,32 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
             failed += 1;
           }
         }
+      } else if (action === "assign_run") {
+        const actor = this.currentRunActor();
+        const scheduledDate = this.parseBulkAssignRunDate();
+        // Una salida por ruta: tras crear la primera, el resto de esa ruta se agrega a la misma.
+        const runIdByRoute = new Map<string, string>();
+        for (const order of selectedRows) {
+          if (!actor || !this.canAssignRunFromBulk(order)) {
+            skipped += 1;
+            continue;
+          }
+          const routeId = order.route_id || "";
+          try {
+            const runId = await this.routeRuns.acceptDispatchRequest({
+              order: this.toDispatchOrderRow(order),
+              routeName: this.routeName(order.route_id),
+              customerName: this.customerName(order.customer_id),
+              actor,
+              scheduledDate,
+              runId: runIdByRoute.get(routeId) || null,
+            });
+            runIdByRoute.set(routeId, runId);
+            updated += 1;
+          } catch {
+            failed += 1;
+          }
+        }
       }
     } finally {
       this.tableBulkActionLoading.set(false);
@@ -1366,6 +1419,53 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     return ["ready_for_route", "assigned_to_run", "en_ruta"].includes(order.status);
   }
 
+  /** Listo para ruta, con ruta asignada y aun sin salida: lo mismo que Rutas ofrece como pendiente. */
+  private canAssignRunFromBulk(order: Order): boolean {
+    if (!this.authz.canCap("cap.dispatch.accept_request") || !this.authz.canCap("cap.runs.add_order")) return false;
+    return order.status === "ready_for_route" && !order.route_run_id && Boolean(order.route_id) && order.route_id !== "sin_ruta";
+  }
+
+  private toDispatchOrderRow(order: Order): DispatchOrderRow {
+    const financials = calculateOrderFinancials(order);
+    return {
+      order_id: order.order_id,
+      business_id: normalizeBusinessId(order.business_id),
+      customer_id: order.customer_id,
+      route_id: order.route_id,
+      status: String(order.status || ""),
+      route_run_id: order.route_run_id || null,
+      dispatch_request: {
+        status: order.dispatch_request?.status || "none",
+        requested_at: order.dispatch_request?.requested_at || null,
+        requested_by: order.dispatch_request?.requested_by || null,
+        note: order.dispatch_request?.note || null,
+      },
+      packing: {
+        status: order.packing?.status || "in_progress",
+        packages_count: Number(order.packing?.packages_count || this.closedPackagesCount(order)),
+        completed_at: order.packing?.completed_at || null,
+      },
+      totals: {
+        total_amount: Number(order.totals?.total_amount ?? financials.netAmount),
+        paid_amount: Number(order.totals?.paid_amount ?? 0),
+        balance_due: Number(order.totals?.balance_due ?? financials.balanceDue),
+      },
+      updated_at: order.updated_at || new Date().toISOString(),
+    };
+  }
+
+  private currentRunActor(): { uid: string; name: string } | null {
+    const user = this.authz.currentUserSig();
+    if (!user) return null;
+    return { uid: user.uid, name: user.displayName || user.email || "Usuario" };
+  }
+
+  private parseBulkAssignRunDate(): Date {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(this.bulkAssignRunDate());
+    if (!match) return new Date();
+    return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  }
+
   private canMarkAsReadyForRouteFromBulk(order: Order): boolean {
     return this.isBulkDispatchStage(order.status) && this.canFinishPackingFromBulk(order);
   }
@@ -1457,6 +1557,8 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
         return "Marcar como recibidos";
       case "mark_listo_ruta":
         return "Marcar como listos para ruta";
+      case "assign_run":
+        return "Agregar a salida";
       default:
         return "Accion";
     }
@@ -1546,6 +1648,27 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     event?.stopPropagation();
     if (this.tableBulkActionLoading()) return;
     this.bulkDeliveryConfirmOpen.set(false);
+  }
+
+  openBulkAssignRun(event?: Event): void {
+    event?.stopPropagation();
+    this.tableBulkMenuOpen.set(false);
+    this.tableBulkMenuPosition.set(null);
+    this.bulkAssignRunDate.set(this.toDateInputValue(new Date()));
+    this.bulkAssignRunOpen.set(true);
+  }
+
+  closeBulkAssignRun(event?: Event): void {
+    event?.stopPropagation();
+    if (this.tableBulkActionLoading()) return;
+    this.bulkAssignRunOpen.set(false);
+  }
+
+  async confirmBulkAssignRun(event?: Event): Promise<void> {
+    event?.stopPropagation();
+    if (this.tableBulkActionLoading() || this.tableAssignRunEligibleRows().length === 0) return;
+    this.bulkAssignRunOpen.set(false);
+    await this.applyTableBulkAction("assign_run", undefined, true);
   }
 
   async confirmBulkDelivery(event?: Event): Promise<void> {
@@ -1860,6 +1983,28 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
+  /**
+   * R5: primera lista (pedidos reales en pantalla) y lista útil (además, nombres de clientas y
+   * buscador). Se miden desde el NavigationStart que trajo a Pedidos, una sola vez por visita.
+   */
+  private readonly listMetricsStartedAt = this.perf.currentNavigationStartedAt() ?? this.perf.now();
+  private listMetricsDone = { first: false, useful: false };
+
+  private recordListMetrics(): void {
+    if (this.listMetricsDone.useful || !this.perf.isEnabled()) return;
+    const mounted = this.viewMode() === "table" ? this.tableVisibleRows().length : this.cardsVisible().length;
+    if (mounted === 0) return;
+    const source = this.orders.syncState() === "server" ? "server" : "cache";
+    if (!this.listMetricsDone.first) {
+      this.listMetricsDone.first = true;
+      this.perf.record("pedidos_first_list_ms", this.listMetricsStartedAt, { result: "success", source, docs: this.orders.list().length });
+    }
+    if (this.customers.customersLoaded()) {
+      this.listMetricsDone.useful = true;
+      this.perf.record("pedidos_useful_ms", this.listMetricsStartedAt, { result: "success", source, docs: this.orders.list().length });
+    }
+  }
+
   private async loadCustomersForSearch(pageStartedAt: number): Promise<void> {
     const hadData = this.customers.customersLoaded();
     if (hadData) {
@@ -1949,6 +2094,11 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     this.customerQuery.set(this.customerName(id));
   }
 
+  private orderCreator() {
+    const user = this.authz.currentUserSig();
+    return user ? { uid: user.uid, name: user.displayName || user.username || "Usuario", gender: user.gender ?? null } : null;
+  }
+
   async createOrder() {
     const customer = this.selectedCustomer();
     if (!customer) {
@@ -1963,6 +2113,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
         this.inferredRouteId() || null,
         this.newNotes(),
         this.newBusinessId(),
+        this.orderCreator(),
       );
       this.search.set("");
       this.intentFilter.set("por_confirmar");
@@ -2421,10 +2572,10 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     return text.compact.includes(compactTerm);
   }
 
-  private createdDateKey(order: Order): string | null {
-    if (this.createdDateKeyCache.has(order)) return this.createdDateKeyCache.get(order) ?? null;
-    const key = this.toLocalDateInputValueFromString(order.created_at);
-    this.createdDateKeyCache.set(order, key);
+  private updatedDateKey(order: Order): string | null {
+    if (this.updatedDateKeyCache.has(order)) return this.updatedDateKeyCache.get(order) ?? null;
+    const key = this.toLocalDateInputValueFromString(order.updated_at);
+    this.updatedDateKeyCache.set(order, key);
     return key;
   }
 
@@ -3044,6 +3195,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private async buildRouteBitacoraPdf(routeName: string, orders: Order[], config: BitacoraConfig): Promise<Blob> {
+    const { PDFDocument, StandardFonts, rgb } = await import("pdf-lib");
     const pdfDoc = await PDFDocument.create();
     const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
@@ -3804,6 +3956,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     }
 
     try {
+      const { default: JSZip } = await import("jszip");
       const zip = new JSZip();
       for (const file of files) {
         zip.file(file.fileName, file.blob);

@@ -1,3 +1,4 @@
+import { normalizeUserGender } from "../core/user-gender";
 import { Injectable, inject } from "@angular/core";
 import { User } from "firebase/auth";
 import { collection, doc, getDoc, getDocs, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
@@ -79,6 +80,7 @@ export class UsersService {
       authEmail: authEmail || buildUsernameAuthEmail(username),
       username,
       loginType,
+      gender: normalizeUserGender(bootstrap.gender),
       displayName: (bootstrap.displayName || user.displayName || bootstrap.email || "Usuario").toString(),
       roleId,
       isActive: Boolean(bootstrap.isActive),
@@ -202,6 +204,7 @@ export class UsersService {
       authEmail: authEmail || (loginType === "username" ? buildUsernameAuthEmail(username) : ""),
       username,
       loginType,
+      gender: normalizeUserGender(bootstrap?.gender ?? data["gender"]),
       displayName: (bootstrap?.displayName || data["displayName"] || authUser?.displayName || data["email"] || "Usuario").toString(),
       roleId,
       isActive: Boolean(bootstrap?.isActive ?? data["isActive"] ?? data["active"] ?? true),

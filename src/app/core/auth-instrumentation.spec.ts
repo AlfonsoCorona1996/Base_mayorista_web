@@ -56,6 +56,7 @@ describe("FIX 01 - la instrumentación no cambia autenticación", () => {
 
   describe("UserAdminApiService.getSessionBootstrap", () => {
     const user: SessionBootstrapUser = {
+      gender: null,
       uid: "u1", email: null, username: "u1", displayName: null, roleId: "admin", isActive: true,
       invitePending: false, mustChangePassword: false, sections: null, capabilities: null, businessMemberships: null,
     };
