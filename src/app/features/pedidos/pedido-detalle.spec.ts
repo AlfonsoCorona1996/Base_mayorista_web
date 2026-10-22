@@ -131,6 +131,7 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
             upsertFromConfirmedOrder: upsertSupplierOperations,
             receiveLineAndAllocate: receiveSupplierLine,
             loadFromFirestore: loadSupplierOperations,
+            loadForOrder: loadSupplierOperations,
           },
         },
         { provide: ManualProductHistoryService, useValue: {
@@ -483,6 +484,9 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
       catalog_option_base_product_id: 'mk', catalog_option_image_source: 'catalog',
       image_url: 'https://example.test/mk.jpg',
     });
+
+    // Las líneas de proveedor del pedido ya se cargaron: sin ellas no se fusionan renglones.
+    beforeEach(() => component.dependencyState.set({ supplier_operations: "ready" }));
 
     it("guarda una sola línea después de editar y deja constancia de los IDs agrupados", async () => {
       const items = [makeItem('gris-1'), makeItem('edit', 'tinto'), makeItem('gris-2')];
@@ -1071,6 +1075,7 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
         ],
         limit: 20,
         sellableOnly: true,
+        onFallback: jasmine.any(Function),
       });
       expect(component.catalogProductSuggestions()).toEqual([result]);
       expect(component.catalogSearchResultMeta(result)).toBe("Coincidió por código de internet: 888900");
@@ -1212,6 +1217,8 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
     function prepareBulkOrder(itemCount: number): Order {
       const order = makeSupplierOrder(itemCount);
       component.orderId.set(order.order_id);
+      // Las líneas de proveedor del pedido ya se cargaron (sin ellas no hay recepción masiva).
+      component.dependencyState.set({ supplier_operations: "ready" });
       ordersGetById.and.returnValue(order);
       spyOn(component, "refreshEvents").and.resolveTo();
       return order;

@@ -4,6 +4,7 @@ import { QuerySnapshot, collection, doc, getDocs, orderBy, query, runTransaction
 import { BusinessId, normalizeBusinessId } from "./rbac.constants";
 import { BusinessScopeService } from "./business-scope.service";
 import { calculateOrderFinancials, toPersistedOrderTotals } from "./order-financials";
+import { statusAfterCollection } from "./order-closure";
 import { LatestLoadGate, LoadTicket } from "./latest-load-gate";
 import { PerfMetricsService, PerfSource, firebaseErrorCode } from "./perf-metrics.service";
 
@@ -407,11 +408,17 @@ export class CustomersService {
       if (amount <= 0) throw new Error("No hay saldo a favor aplicable a este pedido.");
       const paidAmount = Number((financials.paidAmount + amount).toFixed(2));
       const totals = toPersistedOrderTotals({ ...orderData, totals: { ...(orderData["totals"] || {}), paid_amount: paidAmount } });
-      const nextStatus = totals["balance_due"] <= 0 ? "pagado" : "pagado_parcial";
+      // Aplicar saldo a favor es cobro, no entrega (RC-01/RC-04): antes de entregar se
+      // conserva la etapa operativa del pedido destino.
+      const nextStatus = statusAfterCollection(
+        { ...orderData, totals },
+        totals["balance_due"] <= 0 ? "collected" : "partial",
+      );
       tx.update(customerRef, { credit_balance: Number((available - amount).toFixed(2)), updated_at: serverTimestamp() });
       tx.update(orderRef, {
         totals,
         status: nextStatus,
+        customer_payment_status: totals["balance_due"] <= 0 ? "collected" : "partial",
         paid_at: totals["balance_due"] <= 0 ? serverTimestamp() : orderData["paid_at"] || null,
         collection_status: totals["balance_due"] <= 0 ? "paid" : "pending",
         collection_reminder_at: totals["balance_due"] <= 0 ? null : orderData["collection_reminder_at"] || null,

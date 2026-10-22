@@ -3393,16 +3393,15 @@
     align-items: flex-start;
     justify-content: center;
     /*
-     * 100dvh no se reduce cuando aparece el teclado en pantalla (eso solo
-     * encoge el visualViewport, no el layout viewport). Sin restar
-     * --add-item-keyboard-inset, esta hoja seguia "creyendo" que tenia toda
-     * la pantalla libre y el teclado tapaba el input, la lista de
-     * sugerencias y el boton de guardar sin que nada se reacomodara.
-     * pedido-detalle.ts mide ese inset con la API visualViewport mientras el
-     * modal esta abierto (ver attachAddItemKeyboardInset).
+     * La hoja ocupa exactamente el viewport VISUAL (lo que queda sobre el teclado).
+     * En iOS el teclado no encoge el viewport de layout: Safari desplaza el visual
+     * (`offsetTop`). pedido-detalle.ts publica `--add-item-vv-top/height` con
+     * `VisualViewportSheet` (mismo patrón que FIX 02) mientras la hoja está abierta.
      */
-    height: calc(100dvh - var(--add-item-keyboard-inset, 0px));
-    min-height: calc(100dvh - var(--add-item-keyboard-inset, 0px));
+    top: var(--add-item-vv-top, 0px);
+    bottom: auto;
+    height: var(--add-item-vv-height, 100dvh);
+    min-height: 0;
     overflow: hidden;
   }
 

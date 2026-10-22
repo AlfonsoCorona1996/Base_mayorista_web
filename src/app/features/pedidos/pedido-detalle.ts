@@ -50,6 +50,8 @@ import {
   ProvisionalProductOption,
 } from "../../shared/components/add-item-product-selection/add-item-product-selection.component";
 import { BarcodeScannerComponent } from "../../shared/barcode-scanner/barcode-scanner.component";
+import { ImageZoomViewerComponent } from "../../shared/components/image-zoom-viewer/image-zoom-viewer.component";
+import { VisualViewportSheet } from "../../shared/visual-viewport-sheet";
 import { AuthzService } from "../../core/authz.service";
 import { AuthService } from "../../core/auth.service";
 import { DispatchOrderRow, RouteRunDoc, RouteRunsService } from "../../services/route-runs.service";
@@ -57,8 +59,36 @@ import { computeDiscountPctFromPrices, resolveSalesNoteDiscountPct, SalesNoteRen
 import { CustomerFollowupsService } from "../../core/customer-followups.service";
 import { ShipmentBusinessSummary, ShipmentItem, ShipmentsService } from "../../core/shipments.service";
 import { OperationalExpenseReport, OperationalExpenseReportsService } from "../../core/operational-expense-reports.service";
+import { PerfMetricsService, firebaseErrorCode } from "../../core/perf-metrics.service";
+import { hasDeliveryEvidence } from "../../core/order-closure";
+
+type SecondaryDependency =
+  | "customers" | "suppliers" | "routes" | "localities" | "inventory"
+  | "finance_accounts" | "expense_reports" | "supplier_operations" | "assignees";
+
+const SECONDARY_DEPENDENCY_LABELS: Record<SecondaryDependency, string> = {
+  customers: "clientas",
+  suppliers: "proveedores",
+  routes: "rutas",
+  localities: "localidades",
+  inventory: "inventario",
+  finance_accounts: "cuentas de dinero",
+  expense_reports: "reportes de gastos",
+  supplier_operations: "recepciones de proveedor",
+  assignees: "responsables",
+};
+
+/** Ventana en la que el detalle reutiliza dependencias ya cargadas al volver a entrar. */
+const SECONDARY_REUSE_MS = 2 * 60_000;
+/** Por instancia de la app (servicios raíz): la reutilización nunca sobrevive a los datos. */
+const secondaryLoadedAtByApp = new WeakMap<object, Map<string, number>>();
 
 type EstadoConfirmacion = "pendiente" | "confirmado" | "sin_stock";
+
+/** Resultados visibles por página en "Agregar producto"; "Ver más" muestra otros tantos. */
+const SEARCH_RESULTS_PAGE = 20;
+const CATALOG_LOCAL_SEARCH_DEBOUNCE_MS = 160;
+const CATALOG_BACKEND_SEARCH_LIMIT = 20;
 
 const CATALOG_ORDER_SEARCH_IDENTIFIER_TYPES: CatalogProductIdentifierType[] = [
   "barcode",
@@ -285,9 +315,10 @@ const CATALOG_QUERY_SYNONYMS: Record<string, string[]> = {
     ClientaDiscountPanelComponent,
     AddItemProductSelectionComponent,
     BarcodeScannerComponent,
+    ImageZoomViewerComponent,
   ],
   templateUrl: "./pedido-detalle.html",
-  styleUrls: ["./pedido-detalle.css"],
+  styleUrls: ["./pedido-detalle.css", "./pedido-detalle-fix03.css"],
 })
 export default class PedidoDetallePage implements OnInit, OnDestroy {
   private route = inject(ActivatedRoute);
@@ -319,6 +350,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   private operationalExpenseReports = inject(OperationalExpenseReportsService);
   private destroyRef = inject(DestroyRef);
   private api = inject(UserAdminApiService);
+  private perf = inject(PerfMetricsService);
 
   readonly physicalScannerMode = this.physicalBarcodeScanner.activeMode;
   readonly physicalScannerLastCode = this.physicalBarcodeScanner.lastCode;
@@ -333,6 +365,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   @ViewChild(AddItemProductSelectionComponent) addItemProductSelection?: AddItemProductSelectionComponent;
   @ViewChild("pageHead") pageHead?: ElementRef<HTMLElement>;
   private readonly onAnyScroll = () => {
+    // Con una hoja abierta el documento está fijo: el scroll es interno de la hoja.
+    if (this.overlayOpen()) return;
     const scrollingEl = document.scrollingElement as HTMLElement | null;
     const scrollTop = Math.max(
       window.scrollY || 0,
@@ -354,6 +388,14 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   orderId = signal<string>("");
   error = signal<string | null>(null);
   initialHydration = signal(true);
+  /** Estado de cada dependencia secundaria; no bloquea el render del pedido. */
+  readonly dependencyState = signal<Partial<Record<SecondaryDependency, "loading" | "ready" | "error">>>({});
+  readonly supplierOpsReady = computed(() => this.dependencyState()["supplier_operations"] === "ready");
+  readonly dependencyErrors = computed(() =>
+    (Object.entries(this.dependencyState()) as Array<[SecondaryDependency, string]>)
+      .filter(([, state]) => state === "error")
+      .map(([dep]) => SECONDARY_DEPENDENCY_LABELS[dep]),
+  );
   private lastInventoryBlockedAlertAt = 0;
   private inventoryMutationSequence = 0;
 
@@ -407,6 +449,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   quickConfirming = signal<Record<string, boolean>>({});
   itemActionLoading = signal<Record<string, boolean>>({});
   imagePreviewUrl = signal<string | null>(null);
+  /** Visor de fotografías (búsqueda y tarjetas). */
+  readonly imageViewer = signal<{ images: string[]; index: number; label: string } | null>(null);
   imagePreviewLoading = signal(false);
   openProductMenuId = signal<string | null>(null);
   productsMenuOpen = signal(false);
@@ -510,27 +554,36 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
   addItemModalOpen = signal(false);
   /**
-   * En mobile, `100dvh`/`100vh` no se encogen cuando aparece el teclado
-   * (el navegador solo reduce el `visualViewport`, no el layout viewport).
-   * Por eso la hoja de "agregar producto" -dimensionada con esas unidades-
-   * seguia ocupando toda la pantalla "de papel" mientras el teclado tapaba
-   * su mitad inferior: ahi vivian el input, la lista de sugerencias y el
-   * boton de guardar, todos invisibles o inalcanzables aunque el scroll
-   * interno funcionara bien. Este effect mide cuanto tapa el teclado con
-   * `visualViewport` y expone ese alto como variable CSS para que la hoja
-   * se encoja de verdad y todo quede arriba del teclado.
+   * Hojas con teclado ("Agregar/Editar producto", devolución) en móvil. En iOS el teclado
+   * no encoge el viewport de layout: Safari desplaza el viewport visual. Restar solo el alto
+   * del teclado dejaba el encabezado y el buscador por encima de lo visible y la página de
+   * fondo podía desplazarse. Se reutiliza el patrón de FIX 02 (`VisualViewportSheet`): la
+   * hoja sigue `offsetTop`/`height` del viewport visual y el documento queda fijo.
    */
-  private readonly addItemKeyboardInsetEffect = effect(() => {
-    if (this.addItemModalOpen()) this.attachAddItemKeyboardInset();
-    else this.detachAddItemKeyboardInset();
+  readonly overlayViewport = new VisualViewportSheet();
+  private readonly overlayViewportEffect = effect(() => {
+    const keyboardSheetOpen = this.addItemModalOpen() || this.returnModalOpen();
+    if (keyboardSheetOpen) this.overlayViewport.open();
+    else this.overlayViewport.close();
   });
-  private addItemKeyboardInsetAttached = false;
-  private readonly updateAddItemKeyboardInset = (): void => {
-    const viewport = window.visualViewport;
-    if (!viewport) return;
-    const inset = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
-    document.documentElement.style.setProperty("--add-item-keyboard-inset", `${inset}px`);
-  };
+  private readonly overlayViewportVarsEffect = effect(() => {
+    const top = this.overlayViewport.top();
+    const height = this.overlayViewport.height();
+    if (typeof document === "undefined") return;
+    const root = document.documentElement.style;
+    if (height === null) {
+      root.removeProperty("--add-item-vv-top");
+      root.removeProperty("--add-item-vv-height");
+      return;
+    }
+    root.setProperty("--add-item-vv-top", `${top}px`);
+    root.setProperty("--add-item-vv-height", `${height}px`);
+  });
+  /** Cualquier hoja, diálogo o visor abierto: la barra fija del pedido no compite con ellos. */
+  readonly overlayOpen = computed(() =>
+    this.addItemModalOpen() || this.returnModalOpen() || this.actionModalOpen() || this.paymentModalOpen()
+    || this.moreActionsSheetOpen() || this.operationsSheetOpen() || this.imageViewer() !== null,
+  );
   addItemSaving = signal(false);
   addItemSuccessMessage = signal<string | null>(null);
   addItemError = signal<string | null>(null);
@@ -671,6 +724,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   returnRefundMethod = signal("");
   returnRefundReference = signal("");
   returnSaving = signal(false);
+  /** Un intento por apertura del formulario de devolución (idempotencia persistente). */
+  private returnAttemptId: string | null = null;
   financeAccountsLoadError = signal<string | null>(null);
   creatingGeneralAccount = signal(false);
   financeAccounts = computed(() => {
@@ -828,16 +883,17 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   inventorySearchActive = computed(() => (
     this.newItemSource() === "inventario" && this.normalizeSearchText(this.newItemSearch()).length >= 2
   ));
-  inventorySuggestions = computed(() => {
+  /** Todas las coincidencias de inventario con piezas disponibles (sin tope silencioso). */
+  inventoryMatches = computed(() => {
     if (!this.inventorySearchActive() || this.inventorySourceLoading() || this.inventorySourceError()) return [];
     const term = this.normalizeSearchText(this.newItemSearch());
     return this.inventory.items()
       .filter((item) => {
         const blob = this.normalizeSearchText([item.title, item.color_name || "", item.variant_name || "", item.size_label || ""].join(" "));
         return this.inventoryAvailableQty(item) > 0 && blob.includes(term);
-      })
-      .slice(0, 6);
+      });
   });
+  inventorySuggestions = computed(() => this.inventoryMatches().slice(0, this.searchVisibleLimit()));
   unavailableInventoryMatchesCount = computed(() => {
     if (!this.inventorySearchActive() || this.inventorySourceLoading() || this.inventorySourceError()) return 0;
     const term = this.normalizeSearchText(this.newItemSearch());
@@ -853,24 +909,49 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     && !this.crossBusinessCatalogMode()
     && this.compactSearchText(this.newItemSearch()).length >= 2
   ));
-  catalogSuggestions = computed(() => {
+  /**
+   * Término con el que se buscó en el catálogo BM. Se actualiza con debounce: antes cada
+   * pulsación recorría todo el catálogo (150–780 ms por tecla con CPU 4×).
+   */
+  private catalogSearchTerm = signal("");
+  private catalogSearchTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Cuántos resultados se muestran; "Ver más" lo amplía. */
+  readonly searchVisibleLimit = signal(SEARCH_RESULTS_PAGE);
+  /** El buscador del catálogo falló y se usó la búsqueda limitada por código. */
+  readonly catalogSearchFallbackNotice = signal<string | null>(null);
+  readonly catalogLocalSearchPending = computed(() =>
+    this.catalogLocalSearchActive()
+    && this.compactSearchText(this.newItemSearch()) !== this.compactSearchText(this.catalogSearchTerm()),
+  );
+  /** Texto normalizado por publicación, calculado una vez por carga del catálogo. */
+  private catalogSearchIndex = computed(() => this.catalogRows().map((doc) => {
+    const listing: any = doc.listing || { items: [] };
+    const title = this.compactSearchText(listing.title || "");
+    const cat = this.compactSearchText(listing.category_hint || "");
+    const docBlob = this.compactSearchText([title, cat, ...this.getListingSemanticValues(listing)].join(" "));
+    const variants = (listing.items || []).map((v: any) => {
+      const colors: string[] = this.getVariantColors(v);
+      return { v, colors, blob: this.compactSearchText([docBlob, v.variant_name || "", colors.join(" ")].join(" ")) };
+    });
+    return { doc, title, docBlob, variants: variants as Array<{ v: any; colors: string[]; blob: string }> };
+  }));
+  /** Todas las coincidencias del catálogo BM, ordenadas por relevancia. */
+  readonly catalogMatches = computed(() => {
     if (!this.catalogLocalSearchActive()) return [];
-    const terms = this.buildCatalogSearchTerms(this.newItemSearch());
+    const query = this.catalogSearchTerm();
+    const terms = this.buildCatalogSearchTerms(query);
     if (terms.length === 0) return [];
-    const tokens = this.catalogQueryTokens(this.newItemSearch());
-    const phrase = this.compactSearchText(this.newItemSearch());
+    const tokens = this.catalogQueryTokens(query);
+    const phrase = this.compactSearchText(query);
     const matches: { doc: NormalizedListingDoc; variant: any; color: string; image: string | null; score: number }[] = [];
-    for (const doc of this.catalogRows()) {
-      const listing: any = doc.listing || { items: [] };
-      const title = this.compactSearchText(listing.title || "");
-      const cat = this.compactSearchText(listing.category_hint || "");
-      const semanticValues = this.getListingSemanticValues(listing);
-      const docBlob = this.compactSearchText([title, cat, ...semanticValues].join(" "));
-      const variants = listing.items || [];
+    for (const entry of this.catalogSearchIndex()) {
+      const { doc, title, docBlob } = entry;
+      const variants = entry.variants.map((row: { v: any }) => row.v);
       let matched = false;
-      for (const v of variants) {
-        const colors = this.getVariantColors(v);
-        const blob = this.compactSearchText([docBlob, v.variant_name || "", colors.join(" ")].join(" "));
+      for (const row of entry.variants) {
+        const v = row.v;
+        const colors: string[] = row.colors;
+        const blob = row.blob;
         if (!this.catalogBlobMatches(blob, terms)) continue;
         const colorHit = colors.find((c) => this.catalogBlobMatches(this.compactSearchText(c), terms)) || colors[0] || "";
         const colorImage = this.resolveColorImage(doc, colorHit);
@@ -895,9 +976,13 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     return matches
       .map((match, index) => ({ match, index }))
       .sort((left, right) => (right.match.score - left.match.score) || (left.index - right.index))
-      .slice(0, 6)
       .map((entry) => entry.match);
   });
+  catalogSuggestions = computed(() => this.catalogMatches().slice(0, this.searchVisibleLimit()));
+
+  showMoreSearchResults(): void {
+    this.searchVisibleLimit.update((current) => current + SEARCH_RESULTS_PAGE);
+  }
 
   private catalogRows = signal<NormalizedListingDoc[]>([]);
   private catalogById = computed(() => {
@@ -970,7 +1055,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         confirmedQty: this.confirmedQty(item),
         draftConfirmedQty: this.getCardDraftConfirmedQty(item),
         quickConfirming: !!quickMap[item.item_id],
-        showSupplierReceive: !isConfirmPhase && isConfirmed && this.isSupplierManagedItem(item) && !this.isSupplierItemReceived(currentOrder, item),
+        showSupplierReceive: this.supplierOpsReady() && !isConfirmPhase && isConfirmed && this.isSupplierManagedItem(item) && !this.isSupplierItemReceived(currentOrder, item),
         itemActionLoading: !!loadingMap[item.item_id],
         returnedQty: returnedItemQty(item),
         netQty: netItemQty(item),
@@ -1113,7 +1198,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     return {
       customerName: this.customerName(currentOrder),
       routeName: this.routeName(currentOrder),
-      statusLabel: this.statusLabel(currentOrder.status),
+      statusLabel: this.stageLabel(currentOrder),
       phase,
       isPackingWorkflowPhase: this.isPackingWorkflowPhase(currentOrder),
       canCreatePackages: caps.canCreatePackages,
@@ -1157,38 +1242,25 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.returnsService.watch();
     this.catalogImportJobs.watch();
     this.shipments.watch();
-    this.orderId.set(this.route.snapshot.paramMap.get("id") || "");
+    const orderId = this.route.snapshot.paramMap.get("id") || "";
+    this.orderId.set(orderId);
     this.initialHydration.set(true);
-    void Promise.all([
-      this.orders.loadFromFirestore(),
-      this.customers.loadFromFirestore().catch(() => null),
-      this.suppliers.loadFromFirestore().catch(() => null),
-      this.rutas.loadFromFirestore().catch(() => null),
-      this.localities.loadFromFirestore().catch(() => null),
-      this.inventory.loadFromFirestore()
-        .then(() => {
-          this.inventoryLoaded.set(true);
-          this.inventorySourceError.set(null);
-        })
-        .catch(() => {
-          this.inventorySourceError.set("No se pudo actualizar el inventario.");
-          return null;
-        }),
-      this.finance.loadAccounts()
-        .then(() => this.financeAccountsLoadError.set(null))
-        .catch(() => {
-          this.financeAccountsLoadError.set("No se pudieron cargar las cuentas de dinero.");
-          return null;
-        }),
-      this.operationalExpenseReports.loadAll().catch(() => null),
-      this.supplierOperations.loadFromFirestore().catch(() => null),
-      this.loadAssigneeOptions().catch(() => null),
-    ]).then(() => {
-      const currentOrder = this.orders.getById(this.orderId());
+    const openedAt = this.perf.now();
+    // Las dependencias secundarias empiezan en paralelo, pero NO bloquean la pantalla:
+    // antes el esqueleto esperaba nueve colecciones completas (todo el inventario con sus
+    // movimientos, todas las clientas con su historial de crédito, etc.) aunque el pedido
+    // ya estuviera en memoria. Cada control que las necesita espera su propio dato.
+    void this.loadSecondaryData(orderId);
+    // Indispensable: el pedido. En cuanto está disponible se muestra el detalle.
+    void this.orders.loadFromFirestore().then(() => {
+      const currentOrder = this.orders.getById(orderId);
       if (!currentOrder) {
-        this.error.set("Pedido no encontrado");
+        this.error.set(this.orders.loadError()
+          ? "No se pudo cargar el pedido. Revisa tu conexión y vuelve a intentar."
+          : "Pedido no encontrado");
         return;
       }
+      this.perf.record("order_detail_first_data_ms", openedAt, { result: "success", source: this.orders.syncState() === "cache" ? "cache" : "server" });
       this.businessScope.lockScope(currentOrder.business_id, `Pedido ${this.businessScope.businessShortLabel(currentOrder.business_id)}`);
       this.manualHistory.load(currentOrder.business_id).catch(() => null);
       this.loadIncidents();
@@ -1198,6 +1270,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       this.error.set("No se pudo cargar la informacion del pedido.");
     }).finally(() => {
       this.initialHydration.set(false);
+      requestAnimationFrame(() => this.perf.record("order_detail_hydrated_ms", openedAt, { result: this.error() ? "error" : "success" }));
     });
 
     this.route.queryParamMap
@@ -1248,10 +1321,79 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       clearTimeout(this.catalogProductSearchTimer);
       this.catalogProductSearchTimer = null;
     }
-    this.catalogImportJobs.stop();
+    if (this.catalogSearchTimer) {
+      clearTimeout(this.catalogSearchTimer);
+      this.catalogSearchTimer = null;
+    }
+    // No se detiene `catalogImportJobs`: su listener lo abrió el layout y lo comparte
+    // (antes, salir del detalle apagaba el aviso global de importaciones).
     this.stopPhysicalBarcodeScanner();
     this.businessScope.unlockScope();
-    this.detachAddItemKeyboardInset();
+    this.overlayViewport.close();
+  }
+
+  /**
+   * Carga en segundo plano lo que el detalle usa para nombres, avisos y acciones
+   * secundarias. Se reutiliza lo cargado en los últimos minutos (al volver al detalle
+   * desde otra pantalla no se repite) y cada fallo queda visible en `dependencyErrors`.
+   */
+  private async loadSecondaryData(orderId: string, options: { force?: boolean } = {}): Promise<void> {
+    const scopeKey = this.businessScope.availableBusinessIds().join("|");
+    let secondaryLoadedAt = secondaryLoadedAtByApp.get(this.orders);
+    if (!secondaryLoadedAt) {
+      secondaryLoadedAt = new Map<string, number>();
+      secondaryLoadedAtByApp.set(this.orders, secondaryLoadedAt);
+    }
+    const loadedAt = secondaryLoadedAt;
+    const fresh = (dep: string) => !options.force && Date.now() - (loadedAt.get(`${scopeKey}:${dep}`) ?? 0) < SECONDARY_REUSE_MS;
+    const run = async (dep: SecondaryDependency, task: () => Promise<unknown>, reusable: boolean) => {
+      if (reusable && fresh(dep)) {
+        this.setDependencyState(dep, "ready");
+        return;
+      }
+      this.setDependencyState(dep, "loading");
+      const startedAt = this.perf.now();
+      try {
+        await task();
+        loadedAt.set(`${scopeKey}:${dep}`, Date.now());
+        this.setDependencyState(dep, "ready");
+        this.perf.record("order_detail_dep_ms", startedAt, { result: "success", dep });
+      } catch (error) {
+        this.setDependencyState(dep, "error");
+        this.perf.record("order_detail_dep_ms", startedAt, { result: "error", dep, error_code: firebaseErrorCode(error) });
+      }
+    };
+    await Promise.all([
+      // Solo clientas: el historial de saldo a favor no se usa aquí.
+      run("customers", () => this.customers.loadCustomers(), this.customers.customers().length > 0),
+      run("suppliers", () => this.suppliers.loadFromFirestore(), true),
+      run("routes", () => this.rutas.loadFromFirestore(), true),
+      run("localities", () => this.localities.loadFromFirestore(), true),
+      // Sin movimientos: el detalle solo necesita existencias.
+      run("inventory", async () => {
+        await this.inventory.loadFromFirestore({ includeMovements: false });
+        this.inventoryLoaded.set(true);
+        this.inventorySourceError.set(null);
+      }, this.inventoryLoaded() || this.inventory.items().length > 0),
+      run("finance_accounts", async () => {
+        await this.finance.loadAccounts();
+        this.financeAccountsLoadError.set(null);
+      }, true),
+      run("expense_reports", () => this.operationalExpenseReports.loadAll(), true),
+      // Solo las líneas de este pedido; siempre frescas porque deciden botones de recepción.
+      run("supplier_operations", () => this.supplierOperations.loadForOrder(orderId), false),
+      run("assignees", () => this.loadAssigneeOptions(), true),
+    ]);
+    if (this.dependencyState()["inventory"] === "error") this.inventorySourceError.set("No se pudo actualizar el inventario.");
+    if (this.dependencyState()["finance_accounts"] === "error") this.financeAccountsLoadError.set("No se pudieron cargar las cuentas de dinero.");
+  }
+
+  retrySecondaryData(): void {
+    void this.loadSecondaryData(this.orderId(), { force: true });
+  }
+
+  private setDependencyState(dep: SecondaryDependency, state: "loading" | "ready" | "error"): void {
+    this.dependencyState.update((current) => ({ ...current, [dep]: state }));
   }
 
   async loadIncidents() {
@@ -1603,7 +1745,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       solicitado_proveedor: "Solicitado",
       supplier_processing: "Proveedor",
       en_transito: "En transito proveedor",
-      recibido_qa: "En transito proveedor",
+      recibido_qa: "Listo para empacar",
       empaque: "Empaque",
       ready_for_route: "Listo para ruta",
       assigned_to_run: "Asignado a salida",
@@ -1611,13 +1753,27 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       entregado: "Entregado",
       entregado_parcial: "Entrega parcial",
       closed: "Cerrado",
-      pago_pendiente: "Pago pendiente",
-      pagado_parcial: "Pago parcial",
-      pagado: "Pagado",
+      // La etapa no repite el cobro (que tiene su propio indicador "Cobro clienta"):
+      // estos estados solo se alcanzan después de entregar.
+      pago_pendiente: "Entregado",
+      pagado_parcial: "Entregado",
+      pagado: "Entregado",
       cancelado: "Cancelado",
       devuelto: "Devuelto",
     };
     return map[status];
+  }
+
+  /**
+   * Etapa visible del pedido. Los estados de cobro posteriores a la entrega se muestran
+   * como "Entregado" (el cobro tiene su propio indicador). Si no hay evidencia de entrega
+   * —p. ej. pedidos históricos marcados pagados sin registrar la entrega— se dice así.
+   */
+  stageLabel(order: Order): string {
+    if (["pagado", "pagado_parcial", "pago_pendiente"].includes(order.status)) {
+      return hasDeliveryEvidence(order) || order.delivery_status === "delivered" ? "Entregado" : "Entrega sin registrar";
+    }
+    return this.statusLabel(order.status);
   }
 
   statusIcon(status: OrderStatus): string {
@@ -1628,7 +1784,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       solicitado_proveedor: "send",
       supplier_processing: "storefront",
       en_transito: "local_shipping",
-      recibido_qa: "local_shipping",
+      recibido_qa: "inventory",
       empaque: "inventory_2",
       ready_for_route: "local_shipping",
       assigned_to_run: "route",
@@ -1701,6 +1857,9 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         label: this.settlementLabel(order),
         tone: order.settlement_status === "reconciled" ? "ok" : order.settlement_status === "difference" ? "danger" : order.settlement_status === "sent_to_gdl" || order.settlement_status === "received" ? "warn" : "wait",
       },
+      ...(order.has_returns
+        ? [{ icon: "assignment_return", title: "Postventa", label: "Devolución registrada", tone: "warn" }]
+        : []),
     ];
   }
 
@@ -1963,6 +2122,10 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     if (!order) return false;
     if (["cancelado", "devuelto", "closed"].includes(order.status)) return false;
     if (order.delivery_status === "delivered" || order.status === "entregado") return false;
+    // No se entrega lo que aún está en captura o abastecimiento, ni con piezas sin confirmar.
+    // (Si se debe permitir venta de mostrador sin cajas es decisión pendiente D5.)
+    if (["borrador", "confirmando_proveedor", "reservado_inventario", "solicitado_proveedor", "supplier_processing", "en_transito"].includes(order.status)) return false;
+    if (this.pendingPieces(order) > 0) return false;
     return this.authz.canCap("cap.delivery.mark_delivered");
   }
 
@@ -2701,7 +2864,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     if (!order || !this.isConfirmItemsPhase(order)) return;
     if (!this.canEditItems(order)) return;
 
-    const pending = (order.items || []).filter((item) => !this.isConfirmedConfirmation(item));
+    // Solo pendientes: un artículo marcado agotado no vuelve a "disponible" en masa.
+    const pending = (order.items || []).filter((item) => this.isPendingConfirmation(item));
     if (pending.length === 0) return;
 
     await this.confirmGroup(order, pending);
@@ -2710,6 +2874,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   pendingSupplierReceptionItems(order: Order): OrderItem[] {
+    // Sin las líneas de proveedor cargadas no se sabe qué falta recibir.
+    if (!this.supplierOpsReady()) return [];
     return (order.items || []).filter(
       (item) =>
         this.isConfirmedConfirmation(item)
@@ -2781,12 +2947,15 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
             );
             return { item, error: null };
           } catch (error) {
+            // Solo una línea fallida vuelve a habilitar su botón en este momento.
+            this.setItemActionLoading(item, false);
             return {
               item,
               error: error instanceof Error ? error.message : "Error desconocido al recibir el producto.",
             };
           } finally {
-            this.setItemActionLoading(item, false);
+            // Las líneas recibidas siguen "Procesando…" hasta recargar las operaciones:
+            // antes su botón "Recibir proveedor" reaparecía con la línea ya recibida.
             this.productBulkActionProgress.update((current) => current
               ? { ...current, completed: Math.min(current.total, current.completed + 1) }
               : current);
@@ -2816,8 +2985,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       }
 
       const cacheRefreshes = await Promise.allSettled([
-        this.inventory.loadFromFirestore(),
-        this.supplierOperations.loadFromFirestore(),
+        this.inventory.loadFromFirestore({ includeMovements: false }),
+        this.supplierOperations.loadForOrder(order.order_id),
       ]);
       const cacheRefreshFailed = cacheRefreshes.some((result) => result.status === "rejected");
       await this.refreshEvents().catch(() => undefined);
@@ -2979,6 +3148,9 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     if (!order) return false;
     if (this.userRole() === "viewer") return false;
     if (this.isOrderClosed(order)) return false;
+    // `pago_pendiente`/`pagado_parcial` no cuentan como cerrados, pero si ya hubo entrega
+    // los artículos no se editan: lo que sigue es postventa (devolución).
+    if (order.delivery_status === "delivered" || hasDeliveryEvidence(order)) return false;
     return true;
   }
 
@@ -3004,11 +3176,19 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       || this.addItemSaving()
       || this.addItemProvisionalEditorOpen()
       || (this.isManualBelowCost() && !this.manualBelowCostAuthorized())
-      || (this.newItemSource() === "inventario" && (
-        this.inventorySourceLoading()
-        || !!this.inventorySourceError()
-        || !!this.newItemInventoryQuantityError()
-      ));
+      || (this.newItemSource() === "inventario" && this.inventoryCheckBlocksSubmit());
+  }
+
+  /**
+   * Agregar inventario, o aumentar la cantidad de un artículo de inventario, necesita
+   * existencias frescas. Editar precio, nombre o bajar la cantidad no: antes el botón
+   * quedaba bloqueado mientras se releía todo el inventario y el modal parecía congelado.
+   */
+  private inventoryCheckBlocksSubmit(): boolean {
+    const target = this.isEditMode() ? this.editTargetItem() : null;
+    const needsAvailability = !target || this.normalizedNewItemQty() > this.itemQuantity(target);
+    if (!needsAvailability) return false;
+    return this.inventorySourceLoading() || !!this.inventorySourceError() || !!this.newItemInventoryQuantityError();
   }
 
   addItemSelectionImages(): readonly ProductSelectionImage[] {
@@ -5090,29 +5270,32 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         })
         .catch(() => undefined);
     }
-    void this.refreshAddItemSources({ force: true });
+    void this.refreshAddItemSources({ force: true }).then(() => this.hydrateEditCatalogOptions(item));
+  }
+
+  /**
+   * En edición se recuperan las tallas y colores del producto de catálogo BM para poder
+   * corregirlos (antes solo aparecía el valor actual). No cambia precios ni producto.
+   */
+  private hydrateEditCatalogOptions(item: OrderItem): void {
+    if (!this.addItemModalOpen() || !this.isEditMode() || this.editTargetItemId() !== item.item_id) return;
+    if (item.source !== "catalogo" || item.product_ref_type === "catalog_product" || !item.product_id) return;
+    const doc = this.catalogById().get(item.product_id);
+    if (!doc) return;
+    const listing: any = doc.listing || { items: [] };
+    const variants: string[] = [...new Set<string>((listing.items || []).map((it: any) => String(it.variant_name || "Sin variante")))];
+    const current = (listing.items || []).find((it: any) => (it.variant_name || "") === (item.variant || "")) || listing.items?.[0] || null;
+    const colors = current ? this.getVariantColors(current) : [];
+    this.selectedCatalogDoc.set(doc);
+    this.catalogVariantOptions.set(variants);
+    this.catalogColorOptions.set(colors.length ? colors : (item.color ? [item.color] : []));
+    void this.loadAddItemCatalogSourceImages(doc);
   }
 
   closeAddItemModal() {
     if (this.addItemSaving()) return;
     this.resetAddItemForm();
     this.addItemModalOpen.set(false);
-  }
-
-  private attachAddItemKeyboardInset(): void {
-    if (this.addItemKeyboardInsetAttached || typeof window === "undefined" || !window.visualViewport) return;
-    this.addItemKeyboardInsetAttached = true;
-    window.visualViewport.addEventListener("resize", this.updateAddItemKeyboardInset);
-    window.visualViewport.addEventListener("scroll", this.updateAddItemKeyboardInset);
-    this.updateAddItemKeyboardInset();
-  }
-
-  private detachAddItemKeyboardInset(): void {
-    if (!this.addItemKeyboardInsetAttached) return;
-    this.addItemKeyboardInsetAttached = false;
-    window.visualViewport?.removeEventListener("resize", this.updateAddItemKeyboardInset);
-    window.visualViewport?.removeEventListener("scroll", this.updateAddItemKeyboardInset);
-    document.documentElement.style.setProperty("--add-item-keyboard-inset", "0px");
   }
 
   private resetAddItemForm() {
@@ -5201,6 +5384,12 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
   onNewItemSearchChange(value: string): void {
     this.newItemSearch.set(value);
+    this.searchVisibleLimit.set(SEARCH_RESULTS_PAGE);
+    if (this.catalogSearchTimer) clearTimeout(this.catalogSearchTimer);
+    this.catalogSearchTimer = setTimeout(() => {
+      this.catalogSearchTimer = null;
+      this.catalogSearchTerm.set(value);
+    }, CATALOG_LOCAL_SEARCH_DEBOUNCE_MS);
     if ((!this.isCatalogoOrder() && !this.crossBusinessCatalogMode()) || this.newItemSource() !== "catalogo") return;
     if (this.catalogProductSearchTimer) clearTimeout(this.catalogProductSearchTimer);
     const term = value.trim();
@@ -5217,12 +5406,19 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.catalogProductSearching.set(true);
     this.catalogProductSearchAttempted.set(false);
     this.catalogProductSearchError.set(null);
+    this.catalogSearchFallbackNotice.set(null);
     this.catalogProductSearchTimer = setTimeout(() => {
       this.catalogProducts.searchCatalog(term, {
         businessId: "catalogo",
         types: CATALOG_ORDER_SEARCH_IDENTIFIER_TYPES,
-        limit: 20,
+        limit: CATALOG_BACKEND_SEARCH_LIMIT,
         sellableOnly: true,
+        onFallback: () => {
+          if (requestId !== this.catalogProductSearchRequest) return;
+          this.catalogSearchFallbackNotice.set(
+            "El buscador del catálogo no respondió. Se muestran solo coincidencias por código; puede haber más productos.",
+          );
+        },
       })
         .then((rows) => {
           if (requestId !== this.catalogProductSearchRequest) return;
@@ -8010,7 +8206,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         (item) => item.source === "catalogo" && !!(item.supplier_id || "").trim(),
       );
       const createdOps = await this.supplierOperations.upsertFromConfirmedOrder(order, this.customerName(order));
-      let nextStatus = await this.orders.syncDerivedStatus(order.order_id);
+      let nextStatus = await this.orders.syncDerivedStatus(order.order_id, { allowFromDraft: true });
       const refreshed = this.orders.getById(order.order_id);
       const stillConfirmPhase = this.phaseAction(refreshed || order)?.actionId === "confirm_items";
       if (stillConfirmPhase && !hasConfirmedSupplierItems) {
@@ -8034,8 +8230,36 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   openImagePreview(url: string) {
-    this.imagePreviewUrl.set(url);
-    this.imagePreviewLoading.set(true);
+    this.openImageViewer([url], 0, "Producto");
+  }
+
+  /** Abre el visor sin seleccionar el resultado ni tocar el formulario. */
+  openImageViewer(images: ReadonlyArray<string | null | undefined>, startIndex = 0, label = "Producto", event?: Event): void {
+    event?.preventDefault();
+    event?.stopPropagation();
+    const unique = [...new Set(images.map((url) => String(url || "").trim()).filter(Boolean))];
+    if (unique.length === 0) return;
+    this.imageViewer.set({ images: unique, index: Math.min(Math.max(0, startIndex), unique.length - 1), label });
+  }
+
+  closeImageViewer(): void {
+    this.imageViewer.set(null);
+  }
+
+  /** Fotos de un resultado de catálogo BM: la del color primero, luego las del producto. */
+  catalogResultImages(match: { doc: NormalizedListingDoc; variant: any; image: string | null }): string[] {
+    const doc = match.doc;
+    return [
+      match.image,
+      ...(doc.product_colors || []).map((color) => color.image_url),
+      match.variant?.image_url,
+      ...(doc.cover_images || []),
+      doc.preview_image_url,
+    ].filter((url): url is string => !!url);
+  }
+
+  catalogProductResultImages(result: CatalogProductSearchResult, product: CatalogProduct): string[] {
+    return [product.image_url, ...result.variants.map((variant) => variant.image_url)].filter((url): url is string => !!url);
   }
 
   closeImagePreview() {
@@ -8690,6 +8914,11 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     return this.returnsService.returns().filter((row) => row.order_id === orderId && row.order_item_id === item.item_id);
   }
 
+  /** `created_at` de una devolución llega como Timestamp de Firestore; el pipe `date` no lo acepta. */
+  returnRowDate(row: ReturnRecord): Date | null {
+    return this.toDate(row.created_at) || this.toDate(row.occurred_at);
+  }
+
   returnDestination(row: ReturnRecord): string {
     if (row.status === "damaged" || row.disposition === "damaged") return "Dañada";
     if (row.status === "pending_review") return "Por revisar";
@@ -8708,6 +8937,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.returnRefundAccountId.set(this.defaultReturnRefundAccount()?.account_id || "");
     this.returnRefundMethod.set("");
     this.returnRefundReference.set("");
+    this.returnAttemptId = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
     this.returnModalOpen.set(true);
   }
 
@@ -8770,6 +9000,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   async confirmReturn(order: Order | null) {
+    // Un segundo toque mientras se guarda no registra otra devolución.
+    if (this.returnSaving()) return;
     const item = this.returnTargetItem();
     if (!order || !item || !this.canRegisterReturn(order, item)) return;
     const qty = Math.max(1, Math.min(Math.trunc(Number(this.returnQty()) || 1), availableReturnQty(item)));
@@ -8796,6 +9028,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         refundMethod: this.returnRefundMethod() || null,
         refundReference: this.returnRefundReference() || null,
         packageId: this.returnPackageId(order, item),
+        attemptId: this.returnAttemptId,
       });
       this.showActionToast(record.payment_resolution === "credit" ? "Devolución registrada y saldo a favor creado." : "Devolución registrada.");
       this.returnSaving.set(false);
@@ -9531,6 +9764,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
   private canMergeIntoExistingRow(order: Order, existing: OrderItem): boolean {
     if (!canMergePendingOrderItem(existing)) return false;
+    // Sin las líneas de proveedor no se puede saber si el renglón ya se pidió: no fusionar.
+    if (!this.supplierOpsReady()) return false;
     if (this.itemPackedQty(order, existing.item_id) > 0) return false;
     if (this.supplierOperations.rows().some(row => row.order_id === order.order_id && row.order_item_id === existing.item_id)) return false;
     return true;
@@ -10102,11 +10337,15 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     const variant = (listing.items || []).find((it: any) => it.variant_name === value) || null;
     if (!variant) return;
     this.newItemVariantId.set(String(variant?.variant_id || "").trim() || null);
-    const prices = this.getVariantPriceSet(variant);
-    this.newItemPricePublic.set(prices.final);
-    this.newItemPriceClienta.set(this.computeClientaPrice(prices.final));
-    this.newItemPriceCost.set(prices.costo);
-    this.updatePriceDraftFromSignals();
+    // Al EDITAR un artículo, cambiar talla no reescribe sus precios: son los pactados en
+    // el pedido. Solo al agregar se toman los precios de la variante del catálogo.
+    if (!this.isEditMode()) {
+      const prices = this.getVariantPriceSet(variant);
+      this.newItemPricePublic.set(prices.final);
+      this.newItemPriceClienta.set(this.computeClientaPrice(prices.final));
+      this.newItemPriceCost.set(prices.costo);
+      this.updatePriceDraftFromSignals();
+    }
 
     const colors = this.getVariantColors(variant);
     this.catalogColorOptions.set(colors);
@@ -10712,7 +10951,8 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   private focusProductSearchInput() {
-    setTimeout(() => this.productSearchInput?.nativeElement.focus(), 0);
+    // Sin desplazar la página: la hoja ya sigue el viewport visible.
+    setTimeout(() => this.productSearchInput?.nativeElement.focus({ preventScroll: true }), 0);
   }
 
   private findOrderHoldingInventory(inventoryId: string): { orderId: string; customerName: string; reservedBy: string } | null {

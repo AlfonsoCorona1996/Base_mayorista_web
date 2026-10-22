@@ -369,4 +369,54 @@ describe("PedidosPage - cachés por pedido de la plantilla (R3)", () => {
     expect(host.querySelector("tbody tr.trow td:last-child")?.classList.contains("td-action")).toBeTrue();
     expect(TestBed.inject(OrdersService).loadFromFirestore).toHaveBeenCalledTimes(1);
   });
+
+  describe("FIX 03A — incluir pedidos cerrados", () => {
+    beforeEach(() => window.sessionStorage.removeItem("pedidos.include-closed.v1"));
+    afterEach(() => window.sessionStorage.removeItem("pedidos.include-closed.v1"));
+
+    const closedOrder = (index: number, overrides: Partial<Order> = {}) => makeOrder(index, {
+      status: "closed",
+      delivered_at: "2026-09-20T12:00:00.000Z",
+      delivery_status: "delivered",
+      customer_payment_status: "collected",
+      totals: { total_amount: 999, paid_amount: 100000, balance_due: 0 },
+      ...overrides,
+    });
+
+    it("oculta por defecto solo los pedidos realmente cerrados, en tabla, tarjetas y contadores", async () => {
+      const open = makeOrder(1, { status: "borrador" });
+      const closed = closedOrder(2);
+      // Casos ambiguos que NO deben ocultarse.
+      const paidOnly = makeOrder(3, { status: "pagado", delivered_at: null });
+      const closedWithoutDelivery = closedOrder(4, { delivered_at: null });
+      const returned = makeOrder(5, { status: "devuelto" });
+      await showTable([open, closed, paidOnly, closedWithoutDelivery, returned]);
+
+      expect(component.includeClosed()).toBeFalse();
+      const ids = component.tableRows().map((order) => order.order_id);
+      expect(ids).not.toContain(closed.order_id);
+      expect(ids).toEqual(jasmine.arrayWithExactContents([open.order_id, paidOnly.order_id, closedWithoutDelivery.order_id, returned.order_id]));
+      expect(component.closedOrdersCount()).toBe(1);
+      expect(component.scopedList().some((order) => order.order_id === closed.order_id)).toBeFalse();
+
+      component.includeClosed.set(true);
+      expect(component.tableRows().map((order) => order.order_id)).toContain(closed.order_id);
+      fixture.detectChanges(); // ejecuta el effect que guarda la preferencia de la sesión
+      expect(window.sessionStorage.getItem("pedidos.include-closed.v1")).toBe("1");
+    });
+
+    it("un pedido cerrado con devolución posterior sigue cerrado (y oculto por defecto)", async () => {
+      const closedReturned = closedOrder(6, { has_returns: true, items: [{ item_id: "i-6", title: "Tenis", quantity: 1, returned_qty: 1, price_clienta: 500, price_cost: 300, state: "devuelto", source: "manual", confirmation_state: "confirmed", confirmed_qty: 1 }] });
+      await showTable([makeOrder(7, { status: "borrador" }), closedReturned]);
+      expect(component.tableRows().map((order) => order.order_id)).not.toContain(closedReturned.order_id);
+    });
+
+    it("la selección masiva solo abarca lo visible con el filtro", async () => {
+      const closed = closedOrder(8);
+      const open = makeOrder(9, { status: "borrador" });
+      await showTable([closed, open]);
+      component.tableSelected.set({ [closed.order_id]: true, [open.order_id]: true });
+      expect(component.tableSelectedRows().map((order) => order.order_id)).toEqual([open.order_id]);
+    });
+  });
 });

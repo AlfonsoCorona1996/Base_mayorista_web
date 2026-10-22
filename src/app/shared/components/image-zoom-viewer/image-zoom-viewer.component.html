@@ -1,0 +1,80 @@
+<div class="izv-backdrop" role="dialog" aria-modal="true" [attr.aria-label]="'Fotografía de ' + label()" (click)="close($event)">
+  <div class="izv-shell" (click)="$event.stopPropagation()">
+    <header class="izv-head">
+      <p class="izv-title">
+        <span class="izv-name">{{ label() }}</span>
+        @if (count() > 1) {
+          <span class="izv-count">{{ index() + 1 }} / {{ count() }}</span>
+        }
+      </p>
+      <div class="izv-tools">
+        <button type="button" class="izv-btn" aria-label="Alejar" [disabled]="!zoomed()" (click)="zoomBy(1 / 1.5)">
+          <span class="material-symbols-rounded" aria-hidden="true">zoom_out</span>
+        </button>
+        <button type="button" class="izv-btn" aria-label="Acercar" (click)="zoomBy(1.5)">
+          <span class="material-symbols-rounded" aria-hidden="true">zoom_in</span>
+        </button>
+        <button #closeButton type="button" class="izv-btn izv-close" aria-label="Cerrar fotografía" (click)="close($event)">
+          <span class="material-symbols-rounded" aria-hidden="true">close</span>
+        </button>
+      </div>
+    </header>
+
+    <div
+      #stage
+      class="izv-stage"
+      [class.is-zoomed]="zoomed()"
+      (pointerdown)="onPointerDown($event)"
+      (pointermove)="onPointerMove($event)"
+      (pointerup)="onPointerUp($event)"
+      (pointercancel)="onPointerUp($event)"
+      (wheel)="onWheel($event)"
+    >
+      @if (current(); as src) {
+        @if (loading()) {
+          <div class="izv-loader" role="status" aria-label="Cargando fotografía"></div>
+        }
+        @if (failed()) {
+          <p class="izv-error" role="alert">No se pudo cargar esta fotografía.</p>
+        }
+        <img
+          class="izv-img"
+          [src]="src"
+          [alt]="label() + (count() > 1 ? ' — foto ' + (index() + 1) : '')"
+          [style.transform]="transform()"
+          [class.is-loading]="loading()"
+          draggable="false"
+          (load)="onImageLoad()"
+          (error)="onImageError()"
+        />
+      }
+      @if (count() > 1) {
+        <button type="button" class="izv-btn izv-nav izv-prev" aria-label="Foto anterior" (pointerdown)="$event.stopPropagation()" (click)="go(-1)">
+          <span class="material-symbols-rounded" aria-hidden="true">chevron_left</span>
+        </button>
+        <button type="button" class="izv-btn izv-nav izv-next" aria-label="Foto siguiente" (pointerdown)="$event.stopPropagation()" (click)="go(1)">
+          <span class="material-symbols-rounded" aria-hidden="true">chevron_right</span>
+        </button>
+      }
+    </div>
+
+    @if (count() > 1) {
+      <div class="izv-thumbs" role="tablist" aria-label="Fotografías">
+        @for (src of images(); track src; let i = $index) {
+          <button
+            type="button"
+            class="izv-thumb"
+            role="tab"
+            [class.is-active]="i === index()"
+            [attr.aria-selected]="i === index()"
+            [attr.aria-label]="'Ver foto ' + (i + 1)"
+            (click)="select(i)"
+          >
+            <img [src]="src" alt="" loading="lazy" />
+          </button>
+        }
+      </div>
+    }
+    <p class="izv-hint">Pellizca o toca dos veces para ampliar.</p>
+  </div>
+</div>

@@ -1,0 +1,211 @@
+:host {
+  --izv-bg: rgba(2, 6, 23, 0.92);
+  --izv-text: #f8fafc;
+  --izv-muted: #cbd5e1;
+  --izv-control: rgba(15, 23, 42, 0.72);
+  --izv-control-border: rgba(148, 163, 184, 0.35);
+  --izv-accent: #38bdf8;
+}
+
+.izv-backdrop {
+  position: fixed;
+  inset: 0;
+  /* Por encima de hojas (120–160), barras fijas y avisos. */
+  z-index: 1000;
+  background: var(--izv-bg);
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  padding:
+    env(safe-area-inset-top, 0px)
+    env(safe-area-inset-right, 0px)
+    env(safe-area-inset-bottom, 0px)
+    env(safe-area-inset-left, 0px);
+  overscroll-behavior: contain;
+}
+
+.izv-shell {
+  display: flex;
+  flex-direction: column;
+  width: min(1100px, 100%);
+  min-height: 0;
+  color: var(--izv-text);
+}
+
+.izv-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+}
+
+.izv-title {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin: 0;
+}
+
+.izv-name {
+  font-weight: 700;
+  font-size: 0.95rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.izv-count {
+  color: var(--izv-muted);
+  font-size: 0.8rem;
+}
+
+.izv-tools {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.izv-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border-radius: 12px;
+  border: 1px solid var(--izv-control-border);
+  background: var(--izv-control);
+  color: var(--izv-text);
+  cursor: pointer;
+}
+
+.izv-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.izv-btn:focus-visible,
+.izv-thumb:focus-visible {
+  outline: 3px solid var(--izv-accent);
+  outline-offset: 2px;
+}
+
+.izv-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  /* El zoom y el desplazamiento los controla el visor, no el navegador. */
+  touch-action: none;
+  user-select: none;
+  cursor: zoom-in;
+}
+
+.izv-stage.is-zoomed {
+  cursor: grab;
+}
+
+.izv-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  transform-origin: center center;
+  transition: opacity 0.15s ease;
+  will-change: transform;
+  -webkit-user-drag: none;
+}
+
+.izv-img.is-loading {
+  opacity: 0;
+}
+
+.izv-loader {
+  position: absolute;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 3px solid var(--izv-control-border);
+  border-top-color: var(--izv-accent);
+  animation: izv-spin 0.8s linear infinite;
+}
+
+.izv-error {
+  position: absolute;
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: var(--izv-control);
+  color: var(--izv-text);
+}
+
+.izv-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.izv-prev {
+  left: 8px;
+}
+
+.izv-next {
+  right: 8px;
+}
+
+.izv-thumbs {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.izv-thumb {
+  flex: 0 0 auto;
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background: var(--izv-control);
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.izv-thumb.is-active {
+  border-color: var(--izv-accent);
+}
+
+.izv-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.izv-hint {
+  margin: 0;
+  padding: 0 12px 10px;
+  color: var(--izv-muted);
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+@keyframes izv-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .izv-img {
+    transition: none;
+  }
+
+  .izv-loader {
+    animation-duration: 2s;
+  }
+}

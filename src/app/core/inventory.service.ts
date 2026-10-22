@@ -227,6 +227,12 @@ export class InventoryService {
   private businessScope = inject(BusinessScopeService);
   private rows = signal<InventoryItem[]>([]);
   private movementRows = signal<InventoryMovement[]>([]);
+  /**
+   * Algún consumidor pidió el historial de movimientos en esta sesión. Las recargas
+   * posteriores a una mutación solo vuelven a leerlo si es así: el detalle de pedido
+   * no usa movimientos y antes descargaba la colección completa en cada acción.
+   */
+  private movementsRequested = false;
 
   items = computed(() => {
     const active = this.businessScope.activeBusinessIds();
@@ -242,11 +248,15 @@ export class InventoryService {
     return this.movements().filter((row) => row.inventory_id === inventoryId);
   }
 
-  async loadFromFirestore(): Promise<void> {
+  async loadFromFirestore(options: { includeMovements?: boolean } = {}): Promise<void> {
+    const includeMovements = options.includeMovements !== false;
+    if (includeMovements) this.movementsRequested = true;
     const q = query(this.colRef, where("business_id", "in", this.businessScope.availableBusinessIds()));
     const [snapshot, movementSnapshot] = await Promise.all([
       getDocs(q),
-      getDocs(query(this.movementsColRef, where("business_id", "in", this.businessScope.availableBusinessIds()))),
+      includeMovements
+        ? getDocs(query(this.movementsColRef, where("business_id", "in", this.businessScope.availableBusinessIds())))
+        : Promise.resolve(null),
     ]);
 
     const rows = snapshot.docs
@@ -257,6 +267,7 @@ export class InventoryService {
       .sort((a, b) => this.toMillis(b.updated_at) - this.toMillis(a.updated_at));
 
     this.rows.set(rows);
+    if (!movementSnapshot) return;
     this.movementRows.set(
       movementSnapshot.docs
         .map((entry) => this.normalizeMovement(entry.id, entry.data() as Record<string, unknown>))
@@ -340,7 +351,7 @@ export class InventoryService {
         updated_at: serverTimestamp(),
       }, { merge: true });
     });
-    await this.loadFromFirestore();
+    await this.reloadAfterMutation();
     return itemId;
   }
 
@@ -349,7 +360,7 @@ export class InventoryService {
     const idKey = idempotencyKey ? this.safeIdempotencyKey(idempotencyKey) : null;
     if (!idKey) {
       await deleteDoc(ref);
-      await this.loadFromFirestore();
+      await this.reloadAfterMutation();
       return;
     }
 
@@ -361,7 +372,7 @@ export class InventoryService {
       if (idMap[idKey]) return;
       tx.delete(ref);
     });
-    await this.loadFromFirestore();
+    await this.reloadAfterMutation();
   }
 
   async adjustQuantity(itemId: string, delta: number, idempotencyKey?: string): Promise<void> {
@@ -391,7 +402,7 @@ export class InventoryService {
         available: nextAvailable - this.toSafeQty(row.available_qty ?? currentOnHand - reserved),
       }, { reason: "Ajuste manual" });
     });
-    await this.loadFromFirestore();
+    await this.reloadAfterMutation();
   }
 
   async reserveStock(input: ReserveStockInput, options: InventoryMutationOptions = {}): Promise<void> {
@@ -512,7 +523,7 @@ export class InventoryService {
       }, { orderId: input.orderId, orderItemId: input.orderItemId });
     });
 
-    await this.loadFromFirestore();
+    await this.reloadAfterMutation();
   }
 
   async receiveInbound(input: ReceiveInboundInput, options: InventoryMutationOptions = {}): Promise<void> {
@@ -660,7 +671,7 @@ export class InventoryService {
       }, { orderId: input.orderId, orderItemId: input.orderItemId, returnId: input.returnId, reason: input.notes || null });
     });
 
-    await this.loadFromFirestore();
+    await this.reloadAfterMutation();
   }
 
   async scrapDamaged(itemId: string, qty: number, reason: string): Promise<void> {
@@ -685,7 +696,7 @@ export class InventoryService {
         damaged: -safeQty,
       }, { reason: (reason || "Baja de mercancía dañada").trim() });
     });
-    await this.loadFromFirestore();
+    await this.reloadAfterMutation();
   }
 
   generateSku(title: string): string {
@@ -841,10 +852,14 @@ export class InventoryService {
       .slice(0, 120);
   }
 
+  private reloadAfterMutation(): Promise<void> {
+    return this.loadFromFirestore({ includeMovements: this.movementsRequested });
+  }
+
   private async refreshCacheAfterMutation(): Promise<void> {
     // La transacción ya fue confirmada. Una falla de lectura posterior no debe
     // reportar la mutación como fallida ni disparar una compensación incorrecta.
-    await this.loadFromFirestore().catch(() => undefined);
+    await this.reloadAfterMutation().catch(() => undefined);
   }
 
   private withIdempotency(source: Record<string, string>, key: string | null, nowIso: string): Record<string, string> {

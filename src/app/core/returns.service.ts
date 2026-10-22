@@ -13,7 +13,7 @@ import { FIRESTORE } from "./firebase.providers";
 import { BusinessId, normalizeBusinessId } from "./rbac.constants";
 import { BusinessScopeService } from "./business-scope.service";
 import { InventoryService, readInventoryQuantities } from "./inventory.service";
-import { Order, OrderItem } from "./orders.service";
+import { Order, OrderItem, normalizeOrderStatus } from "./orders.service";
 import { availableReturnQty, calculateOrderFinancials, money, toPersistedOrderTotals } from "./order-financials";
 import { FeatureFlagsService } from "./feature-flags.service";
 import { financePeriodDocumentId, ledgerEntryPayload, monthIdFromDateInput } from "./finance-ledger";
@@ -68,6 +68,11 @@ export interface RegisterReturnInput {
   refundMethod?: string | null;
   refundReference?: string | null;
   packageId?: string | null;
+  /**
+   * Identificador del intento (uno por apertura del formulario). Reintentar o pulsar dos
+   * veces con el mismo intento no registra una segunda devolución.
+   */
+  attemptId?: string | null;
 }
 
 @Injectable({ providedIn: "root" })
@@ -108,7 +113,8 @@ export class ReturnsService {
     if (!this.features.enabled("returnsV2")) throw new Error("La fase de devoluciones V2 está desactivada.");
     const businessId = normalizeBusinessId(input.order.business_id);
     const requestedQty = Math.max(1, Math.trunc(Number(input.qty) || 1));
-    const returnId = `ret_${input.order.order_id}_${input.item.item_id}_${Date.now()}`;
+    const attempt = String(input.attemptId || "").replace(/[^a-zA-Z0-9_-]+/g, "_").slice(0, 60);
+    const returnId = `ret_${input.order.order_id}_${input.item.item_id}_${attempt || Date.now()}`;
     const requestedInventoryId = String(input.item.inventory_id || "").trim() || this.buildInventoryId(businessId, input.item);
     const ref = doc(this.colRef, returnId);
     const orderRef = doc(FIRESTORE, "orders", input.order.order_id);
@@ -120,11 +126,19 @@ export class ReturnsService {
       if (!orderSnap.exists()) throw new Error("El pedido ya no existe.");
       const rawOrder = orderSnap.data() as Record<string, any>;
       const liveOrder = { ...rawOrder, order_id: orderSnap.id } as Order;
+      // Idempotencia persistente: el mismo intento ya quedó registrado.
+      const existingReturn = await tx.get(ref);
+      if (existingReturn.exists()) {
+        savedRecord = this.normalize(existingReturn.id, existingReturn.data() as Record<string, unknown>);
+        return;
+      }
+      // "Marcar entregado" guardaba `delivered`; se valida con el nombre canónico.
+      const liveStatus = normalizeOrderStatus(liveOrder.status);
       const allowedStages = new Set([
         "empaque", "ready_for_route", "assigned_to_run", "en_ruta",
         "entregado", "entregado_parcial", "pago_pendiente", "pagado_parcial", "pagado", "closed",
       ]);
-      if (!allowedStages.has(String(liveOrder.status || ""))) {
+      if (!allowedStages.has(liveStatus)) {
         throw new Error("Las devoluciones sólo se permiten desde empaque en adelante.");
       }
       const liveItems = Array.isArray(liveOrder.items) ? liveOrder.items : [];
@@ -137,7 +151,7 @@ export class ReturnsService {
       }
 
       const deliveredStages = new Set(["entregado", "entregado_parcial", "pago_pendiente", "pagado_parcial", "pagado", "closed"]);
-      const afterDelivery = deliveredStages.has(String(liveOrder.status || ""));
+      const afterDelivery = deliveredStages.has(liveStatus) || Boolean(rawOrder["delivered_at"]);
       const inventoryId = String(liveItem.inventory_id || "").trim() || requestedInventoryId;
       const inventoryRef = doc(FIRESTORE, "inventory_items", inventoryId);
       const stopRef = liveOrder.route_run_id
@@ -317,7 +331,8 @@ export class ReturnsService {
         packages: nextPackages,
         totals: persistedTotals,
         has_returns: true,
-        status: allReturned ? "devuelto" : liveOrder.status,
+        // Un pedido cerrado conserva su cierre histórico; la devolución queda como postventa (RC-02).
+        status: allReturned && liveStatus !== "closed" ? "devuelto" : liveOrder.status,
         timeline,
         updated_at: serverTimestamp(),
       });

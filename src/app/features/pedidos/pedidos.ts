@@ -22,6 +22,7 @@ import { Shipment, ShipmentBusinessSummary, ShipmentItem, ShipmentsService } fro
 import { AuthzService } from "../../core/authz.service";
 import { DispatchOrderRow, RouteRunsService } from "../../services/route-runs.service";
 import { canMarkOrderAsPaidFromTable } from "./order-table-bulk-actions";
+import { isAtOrAfterDelivery, isTrulyClosed } from "../../core/order-closure";
 import { PerfMetricsService } from "../../core/perf-metrics.service";
 import { CustomerPickerComponent, CustomerPickerOption } from "./customer-picker/customer-picker.component";
 import { VirtualGridController, VirtualListChange } from "./virtual-grid";
@@ -106,6 +107,14 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   private destroyed = false;
   private readonly uiStateStorageKey = "pedidos.ui-state.v1";
   private uiStateHydrated = signal(false);
+  /**
+   * "Incluir pedidos cerrados". Desmarcado por defecto en cada sesión del navegador y
+   * conservado al entrar a un detalle y volver (sessionStorage, no localStorage).
+   * Solo se ocultan pedidos realmente cerrados: `closed` con entrega registrada y saldo
+   * cero. Un `pagado`, `devuelto` o `closed` sin fecha de entrega sigue visible.
+   */
+  readonly includeClosed = signal(readIncludeClosed());
+  private readonly persistIncludeClosed = effect(() => writeIncludeClosed(this.includeClosed()));
 
   search = signal("");
   intentFilter = signal<IntentFilter>("por_confirmar");
@@ -288,9 +297,11 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   private readonly tableListKey = computed(() => JSON.stringify([
     this.search(), this.routeFilter(), this.tableDateFrom(), this.tableDateTo(), this.tableRouteSelections(),
     this.tableStatusSelections(), this.tableSortCol(), this.tableSortDir(), this.businessScope.activeBusinessIds(),
+    this.includeClosed(),
   ]));
   private readonly cardsListKey = computed(() => JSON.stringify([
     this.search(), this.intentFilter(), this.routeFilter(), this.businessScope.activeBusinessIds(),
+    this.includeClosed(),
   ]));
   private lastTableListKey: string | null = null;
   private lastCardsListKey: string | null = null;
@@ -384,6 +395,14 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   list = computed(() => this.orders.list());
+  /** Pedidos realmente cerrados del alcance actual (para el aviso del filtro). */
+  readonly closedOrdersCount = computed(() => this.list().reduce((count, order) => count + (isTrulyClosed(order) ? 1 : 0), 0));
+  /** Base de contadores, tarjetas, tabla, selección y exportaciones: respeta el filtro de cerrados. */
+  readonly scopedList = computed(() => {
+    const rows = this.list();
+    if (this.includeClosed()) return rows;
+    return rows.filter((order) => !isTrulyClosed(order));
+  });
   intentCounts = computed(() => {
     const term = this.normalizeSearchTerm(this.search());
     const route = this.routeFilter();
@@ -400,7 +419,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     };
 
     const day = this.toDateInputValue(new Date());
-    for (const order of this.list()) {
+    for (const order of this.scopedList()) {
       if (route !== "todos" && order.route_id !== route) continue;
       if (!this.matchesSearchTerm(order, term)) continue;
 
@@ -419,7 +438,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     const route = this.routeFilter();
     const day = this.toDateInputValue(new Date());
 
-    return this.list()
+    return this.scopedList()
       .filter((order) => {
         if (!this.matchesIntentForDay(order, intent, day)) return false;
         if (route !== "todos" && order.route_id !== route) return false;
@@ -441,7 +460,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     const term = this.normalizeSearchTerm(this.search());
     const route = this.routeFilter();
 
-    return this.list().filter((order) => {
+    return this.scopedList().filter((order) => {
       if (route !== "todos" && order.route_id !== route) return false;
       if (!this.matchesSearchTerm(order, term)) return false;
       const updatedDate = this.updatedDateKey(order);
@@ -1200,7 +1219,8 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
             if (total > 0) {
               await this.orders.closeWithPayment(order.order_id, Math.max(0, total - Number(order.totals?.paid_amount || 0)), total);
             } else {
-              await this.orders.updateStatus(order.order_id, "pagado");
+              // Cobro resuelto no es entrega (RC-01): solo se escribe `pagado` si ya se entregó.
+              if (isAtOrAfterDelivery(order)) await this.orders.updateStatus(order.order_id, "pagado");
               await this.orders.updateCollectionState(order.order_id, {
                 collection_status: "paid",
                 collection_reminder_at: null,
@@ -4061,4 +4081,22 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   }
 }
 
+const INCLUDE_CLOSED_KEY = "pedidos.include-closed.v1";
 
+function readIncludeClosed(): boolean {
+  try {
+    return typeof window !== "undefined" && window.sessionStorage.getItem(INCLUDE_CLOSED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeIncludeClosed(value: boolean): void {
+  try {
+    if (typeof window === "undefined") return;
+    if (value) window.sessionStorage.setItem(INCLUDE_CLOSED_KEY, "1");
+    else window.sessionStorage.removeItem(INCLUDE_CLOSED_KEY);
+  } catch {
+    // Almacenamiento bloqueado (modo privado): el filtro sigue funcionando en memoria.
+  }
+}

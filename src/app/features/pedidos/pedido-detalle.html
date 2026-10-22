@@ -219,6 +219,13 @@
       }
     </header>
 
+    @if (dependencyErrors().length > 0) {
+      <div class="dependency-alert" role="alert">
+        <span>No se pudo cargar: {{ dependencyErrors().join(", ") }}. Lo que depende de esos datos puede no estar disponible.</span>
+        <button type="button" class="btn ghost" (click)="retrySecondaryData()">Reintentar</button>
+      </div>
+    }
+
     @if (moreActionsSheetOpen()) {
       <div class="sheet-backdrop" (click)="closeMoreActionsSheet()">
         <div class="sheet more-actions-sheet" role="dialog" aria-modal="true" aria-labelledby="more-actions-title" (click)="$event.stopPropagation()">
@@ -1049,7 +1056,7 @@
                     @if (itemReturns.length > 0) {
                       <div class="return-history-inline">
                         @for (returnRow of itemReturns; track returnRow.return_id) {
-                          <span>{{ returnRow.qty }} pza · {{ returnDestination(returnRow) }} · {{ returnRow.created_at | date:'dd/MM/yy' }}</span>
+                          <span>{{ returnRow.qty }} pza · {{ returnDestination(returnRow) }} · {{ returnRowDate(returnRow) | date:'dd/MM/yy' }}</span>
                         }
                       </div>
                     }
@@ -1506,7 +1513,7 @@
       />
     </section>
 
-    <div class="sticky-action-bar" [class.show]="showStickyFooter()">
+    <div class="sticky-action-bar" [class.show]="showStickyFooter() && !overlayOpen()" [attr.aria-hidden]="overlayOpen() ? 'true' : null">
       <button class="link-back link-back--icon sticky-back-btn" type="button" (click)="backToList()" aria-label="Volver">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
           <path d="M15 18 9 12l6-6"></path>
@@ -1533,7 +1540,7 @@
         </button>
       }
     </div>
-    @if (vm.shouldShowStockFab) {
+    @if (vm.shouldShowStockFab && !overlayOpen()) {
       <button type="button" class="stock-fab" (click)="scrollToFirstInsufficientProduct(current)">
         {{ vm.insufficientItemsCount }} errores
       </button>
@@ -1995,21 +2002,13 @@
     </div>
   }
 
-  @if (imagePreviewUrl(); as previewUrl) {
-    <div class="image-lightbox" (click)="closeImagePreview()">
-      <div class="image-lightbox-dialog" role="dialog" aria-modal="true" aria-label="Vista previa de imagen" (click)="$event.stopPropagation()">
-        @if (imagePreviewLoading()) {
-          <div class="image-lightbox-loader" aria-label="Cargando imagen"></div>
-        }
-        <img
-          [src]="previewUrl"
-          alt="Vista previa del producto"
-          [class.is-loading]="imagePreviewLoading()"
-          (load)="onPreviewImageLoaded()"
-          (error)="onPreviewImageError()"
-        />
-      </div>
-    </div>
+  @if (imageViewer(); as viewer) {
+    <app-image-zoom-viewer
+      [images]="viewer.images"
+      [startIndex]="viewer.index"
+      [label]="viewer.label"
+      (closed)="closeImageViewer()"
+    />
   }
 
   @if (incidentModalOpen()) {
@@ -2361,6 +2360,7 @@
     <div class="sheet-backdrop sheet-backdrop--add-item" (click)="closeAddItemModal()">
       <div
         class="sheet full sheet-add-item-ios"
+        [class.sheet-add-item-ios--searching]="!canSubmitNewItem()"
         role="dialog"
         aria-modal="true"
         aria-labelledby="add-item-modal-title"
@@ -2474,7 +2474,7 @@
                 <small class="add-item-search-help">Escribe al menos 2 caracteres o escanea el código.</small>
               </div>
               @if (showProductList() && (inventorySearchActive() || catalogLocalSearchActive() || catalogSuggestions().length > 0 || catalogProductSuggestions().length > 0 || catalogProductSearching() || catalogProductSearchAttempted() || catalogProductSearchError())) {
-                <div class="listbox" role="listbox" aria-label="Resultados de productos">
+                <div class="listbox" role="region" aria-label="Resultados de productos">
                   @if (inventorySearchActive()) {
                     @if (inventorySourceLoading()) {
                       <div class="listbox-option listbox-option--loading" role="status" aria-live="polite">
@@ -2488,7 +2488,8 @@
                       </div>
                     } @else {
                       @for (s of inventorySuggestions(); track s.inventory_id) {
-                        <button type="button" role="option" class="listbox-option" [attr.aria-label]="'Inventario: ' + s.title + ', ' + inventoryAvailableQty(s) + ' piezas disponibles'" (mousedown)="$event.preventDefault(); beginProductPick()" (touchstart)="beginProductPick()" (click)="pickInventory(s)">
+                        <div class="listbox-row">
+                        <button type="button" class="listbox-thumb-btn" [disabled]="!s.image_urls[0]" [attr.aria-label]="'Ampliar foto de ' + s.title" (mousedown)="$event.preventDefault()" (click)="openImageViewer(s.image_urls, 0, s.title, $event)">
                           @if (s.image_urls[0]) {
                             <img class="listbox-thumb" [src]="s.image_urls[0]" alt="" />
                           } @else {
@@ -2499,6 +2500,8 @@
                               </svg>
                             </div>
                           }
+                        </button>
+                        <button type="button" class="listbox-option listbox-option--with-thumb" [attr.aria-label]="'Agregar de inventario: ' + s.title + ', ' + inventoryAvailableQty(s) + ' piezas disponibles'" (mousedown)="$event.preventDefault(); beginProductPick()" (touchstart)="beginProductPick()" (click)="pickInventory(s)">
                           <div class="listbox-main">
                             <div class="card-title">{{ s.title }}</div>
                             <div class="card-meta">
@@ -2511,6 +2514,7 @@
                             Disponibles: {{ inventoryAvailableQty(s) }}
                           </span>
                         </button>
+                        </div>
                       } @empty {
                         <div class="catalog-search-empty" role="status">
                           {{ unavailableInventoryMatchesCount() > 0
@@ -2519,6 +2523,20 @@
                         </div>
                       }
                     }
+                  }
+                  @if (inventorySearchActive() && !inventorySourceLoading() && inventoryMatches().length > 0) {
+                    <div class="search-results-count" role="status">
+                      <span>Mostrando {{ inventorySuggestions().length }} de {{ inventoryMatches().length }}</span>
+                      @if (inventoryMatches().length > inventorySuggestions().length) {
+                        <button type="button" class="btn ghost" (mousedown)="$event.preventDefault()" (click)="showMoreSearchResults()">Ver más</button>
+                      }
+                    </div>
+                  }
+                  @if (catalogLocalSearchActive() && catalogLocalSearchPending() && !catalogSourceLoading()) {
+                    <div class="listbox-option listbox-option--loading" role="status" aria-live="polite">
+                      <span class="material-symbols-rounded" aria-hidden="true">progress_activity</span>
+                      Buscando en el catálogo...
+                    </div>
                   }
                   @if (catalogProductSearching()) {
                     <div class="listbox-option listbox-option--loading" role="status" aria-live="polite">
@@ -2538,13 +2556,14 @@
                       <button type="button" class="btn ghost" (click)="retryAddItemCatalog()">Reintentar</button>
                     </div>
                   }
-                  @if (catalogLocalSearchActive() && !catalogSourceLoading() && !catalogSourceError() && catalogSuggestions().length === 0) {
+                  @if (catalogLocalSearchActive() && !catalogLocalSearchPending() && !catalogSourceLoading() && !catalogSourceError() && catalogSuggestions().length === 0) {
                     <div class="catalog-search-empty" role="status" aria-live="polite">
                       No encontramos productos con ese nombre en el catálogo.
                     </div>
                   }
                   @for (c of catalogSuggestions(); track c.doc.normalized_id) {
-                    <button type="button" role="option" class="listbox-option" [attr.aria-label]="'Catalogo: ' + c.doc.listing.title" (mousedown)="$event.preventDefault(); beginProductPick()" (touchstart)="beginProductPick()" (click)="pickCatalog(c.doc, c.variant, c.color)">
+                    <div class="listbox-row">
+                    <button type="button" class="listbox-thumb-btn" [disabled]="!c.image" [attr.aria-label]="'Ampliar foto de ' + c.doc.listing.title" (mousedown)="$event.preventDefault()" (click)="openImageViewer(catalogResultImages(c), 0, c.doc.listing.title || 'Producto', $event)">
                       @if (c.image) {
                         <img class="listbox-thumb" [src]="c.image" alt="" />
                       } @else {
@@ -2555,6 +2574,8 @@
                           </svg>
                         </div>
                       }
+                    </button>
+                    <button type="button" class="listbox-option listbox-option--with-thumb" [attr.aria-label]="'Agregar del catálogo: ' + c.doc.listing.title" (mousedown)="$event.preventDefault(); beginProductPick()" (touchstart)="beginProductPick()" (click)="pickCatalog(c.doc, c.variant, c.color)">
                       <div class="listbox-main">
                         <div class="card-title">{{ c.doc.listing.title }}</div>
                         <div class="card-meta">
@@ -2567,6 +2588,15 @@
                         {{ c.variant.variant_name || '-' }} - {{ c.color || 'Color' }}
                       </span>
                     </button>
+                    </div>
+                  }
+                  @if (catalogLocalSearchActive() && !catalogLocalSearchPending() && catalogMatches().length > 0) {
+                    <div class="search-results-count" role="status">
+                      <span>Mostrando {{ catalogSuggestions().length }} de {{ catalogMatches().length }}</span>
+                      @if (catalogMatches().length > catalogSuggestions().length) {
+                        <button type="button" class="btn ghost" (mousedown)="$event.preventDefault()" (click)="showMoreSearchResults()">Ver más</button>
+                      }
+                    </div>
                   }
                   @for (result of catalogProductSuggestions(); track result.result_id) {
                     <div
@@ -2596,15 +2626,8 @@
                         </div>
                       }
                       @if (!result.bundle && catalogSearchResultRepresentative(result); as p) {
-                        <button
-                          type="button"
-                          role="option"
-                          class="listbox-option"
-                          [attr.aria-label]="p.name + ', ' + catalogSearchResultOptionSummary(result)"
-                          (mousedown)="$event.preventDefault(); beginProductPick()"
-                          (touchstart)="beginProductPick()"
-                          (click)="pickCatalogProduct(p, result)"
-                        >
+                        <div class="listbox-row">
+                        <button type="button" class="listbox-thumb-btn" [disabled]="catalogProductResultImages(result, p).length === 0" [attr.aria-label]="'Ampliar foto de ' + p.name" (mousedown)="$event.preventDefault()" (click)="openImageViewer(catalogProductResultImages(result, p), 0, p.name, $event)">
                           @if (p.image_url) {
                             <img class="listbox-thumb" [src]="p.image_url" alt="" />
                           } @else {
@@ -2615,6 +2638,15 @@
                               </svg>
                             </div>
                           }
+                        </button>
+                        <button
+                          type="button"
+                          class="listbox-option listbox-option--with-thumb"
+                          [attr.aria-label]="'Elegir ' + p.name + ', ' + catalogSearchResultOptionSummary(result)"
+                          (mousedown)="$event.preventDefault(); beginProductPick()"
+                          (touchstart)="beginProductPick()"
+                          (click)="pickCatalogProduct(p, result)"
+                        >
                           <div class="listbox-main">
                             <div class="card-title">{{ p.name }}</div>
                             <div class="card-meta">
@@ -2630,6 +2662,7 @@
                             Elegir opciones
                           </span>
                         </button>
+                        </div>
                       } @else {
                         @if (!result.bundle) {
                         <p class="catalog-search-empty">Este grupo todavía no tiene variantes vendibles.</p>
@@ -2645,6 +2678,16 @@
                   @if (catalogProductSearchError()) {
                     <div class="catalog-search-empty catalog-search-empty--error" role="alert">
                       {{ catalogProductSearchError() }}
+                    </div>
+                  }
+                  @if (catalogSearchFallbackNotice(); as fallbackNotice) {
+                    <div class="catalog-search-empty catalog-search-empty--error" role="alert">
+                      {{ fallbackNotice }}
+                    </div>
+                  }
+                  @if (!catalogProductSearching() && catalogProductSuggestions().length >= 20) {
+                    <div class="search-results-count" role="status">
+                      <span>Mostrando los primeros {{ catalogProductSuggestions().length }}. Escribe más del nombre o el código para acotar.</span>
                     </div>
                   }
                 </div>

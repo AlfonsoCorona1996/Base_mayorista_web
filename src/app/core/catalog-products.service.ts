@@ -102,6 +102,11 @@ export interface CatalogProductSearchResult {
 }
 
 export interface CatalogProductSearchOptions {
+  /**
+   * Se llama cuando el buscador del backend falla y se usa la búsqueda limitada por
+   * prefijo de código. Antes el respaldo era silencioso y el error parecía "sin resultados".
+   */
+  onFallback?: (error: unknown) => void;
   businessId?: BusinessId;
   supplierId?: string | null;
   types?: CatalogProductIdentifierType[];
@@ -535,7 +540,8 @@ export class CatalogProductsService {
       );
       this.mergeRows(results.flatMap((result) => result.variants));
       return results;
-    } catch {
+    } catch (error) {
+      options.onFallback?.(error);
       const legacyRows = await this.searchLegacyBySkuPrefix(cleanQuery, businessId, maxRows);
       const normalizedQuery = this.normalizeSku(cleanQuery);
       const exactRows = options.exact

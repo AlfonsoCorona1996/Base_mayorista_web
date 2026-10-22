@@ -552,21 +552,6 @@ export default class RetiroGananciasPage {
       this.error.set("El monto del retiro debe ser mayor a 0.");
       return;
     }
-    const available = this.financialBreakdown().available;
-    if (this.withdrawalAmount() > available + 0.001) {
-      this.error.set(`No hay utilidad cobrada suficiente. Disponible: ${this.formatCurrency(available)}.`);
-      return;
-    }
-    const selectedPartner = this.asPartnerPurpose(this.withdrawalPurpose());
-    if (selectedPartner) {
-      const partnerSummary = this.withdrawalPartnerSummary();
-      const account = selectedPartner === "socio_blanca" ? partnerSummary.blanca : partnerSummary.andreaPepe;
-      const partnerAvailable = Math.max(0, account.availableNow);
-      if (this.withdrawalAmount() > partnerAvailable + 0.001) {
-        this.error.set(`Ese retiro excede la parte disponible de ${this.withdrawalPurposeLabel(this.withdrawalPurpose())}: ${this.formatCurrency(partnerAvailable)}.`);
-        return;
-      }
-    }
     this.error.set(null);
     this.success.set(null);
     try {

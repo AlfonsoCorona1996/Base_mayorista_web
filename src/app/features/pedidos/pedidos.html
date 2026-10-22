@@ -113,6 +113,26 @@
         <span class="material-symbols-rounded">table_rows</span>
       </button>
     </div>
+
+    <label class="filters-closed" for="include-closed">
+      <input
+        id="include-closed"
+        type="checkbox"
+        [checked]="includeClosed()"
+        (change)="includeClosed.set($any($event.target).checked)"
+        aria-describedby="include-closed-hint"
+      />
+      <span class="filters-closed-label">Incluir pedidos cerrados</span>
+      <span id="include-closed-hint" class="filters-closed-hint">
+        @if (includeClosed()) {
+          Mostrando abiertos y cerrados
+        } @else if (closedOrdersCount() > 0) {
+          {{ closedOrdersCount() }} cerrado(s) oculto(s)
+        } @else {
+          Sin pedidos cerrados
+        }
+      </span>
+    </label>
   </section>
 
   @if (viewMode() === 'cards') {

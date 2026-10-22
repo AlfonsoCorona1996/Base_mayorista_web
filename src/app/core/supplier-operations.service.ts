@@ -86,6 +86,23 @@ export class SupplierOperationsService {
     this.rowsSignal.set(rows);
   }
 
+  /**
+   * Carga solo las líneas de un pedido y las mezcla con las ya cargadas. El detalle de
+   * pedido no necesita las operaciones de todo el negocio para decidir sus botones.
+   */
+  async loadForOrder(orderId: string): Promise<void> {
+    const target = String(orderId || "").trim();
+    if (!target) return;
+    const requestId = ++this.loadRequestId;
+    const snap = await getDocs(query(this.colRef, where("order_id", "==", target)));
+    if (requestId !== this.loadRequestId) return;
+    const fresh = snap.docs.map((entry) => this.normalize(entry.id, entry.data() as Record<string, any>));
+    this.rowsSignal.update((current) => [
+      ...fresh,
+      ...current.filter((row) => row.order_id !== target),
+    ]);
+  }
+
   async upsertFromConfirmedOrder(order: Order, customerName: string): Promise<number> {
     const toCreate = this.confirmedSupplierItems(order);
     if (toCreate.length === 0) return 0;
@@ -231,10 +248,21 @@ export class SupplierOperationsService {
       return current;
     });
 
-    const qty = this.safeQty(row.quantity);
+    const targetQty = this.safeQty(row.quantity);
     const inventoryId = row.inventory_item_id || this.buildInventoryIdForLine(row);
+    // Solo se recibe lo que falta. Si la linea ya ingreso piezas a inventario y luego subio
+    // su cantidad, la diferencia entra con su propia llave (`..._from<n>_to<m>`); la primera
+    // recepcion conserva la llave original, por lo que reintentos y dos sesiones siguen
+    // siendo idempotentes. Antes, la segunda recepcion reutilizaba la llave original,
+    // no movia inventario y aun asi marcaba recibida la cantidad completa.
+    const alreadyReceived = row.received_to_inventory ? Math.min(this.safeQty(row.received_qty), targetQty) : 0;
+    const alreadyReserved = row.reservation_applied ? Math.min(this.safeQty(row.reserved_qty_for_order), targetQty) : 0;
+    const qty = Math.max(0, targetQty - alreadyReceived);
+    const reserveQty = Math.max(0, targetQty - alreadyReserved);
+    const stepSuffix = alreadyReceived > 0 ? `_from${alreadyReceived}_to${targetQty}` : "";
+    const reserveSuffix = alreadyReserved > 0 ? `_from${alreadyReserved}_to${targetQty}` : "";
 
-    await this.inventory.receiveInbound(
+    if (qty > 0) await this.inventory.receiveInbound(
       {
         sku: inventoryId,
         product_id: row.product_id,
@@ -244,7 +272,7 @@ export class SupplierOperationsService {
         unit_price: row.price_cost,
         supplierOperationId: row.op_id,
         lineId: row.order_item_id,
-        idempotencyKey: `inbound_${safeRoot}`,
+        idempotencyKey: this.safeIdempotencyKey(`inbound_${safeRoot}${stepSuffix}`),
         title: row.title,
         supplier_id: row.supplier_id || null,
         variant_name: row.variant || null,
@@ -253,36 +281,37 @@ export class SupplierOperationsService {
       },
       { refreshCache: options.refreshInventory !== false },
     );
-    await this.logOrderEvent(row.order_id, "INVENTORY_INBOUND_RECEIVED", `Recepcion inventario para ${row.title}`, {
+    if (qty > 0) await this.logOrderEvent(row.order_id, "INVENTORY_INBOUND_RECEIVED", `Recepcion inventario para ${row.title}`, {
       opId: row.op_id,
       inventoryId,
       qty,
-      idempotencyKey: `inbound_${safeRoot}`,
+      previouslyReceived: alreadyReceived,
+      idempotencyKey: `inbound_${safeRoot}${stepSuffix}`,
     }).catch(() => undefined);
 
     const reserveForOrderId = String(row.reserved_for_order_id || "").trim();
-    const canReserveForOrder = !!reserveForOrderId && !!String(row.order_item_id || "").trim() && qty > 0;
-    if (canReserveForOrder) {
+    const canReserveForOrder = !!reserveForOrderId && !!String(row.order_item_id || "").trim() && targetQty > 0;
+    if (canReserveForOrder && reserveQty > 0) {
       await this.inventory.reserveStock(
         {
           sku: inventoryId,
-          qty,
+          qty: reserveQty,
           orderId: reserveForOrderId,
           orderItemId: row.order_item_id,
-          idempotencyKey: `reserve_${safeRoot}`,
+          idempotencyKey: this.safeIdempotencyKey(`reserve_${safeRoot}${reserveSuffix}`),
         },
         { refreshCache: options.refreshInventory !== false },
       );
       await this.logOrderEvent(row.order_id, "INVENTORY_RESERVED", `Reserva inventario para ${row.title}`, {
         opId: row.op_id,
         inventoryId,
-        qty,
+        qty: reserveQty,
         orderId: reserveForOrderId,
-        idempotencyKey: `reserve_${safeRoot}`,
+        idempotencyKey: `reserve_${safeRoot}${reserveSuffix}`,
       }).catch(() => undefined);
     }
 
-    const finalizeKey = `final_${safeRoot}`;
+    const finalizeKey = this.safeIdempotencyKey(`final_${safeRoot}${stepSuffix}`);
     await runTransaction(FIRESTORE, async (tx) => {
       const snap = await tx.get(opRef);
       if (!snap.exists()) return;
@@ -294,9 +323,13 @@ export class SupplierOperationsService {
         status: "recibido",
         inventory_item_id: inventoryId,
         received_to_inventory: true,
-        reservation_applied: canReserveForOrder && qty > 0,
-        received_qty: qty,
-        reserved_qty_for_order: canReserveForOrder ? qty : 0,
+        reservation_applied: canReserveForOrder,
+        // Nunca se reduce lo ya registrado: si la cantidad bajó después de recibir, la
+        // diferencia sigue apartada y closeOnDelivery la libera al entregar.
+        received_qty: Math.max(row.received_to_inventory ? this.safeQty(row.received_qty) : 0, alreadyReceived + qty),
+        reserved_qty_for_order: canReserveForOrder
+          ? Math.max(row.reservation_applied ? this.safeQty(row.reserved_qty_for_order) : 0, alreadyReserved + reserveQty)
+          : 0,
         updated_at: serverTimestamp(),
         idempotency_keys: {
           ...idMap,
@@ -318,7 +351,8 @@ export class SupplierOperationsService {
     await this.logOrderEvent(row.order_id, "SUPPLIER_LINE_RECEIVED", `Linea de proveedor recibida: ${row.title}`, {
       opId: row.op_id,
       inventoryId,
-      qty,
+      qty: alreadyReceived + qty,
+      receivedNow: qty,
       idempotencyKey: safeRoot,
     }).catch(() => undefined);
     if (options.syncOrderStatus !== false) {
@@ -339,6 +373,58 @@ export class SupplierOperationsService {
     }
     const writes = snap.docs.map((entry) => deleteDoc(entry.ref));
     await Promise.all(writes);
+    await this.loadFromFirestore();
+  }
+
+  /**
+   * Cierra las lineas de proveedor de un pedido entregado. La mercancia recibida y
+   * apartada para el pedido SALE del inventario (consumo); solo se libera a disponible
+   * lo apartado de mas (p. ej. si se redujo la cantidad despues de recibir).
+   * Antes, la entrega borraba la linea liberando la reserva: lo entregado volvia a
+   * "disponible" (inventario fantasma, Auditoria 03 P0-02).
+   */
+  async closeOnDelivery(order: Pick<Order, "order_id" | "items">): Promise<void> {
+    const orderId = order.order_id;
+    const snap = await getDocs(query(this.colRef, where("order_id", "==", orderId)));
+    const itemsById = new Map((order.items || []).map((item) => [item.item_id, item]));
+    for (const entry of snap.docs) {
+      const row = this.normalize(entry.id, entry.data() as Record<string, any>);
+      const inventoryId = (row.inventory_item_id || "").trim();
+      const reservedFor = (row.reserved_for_order_id || "").trim();
+      const reserved = this.safeQty(row.reserved_qty_for_order || (row.reservation_applied ? row.quantity : 0));
+      if (inventoryId && reservedFor === orderId && reserved > 0) {
+        const item = itemsById.get(row.order_item_id);
+        const delivered = item
+          ? Math.max(0, this.safeQty(item.confirmed_qty ?? item.quantity) - this.safeQty(item.returned_qty))
+          : 0;
+        const consume = Math.min(reserved, delivered);
+        if (consume > 0) {
+          // Misma llave que OrdersService.consumeInventoryForDelivery usa para el articulo:
+          // si el articulo ya apuntaba a este inventario, el consumo no se duplica.
+          await this.inventory.consumeOnDelivery({
+            sku: inventoryId,
+            qty: consume,
+            orderId,
+            orderItemId: row.order_item_id,
+            idempotencyKey: `delivery_${orderId}_close_${row.order_item_id}`,
+          });
+        }
+        const leftover = reserved - consume;
+        if (leftover > 0) {
+          await this.inventory.releaseReservation({
+            sku: inventoryId,
+            qty: leftover,
+            orderId,
+            orderItemId: row.order_item_id,
+            idempotencyKey: this.safeIdempotencyKey(`supplier_release_${row.op_id}_delivery_leftover`),
+          });
+        }
+        await this.logOrderEvent(orderId, "SUPPLIER_LINE_DELIVERED", `Entrega de linea de proveedor: ${row.title}`, {
+          opId: row.op_id, inventoryId, consumed: consume, released: leftover,
+        }).catch(() => undefined);
+      }
+      await deleteDoc(entry.ref);
+    }
     await this.loadFromFirestore();
   }
 
@@ -574,6 +660,11 @@ export class SupplierOperationsService {
       "devuelto",
     ]);
     if (lockedStatuses.has(currentStatus) && currentStatus !== nextStatus) {
+      return;
+    }
+    // Una linea de proveedor no saca al pedido de captura: eso solo lo hace
+    // "Confirmar existencias" (RC-01). Tampoco reescribe pedidos ya entregados o cerrados.
+    if (["borrador", "delivered", "entregado_parcial", "pagado_parcial", "closed"].includes(currentStatus)) {
       return;
     }
 

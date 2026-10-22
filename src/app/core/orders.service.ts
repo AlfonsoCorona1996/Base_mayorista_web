@@ -42,6 +42,7 @@ import { financePeriodDocumentId, ledgerEntryPayload, monthIdFromDateInput } fro
 import { LONG_TASK_MS, OrdersSnapshotInference, PerfMetricsService, firebaseErrorCode, roundMs } from "./perf-metrics.service";
 import { OrdersSnapshotEvent, OrdersSnapshotIndex } from "./orders-snapshot-index";
 import { normalizeOrderCreator, OrderCreator } from "./order-creator";
+import { canCloseBySettlement, statusAfterCollection, statusAfterDelivery } from "./order-closure";
 
 export type { OrdersSnapshotChange, OrdersSnapshotDoc, OrdersSnapshotEvent } from "./orders-snapshot-index";
 
@@ -428,10 +429,19 @@ export interface SupplierOrder {
 
 type SupplierOpStatusLite = "por_levantar" | "levantado" | "en_camino" | "recibido";
 
+export interface ComputeOrderStatusOptions {
+  /**
+   * Solo "Confirmar existencias" puede sacar un pedido de captura. Editar, quitar o
+   * recibir artículos nunca lo promueve desde `borrador` (RC-01).
+   */
+  allowFromDraft?: boolean;
+}
+
 export function computeOrderStatus(
   order: Pick<Order, "status">,
   items: OrderItem[],
   supplierOps: Array<{ status: SupplierOpStatusLite }>,
+  options: ComputeOrderStatusOptions = {},
 ): OrderStatus {
   const terminalStatuses: OrderStatus[] = [
     "recibido_qa",
@@ -453,6 +463,7 @@ export function computeOrderStatus(
   ];
   const allItemsResolved = items.length > 0 && items.every((item) => !!item.confirmation_state && item.confirmation_state !== "pending");
   if (terminalStatuses.includes(order.status)) return order.status;
+  if (order.status === "borrador" && !options.allowFromDraft) return "borrador";
   if (items.length === 0) return "borrador";
   if (supplierOps.length === 0) return allItemsResolved ? "recibido_qa" : order.status;
   if (supplierOps.every((op) => op.status === "recibido")) return "recibido_qa";
@@ -929,7 +940,7 @@ export class OrdersService {
     });
     if (marksDelivered) {
       await this.consumeInventoryForDelivery(orderId);
-      await this.supplierOperations.removeByOrder(orderId).catch(() => null);
+      await this.closeSupplierLinesOnDelivery(orderId);
     } else if (status === "cancelado") {
       await this.releaseInventoryForOrder(orderId);
     }
@@ -970,12 +981,15 @@ export class OrdersService {
 
   async markOrderDelivered(orderId: string, note?: string): Promise<void> {
     const now = new Date().toISOString();
+    // La entrega no borra un cobro previo: un pedido ya liquidado queda `pagado`.
+    // Se guarda siempre el nombre canónico (`entregado`), nunca `delivered`.
+    const nextStatus = statusAfterDelivery(this.getById(orderId)?.customer_payment_status);
     this.rows.update((current) =>
       current.map((order) =>
         order.order_id === orderId
           ? {
               ...order,
-              status: "entregado",
+              status: nextStatus,
               delivery_status: "delivered",
               current_holder_location: "customer",
               delivered_at: order.delivered_at || now,
@@ -989,7 +1003,7 @@ export class OrdersService {
       ),
     );
     await updateDoc(doc(this.colRef, orderId), {
-      status: "delivered",
+      status: nextStatus,
       delivery_status: "delivered",
       current_holder_location: "customer",
       delivered_at: serverTimestamp(),
@@ -1000,8 +1014,20 @@ export class OrdersService {
     await this.consumeInventoryForDelivery(orderId).catch((error) => {
       console.error("[OrdersService] No se pudo consumir inventario al entregar", error);
     });
-    await this.supplierOperations.removeByOrder(orderId).catch(() => null);
+    await this.closeSupplierLinesOnDelivery(orderId);
     await this.logEvent(orderId, "ORDER_DELIVERED", note || "Pedido marcado como entregado");
+  }
+
+  /**
+   * La mercancía de proveedor recibida para un pedido entregado sale del inventario.
+   * Antes se borraban las líneas liberando su reserva: lo entregado volvía a "disponible".
+   */
+  private async closeSupplierLinesOnDelivery(orderId: string): Promise<void> {
+    const order = this.getById(orderId);
+    if (!order) return;
+    await this.supplierOperations.closeOnDelivery(order).catch((error) => {
+      console.error("[OrdersService] No se pudieron cerrar las líneas de proveedor al entregar", error);
+    });
   }
 
   async markOrderDeliveryIssue(orderId: string, deliveryStatus: Extract<OrderDeliveryStatus, "not_delivered" | "incident">, note?: string) {
@@ -1066,7 +1092,9 @@ export class OrdersService {
       });
       const balanceDue = Math.max(0, Number(persistedTotals["balance_due"] || 0));
       const customerPaymentStatus: OrderCustomerPaymentStatus = safePaid <= 0 ? "pending" : balanceDue <= 0 ? "collected" : "partial";
-      const nextStatus: OrderStatus = safePaid <= 0 ? "pago_pendiente" : balanceDue <= 0 ? "pagado" : "pagado_parcial";
+      // Cobrar no es entregar (RC-01): antes de la entrega se conserva la etapa operativa
+      // y el cobro queda en `customer_payment_status` y en los montos.
+      const nextStatus = normalizeOrderStatus(statusAfterCollection(liveOrder, customerPaymentStatus));
       const settlementStatus: OrderSettlementStatus = paymentReceived > 0 ? "pending" : liveOrder.settlement_status || "not_applicable";
       const timeline = [
         ...(liveOrder.timeline || []),
@@ -1244,7 +1272,7 @@ export class OrdersService {
     const recalculated = toPersistedOrderTotals({ ...order, totals: { ...order.totals, paid_amount: nextPaid } });
     const nextBalance = Number(recalculated["balance_due"] || 0);
     const nextPaymentStatus: OrderCustomerPaymentStatus = nextPaid <= 0 ? "pending" : nextBalance > 0 ? "partial" : "collected";
-    const nextStatus: OrderStatus = nextPaid <= 0 ? "pago_pendiente" : nextBalance > 0 ? "pagado_parcial" : "pagado";
+    const nextStatus = normalizeOrderStatus(statusAfterCollection(order, nextPaymentStatus));
     const settlementStatus: OrderSettlementStatus = nextPaid > 0 ? "pending" : "not_applicable";
     const now = new Date().toISOString();
 
@@ -1289,9 +1317,10 @@ export class OrdersService {
 
   async markSettlement(orderId: string, settlementStatus: OrderSettlementStatus, note?: string | null): Promise<void> {
     const currentOrder = this.getById(orderId);
-    const deliveryStatus = currentOrder?.delivery_status || this.deriveDeliveryStatus(currentOrder || null);
     const paymentStatus = currentOrder?.customer_payment_status || this.deriveCustomerPaymentStatus(currentOrder || null);
-    const shouldClose = settlementStatus === "reconciled" && deliveryStatus === "delivered" && paymentStatus === "collected";
+    // Cierre explícito por conciliación, solo con entrega REAL (fecha guardada) y saldo cero (RC-02).
+    // Un pedido pagado sin entrega registrada no se cierra aunque se concilie su dinero.
+    const shouldClose = settlementStatus === "reconciled" && !!currentOrder && canCloseBySettlement(currentOrder, paymentStatus);
     const now = new Date().toISOString();
 
     this.rows.update((current) =>
@@ -1518,7 +1547,7 @@ export class OrdersService {
     });
   }
 
-  async syncDerivedStatus(orderId: string): Promise<OrderStatus | null> {
+  async syncDerivedStatus(orderId: string, options: ComputeOrderStatusOptions = {}): Promise<OrderStatus | null> {
     const order = this.getById(orderId);
     if (!order) return null;
     const supplierOpsSnap = await getDocs(query(collection(FIRESTORE, "supplier_operations"), where("order_id", "==", orderId)));
@@ -1537,9 +1566,15 @@ export class OrdersService {
         return { status };
       })
       .filter((row): row is { status: SupplierOpStatusLite } => !!row);
-    const nextStatus = computeOrderStatus(order, order.items || [], supplierOps);
+    const nextStatus = computeOrderStatus(order, order.items || [], supplierOps, options);
     if (nextStatus !== order.status) {
+      const previousStatus = order.status;
       await this.updateStatus(orderId, nextStatus);
+      await this.logEvent(orderId, "ORDER_STATUS_DERIVED", `Etapa: ${previousStatus} -> ${nextStatus}`, {
+        previous_status: previousStatus,
+        next_status: nextStatus,
+        supplier_operations: supplierOps.length,
+      }).catch(() => undefined);
     }
     return nextStatus;
   }
@@ -2164,7 +2199,8 @@ export class OrdersService {
     if (value === "pending" || value === "packing_gdl" || value === "packed_gdl" || value === "packing_durango" || value === "packed_durango") {
       return value;
     }
-    if (data?.packing?.status === "done" || ["ready_for_route", "assigned_to_run", "in_transit", "delivered", "entregado", "pagado", "closed"].includes(String(data?.status))) {
+    // `pagado` no implica empaque ni entrega: puede ser un anticipo (RC-01).
+    if (data?.packing?.status === "done" || data?.delivered_at || ["ready_for_route", "assigned_to_run", "in_transit", "delivered", "entregado", "closed"].includes(String(data?.status))) {
       return "packed_gdl";
     }
     if (["packing", "empaque"].includes(String(data?.status))) return "packing_gdl";
@@ -2175,7 +2211,9 @@ export class OrdersService {
   private normalizeDeliveryStatus(value: unknown, data: any): OrderDeliveryStatus {
     if (value === "pending" || value === "delivered" || value === "not_delivered" || value === "incident") return value;
     const status = String(data?.status || "");
-    if (data?.delivered_at || ["delivered", "entregado", "pagado", "closed"].includes(status)) return "delivered";
+    // Sin `delivery_status` guardado, solo una fecha de entrega o un estado de entrega lo
+    // demuestran. `pagado` sin fecha de entrega es cobro, no entrega (RC-01).
+    if (data?.delivered_at || ["delivered", "entregado", "closed"].includes(status)) return "delivered";
     if (status === "delivered_partial") return "incident";
     return "pending";
   }
@@ -2213,7 +2251,7 @@ export class OrdersService {
     if (legacy === "gdl" || legacy === "durango" || legacy === "delivery_staff" || legacy === "customer") return legacy;
 
     const status = String(data?.status || "");
-    if (data?.delivered_at || ["delivered", "entregado", "pagado", "closed"].includes(status)) return "customer";
+    if (data?.delivered_at || ["delivered", "entregado", "closed"].includes(status)) return "customer";
     if (data?.shipment_id) return "in_transit";
     if (data?.route_run_id || ["assigned_to_run", "in_transit", "en_ruta"].includes(status)) return "delivery_staff";
     return "gdl";

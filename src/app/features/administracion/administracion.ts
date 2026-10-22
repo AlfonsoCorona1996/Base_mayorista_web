@@ -1710,22 +1710,6 @@ export default class AdministracionPage {
       return;
     }
 
-    const available = this.withdrawalAvailableForForm();
-    if (this.withdrawalAmount() > available + 0.001) {
-      this.error.set(`No hay saldo suficiente para retirar ${this.formatCurrency(this.withdrawalAmount())}. Disponible: ${this.formatCurrency(available)}.`);
-      return;
-    }
-
-    const selectedPartner = this.withdrawalSelectedPartner();
-    if (selectedPartner) {
-      const availableForPartner = this.withdrawalAvailableForSelectedPartner();
-      if (this.withdrawalAmount() > availableForPartner + 0.001) {
-        const partnerLabel = this.withdrawalPurposeLabel(this.withdrawalPurpose());
-        this.error.set(`Ese retiro excede la parte de ${partnerLabel}. Maximo permitido ahora: ${this.formatCurrency(availableForPartner)}.`);
-        return;
-      }
-    }
-
     this.error.set(null);
     this.success.set(null);
     try {

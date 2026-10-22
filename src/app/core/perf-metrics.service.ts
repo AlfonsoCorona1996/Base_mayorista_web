@@ -34,7 +34,13 @@ export type PerfMetricName =
   // R5: desde el NavigationStart que llevó a Pedidos hasta el primer render con pedidos reales.
   | "pedidos_first_list_ms"
   // R5: igual, pero además con nombres de clientas y buscador disponibles (lista utilizable).
-  | "pedidos_useful_ms";
+  | "pedidos_useful_ms"
+  // FIX 03A: detalle de pedido. Pedido disponible en memoria, fin del esqueleto,
+  // cada dependencia secundaria (`dep`) y cada acción del usuario (`action`).
+  | "order_detail_first_data_ms"
+  | "order_detail_hydrated_ms"
+  | "order_detail_dep_ms"
+  | "order_detail_action_ms";
 
 export type PerfResult = "success" | "error";
 
@@ -74,6 +80,10 @@ export interface PerfMetricDetails {
   error_code?: string;
   /** Decisión de un guard. */
   outcome?: "allow" | "redirect";
+  /** Dependencia secundaria del detalle de pedido (clientas, inventario…). */
+  dep?: string;
+  /** Acción del detalle de pedido (confirmar, quitar, recibir, entregar…). */
+  action?: string;
 
   // --- Snapshots del listener de pedidos. Todos observables salvo `inferred_cause`. ---
   /** Listener que produjo la medición (`orders-N`). */

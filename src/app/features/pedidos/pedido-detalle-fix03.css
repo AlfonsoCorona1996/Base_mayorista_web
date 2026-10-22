@@ -1,0 +1,100 @@
+/* FIX 03A: estilos añadidos en hoja propia para no superar el presupuesto de
+   estilos del componente (pedido-detalle.css incluye la fuente de iconos). */
+
+/* Dependencias secundarias que no cargaron (FIX 03A). */
+.dependency-alert {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin: 0.75rem 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--danger-border);
+  background: var(--danger-soft);
+  color: #991b1b;
+  font-size: 0.85rem;
+  line-height: 1.35;
+}
+
+.dependency-alert .btn {
+  min-height: 44px;
+}
+
+/* ── FIX 03A: resultados de "Agregar producto" ───────────────────────────── */
+.listbox-row {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* La miniatura es un botón propio: amplía la foto sin seleccionar el producto. */
+.listbox-thumb-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 64px;
+  min-height: 64px;
+  padding: 4px;
+  border-radius: 14px;
+  border: 1px solid #dce6f2;
+  background: #ffffff;
+  cursor: zoom-in;
+}
+
+.listbox-thumb-btn:disabled {
+  cursor: default;
+}
+
+.listbox-thumb-btn:focus-visible {
+  outline: 2px solid #1e293b;
+  outline-offset: 2px;
+}
+
+.listbox-option.listbox-option--with-thumb {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.search-results-count {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 10px;
+  padding: 6px 8px;
+  color: #475569;
+  font-size: 0.82rem;
+}
+
+.search-results-count .btn {
+  min-height: 44px;
+}
+
+.sheet-add-item-ios .listbox {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 640px) {
+  /* La lista usa el alto disponible sobre el teclado, no un alto fijo. */
+  .sheet-add-item-ios .listbox {
+    max-height: max(180px, calc(var(--add-item-vv-height, 100dvh) - 300px));
+  }
+
+  /* Mientras se busca no hay nada que enviar: el pie no quita espacio a la lista.
+     Cerrar sigue disponible en el encabezado (44 × 44). */
+  .sheet.full.sheet-add-item-ios.sheet-add-item-ios--searching .sheet-footer {
+    display: none;
+  }
+}
+
+/* Un botón deshabilitado no debe verse igual que uno disponible. */
+.sheet-add-item-ios .sheet-footer .btn.primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
