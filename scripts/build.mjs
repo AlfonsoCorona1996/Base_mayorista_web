@@ -2,6 +2,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { generateAnniversaryPage } from "./generate-anniversary-page.mjs";
 
 const workspaceRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const packageMetadata = JSON.parse(readFileSync(join(workspaceRoot, "package.json"), "utf8"));
@@ -50,5 +51,8 @@ writeFileSync(
   }, null, 2)}\n`,
   "utf8",
 );
+
+// Página estática con metadatos Open Graph para compartir /aniversario por WhatsApp.
+generateAnniversaryPage(browserOutput);
 
 console.log(`Build metadata: frontend v${packageMetadata.version} (${commit.slice(0, 7)}${dirty ? ", dirty" : ""})`);

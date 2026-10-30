@@ -11,6 +11,7 @@ import { retryInterceptor } from "./core/interceptors/retry.interceptor";
 import { errorLoggingInterceptor } from "./core/interceptors/error-logging.interceptor";
 import { providePerfNavigationTracking } from "./core/perf-metrics.service";
 import { provideRouteChunkPreload } from "./core/route-chunk-preload";
+import { bootedOnLightweightPublicPath } from "./core/public-landing";
 
 registerLocaleData(localeEsMx);
 
@@ -28,7 +29,8 @@ export const appConfig: ApplicationConfig = {
       withInterceptors([authInterceptor, retryInterceptor, errorLoggingInterceptor]),
     ),
     provideServiceWorker("ngsw-worker.js", {
-      enabled: !isDevMode(),
+      // La encuesta pública no registra el SW: evita descargar todo el panel en datos móviles.
+      enabled: !isDevMode() && !bootedOnLightweightPublicPath(),
       registrationStrategy: "registerWhenStable:30000",
     }),
   ],

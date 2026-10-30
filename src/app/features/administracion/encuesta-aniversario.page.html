@@ -1,0 +1,192 @@
+<section class="sv-page" aria-labelledby="sv-title">
+  <header class="sv-head">
+    <div class="sv-head__copy">
+      <p class="sv-kicker">Administración · Campaña</p>
+      <h1 id="sv-title">Encuesta de aniversario</h1>
+      @if (data(); as response) {
+        <p class="sv-head__meta">
+          <span class="sv-chip" [class.sv-chip--ok]="response.config.status === 'active'">
+            {{ response.config.status === "active" ? "Recibiendo respuestas" : "Cerrada" }}
+          </span>
+          <span>
+            Regalo:
+            {{ response.config.reward.status === "active" ? response.config.reward.title : "pendiente de definir" }}
+          </span>
+          <span>Actualizado {{ updatedLabel() }}</span>
+        </p>
+      }
+    </div>
+    <div class="sv-head__actions">
+      <button type="button" class="sv-btn sv-btn--ghost" (click)="copyLink()">
+        {{ copied() ? "Enlace copiado" : "Copiar enlace" }}
+      </button>
+      <a class="sv-btn sv-btn--ghost" href="/aniversario" target="_blank" rel="noopener">Abrir encuesta</a>
+      <button type="button" class="sv-btn sv-btn--primary" (click)="load()" [disabled]="loading()">
+        {{ loading() ? "Actualizando…" : "Actualizar" }}
+      </button>
+    </div>
+  </header>
+
+  @if (error(); as message) {
+    <div class="sv-alert" role="alert">
+      <p>{{ message }}</p>
+      <button type="button" class="sv-btn sv-btn--ghost" (click)="load()">Reintentar</button>
+    </div>
+  }
+
+  @if (loading() && !data()) {
+    <div class="sv-tiles" aria-busy="true" aria-label="Cargando resultados">
+      @for (item of [1, 2, 3, 4]; track item) {
+        <div class="sv-tile sv-tile--skeleton"></div>
+      }
+    </div>
+  } @else if (summary(); as s) {
+    <div class="sv-tiles">
+      <div class="sv-tile">
+        <span class="sv-tile__label">Participaciones</span>
+        <strong class="sv-tile__value">{{ s.total_responses }}</strong>
+      </div>
+      <div class="sv-tile">
+        <span class="sv-tile__label">Satisfacción promedio</span>
+        <strong class="sv-tile__value">
+          {{ s.satisfaction.average !== null ? s.satisfaction.average.toFixed(2) : "—" }}<small> / 5</small>
+        </strong>
+      </div>
+      <div class="sv-tile">
+        <span class="sv-tile__label">Comentarios abiertos</span>
+        <strong class="sv-tile__value">{{ s.comments.length }}</strong>
+      </div>
+      <div class="sv-tile">
+        <span class="sv-tile__label">Regalos por validar</span>
+        <strong class="sv-tile__value">{{ pendingClaims() }}</strong>
+        @if (s.claims.repeated_names > 0) {
+          <span class="sv-tile__note">{{ s.claims.repeated_names }} nombre(s) repetido(s)</span>
+        }
+      </div>
+    </div>
+
+    @if (s.total_responses === 0) {
+      <div class="sv-empty">
+        <p class="sv-empty__title">Todavía no hay respuestas</p>
+        <p>Comparte el enlace por WhatsApp; los resultados aparecerán aquí en cuanto lleguen.</p>
+      </div>
+    } @else {
+      <div class="sv-grid">
+        <section class="sv-card" aria-labelledby="sv-rating-title">
+          <h2 id="sv-rating-title">Calificación del servicio</h2>
+          <p class="sv-card__sub">{{ s.satisfaction.answered }} respuestas · porcentaje sobre el total</p>
+          <ul class="sv-bars">
+            @for (row of ratingRows(); track row.id) {
+              <li class="sv-bar">
+                <span class="sv-bar__label">{{ row.label }}</span>
+                <span class="sv-bar__value">{{ row.count }} <small>{{ percent(row.share) }}</small></span>
+                <span class="sv-bar__track" aria-hidden="true">
+                  <span class="sv-bar__fill" [style.width.%]="row.share * 100"></span>
+                </span>
+              </li>
+            }
+          </ul>
+        </section>
+
+        @for (section of optionSections(); track section.id) {
+          <section class="sv-card" [attr.aria-labelledby]="'sv-' + section.id">
+            <h2 [id]="'sv-' + section.id">{{ section.title }}</h2>
+            <p class="sv-card__sub">Hasta {{ section.max }} por persona · porcentaje de participantes</p>
+            <ul class="sv-bars">
+              @for (row of section.rows; track row.id) {
+                <li class="sv-bar">
+                  <span class="sv-bar__label">{{ row.label }}</span>
+                  <span class="sv-bar__value">{{ row.count }} <small>{{ percent(row.share) }}</small></span>
+                  <span class="sv-bar__track" aria-hidden="true">
+                    <span class="sv-bar__fill" [style.width.%]="row.share * 100"></span>
+                  </span>
+                </li>
+              }
+            </ul>
+            @if (section.otherTexts.length) {
+              <details class="sv-other">
+                <summary>Respuestas en «Otro» ({{ section.otherTexts.length }})</summary>
+                <ul>
+                  @for (text of section.otherTexts; track $index) {
+                    <li>{{ text }}</li>
+                  }
+                </ul>
+              </details>
+            }
+          </section>
+        }
+      </div>
+
+      <div class="sv-search">
+        <label for="sv-search-input">Buscar por nombre o comentario</label>
+        <input
+          id="sv-search-input"
+          type="search"
+          autocomplete="off"
+          [value]="search()"
+          (input)="setSearch(searchInput.value)"
+          #searchInput
+        />
+      </div>
+
+      <section class="sv-card" aria-labelledby="sv-comments-title">
+        <h2 id="sv-comments-title">Comentarios ({{ filteredComments().length }})</h2>
+        @if (filteredComments().length === 0) {
+          <p class="sv-card__sub">{{ search() ? "Sin coincidencias." : "Nadie ha dejado comentario todavía." }}</p>
+        } @else {
+          <ul class="sv-comments">
+            @for (comment of filteredComments(); track comment.response_id) {
+              <li class="sv-comment">
+                <p class="sv-comment__text">{{ comment.text }}</p>
+                <p class="sv-comment__meta">
+                  {{ comment.registered_name || "Sin nombre" }} · calificó {{ comment.satisfaction ?? "—" }}/5 ·
+                  {{ formatDate(comment.received_at) }}
+                </p>
+              </li>
+            }
+          </ul>
+        }
+      </section>
+
+      <section class="sv-card" aria-labelledby="sv-people-title">
+        <h2 id="sv-people-title">Participaciones y regalos ({{ filteredParticipations().length }})</h2>
+        <p class="sv-card__sub">
+          El nombre no prueba identidad: valida cada registro contra tus clientas afiliadas antes de entregar el regalo.
+        </p>
+        @if (filteredParticipations().length === 0) {
+          <p class="sv-card__sub">Sin coincidencias.</p>
+        } @else {
+          <div class="sv-table-wrap">
+            <table class="sv-table">
+              <thead>
+                <tr>
+                  <th scope="col">Nombre registrado</th>
+                  <th scope="col">Calificación</th>
+                  <th scope="col">Fecha</th>
+                  <th scope="col">Regalo</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of filteredParticipations(); track row.response_id) {
+                  <tr>
+                    <td data-label="Nombre">
+                      <span class="sv-name">{{ row.registered_name || "Sin nombre" }}</span>
+                      @if (row.repeated) {
+                        <span class="sv-chip sv-chip--warn">Repetido</span>
+                      }
+                    </td>
+                    <td data-label="Calificación">{{ row.satisfaction ?? "—" }}/5</td>
+                    <td data-label="Fecha">{{ formatDate(row.received_at) }}</td>
+                    <td data-label="Regalo">{{ claimLabel(row.claim_status) }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </section>
+    }
+  }
+
+  <p class="sv-foot"><a routerLink="/main/administracion">Volver a Administración</a></p>
+</section>

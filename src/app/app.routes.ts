@@ -194,6 +194,13 @@ export const routes: Routes = [
           import("./features/administracion/retiro-ganancias.page").then((m) => m.default),
       },
       {
+        path: "administracion/encuesta-aniversario",
+        canActivate: [authzGuard],
+        data: { section: "sections.administracion" },
+        loadComponent: () =>
+          import("./features/administracion/encuesta-aniversario.page").then((m) => m.default),
+      },
+      {
         path: "wa-bot",
         canActivate: [permissionGuard],
         data: { permission: "administracion" },
@@ -221,6 +228,13 @@ export const routes: Routes = [
       { path: "inbox", pathMatch: "full", redirectTo: "validacion" },
       { path: "", pathMatch: "full", redirectTo: "dashboard" },
     ],
+  },
+
+  // Encuesta pública de aniversario (sin auth). Ver también scripts/generate-anniversary-page.mjs.
+  {
+    path: "aniversario",
+    loadComponent: () =>
+      import("./features/public/anniversary-survey/anniversary-survey").then((m) => m.default),
   },
 
   // Portal público de seguimiento para clientas (sin auth)

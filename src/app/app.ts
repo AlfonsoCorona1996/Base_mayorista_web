@@ -4,6 +4,7 @@ import { SwUpdate, VersionReadyEvent } from '@angular/service-worker';
 import { filter, take } from 'rxjs';
 import { firebaseSmokeTest } from "./core/firebase.smoketest";
 import { initFirestoreConnectivityResume } from "./core/firestore-connectivity";
+import { bootedOnLightweightPublicPath } from "./core/public-landing";
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -18,8 +19,10 @@ export class App {
   private readonly swUpdate = inject(SwUpdate, { optional: true });
 
   constructor() {
-    firebaseSmokeTest();
-    initFirestoreConnectivityResume();
+    if (!bootedOnLightweightPublicPath()) {
+      firebaseSmokeTest();
+      initFirestoreConnectivityResume();
+    }
     this.setupServiceWorkerUpdates();
     this.router.events
       .pipe(
