@@ -640,6 +640,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   newItemQty = signal(1);
   newItemPricePublic = signal<number | null>(null);
   newItemPriceCost = signal<number | null>(null);
+  private newItemCostEdited = signal(false);
   newItemPriceClienta = signal<number | null>(null);
   newItemDiscount = signal<number | null>(null);
   priceInputFocused = signal<"final" | "clienta" | "costo" | null>(null);
@@ -3172,6 +3173,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
   addItemSubmitDisabled(order: Order | null = this.order()): boolean {
     return !this.canSubmitNewItem()
+      || !!this.newItemCostError()
       || !this.canEditItems(order)
       || this.addItemSaving()
       || this.addItemProvisionalEditorOpen()
@@ -5326,6 +5328,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.newItemQty.set(1);
     this.newItemPricePublic.set(null);
     this.newItemPriceCost.set(null);
+    this.newItemCostEdited.set(false);
     this.newItemPriceClienta.set(null);
     this.newItemDiscount.set(null);
     this.priceInputFocused.set(null);
@@ -5487,6 +5490,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     this.newItemQty.set(1);
     this.newItemPricePublic.set(null);
     this.newItemPriceCost.set(null);
+    this.newItemCostEdited.set(false);
     this.newItemPriceClienta.set(null);
     this.newItemDiscount.set(null);
     this.priceInputFocused.set(null);
@@ -9503,6 +9507,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       price_public: this.newItemPricePublic(),
       price_clienta: this.newItemPriceClienta(),
       price_cost: this.newItemPriceCost(),
+      price_cost_override: this.newItemCostEdited(),
       price_source_import_id: this.selectedCatalogProduct()?.last_price_import_id || this.selectedCatalogProduct()?.last_import_id || target.price_source_import_id || null,
       price_source_imported_at: this.selectedCatalogProduct()?.last_price_imported_at || this.selectedCatalogProduct()?.last_imported_at || target.price_source_imported_at || null,
       price_warning_ack_at: this.priceWarningAckReason() ? new Date().toISOString() : target.price_warning_ack_at || null,
@@ -9647,6 +9652,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       price_clienta: this.newItemPriceClienta(),
       price_public: this.newItemPricePublic(),
       price_cost: this.newItemPriceCost(),
+      price_cost_override: this.newItemCostEdited(),
       price_source_import_id: selectedImportedProduct?.last_price_import_id || selectedImportedProduct?.last_import_id || null,
       price_source_imported_at: selectedImportedProduct?.last_price_imported_at || selectedImportedProduct?.last_imported_at || null,
       price_warning_ack_at: warningReason ? new Date().toISOString() : null,
@@ -10583,6 +10589,12 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   private async confirmPriceOverrideIfNeeded(): Promise<boolean> {
     this.priceOverrideError.set(null);
     this.error.set(null);
+    const costError = this.newItemCostError();
+    if (costError) {
+      this.priceOverrideError.set(costError);
+      this.error.set(costError);
+      return false;
+    }
     if (this.isManualGift()) {
       return this.showPopupConfirm(
         `Se registrará "${this.newItemTitle().trim()}" como regalo sin cobrar a la clienta. El costo total de ${this.manualGiftCostLabel()} reducirá la utilidad del pedido cuando se confirmen las piezas.`,
@@ -10735,6 +10747,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   onPriceInputChange(field: "final" | "clienta" | "costo", raw: string) {
+    if (field === "costo") this.newItemCostEdited.set(true);
     this.priceInputDraft.update((draft) => ({ ...draft, [field]: raw }));
     this.setPriceValue(field, this.parseMoney(raw));
   }
@@ -10751,6 +10764,14 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
   priceRuleInvalid(): boolean {
     return this.isClientaBelowCosto() && !this.isManualGift();
+  }
+
+  newItemCostError(): string | null {
+    if (!this.newItemCostEdited()) return null;
+    const cost = this.newItemPriceCost();
+    return cost === null || !Number.isFinite(cost) || cost <= 0
+      ? "Ingresa un costo mayor a cero."
+      : null;
   }
 
   private updatePriceDraftFromSignals() {

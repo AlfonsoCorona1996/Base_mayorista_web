@@ -203,6 +203,12 @@ export interface OrderItem {
   price_clienta?: number | null;
   price_public?: number | null;
   price_cost?: number | null;
+  /** Intención explícita de editar el costo; el backend la consume sin persistirla. */
+  price_cost_override?: boolean;
+  price_cost_override_from?: number | null;
+  price_cost_override_to?: number | null;
+  price_cost_override_by?: string | null;
+  price_cost_override_at?: string | null;
   price_source_import_id?: string | null;
   price_source_imported_at?: unknown;
   price_warning_ack_at?: string | null;

@@ -168,6 +168,90 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
     expect(component).toBeTruthy();
   });
 
+  describe("costo editable por pedido", () => {
+    function costOrder(items: OrderItem[] = []): Order {
+      return {
+        order_id: "PED-COSTO", business_id: "bm", customer_id: "customer", route_id: null,
+        status: "borrador", created_at: "2026-10-28", updated_at: "2026-10-28", items,
+        packages: [], timeline: [], totals: { total_amount: 0, paid_amount: 0, balance_due: 0 },
+        packing: { status: "in_progress", packages_count: 0, completed_at: null },
+        dispatch_request: { status: "none", requested_at: null, requested_by: null, note: null },
+      };
+    }
+
+    beforeEach(() => {
+      spyOn(component, "refreshEvents").and.resolveTo();
+      component.newItemTitle.set("Pantalonera Tela Tipo Pana para Dama");
+      component.newItemPricePublic.set(199);
+      component.newItemPriceClienta.set(149.25);
+      component.newItemPriceCost.set(99.5);
+    });
+
+    it("habilita el costo en catálogo e inventario y envía la edición explícita", () => {
+      const order = costOrder();
+      ordersGetById.and.returnValue(order);
+      component.orderId.set(order.order_id);
+      component.initialHydration.set(false);
+      component.addItemModalOpen.set(true);
+      component.selectedPreview.set({ title: "Pantalonera Tela Tipo Pana para Dama", variant: "UNITALLA", color: "Negro", image: null, source: "catalogo" });
+      for (const source of ["catalogo", "inventario"] as const) {
+        component.newItemSource.set(source);
+        fixture.detectChanges();
+        const input = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>("#add-item-price-cost");
+        expect(input).not.toBeNull();
+        expect(input!.disabled).toBeFalse();
+        expect(input!.readOnly).toBeFalse();
+        input!.value = "120.50";
+        input!.dispatchEvent(new Event("input"));
+        expect(component.newItemPriceCost()).toBe(120.5);
+        const item = (component as unknown as {
+          buildOrderItemFromForm: (id: string, source: "catalogo" | "inventario", state: "borrador") => OrderItem;
+        }).buildOrderItemFromForm("new-item", source, "borrador");
+        expect(item.price_cost).toBe(120.5);
+        expect(item.price_cost_override).toBeTrue();
+      }
+    });
+
+    it("guarda un costo mayor al editar sin cambiar el precio a la clienta", async () => {
+      const item: OrderItem = { item_id: "pantalon", source: "catalogo", product_ref_type: "normalized_listing", product_id: "prod-1", title: "Pantalonera", quantity: 1, state: "borrador", price_cost: 99.5, price_clienta: 149.25, price_public: 199 };
+      const order = costOrder([item]);
+      ordersGetById.and.returnValue(order);
+      component.orderId.set(order.order_id);
+      component.newItemSource.set("catalogo");
+      component.editTargetItemId.set(item.item_id);
+      component.onPriceInputChange("costo", "120.50");
+      await component.updateExistingItem(order);
+      expect(updateOrderItems).toHaveBeenCalledWith(order.order_id, [jasmine.objectContaining({ price_cost: 120.5, price_cost_override: true, price_clienta: 149.25, price_public: 199 })]);
+      expect(component.newItemCostError()).toBeNull();
+    });
+
+    it("impide guardar costos inválidos y conserva el dato para corregirlo", async () => {
+      const order = costOrder();
+      component.newItemSource.set("manual");
+      for (const value of ["", "0", "-20", "abc"]) {
+        component.onPriceInputChange("costo", value);
+        expect(component.newItemCostError()).toBe("Ingresa un costo mayor a cero.");
+        expect(component.addItemSubmitDisabled(order)).toBeTrue();
+        await component.addItem(order);
+        expect(addOrderItem).not.toHaveBeenCalled();
+      }
+      component.onPriceInputChange("costo", "120");
+      expect(component.newItemCostError()).toBeNull();
+    });
+
+    it("no combina el mismo producto si el nuevo costo es diferente", async () => {
+      const order = costOrder([{ item_id: "original", title: "Pantalonera Tela Tipo Pana para Dama", source: "manual", quantity: 1, confirmation_state: "pending", state: "borrador", price_cost: 99.5, price_clienta: 149.25, price_public: 199 }]);
+      ordersGetById.and.returnValue(order);
+      component.orderId.set(order.order_id);
+      component.newItemSource.set("manual");
+      component.onPriceInputChange("costo", "120");
+      await component.addItem(order);
+      expect(addOrderItem).toHaveBeenCalled();
+      expect(updateOrderItems).not.toHaveBeenCalled();
+      expect(order.items[0].price_cost).toBe(99.5);
+    });
+  });
+
   describe("regalos manuales sin cargo", () => {
     let order: Order;
 

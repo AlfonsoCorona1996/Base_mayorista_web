@@ -2913,20 +2913,27 @@
 
               <div class="field price-row-field add-item-price-cost">
                 <label for="add-item-price-cost">Precio costo</label>
-                <div class="money" [class.money-readonly]="!isManualSource()" [class.money-invalid]="priceRuleInvalid()">
+                <div class="money" [class.money-invalid]="!!newItemCostError() || priceRuleInvalid()">
                   <span>MXN</span>
                   <input
                     id="add-item-price-cost"
                     class="input"
                     type="text"
+                    inputmode="decimal"
+                    autocomplete="off"
+                    [attr.aria-invalid]="newItemCostError() ? 'true' : null"
+                    [attr.aria-describedby]="newItemCostError() ? 'add-item-cost-help add-item-cost-error' : 'add-item-cost-help'"
                     [value]="priceDisplayValue('costo')"
                     (focus)="onPriceInputFocus('costo')"
                     (input)="onPriceInputChange('costo', $any($event.target).value)"
                     (blur)="onPriceInputBlur('costo')"
-                    [readonly]="!isManualSource()"
-                    [disabled]="!canSubmitNewItem() || !vm.canEditItems || !isManualSource()"
+                    [disabled]="!canSubmitNewItem() || !vm.canEditItems || addItemSaving()"
                   />
                 </div>
+                <small id="add-item-cost-help">Costo unitario para este pedido.</small>
+                @if (newItemCostError(); as costError) {
+                  <small id="add-item-cost-error" class="field-error" role="alert">{{ costError }}</small>
+                }
               </div>
             </div>
 
