@@ -1,8 +1,8 @@
 import {
   COMMENT_MAX_LENGTH,
-  MULTI_QUESTION_IDS,
-  MultiQuestion,
-  MultiQuestionId,
+  CHOICE_QUESTION_IDS,
+  ChoiceQuestion,
+  ChoiceQuestionId,
   NAME_MAX_LENGTH,
   NAME_MIN_LENGTH,
   OTHER_MAX_LENGTH,
@@ -32,7 +32,7 @@ export interface SurveyAnswers {
   strengths: MultiAnswer;
   improvements: MultiAnswer;
   new_products: MultiAnswer;
-  sell_more: MultiAnswer;
+  facebook_interest: MultiAnswer;
   comment: string;
 }
 
@@ -63,11 +63,13 @@ export interface SurveyDraft {
   name: string;
   submission: SubmissionStatus;
   receipt: SurveyReceipt | null;
+  /** Instantánea v1 pendiente: solo se reintenta; nunca se atribuye a preguntas v2. */
+  legacySubmission?: LegacySubmissionPayload;
   startedAt: string;
   updatedAt: string;
 }
 
-export type StepErrorCode = "required" | "other_required" | "too_long" | "name_required" | "name_too_long";
+export type StepErrorCode = "required" | "other_required" | "too_long" | "name_required" | "name_too_long" | "invalid_selection";
 
 export interface StepError {
   code: StepErrorCode;
@@ -84,7 +86,7 @@ export function emptyAnswers(): SurveyAnswers {
     strengths: emptyMulti(),
     improvements: emptyMulti(),
     new_products: emptyMulti(),
-    sell_more: emptyMulti(),
+    facebook_interest: emptyMulti(),
     comment: "",
   };
 }
@@ -121,8 +123,8 @@ export function createDraft(now: Date = new Date()): SurveyDraft {
   };
 }
 
-export function multiQuestion(id: MultiQuestionId): MultiQuestion {
-  const question = SURVEY_QUESTIONS.find((item): item is MultiQuestion => item.kind === "multi" && item.id === id);
+export function choiceQuestion(id: ChoiceQuestionId): ChoiceQuestion {
+  const question = SURVEY_QUESTIONS.find((item): item is ChoiceQuestion => (item.kind === "multi" || item.kind === "single") && item.id === id);
   if (!question) throw new Error(`Pregunta desconocida: ${id}`);
   return question;
 }
@@ -140,10 +142,14 @@ export function validateQuestion(answers: SurveyAnswers, questionIndex: number):
       ? null
       : { code: "required", message: "Elige una calificación para continuar." };
   }
-  if (question.kind === "multi") {
+  if (question.kind === "multi" || question.kind === "single") {
     const answer = answers[question.id];
+    if (answer.selected.length > question.max || new Set(answer.selected).size !== answer.selected.length ||
+        answer.selected.some((id) => !question.options.some((option) => option.id === id))) {
+      return { code: "invalid_selection", message: "Revisa las opciones seleccionadas para continuar." };
+    }
     if (answer.selected.length === 0) {
-      return { code: "required", message: `Elige al menos una opción (hasta ${question.max}).` };
+      return { code: "required", message: question.kind === "single" ? "Elige una opción para continuar." : `Elige al menos una opción (hasta ${question.max}).` };
     }
     if (answer.selected.includes(OTHER_OPTION_ID)) {
       const other = collapseSpaces(answer.other);
@@ -201,10 +207,10 @@ function readIso(value: unknown): string | null {
   return Number.isFinite(ms) ? new Date(ms).toISOString() : null;
 }
 
-function readMulti(id: MultiQuestionId, input: unknown): MultiAnswer {
+function readMulti(id: ChoiceQuestionId, input: unknown): MultiAnswer {
   const value = asUnchecked<MultiAnswer>(input);
   if (!value || !Array.isArray(value.selected)) return emptyMulti();
-  const question = multiQuestion(id);
+  const question = choiceQuestion(id);
   const allowed = new Set(question.options.map((option) => option.id));
   const selected: string[] = [];
   for (const item of value.selected) {
@@ -247,7 +253,8 @@ export function parseStoredDraft(input: unknown): SurveyDraft | null {
   const raw = asUnchecked<SurveyDraft>(input);
   if (!raw) return null;
   if (raw.schema !== DRAFT_SCHEMA_VERSION) return null;
-  if (raw.campaignId !== SURVEY_CAMPAIGN_ID || raw.questionsVersion !== SURVEY_QUESTIONS_VERSION) return null;
+  if (raw.campaignId !== SURVEY_CAMPAIGN_ID) return null;
+  if (raw.questionsVersion !== SURVEY_QUESTIONS_VERSION) return readLegacyDraft(raw);
   if (typeof raw.participationId !== "string" || !PARTICIPATION_ID_RE.test(raw.participationId)) return null;
 
   const rawAnswers: Unchecked<SurveyAnswers> = asUnchecked<SurveyAnswers>(raw.answers) ?? {};
@@ -260,10 +267,14 @@ export function parseStoredDraft(input: unknown): SurveyDraft | null {
     strengths: emptyMulti(),
     improvements: emptyMulti(),
     new_products: emptyMulti(),
-    sell_more: emptyMulti(),
+    facebook_interest: emptyMulti(),
     comment: readString(rawAnswers.comment, COMMENT_MAX_LENGTH),
   };
-  for (const id of MULTI_QUESTION_IDS) answers[id] = readMulti(id, rawAnswers[id]);
+  for (const id of CHOICE_QUESTION_IDS) answers[id] = readMulti(id, rawAnswers[id]);
+
+  const legacy = readLegacyPayload(raw.legacySubmission);
+  if (legacy) return { ...createDraft(), participationId: legacy.participation_id, step: GIFT_STEP,
+    submission: "pending", name: legacy.registered_name, legacySubmission: legacy };
 
   const receipt = raw.submission === "confirmed" ? readReceipt(raw.receipt) : null;
   const submission: SubmissionStatus = receipt ? "confirmed" : raw.submission === "pending" ? "pending" : "idle";
@@ -294,7 +305,7 @@ export function parseStoredDraft(input: unknown): SurveyDraft | null {
 
 /** Cuerpo que espera POST /api/surveys/:campaignId/responses. */
 export function buildSubmissionPayload(draft: SurveyDraft) {
-  const multi = (id: MultiQuestionId) => {
+  const multi = (id: ChoiceQuestionId) => {
     const answer = draft.answers[id];
     return {
       selected: [...answer.selected],
@@ -312,10 +323,65 @@ export function buildSubmissionPayload(draft: SurveyDraft) {
       strengths: multi("strengths"),
       improvements: multi("improvements"),
       new_products: multi("new_products"),
-      sell_more: multi("sell_more"),
+      facebook_interest: multi("facebook_interest"),
       comment: draft.answers.comment.trim(),
     },
   };
 }
 
-export type SurveySubmissionPayload = ReturnType<typeof buildSubmissionPayload>;
+export interface LegacySubmissionPayload {
+  campaign_id: string;
+  questions_version: 1;
+  participation_id: string;
+  started_at: string;
+  registered_name: string;
+  answers: {
+    satisfaction: number;
+    strengths: MultiAnswer;
+    improvements: MultiAnswer;
+    new_products: MultiAnswer;
+    sell_more: MultiAnswer;
+    comment: string;
+  };
+}
+
+export type SurveySubmissionPayload = ReturnType<typeof buildSubmissionPayload> | LegacySubmissionPayload;
+
+/** Solo conserva el envío v1 pendiente o su comprobante; nunca migra respuestas a v2. */
+function readLegacyDraft(raw: Unchecked<SurveyDraft>): SurveyDraft | null {
+  if (raw.questionsVersion !== 1 || typeof raw.participationId !== "string" || !PARTICIPATION_ID_RE.test(raw.participationId)) return null;
+  const receipt = raw.submission === "confirmed" ? readReceipt(raw.receipt) : null;
+  if (receipt) return { ...createDraft(), questionsVersion: 1, participationId: raw.participationId,
+    step: DONE_STEP, submission: "confirmed", receipt };
+  if (raw.submission !== "pending") return null;
+  const payload = readLegacyPayload({ campaign_id: raw.campaignId, questions_version: 1,
+    participation_id: raw.participationId, started_at: raw.startedAt,
+    registered_name: raw.name, answers: raw.answers });
+  return payload ? { ...createDraft(), participationId: payload.participation_id,
+    step: GIFT_STEP, submission: "pending", name: payload.registered_name, legacySubmission: payload } : null;
+}
+
+function readLegacyPayload(input: unknown): LegacySubmissionPayload | null {
+  const raw = asUnchecked<LegacySubmissionPayload>(input);
+  if (!raw || raw.questions_version !== 1 || raw.campaign_id !== SURVEY_CAMPAIGN_ID ||
+      typeof raw.participation_id !== "string" || !PARTICIPATION_ID_RE.test(raw.participation_id) ||
+      typeof raw.registered_name !== "string" || validateName(raw.registered_name)) return null;
+  const answers = asUnchecked<LegacySubmissionPayload["answers"]>(raw.answers);
+  if (!answers || typeof answers.satisfaction !== "number" || !Number.isInteger(answers.satisfaction) ||
+      answers.satisfaction < 1 || answers.satisfaction > 5) return null;
+  const legacyMulti = (value: unknown, max: number): MultiAnswer | null => {
+    const choice = asUnchecked<MultiAnswer>(value);
+    if (!choice || !Array.isArray(choice.selected) || !choice.selected.length || choice.selected.length > max ||
+        choice.selected.some((id) => typeof id !== "string")) return null;
+    return { selected: choice.selected as string[], other: readString(choice.other, OTHER_MAX_LENGTH) };
+  };
+  const strengths = legacyMulti(answers.strengths, 2);
+  const improvements = legacyMulti(answers.improvements, 2);
+  const new_products = legacyMulti(answers.new_products, 3);
+  const sell_more = legacyMulti(answers.sell_more, 2);
+  if (!strengths || !improvements || !new_products || !sell_more) return null;
+  return { campaign_id: SURVEY_CAMPAIGN_ID, questions_version: 1, participation_id: raw.participation_id,
+    started_at: readIso(raw.started_at) ?? new Date().toISOString(), registered_name: raw.registered_name,
+    answers: { satisfaction: answers.satisfaction, strengths, improvements, new_products, sell_more,
+      comment: readString(answers.comment, COMMENT_MAX_LENGTH) } };
+}

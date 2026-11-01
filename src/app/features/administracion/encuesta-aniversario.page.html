@@ -27,6 +27,22 @@
     </div>
   </header>
 
+  <div class="sv-search">
+    <label for="sv-version">Versión del cuestionario</label>
+    <select id="sv-version" [value]="selectedVersion()" (change)="setVersion(versionInput.value)" #versionInput>
+      <option value="2">Versión 2 · Segundo año</option>
+      <option value="1">Versión 1 · Encuesta anterior</option>
+    </select>
+    <p class="sv-card__sub">Los indicadores, sugerencias y regalos corresponden solo a la versión seleccionada.</p>
+    @if (data()?.unversioned_responses) {
+      <p class="sv-card__sub">Hay {{ data()?.unversioned_responses }} registro(s) sin versión reconocida, excluidos de estos indicadores.</p>
+    }
+  </div>
+
+  @if (data() && !summary()) {
+    <p class="sv-alert" role="status">El backend todavía no ofrece resultados para esta versión. Actualiza el backend de encuestas.</p>
+  }
+
   @if (error(); as message) {
     <div class="sv-alert" role="alert">
       <p>{{ message }}</p>
@@ -53,7 +69,7 @@
         </strong>
       </div>
       <div class="sv-tile">
-        <span class="sv-tile__label">Comentarios abiertos</span>
+        <span class="sv-tile__label">Sugerencias abiertas</span>
         <strong class="sv-tile__value">{{ s.comments.length }}</strong>
       </div>
       <div class="sv-tile">
@@ -73,7 +89,7 @@
     } @else {
       <div class="sv-grid">
         <section class="sv-card" aria-labelledby="sv-rating-title">
-          <h2 id="sv-rating-title">Calificación del servicio</h2>
+          <h2 id="sv-rating-title">Experiencia de compra</h2>
           <p class="sv-card__sub">{{ s.satisfaction.answered }} respuestas · porcentaje sobre el total</p>
           <ul class="sv-bars">
             @for (row of ratingRows(); track row.id) {
@@ -91,7 +107,10 @@
         @for (section of optionSections(); track section.id) {
           <section class="sv-card" [attr.aria-labelledby]="'sv-' + section.id">
             <h2 [id]="'sv-' + section.id">{{ section.title }}</h2>
-            <p class="sv-card__sub">Hasta {{ section.max }} por persona · porcentaje de participantes</p>
+            <p class="sv-card__sub">{{ section.max === 1 ? "Una opción" : "Hasta " + section.max }} por persona · porcentaje de participantes</p>
+            @if (section.id === "facebook_interest") {
+              <p class="sv-card__sub">Interés declarado; no implica inscripción ni consentimiento para compartir datos.</p>
+            }
             <ul class="sv-bars">
               @for (row of section.rows; track row.id) {
                 <li class="sv-bar">
@@ -130,7 +149,7 @@
       </div>
 
       <section class="sv-card" aria-labelledby="sv-comments-title">
-        <h2 id="sv-comments-title">Comentarios ({{ filteredComments().length }})</h2>
+        <h2 id="sv-comments-title">Sugerencias ({{ filteredComments().length }})</h2>
         @if (filteredComments().length === 0) {
           <p class="sv-card__sub">{{ search() ? "Sin coincidencias." : "Nadie ha dejado comentario todavía." }}</p>
         } @else {

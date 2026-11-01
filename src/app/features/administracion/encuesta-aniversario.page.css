@@ -88,7 +88,7 @@
 }
 
 .sv-btn:focus-visible,
-.sv-search input:focus-visible,
+.sv-search :is(input, select):focus-visible,
 .sv-other summary:focus-visible,
 .sv-foot a:focus-visible {
   outline: 3px solid #84adff;
@@ -313,7 +313,7 @@
   font-weight: 650;
 }
 
-.sv-search input {
+.sv-search :is(input, select) {
   min-height: var(--ui-control-height, 44px);
   padding: 0 var(--ui-space-12, 12px);
   border: 1px solid #c9d3e0;

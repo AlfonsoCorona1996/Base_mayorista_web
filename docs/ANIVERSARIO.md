@@ -52,7 +52,7 @@ Firebase; el backend lo relee cada 60 s).
 | Pieza | Archivo |
 | --- | --- |
 | Ruta pública lazy | `src/app/app.routes.ts` → `features/public/anniversary-survey/anniversary-survey.ts` |
-| Preguntas y opciones (versión 1) | `features/public/anniversary-survey/survey-definition.ts` |
+| Preguntas y opciones (versión 2) | `features/public/anniversary-survey/survey-definition.ts` |
 | Modelo, validación y lectura segura del borrador | `survey-state.ts` |
 | Guardado local | `survey-draft-storage.ts` |
 | Llamadas al backend | `survey-api.service.ts` |
@@ -98,8 +98,13 @@ aplica las URLs sin `.html` (`/index` redirige a `/`), así que `/aniversario` s
 - Al reabrir el enlace en el mismo navegador retoma la pregunta y muestra «Retomamos tu encuesta donde
   la dejaste.» con la opción «Comenzar de nuevo» (pide confirmación). Nunca retoma más allá de una
   pregunta obligatoria vacía.
-- Un borrador corrupto o de otra versión se descarta sin errores. Si `localStorage` está bloqueado la
-  encuesta funciona en memoria y lo avisa en la bienvenida.
+- Un borrador v1 sin enviar se respalda en `bm.survey.aniversario-2026.previous` y se reinicia con
+  un aviso. Las respuestas antiguas no se reinterpretan como v2. Los comprobantes v1 se conservan.
+- Un envío v1 pendiente se recupera como instantánea de solo lectura (`legacySubmission`) y se
+  reintenta con su mismo identificador y versión. El backend mantiene la definición v1 para estos
+  reintentos y navegadores que todavía tengan el bundle anterior en caché.
+- Un borrador corrupto se descarta. Si `localStorage` está bloqueado la encuesta funciona en memoria
+  y lo avisa en la bienvenida.
 - El botón Atrás del navegador/Android recorre las preguntas (historial con `pushState`).
 - Tras la confirmación del servidor el borrador se reemplaza por el comprobante (sin respuestas ni
   nombre, por si el celular es compartido). Reabrir el enlace muestra la confirmación; desde ahí otra
@@ -131,14 +136,14 @@ Respuestas del `POST`: `201` registrado, `200` reintento de un registro existent
 por IP cada 10 min, holgado por el CGNAT de los operadores móviles), `500` error. Todas con
 `Cache-Control: no-store`.
 
-El backend vuelve a validar todo: opciones conocidas, máximos (2/2/3/2), «Otro» con 2–120 caracteres,
+El backend vuelve a validar todo: opciones conocidas, máximos v2 (2/2/1/3), con selección única en Facebook, «Otro» con 2–120 caracteres,
 comentario ≤ 1000, nombre de 2–80 caracteres con letras, sin caracteres de control. Sin CAPTCHA.
 
 ### Datos (Firestore, solo escritura vía Admin SDK)
 
 - `survey_responses/{campaign}__{participationId}`: `participation_id`, `campaign_id`,
   `questions_version`, `answers` (`satisfaction`, `strengths`, `improvements`, `new_products`,
-  `sell_more` con `{ selected, other }`, `comment`), atajos `satisfaction`, `comment`, `has_comment`,
+  `facebook_interest` con `{ selected, other }`, `comment`) en v2; v1 conserva `sell_more`. Atajos `satisfaction`, `comment`, `has_comment`,
   `claim_id`, `status: "received"`, `payload_hash`, `client_started_at`, `received_at` (hora del
   servidor), `created_at`.
 - `survey_reward_claims/{mismo id}`: `registered_name`, `registered_name_key` (normalizado para
@@ -149,6 +154,23 @@ comentario ≤ 1000, nombre de 2–80 caracteres con letras, sin caracteres de c
 Las reglas de Firestore no se cambiaron: estas colecciones no tienen reglas de cliente, por lo que el
 acceso desde el navegador está denegado. El nombre no prueba identidad: el regalo se valida contra las
 clientas afiliadas antes de entregarlo (la vista de Administración marca nombres repetidos).
+
+### Versiones y reportes
+
+El cuestionario actual es **v2**. `facebook_interest` utiliza `very_interested`, `needs_information`,
+`not_interested` u `other`. Es interés declarado, sin inscripción ni consentimiento para compartir datos.
+Los registros históricos conservan `questions_version: 1` y no se modifican ni borran.
+
+El resumen incluye `summary` (v2), `summaries_by_version` (v1/v2 por separado) y
+`unversioned_responses` (conteo de registros excluidos por versión ausente o desconocida).
+Cada agregado filtra respuestas y sus regalos antes de calcular totales, promedios, rankings y comentarios.
+El panel permite elegir versión; Facebook aparece primero entre las secciones de opciones de v2.
+No se requieren migraciones, índices, nuevas colecciones ni cambios de reglas de Firestore.
+
+Para publicar v2, actualizar **primero el backend** y después el frontend. El backend actualizado
+acepta v1 y v2, pero el backend anterior rechazaría envíos v2. No se ha desplegado esta actualización.
+
+Ver auditoría, archivos y comprobaciones del cambio en [ANIVERSARIO_V2.md](ANIVERSARIO_V2.md).
 
 ## Logo BM
 

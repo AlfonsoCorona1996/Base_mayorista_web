@@ -40,15 +40,20 @@
           </picture>
           <p class="eyebrow eyebrow--brand">Primer aniversario</p>
           <h1 id="step-title" class="hero__title" tabindex="-1">
-            <span class="hero__title-main">Un año de <span class="hero__brand">Base Mayorista.</span></span>
-            <span class="hero__title-sub">Queremos saber cómo te ha ido con nosotros.</span>
+            <span class="hero__title-main">¡Nuestro primer año <span class="hero__brand">se celebra contigo!</span></span>
           </h1>
         </section>
 
         <div class="welcome__body">
+          @if (draftReset()) {
+            <p class="alert alert--offline" role="status">
+              Actualizamos las preguntas para nuestro segundo año. Tu borrador anterior no se puede continuar;
+              comienza esta nueva encuesta. Si ya registraste tu participación, ese registro se conserva.
+            </p>
+          }
           <p class="lead">
-            En este primer año hemos compartido muchos pedidos, novedades y aprendizajes. Ahora queremos escucharte:
-            qué te gusta, qué podemos mejorar y qué te gustaría encontrar próximamente.
+            Tenemos varias ideas para este segundo año de Base Mayorista, pero antes de ponerlas en marcha queremos
+            saber cuáles te servirían más para vender y cuáles te gustaría que hiciéramos realidad.
           </p>
 
           <aside class="gift-card" aria-labelledby="gift-card-title">
@@ -79,7 +84,7 @@
                 <circle cx="12" cy="12" r="9" />
                 <path d="M12 7v5l3 2" />
               </svg>
-              2 minutos aprox.
+              Aproximadamente 2 minutos
             </li>
           </ul>
 
@@ -106,6 +111,12 @@
             <ng-container *ngTemplateOutlet="resumeNotice" />
 
             <form class="step" novalidate (submit)="$event.preventDefault(); next()">
+              @if (q.kind === "single") {
+                <aside class="initiative" aria-labelledby="initiative-title">
+                  <h2 id="initiative-title">{{ q.intro.title }}</h2>
+                  <p>{{ q.intro.description }}</p>
+                </aside>
+              }
               @if (q.kind === "text") {
                 <div class="step__head">
                   <p class="kicker">Pregunta {{ questionIndex() + 1 }} de {{ questionCount }}</p>
@@ -159,7 +170,9 @@
                     </div>
                   } @else {
                     <p class="hint" id="q-hint" aria-live="polite">
-                      @if (selectedCount(q.id) >= q.max) {
+                      @if (q.kind === "single") {
+                        Elige una opción.
+                      } @else if (selectedCount(q.id) >= q.max) {
                         <strong>Ya elegiste {{ q.max }}.</strong> Para cambiar, desmarca una opción.
                       } @else {
                         Elige hasta {{ q.max }} opciones.
@@ -175,19 +188,24 @@
                         >
                           <input
                             class="sr-only"
-                            type="checkbox"
+                            [type]="q.kind === 'single' ? 'radio' : 'checkbox'"
+                            [name]="q.id"
+                            [value]="option.id"
                             [checked]="isSelected(q.id, option.id)"
                             [disabled]="isOptionDisabled(q, option.id)"
                             (change)="toggleOption(q, option.id, box.checked)"
                             #box
                           />
-                          <span class="option__box" aria-hidden="true">
+                          <span class="option__box" [class.option__box--radio]="q.kind === 'single'" aria-hidden="true">
                             <svg class="icon" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
                           </span>
                           <span class="option__label">{{ option.label }}</span>
                         </label>
                       }
                     </div>
+                    @if (q.kind === "single") {
+                      <p class="field__help">Solo registramos tu interés: no te inscribe ni autoriza compartir tus datos.</p>
+                    }
                     @if (isSelected(q.id, otherId)) {
                       <div class="other">
                         <label class="other__label" for="other-input">Cuéntanos cuál</label>
@@ -249,15 +267,21 @@
             <p class="kicker">Último paso</p>
             <h1 id="step-title" class="step__title step__title--gift" tabindex="-1">¡Ahora sí, vamos por tu regalo!</h1>
             <p class="step__text">
-              Gracias por contarnos cómo ha sido tu experiencia. Nos llevamos tus comentarios para trabajar en lo que
-              realmente importa durante nuestro segundo año.
+              Gracias por compartir tus ideas. Ya tenemos mucho que tomar en cuenta para decidir qué viene en nuestro segundo año.
             </p>
           </div>
 
+          @if (draft().legacySubmission) {
+            <p class="alert alert--offline" role="status">
+              Tu envío de la encuesta anterior quedó sin confirmar. Reinténtalo para registrar esas respuestas
+              y tu regalo; se conservará como una participación de la versión anterior.
+            </p>
+          }
           <div class="field field--name">
             <label class="field__label" for="gift-name">¿A qué nombre registramos tu regalo de aniversario?</label>
             <input
               id="gift-name"
+              [readOnly]="!!draft().legacySubmission || sending()"
               class="input"
               type="text"
               autocomplete="name"
@@ -272,7 +296,7 @@
               #nameInput
             />
             <p class="field__help" id="gift-help">
-              Escríbelo como te conocemos en Base Mayorista para que podamos identificarte cuando quieras canjearlo.
+              Escríbelo como te conocemos en Base Mayorista para que podamos identificarte al canjearlo.
             </p>
             <p class="field-error" id="step-error" tabindex="-1" aria-live="polite">
               @if (visibleError(); as error) {
@@ -307,7 +331,7 @@
           </div>
 
           <div class="actions">
-            <button type="button" class="btn btn--ghost" (click)="back()" [disabled]="sending()">
+            <button type="button" class="btn btn--ghost" (click)="back()" [disabled]="sending() || !!draft().legacySubmission">
               <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6" /></svg>
               Anterior
             </button>

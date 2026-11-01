@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from "@a
 import { RouterLink } from "@angular/router";
 import { firstValueFrom } from "rxjs";
 import { UserAdminApiService } from "../../services/user-admin-api.service";
-import { SURVEY_CAMPAIGN_ID, SURVEY_QUESTIONS } from "../public/anniversary-survey/survey-definition";
+import { SURVEY_CAMPAIGN_ID, SURVEY_QUESTIONS_VERSION } from "../public/anniversary-survey/survey-definition";
 
 type ClaimStatus = "pending_validation" | "validated" | "rejected" | "redeemed" | "missing" | string;
 
@@ -11,6 +11,7 @@ interface OptionStats {
   labels: Record<string, string>;
   other_texts: { text: string; response_id: string }[];
   max: number;
+  kind: "multi" | "single";
 }
 
 interface SurveySummaryResponse {
@@ -20,7 +21,10 @@ interface SurveySummaryResponse {
     status: "active" | "closed";
     reward: { status: "pending_definition" | "active"; title: string | null; description: string | null };
   };
+  summaries_by_version: Record<string, SurveySummaryResponse["summary"]>;
+  unversioned_responses: number;
   summary: {
+    questions_version: number;
     total_responses: number;
     satisfaction: {
       counts: Record<string, number>;
@@ -72,6 +76,13 @@ const CLAIM_LABEL: Record<string, string> = {
 };
 
 const SHORT_TITLE: Record<string, string> = {
+  strengths: "Fortalezas que debemos conservar",
+  improvements: "Herramientas más solicitadas",
+  facebook_interest: "Iniciativa Facebook",
+  new_products: "Productos para el segundo año",
+};
+
+const LEGACY_SHORT_TITLE: Record<string, string> = {
   strengths: "Lo que más les gusta",
   improvements: "Lo que debemos mejorar",
   new_products: "Productos que quieren",
@@ -101,10 +112,15 @@ export default class EncuestaAniversarioPage {
   protected readonly error = signal<string | null>(null);
   protected readonly data = signal<SurveySummaryResponse | null>(null);
   protected readonly search = signal("");
+  protected readonly selectedVersion = signal(SURVEY_QUESTIONS_VERSION);
   protected readonly copied = signal(false);
   protected readonly surveyUrl = `${typeof location === "undefined" ? "" : location.origin}/aniversario`;
 
-  protected readonly summary = computed(() => this.data()?.summary ?? null);
+  protected readonly summary = computed(() => {
+    const data = this.data();
+    return data?.summaries_by_version?.[String(this.selectedVersion())] ??
+      (data?.summary.questions_version === this.selectedVersion() ? data.summary : null);
+  });
   protected readonly total = computed(() => this.summary()?.total_responses ?? 0);
 
   protected readonly ratingRows = computed<BarRow[]>(() => {
@@ -126,16 +142,18 @@ export default class EncuestaAniversarioPage {
     const options = this.summary()?.options;
     if (!options) return [];
     const total = this.total();
-    return SURVEY_QUESTIONS.filter((question) => question.kind === "multi").map((question) => {
-      const stats = options[question.id];
+    return Object.entries(options).sort(([a], [b]) =>
+      a === "facebook_interest" ? -1 : b === "facebook_interest" ? 1 : 0).map(([id, stats]) => {
       const rows = stats
         ? Object.entries(stats.counts)
             .map(([id, count]) => ({ id, label: stats.labels[id] ?? id, count, share: total ? count / total : 0 }))
             .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "es"))
         : [];
       return {
-        id: question.id,
-        title: SHORT_TITLE[question.id] ?? question.title,
+        id,
+        title: this.selectedVersion() === 1
+          ? LEGACY_SHORT_TITLE[id] ?? id
+          : SHORT_TITLE[id] ?? id,
         max: stats?.max ?? 0,
         rows,
         otherTexts: stats?.other_texts.map((item) => item.text) ?? [],
@@ -184,6 +202,14 @@ export default class EncuestaAniversarioPage {
       this.error.set(message || "No pudimos cargar los resultados de la encuesta.");
     } finally {
       this.loading.set(false);
+    }
+  }
+
+  protected setVersion(value: string): void {
+    const version = Number(value);
+    if (version === 1 || version === SURVEY_QUESTIONS_VERSION) {
+      this.selectedVersion.set(version);
+      this.search.set("");
     }
   }
 

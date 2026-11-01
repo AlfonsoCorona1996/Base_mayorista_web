@@ -2,10 +2,10 @@
  * Encuesta del primer aniversario. El backend valida con su propia copia
  * (survey_definitions.js en el repo del backend): si cambian opciones o
  * límites, sube QUESTIONS_VERSION en ambos lados. Un cambio de versión
- * descarta los borradores guardados en los celulares.
+ * reinicia con aviso los borradores incompatibles; conserva comprobantes y envíos pendientes.
  */
 export const SURVEY_CAMPAIGN_ID = "aniversario-2026";
-export const SURVEY_QUESTIONS_VERSION = 1;
+export const SURVEY_QUESTIONS_VERSION = 2;
 
 export const OTHER_OPTION_ID = "other";
 export const OTHER_MIN_LENGTH = 2;
@@ -25,7 +25,8 @@ export const SURVEY_LOGO = {
   iconPng: "/aniversario/bm-icono.png",
 } as const;
 
-export type MultiQuestionId = "strengths" | "improvements" | "new_products" | "sell_more";
+export type MultiQuestionId = "strengths" | "improvements" | "new_products";
+export type ChoiceQuestionId = MultiQuestionId | "facebook_interest";
 
 export interface SurveyOption {
   id: string;
@@ -47,6 +48,17 @@ export interface MultiQuestion {
   options: readonly SurveyOption[];
 }
 
+export interface SingleQuestion {
+  kind: "single";
+  id: "facebook_interest";
+  title: string;
+  intro: { title: string; description: string };
+  max: 1;
+  options: readonly SurveyOption[];
+}
+
+export type ChoiceQuestion = MultiQuestion | SingleQuestion;
+
 export interface TextQuestion {
   kind: "text";
   id: "comment";
@@ -55,13 +67,13 @@ export interface TextQuestion {
   maxLength: number;
 }
 
-export type SurveyQuestion = RatingQuestion | MultiQuestion | TextQuestion;
+export type SurveyQuestion = RatingQuestion | ChoiceQuestion | TextQuestion;
 
 export const SURVEY_QUESTIONS: readonly SurveyQuestion[] = [
   {
     kind: "rating",
     id: "satisfaction",
-    title: "¿Cómo calificarías tu experiencia comprando con Base Mayorista durante este primer año?",
+    title: "¿Cómo calificarías tu experiencia actual comprando con Base Mayorista?",
     options: [
       { value: 1, label: "Muy mala" },
       { value: 2, label: "Mala" },
@@ -73,73 +85,76 @@ export const SURVEY_QUESTIONS: readonly SurveyQuestion[] = [
   {
     kind: "multi",
     id: "strengths",
-    title: "¿Qué es lo que más te gusta de comprar con nosotros?",
+    title: "¿Qué es lo que más valoras de Base Mayorista y te gustaría que siguiéramos ofreciendo?",
     max: 2,
     options: [
       { id: "prices", label: "Nuestros precios" },
-      { id: "variety", label: "Variedad de productos y modelos" },
-      { id: "quality", label: "Calidad de los productos" },
-      { id: "service", label: "Atención y trato que recibes" },
-      { id: "ordering_ease", label: "Facilidad para realizar pedidos" },
+      { id: "variety", label: "La variedad de productos" },
+      { id: "quality", label: "La calidad de los productos" },
+      { id: "service", label: "La atención y el trato que recibes" },
+      { id: "ordering_ease", label: "La facilidad para realizar pedidos" },
+      { id: "news", label: "Las novedades que compartimos" },
       { id: OTHER_OPTION_ID, label: "Otro" },
     ],
   },
   {
     kind: "multi",
     id: "improvements",
-    title: "Si pudieras pedirnos que mejoráramos algo, ¿qué sería?",
+    title: "¿Cuál de estas opciones te ayudaría más a hacer tus pedidos o vender nuestros productos?",
     max: 2,
     options: [
-      { id: "delivery_times", label: "Tiempos de entrega" },
-      { id: "availability", label: "Disponibilidad de tallas, colores y modelos" },
-      { id: "prices", label: "Precios" },
-      { id: "order_tracking", label: "Información y seguimiento de pedidos" },
-      { id: "communication", label: "Atención y comunicación" },
-      { id: "returns", label: "Cambios y devoluciones" },
+      { id: "digital_catalog", label: "Un catálogo digital fácil de consultar y compartir" },
+      { id: "ready_media", label: "Fotos y videos listos para publicar" },
+      { id: "order_tracking", label: "Poder consultar más fácilmente el avance de mis pedidos" },
+      { id: "early_news", label: "Conocer las novedades con anticipación" },
+      { id: "availability", label: "Más opciones de tallas, colores y modelos" },
+      { id: "seller_promos", label: "Promociones especiales para vendedoras" },
+      { id: OTHER_OPTION_ID, label: "Otro" },
+    ],
+  },
+  {
+    kind: "single",
+    id: "facebook_interest",
+    intro: {
+      title: "Una idea que estamos preparando",
+      description: "Queremos aprovechar nuestra nueva página de Facebook para dar a conocer nuestros productos y ayudar a que las personas interesadas encuentren vendedoras en su localidad.",
+    },
+    title: "¿Te gustaría participar en esta iniciativa y recibir posibles nuevas clientas de tu zona?",
+    max: 1,
+    options: [
+      { id: "very_interested", label: "¡Sí, me interesa mucho!" },
+      { id: "needs_information", label: "Me interesa, pero quisiera conocer cómo funcionaría" },
+      { id: "not_interested", label: "Por ahora prefiero seguir con mis propias clientas" },
       { id: OTHER_OPTION_ID, label: "Otro" },
     ],
   },
   {
     kind: "multi",
     id: "new_products",
-    title: "¿Qué te gustaría que empezáramos a vender o que tuviéramos con más variedad?",
+    title: "¿Qué productos te gustaría que ampliáramos o incorporáramos a nuestro catálogo?",
     max: 3,
     options: [
-      { id: "women_clothing", label: "Ropa de mujer" },
-      { id: "men_clothing", label: "Ropa de hombre" },
-      { id: "kids_clothing", label: "Ropa infantil" },
+      { id: "women_clothing", label: "Más ropa de dama" },
+      { id: "men_clothing", label: "Más ropa de caballero" },
+      { id: "kids_clothing", label: "Ropa infantil y para bebé" },
       { id: "footwear", label: "Calzado" },
+      { id: "underwear", label: "Ropa interior" },
       { id: "bags_accessories", label: "Bolsas y accesorios" },
-      { id: "home", label: "Artículos para el hogar" },
+      { id: "home", label: "Blancos y artículos para el hogar" },
       { id: "beauty", label: "Belleza y cuidado personal" },
-      { id: OTHER_OPTION_ID, label: "Otro" },
-    ],
-  },
-  {
-    kind: "multi",
-    id: "sell_more",
-    title: "¿Qué te ayudaría a vender más y hacer pedidos más seguido con nosotros?",
-    max: 2,
-    options: [
-      { id: "frequent_news", label: "Recibir novedades con mayor frecuencia" },
-      { id: "better_media", label: "Tener mejores fotos y videos para ofrecer" },
-      { id: "seller_promos", label: "Promociones especiales para vendedoras" },
-      { id: "easy_catalog", label: "Consultar fácilmente los productos disponibles" },
-      { id: "faster_delivery", label: "Recibir los pedidos más rápido" },
-      { id: "more_variety", label: "Encontrar más variedad de productos" },
       { id: OTHER_OPTION_ID, label: "Otro" },
     ],
   },
   {
     kind: "text",
     id: "comment",
-    title: "¿Hay algo que te gustaría decirnos y que no te hayamos preguntado?",
+    title: "Si pudieras proponernos una idea para nuestro segundo año, ¿qué te gustaría que hiciéramos?",
     placeholder:
-      "Puede ser una idea, algún producto específico que quisieras encontrar o algo que creas que deberíamos mejorar...",
+      "Puede ser una nueva forma de vender, algún producto, una promoción, una mejora o algo que todavía no hayamos pensado...",
     maxLength: COMMENT_MAX_LENGTH,
   },
 ];
 
-export const MULTI_QUESTION_IDS: readonly MultiQuestionId[] = SURVEY_QUESTIONS.filter(
-  (question): question is MultiQuestion => question.kind === "multi",
+export const CHOICE_QUESTION_IDS: readonly ChoiceQuestionId[] = SURVEY_QUESTIONS.filter(
+  (question): question is ChoiceQuestion => question.kind === "multi" || question.kind === "single",
 ).map((question) => question.id);

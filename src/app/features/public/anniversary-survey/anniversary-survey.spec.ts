@@ -22,9 +22,9 @@ function completeDraft(step: number) {
     answers: {
       satisfaction: 4,
       strengths: { selected: ["prices"], other: "" },
-      improvements: { selected: ["delivery_times"], other: "" },
+      improvements: { selected: ["digital_catalog"], other: "" },
       new_products: { selected: ["footwear"], other: "" },
-      sell_more: { selected: ["frequent_news"], other: "" },
+      facebook_interest: { selected: ["needs_information"], other: "" },
       comment: "",
     },
   };
@@ -87,7 +87,7 @@ describe("AnniversarySurveyPage", () => {
 
   it("muestra la bienvenida y avanza a la primera pregunta", async () => {
     await render();
-    expect(q("h1").textContent).toContain("Un año de Base Mayorista.");
+    expect(q("h1").textContent).toContain("¡Nuestro primer año se celebra contigo!");
     expect(root.textContent).toContain("registrar tu regalo de aniversario");
     buttonByText("Comenzar encuesta").click();
     await settle();
@@ -119,11 +119,11 @@ describe("AnniversarySurveyPage", () => {
     boxes[0].click();
     await settle();
     boxes = checkboxes();
-    boxes[5].click(); // Otro
+    boxes[6].click(); // Otro
     await settle();
 
     boxes = checkboxes();
-    expect(boxes.filter((box) => box.disabled).length).toBe(4);
+    expect(boxes.filter((box) => box.disabled).length).toBe(5);
     expect(q(".hint").textContent).toContain("Ya elegiste 2");
     expect(root.querySelector("#other-input")).not.toBeNull();
 
@@ -137,7 +137,7 @@ describe("AnniversarySurveyPage", () => {
     await settle();
 
     // Desmarcar Otro oculta y limpia el texto, sin tocar la otra selección.
-    checkboxes()[5].click();
+    checkboxes()[6].click();
     await settle();
     expect(root.querySelector("#other-input")).toBeNull();
     const strengths = (stored()["answers"] as Record<string, { selected: string[]; other: string }>)["strengths"];
@@ -150,14 +150,14 @@ describe("AnniversarySurveyPage", () => {
     await render();
     expect(q(".kicker").textContent).toContain("Pregunta 4 de 6");
     expect(q(".resume").textContent).toContain("Retomamos tu encuesta donde la dejaste.");
-    expect(checkboxes()[3].checked).toBeTrue();
+    expect(root.querySelectorAll<HTMLInputElement>(".option input[type=radio]")[1].checked).toBeTrue();
 
     buttonByText("Comenzar de nuevo").click();
     await settle();
     expect(stored()["step"]).toBe(4);
     buttonByText("Sí, empezar de nuevo").click();
     await settle();
-    expect(q("h1").textContent).toContain("Un año de Base Mayorista.");
+    expect(q("h1").textContent).toContain("¡Nuestro primer año se celebra contigo!");
     expect(stored()["step"]).toBe(0);
     expect((stored()["answers"] as Record<string, unknown>)["satisfaction"]).toBeNull();
   });
@@ -197,6 +197,74 @@ describe("AnniversarySurveyPage", () => {
     const saved = stored();
     expect(saved["submission"]).toBe("confirmed");
     expect((saved["answers"] as Record<string, unknown>)["satisfaction"]).toBeNull();
+  });
+
+  it("Facebook usa radios, exige Otro, conserva su texto y lo limpia al cambiar de opción", async () => {
+    const draft = completeDraft(4);
+    draft.answers.facebook_interest = { selected: [], other: "" };
+    localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+    await render();
+    expect(root.textContent).toContain("Una idea que estamos preparando");
+    expect(root.textContent).toContain("no te inscribe ni autoriza compartir tus datos");
+    let radios = [...root.querySelectorAll<HTMLInputElement>(".option input[type=radio]")];
+    expect(radios.length).toBe(4);
+    expect(checkboxes().length).toBe(0);
+    radios[3].click();
+    await settle();
+    await next();
+    expect(q("#step-error").textContent).toContain("Otro");
+    const input = q<HTMLInputElement>("#other-input");
+    input.value = "Quisiera saber qué zonas cubre";
+    input.dispatchEvent(new Event("input"));
+    window.dispatchEvent(new Event("pagehide"));
+    await settle();
+    expect((stored()["answers"] as Record<string, { other: string }>)["facebook_interest"].other).toBe(input.value);
+    radios = [...root.querySelectorAll<HTMLInputElement>(".option input[type=radio]")];
+    radios[1].click();
+    await settle();
+    expect(root.querySelector("#other-input")).toBeNull();
+    expect(radios.filter((radio) => radio.checked).length).toBe(1);
+    expect(radios.some((radio) => radio.disabled)).toBeFalse();
+    expect((stored()["answers"] as Record<string, { other: string }>)["facebook_interest"].other).toBe("");
+    await next();
+    expect(q(".kicker").textContent).toContain("Pregunta 5 de 6");
+  });
+
+  it("la propuesta abierta permite avanzar sin texto", async () => {
+    localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(completeDraft(6)));
+    await render();
+    expect(root.textContent).toContain("Opcional. Puedes continuar sin escribir nada.");
+    await next();
+    expect(root.querySelector("#gift-name")).not.toBeNull();
+  });
+
+  it("explica el reinicio de un borrador anterior sin reutilizar respuestas", async () => {
+    localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify({ ...completeDraft(4), questionsVersion: 1 }));
+    await render();
+    expect(root.textContent).toContain("Actualizamos las preguntas");
+    expect(stored()["questionsVersion"]).toBe(2);
+    expect((stored()["answers"] as Record<string, unknown>)["satisfaction"]).toBeNull();
+  });
+
+  it("reintenta un envío v1 pendiente con el mismo id y las respuestas originales", async () => {
+    const old = { ...completeDraft(GIFT_STEP), questionsVersion: 1, submission: "pending", name: "Ana",
+      answers: { ...completeDraft(GIFT_STEP).answers, improvements: { selected: ["delivery_times"], other: "" },
+        sell_more: { selected: ["frequent_news"], other: "" } } };
+    localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(old));
+    await render();
+    expect(root.textContent).toContain("Tu envío de la encuesta anterior quedó sin confirmar");
+    expect(q<HTMLInputElement>("#gift-name").readOnly).toBeTrue();
+    expect(buttonByText("Anterior").disabled).toBeTrue();
+    await next();
+    const request = http.expectOne(`${BASE}/responses`);
+    expect(request.request.body.questions_version).toBe(1);
+    expect(request.request.body.participation_id).toBe(old.participationId);
+    expect(request.request.body.answers.sell_more.selected).toEqual(["frequent_news"]);
+    expect(request.request.body.answers.facebook_interest).toBeUndefined();
+    request.flush({ ok: true, participation_id: old.participationId, registered_name: "Ana", reward: { status: "pending_definition" } });
+    await settle();
+    await settle();
+    expect(q("h1").textContent).toContain("¡Gracias por participar!");
   });
 
   it("sin conexión conserva el borrador y reintenta con el mismo id", async () => {

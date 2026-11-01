@@ -59,6 +59,17 @@ describe("SurveyDraftStorage", () => {
     expect(new SurveyDraftStorage(memory).load().status).toBe("discarded");
   });
 
+  it("respalda un borrador anterior sin reinterpretar sus respuestas", () => {
+    const memory = new MemoryStorage();
+    const old = JSON.stringify({ ...createDraft(), questionsVersion: 1, step: 4 });
+    memory.setItem(DRAFT_STORAGE_KEY, old);
+    const storage = new SurveyDraftStorage(memory);
+    expect(storage.load().status).toBe("discarded");
+    storage.save(createDraft());
+    expect(memory.getItem(`${DRAFT_STORAGE_KEY}.previous`)).toBe(old);
+    expect(storage.load().draft?.questionsVersion).toBe(2);
+  });
+
   it("sin almacenamiento disponible funciona en memoria sin fallar", () => {
     const storage = new SurveyDraftStorage(null);
     expect(storage.available).toBeFalse();

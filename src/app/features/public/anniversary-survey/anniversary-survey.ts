@@ -13,8 +13,8 @@ import { NgTemplateOutlet } from "@angular/common";
 import { Meta, Title } from "@angular/platform-browser";
 import {
   COMMENT_MAX_LENGTH,
-  MultiQuestion,
-  MultiQuestionId,
+  ChoiceQuestion,
+  ChoiceQuestionId,
   NAME_MAX_LENGTH,
   OTHER_MAX_LENGTH,
   OTHER_OPTION_ID,
@@ -88,6 +88,7 @@ export default class AnniversarySurveyPage {
   protected readonly draft = signal<SurveyDraft>(createDraft());
   protected readonly online = signal(typeof navigator === "undefined" ? true : navigator.onLine !== false);
   protected readonly resumed = signal(false);
+  protected readonly draftReset = signal(false);
   protected readonly confirmingRestart = signal(false);
   protected readonly showErrors = signal(false);
   protected readonly sending = signal(false);
@@ -197,7 +198,7 @@ export default class AnniversarySurveyPage {
 
   protected back(): void {
     const step = this.step();
-    if (step <= WELCOME_STEP) return;
+    if (step <= WELCOME_STEP || this.draft().legacySubmission) return;
     const state = readHistoryState();
     // Si el paso anterior está en el historial, se usa para que el botón
     // "atrás" de Android y este botón recorran el mismo camino.
@@ -236,7 +237,7 @@ export default class AnniversarySurveyPage {
   private handlePopState(event: PopStateEvent): void {
     const state: unknown = event.state;
     const target = typeof state === "object" && state !== null ? (state as HistoryEntryState)[HISTORY_KEY] : undefined;
-    if (typeof target !== "number" || this.draft().receipt || this.sending()) return;
+    if (typeof target !== "number" || this.draft().receipt || this.draft().legacySubmission || this.sending()) return;
     let step = Math.min(Math.max(target, WELCOME_STEP), GIFT_STEP);
     const incomplete = firstIncompleteStep(this.draft().answers, step);
     if (incomplete !== null) step = incomplete;
@@ -251,29 +252,33 @@ export default class AnniversarySurveyPage {
     this.persistNow();
   }
 
-  protected isSelected(id: MultiQuestionId, optionId: string): boolean {
+  protected isSelected(id: ChoiceQuestionId, optionId: string): boolean {
     return this.draft().answers[id].selected.includes(optionId);
   }
 
-  protected selectedCount(id: MultiQuestionId): number {
+  protected selectedCount(id: ChoiceQuestionId): number {
     return this.draft().answers[id].selected.length;
   }
 
-  protected isOptionDisabled(question: MultiQuestion, optionId: string): boolean {
+  protected isOptionDisabled(question: ChoiceQuestion, optionId: string): boolean {
     const selected = this.draft().answers[question.id].selected;
-    return selected.length >= question.max && !selected.includes(optionId);
+    return question.kind === "multi" && selected.length >= question.max && !selected.includes(optionId);
   }
 
-  protected otherText(id: MultiQuestionId): string {
+  protected otherText(id: ChoiceQuestionId): string {
     return this.draft().answers[id].other;
   }
 
-  protected toggleOption(question: MultiQuestion, optionId: string, checked: boolean): void {
+  protected toggleOption(question: ChoiceQuestion, optionId: string, checked: boolean): void {
     const current = this.draft().answers[question.id];
     let selected = current.selected;
     if (checked) {
-      if (selected.includes(optionId) || selected.length >= question.max) return;
-      selected = [...selected, optionId];
+      if (selected.includes(optionId)) return;
+      if (question.kind === "single") selected = [optionId];
+      else {
+        if (selected.length >= question.max) return;
+        selected = [...selected, optionId];
+      }
     } else {
       selected = selected.filter((id) => id !== optionId);
     }
@@ -287,7 +292,7 @@ export default class AnniversarySurveyPage {
     if (checked && optionId === OTHER_OPTION_ID) this.focusById("other-input");
   }
 
-  protected setOther(id: MultiQuestionId, value: string): void {
+  protected setOther(id: ChoiceQuestionId, value: string): void {
     const text = value.slice(0, OTHER_MAX_LENGTH);
     this.update((draft) => ({
       ...draft,
@@ -321,7 +326,7 @@ export default class AnniversarySurveyPage {
       return;
     }
     const incomplete = firstIncompleteStep(this.draft().answers, GIFT_STEP);
-    if (incomplete !== null) {
+    if (incomplete !== null && !this.draft().legacySubmission) {
       this.applyStep(incomplete, "replace");
       this.showErrors.set(true);
       return;
@@ -332,7 +337,7 @@ export default class AnniversarySurveyPage {
     this.sending.set(true);
     this.submitNotice.set(null);
 
-    const result = await this.api.submit(buildSubmissionPayload(this.draft()));
+    const result = await this.api.submit(this.draft().legacySubmission ?? buildSubmissionPayload(this.draft()));
     this.sending.set(false);
 
     switch (result.kind) {
@@ -343,6 +348,7 @@ export default class AnniversarySurveyPage {
           step: DONE_STEP,
           submission: "confirmed",
           receipt: result.receipt,
+          legacySubmission: undefined,
           // En un celular compartido no se dejan respuestas a la vista; queda el comprobante.
           answers: emptyAnswers(),
           name: "",
@@ -400,6 +406,7 @@ export default class AnniversarySurveyPage {
     this.clearSaveTimer();
     this.storage.clear();
     this.resumed.set(false);
+    this.draftReset.set(false);
     this.confirmingRestart.set(false);
     this.closedMessage.set(this.campaign()?.status === "closed" ? "La encuesta de aniversario ya cerró. Gracias por tu interés." : null);
     this.draft.set(createDraft());
@@ -441,6 +448,7 @@ export default class AnniversarySurveyPage {
 
   private restoreDraft(): void {
     const { draft, status } = this.storage.load();
+    this.draftReset.set(status === "discarded");
     if (draft) {
       this.draft.set(draft);
       this.resumed.set(status === "restored" && !draft.receipt && draft.step > WELCOME_STEP);
@@ -505,7 +513,7 @@ export default class AnniversarySurveyPage {
 
   private focusFirstInvalid(): void {
     const error = this.stepError();
-    if (error?.code === "other_required" || (error?.code === "too_long" && this.question()?.kind === "multi")) {
+    if (error?.code === "other_required" || (error?.code === "too_long" && (this.question()?.kind === "multi" || this.question()?.kind === "single"))) {
       this.focusById("other-input");
     } else if (this.question()?.kind === "text") {
       this.focusById("comment-input");

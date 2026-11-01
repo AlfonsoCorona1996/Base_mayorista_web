@@ -1,4 +1,4 @@
-import { provideZonelessChangeDetection } from "@angular/core";
+import { ApplicationRef, provideZonelessChangeDetection } from "@angular/core";
 import { TestBed } from "@angular/core/testing";
 import { provideRouter } from "@angular/router";
 import { Observable, of, throwError } from "rxjs";
@@ -11,6 +11,7 @@ function summaryResponse(total: number) {
     generated_at: "2026-10-28T18:00:00.000Z",
     config: { status: "active", reward: { status: "pending_definition", title: null, description: null } },
     summary: {
+      questions_version: 2,
       total_responses: total,
       satisfaction: {
         counts: { 1: 0, 2: 0, 3: 1, 4: 0, 5: total ? total - 1 : 0 },
@@ -19,6 +20,13 @@ function summaryResponse(total: number) {
         answered: total,
       },
       options: {
+        facebook_interest: {
+          counts: { very_interested: 1, needs_information: 1, not_interested: 0, other: 0 },
+          labels: { very_interested: "Muy interesadas", needs_information: "Interesadas que necesitan información", not_interested: "No interesadas", other: "Otras respuestas" },
+          other_texts: [],
+          max: 1,
+          kind: "single",
+        },
         strengths: {
           counts: { prices: 2, quality: 1, other: 1 },
           labels: { prices: "Nuestros precios", quality: "Calidad de los productos", other: "Otro" },
@@ -64,6 +72,8 @@ describe("EncuestaAniversarioPage", () => {
     expect(text).toContain("Muy bien");
     expect(text).toContain("Por validar");
     expect(text).toContain("Validado");
+    expect(text).toContain("Iniciativa Facebook");
+    expect(text).toContain("Interesadas que necesitan información");
     expect(root.querySelectorAll(".sv-chip--warn").length).toBe(2);
   });
 
@@ -76,5 +86,25 @@ describe("EncuestaAniversarioPage", () => {
     const root = await render(() => throwError(() => new Error("Sin permiso")));
     expect(root.querySelector("[role=alert]")?.textContent).toContain("Sin permiso");
     expect(root.textContent).toContain("Reintentar");
+  });
+
+  it("al cambiar de versión muestra únicamente indicadores y textos históricos", async () => {
+    const current = summaryResponse(2);
+    const previous = summaryResponse(1).summary;
+    previous.questions_version = 1;
+    previous.satisfaction.average = 2;
+    previous.options = {} as typeof previous.options;
+    previous.comments = [{ response_id: "old", text: "Comentario anterior", satisfaction: 2, registered_name: "Bea", received_at: null }];
+    const root = await render(() => of({ ...current, summaries_by_version: { 1: previous, 2: current.summary } }));
+    const select = root.querySelector<HTMLSelectElement>("#sv-version");
+    expect(root.textContent).toContain("Iniciativa Facebook");
+    if (!select) throw new Error("Falta selector de versión");
+    select.value = "1";
+    select.dispatchEvent(new Event("change"));
+    TestBed.inject(ApplicationRef).tick();
+    expect(root.textContent).toContain("2.00");
+    expect(root.textContent).toContain("Comentario anterior");
+    expect(root.textContent).not.toContain("Iniciativa Facebook");
+    expect(root.textContent).not.toContain("Muy bien");
   });
 });

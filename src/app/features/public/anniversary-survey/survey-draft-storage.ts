@@ -57,6 +57,10 @@ export class SurveyDraftStorage {
     }
     const draft = parseStoredDraft(parsed);
     if (!draft) {
+      // Conserva el original antes de reemplazarlo: no reutilizamos respuestas incompatibles.
+      if (typeof parsed === "object" && parsed !== null && "questionsVersion" in parsed) {
+        try { this.storage.setItem(`${DRAFT_STORAGE_KEY}.previous`, raw); } catch { /* La encuesta sigue en memoria. */ }
+      }
       this.clear();
       return { draft: null, status: "discarded" };
     }

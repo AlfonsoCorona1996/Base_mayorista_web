@@ -1209,3 +1209,29 @@
     animation-duration: 2s;
   }
 }
+
+/* Propuesta del segundo año: compacta y con la paleta BM existente. */
+.initiative {
+  margin-bottom: var(--ui-space-16, 16px);
+  padding: var(--ui-space-12, 12px) var(--ui-space-16, 16px);
+  border-left: 3px solid var(--magenta-deep);
+  border-radius: var(--ui-radius-sm, 8px);
+  background: var(--selected-bg);
+}
+
+.initiative h2 {
+  margin: 0 0 var(--ui-space-4, 4px);
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
+.initiative p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.option__box--radio {
+  border-radius: var(--ui-radius-pill, 999px);
+}
