@@ -60,6 +60,19 @@
   overflow-x: clip;
 }
 
+/* Un solo scroll para el contenido; el pie ocupa espacio propio y nunca lo tapa. */
+.survey:is([data-view="question"], [data-view="gift"]) {
+  height: 100vh;
+  height: min(100dvh, var(--survey-viewport-height, 100dvh));
+  min-height: 0;
+  overflow: hidden;
+}
+
+.bar,
+.net-notice {
+  flex-shrink: 0;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
@@ -208,6 +221,7 @@
   min-height: 56px;
   margin: 0 auto;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--ui-space-12, 12px);
@@ -223,6 +237,10 @@
   font-weight: 800;
 }
 
+.brand picture {
+  flex-shrink: 0;
+}
+
 .brand__logo {
   display: block;
   width: 48px;
@@ -230,9 +248,7 @@
 }
 
 .brand__name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .bar__tag {
@@ -488,8 +504,25 @@
 
 .step {
   flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
+}
+
+.survey:is([data-view="question"], [data-view="gift"]) .stage {
+  min-height: 0;
+  padding: 0;
+}
+
+.step__content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+  scroll-padding-block: var(--ui-space-16, 16px);
+  padding: var(--ui-space-24, 24px) max(var(--gutter), env(safe-area-inset-right))
+    var(--ui-space-16, 16px) max(var(--gutter), env(safe-area-inset-left));
 }
 
 .step__set {
@@ -556,6 +589,12 @@
 }
 
 /* Opciones múltiples */
+
+.option,
+.scale__item {
+  /* Mantiene cada control nativo oculto dentro de su opción al hacer scroll o enfocar. */
+  position: relative;
+}
 
 .options {
   display: grid;
@@ -805,14 +844,21 @@
   margin-top: 1px;
 }
 
-/* Acciones al pie: quedan al alcance del pulgar cuando hay espacio. */
+/* Acciones siempre visibles, fuera del área que se desplaza. */
 
 .actions {
-  margin-top: auto;
-  padding-top: var(--ui-space-16, 16px);
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  flex-shrink: 0;
+  padding: var(--ui-space-12, 12px) max(var(--gutter), env(safe-area-inset-right))
+    max(var(--ui-space-16, 16px), env(safe-area-inset-bottom)) max(var(--gutter), env(safe-area-inset-left));
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--ui-space-12, 12px);
+}
+
+.actions .btn {
+  flex: 1 1 auto;
 }
 
 .actions .btn--primary {
@@ -986,8 +1032,7 @@
   gap: var(--ui-space-4, 4px);
 }
 
-.receipt__name,
-.receipt__reward {
+.receipt__name {
   font-weight: 800;
   font-size: 1.0625rem;
   overflow-wrap: anywhere;
@@ -1066,8 +1111,11 @@
   }
 
   .actions {
-    grid-template-columns: auto auto;
     justify-content: space-between;
+  }
+
+  .actions .btn {
+    flex-grow: 0;
   }
 
   .actions .btn--primary {
@@ -1081,6 +1129,10 @@
   }
 
   .stage {
+    padding-top: var(--ui-space-48, 48px);
+  }
+
+  .step__content {
     padding-top: var(--ui-space-48, 48px);
   }
 
@@ -1174,11 +1226,36 @@
 }
 
 .stage--gift .actions {
+  display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--ui-space-4, 4px);
-  margin-top: var(--ui-space-16, 16px);
 }
 
 .stage--gift .privacy {
   margin-top: var(--ui-space-8, 8px);
+}
+
+.survey[data-view="done"] .done-head__mark img {
+  width: 80px;
+}
+
+.anniversary-reward--earned {
+  border-top: var(--ui-space-4, 4px) solid var(--magenta-deep);
+  background: linear-gradient(135deg, var(--hero-bg), var(--selected-bg));
+}
+
+.anniversary-reward__instructions {
+  margin: var(--ui-space-16, 16px) 0 0;
+  padding-top: var(--ui-space-16, 16px);
+  border-top: 1px solid var(--line);
+  font-size: 0.9375rem;
+  overflow-wrap: anywhere;
+}
+
+.reward-pending {
+  display: grid;
+  justify-items: center;
+  gap: var(--ui-space-8, 8px);
+  margin: var(--ui-space-24, 24px) 0 0;
+  text-align: center;
 }

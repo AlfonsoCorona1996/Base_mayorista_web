@@ -74,135 +74,136 @@
       @for (key of stepKey(); track key) {
         @if (question(); as q) {
           <main class="stage" id="contenido">
-            <ng-container *ngTemplateOutlet="resumeNotice" />
-
             <form class="step" novalidate (submit)="$event.preventDefault(); next()">
-              @if (q.kind === "single") {
-                <aside class="initiative" aria-labelledby="initiative-title">
-                  <h2 id="initiative-title">{{ q.intro.title }}</h2>
-                  <p>{{ q.intro.description }}</p>
-                </aside>
-              }
-              @if (q.kind === "text") {
-                <div class="step__head">
-                  <p class="kicker">Pregunta {{ questionIndex() + 1 }} de {{ questionCount }}</p>
-                  <h1 id="step-title" class="step__title" tabindex="-1">{{ q.title }}</h1>
-                  <p class="hint" id="q-hint">Opcional. Puedes continuar sin escribir nada.</p>
-                </div>
-                <div class="field">
-                  <textarea
-                    id="comment-input"
-                    class="input input--area"
-                    rows="6"
-                    [maxLength]="commentMaxLength"
-                    [placeholder]="q.placeholder"
-                    aria-labelledby="step-title"
-                    aria-describedby="q-hint comment-count step-error"
-                    [value]="draft().answers.comment"
-                    (input)="setComment(commentArea.value)"
-                    #commentArea
-                  ></textarea>
-                  <p class="counter" id="comment-count">
-                    {{ draft().answers.comment.length }} / {{ commentMaxLength }}
-                  </p>
-                </div>
-              } @else {
-                <fieldset class="step__set" aria-describedby="q-hint step-error">
-                  <legend class="step__head">
-                    <span class="kicker">Pregunta {{ questionIndex() + 1 }} de {{ questionCount }}</span>
-                    <h1 id="step-title" class="step__title" tabindex="-1">{{ q.title }}</h1>
-                  </legend>
-
-                  @if (q.kind === "rating") {
-                    <p class="hint" id="q-hint">Elige una opción, del 1 (muy mala) al 5 (excelente).</p>
-                    <div class="scale">
-                      @for (option of q.options; track option.value) {
-                        <label class="scale__item" [class.is-selected]="draft().answers.satisfaction === option.value">
-                          <input
-                            class="sr-only"
-                            type="radio"
-                            name="satisfaction"
-                            [value]="option.value"
-                            [checked]="draft().answers.satisfaction === option.value"
-                            (change)="setRating(option.value)"
-                          />
-                          <span class="scale__num">{{ option.value }}</span>
-                          <span class="scale__label">{{ option.label }}</span>
-                          <svg class="icon scale__check" viewBox="0 0 24 24" aria-hidden="true">
-                            <path d="M5 12.5l4.5 4.5L19 7.5" />
-                          </svg>
-                        </label>
-                      }
-                    </div>
-                  } @else {
-                    <p class="hint" id="q-hint" aria-live="polite">
-                      @if (q.kind === "single") {
-                        Elige una opción.
-                      } @else if (selectedCount(q.id) >= q.max) {
-                        <strong>Ya elegiste {{ q.max }}.</strong> Para cambiar, desmarca una opción.
-                      } @else {
-                        Elige hasta {{ q.max }} opciones.
-                        <span class="hint__count">{{ selectedCount(q.id) }} de {{ q.max }}</span>
-                      }
-                    </p>
-                    <div class="options">
-                      @for (option of q.options; track option.id) {
-                        <label
-                          class="option"
-                          [class.is-selected]="isSelected(q.id, option.id)"
-                          [class.is-disabled]="isOptionDisabled(q, option.id)"
-                        >
-                          <input
-                            class="sr-only"
-                            [type]="q.kind === 'single' ? 'radio' : 'checkbox'"
-                            [name]="q.id"
-                            [value]="option.id"
-                            [checked]="isSelected(q.id, option.id)"
-                            [disabled]="isOptionDisabled(q, option.id)"
-                            (change)="toggleOption(q, option.id, box.checked)"
-                            #box
-                          />
-                          <span class="option__box" [class.option__box--radio]="q.kind === 'single'" aria-hidden="true">
-                            <svg class="icon" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
-                          </span>
-                          <span class="option__label">{{ option.label }}</span>
-                        </label>
-                      }
-                    </div>
-                    @if (q.kind === "single") {
-                      <p class="field__help">Solo registramos tu interés: no te inscribe ni autoriza compartir tus datos.</p>
-                    }
-                    @if (isSelected(q.id, otherId)) {
-                      <div class="other">
-                        <label class="other__label" for="other-input">Cuéntanos cuál</label>
-                        <input
-                          id="other-input"
-                          class="input"
-                          type="text"
-                          autocomplete="off"
-                          enterkeyhint="next"
-                          [maxLength]="otherMaxLength"
-                          [value]="otherText(q.id)"
-                          [attr.aria-invalid]="visibleError()?.code === 'other_required' ? 'true' : null"
-                          aria-describedby="step-error"
-                          (input)="setOther(q.id, otherInput.value)"
-                          #otherInput
-                        />
-                      </div>
-                    }
-                  }
-                </fieldset>
-              }
-
-              <p class="field-error" id="step-error" tabindex="-1" aria-live="polite">
-                @if (visibleError(); as error) {
-                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-                    <circle cx="12" cy="12" r="9" /><path d="M12 7.5v5M12 16h.01" />
-                  </svg>
-                  {{ error.message }}
+              <div class="step__content">
+                <ng-container *ngTemplateOutlet="resumeNotice" />
+                @if (q.kind === "single") {
+                  <aside class="initiative" aria-labelledby="initiative-title">
+                    <h2 id="initiative-title">{{ q.intro.title }}</h2>
+                    <p>{{ q.intro.description }}</p>
+                  </aside>
                 }
-              </p>
+                @if (q.kind === "text") {
+                  <div class="step__head">
+                    <p class="kicker">Pregunta {{ questionIndex() + 1 }} de {{ questionCount }}</p>
+                    <h1 id="step-title" class="step__title" tabindex="-1">{{ q.title }}</h1>
+                    <p class="hint" id="q-hint">Opcional. Puedes continuar sin escribir nada.</p>
+                  </div>
+                  <div class="field">
+                    <textarea
+                      id="comment-input"
+                      class="input input--area"
+                      rows="6"
+                      [maxLength]="commentMaxLength"
+                      [placeholder]="q.placeholder"
+                      aria-labelledby="step-title"
+                      aria-describedby="q-hint comment-count step-error"
+                      [value]="draft().answers.comment"
+                      (input)="setComment(commentArea.value)"
+                      #commentArea
+                    ></textarea>
+                    <p class="counter" id="comment-count">
+                      {{ draft().answers.comment.length }} / {{ commentMaxLength }}
+                    </p>
+                  </div>
+                } @else {
+                  <fieldset class="step__set" aria-describedby="q-hint step-error">
+                    <legend class="step__head">
+                      <span class="kicker">Pregunta {{ questionIndex() + 1 }} de {{ questionCount }}</span>
+                      <h1 id="step-title" class="step__title" tabindex="-1">{{ q.title }}</h1>
+                    </legend>
 
+                    @if (q.kind === "rating") {
+                      <p class="hint" id="q-hint">Elige una opción, del 1 (muy mala) al 5 (excelente).</p>
+                      <div class="scale">
+                        @for (option of q.options; track option.value) {
+                          <label class="scale__item" [class.is-selected]="draft().answers.satisfaction === option.value">
+                            <input
+                              class="sr-only"
+                              type="radio"
+                              name="satisfaction"
+                              [value]="option.value"
+                              [checked]="draft().answers.satisfaction === option.value"
+                              (change)="setRating(option.value)"
+                            />
+                            <span class="scale__num">{{ option.value }}</span>
+                            <span class="scale__label">{{ option.label }}</span>
+                            <svg class="icon scale__check" viewBox="0 0 24 24" aria-hidden="true">
+                              <path d="M5 12.5l4.5 4.5L19 7.5" />
+                            </svg>
+                          </label>
+                        }
+                      </div>
+                    } @else {
+                      <p class="hint" id="q-hint" aria-live="polite">
+                        @if (q.kind === "single") {
+                          Elige una opción.
+                        } @else if (selectedCount(q.id) >= q.max) {
+                          <strong>Ya elegiste {{ q.max }}.</strong> Para cambiar, desmarca una opción.
+                        } @else {
+                          Elige hasta {{ q.max }} opciones.
+                          <span class="hint__count">{{ selectedCount(q.id) }} de {{ q.max }}</span>
+                        }
+                      </p>
+                      <div class="options">
+                        @for (option of q.options; track option.id) {
+                          <label
+                            class="option"
+                            [class.is-selected]="isSelected(q.id, option.id)"
+                            [class.is-disabled]="isOptionDisabled(q, option.id)"
+                          >
+                            <input
+                              class="sr-only"
+                              [type]="q.kind === 'single' ? 'radio' : 'checkbox'"
+                              [name]="q.id"
+                              [value]="option.id"
+                              [checked]="isSelected(q.id, option.id)"
+                              [disabled]="isOptionDisabled(q, option.id)"
+                              (change)="toggleOption(q, option.id, box.checked)"
+                              #box
+                            />
+                            <span class="option__box" [class.option__box--radio]="q.kind === 'single'" aria-hidden="true">
+                              <svg class="icon" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+                            </span>
+                            <span class="option__label">{{ option.label }}</span>
+                          </label>
+                        }
+                      </div>
+                      @if (q.kind === "single") {
+                        <p class="field__help">Solo registramos tu interés: no te inscribe ni autoriza compartir tus datos.</p>
+                      }
+                      @if (isSelected(q.id, otherId)) {
+                        <div class="other">
+                          <label class="other__label" for="other-input">Cuéntanos cuál</label>
+                          <input
+                            id="other-input"
+                            class="input"
+                            type="text"
+                            autocomplete="off"
+                            enterkeyhint="next"
+                            [maxLength]="otherMaxLength"
+                            [value]="otherText(q.id)"
+                            [attr.aria-invalid]="visibleError()?.code === 'other_required' ? 'true' : null"
+                            aria-describedby="step-error"
+                            (input)="setOther(q.id, otherInput.value)"
+                            #otherInput
+                          />
+                        </div>
+                      }
+                    }
+                  </fieldset>
+                }
+
+                <p class="field-error" id="step-error" tabindex="-1" aria-live="polite">
+                  @if (visibleError(); as error) {
+                    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                      <circle cx="12" cy="12" r="9" /><path d="M12 7.5v5M12 16h.01" />
+                    </svg>
+                    {{ error.message }}
+                  }
+                </p>
+
+              </div>
               <div class="actions">
                 <button type="button" class="btn btn--ghost" (click)="back()">
                   <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6" /></svg>
@@ -221,85 +222,107 @@
 
     @case ("gift") {
       <main class="stage stage--gift" id="contenido">
-        <ng-container *ngTemplateOutlet="resumeNotice" />
-
         <form class="step" novalidate (submit)="$event.preventDefault(); submit()">
-          <div class="step__head gift-head">
-            <h1 id="step-title" class="step__title step__title--gift" tabindex="-1">¡Este regalo es para ti!</h1>
-            <p class="step__text">Gracias por compartir tus ideas.</p>
-          </div>
+          <div class="step__content">
+            <ng-container *ngTemplateOutlet="resumeNotice" />
+            <div class="step__head gift-head">
+              <h1 id="step-title" class="step__title step__title--gift" tabindex="-1">¡Este regalo es para ti!</h1>
+              <p class="step__text">Gracias por compartir tus ideas.</p>
+            </div>
 
-          @if (reward().status === "active") {
-            <aside class="anniversary-reward" aria-label="Tu regalo de aniversario">
-              <span class="anniversary-reward__label">Tu regalo de aniversario</span>
-              <p class="anniversary-reward__value" [class.anniversary-reward__value--long]="(reward().title?.length ?? 0) > 16">{{ reward().title }}</p>
-              @if (reward().description) {
-                <p class="anniversary-reward__description">{{ reward().description }}</p>
-              }
-            </aside>
-          }
-
-          @if (draft().legacySubmission) {
-            <p class="alert alert--offline" role="status">
-              Tu envío de la encuesta anterior quedó sin confirmar. Reinténtalo para registrar esas respuestas
-              y tu regalo; se conservará como una participación de la versión anterior.
-            </p>
-          }
-          <div class="field field--name">
-            <label class="field__label" for="gift-name">¿A qué nombre registramos tu regalo?</label>
-            <input
-              id="gift-name"
-              [readOnly]="!!draft().legacySubmission || sending()"
-              class="input"
-              type="text"
-              autocomplete="name"
-              autocapitalize="words"
-              enterkeyhint="send"
-              placeholder="Nombre con el que realizas tus pedidos"
-              [maxLength]="nameMaxLength"
-              [value]="draft().name"
-              [attr.aria-invalid]="visibleError() ? 'true' : null"
-              aria-describedby="gift-help step-error"
-              (input)="setName(nameInput.value)"
-              #nameInput
-            />
-            <p class="field__help" id="gift-help">
-              Así podremos identificarte al canjearlo.
-            </p>
-            <p class="field-error" id="step-error" tabindex="-1" aria-live="polite">
-              @if (visibleError(); as error) {
-                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-                  <circle cx="12" cy="12" r="9" /><path d="M12 7.5v5M12 16h.01" />
-                </svg>
-                {{ error.message }}
-              }
-            </p>
-          </div>
-
-          <div class="submit-notice-slot" id="submit-notice" tabindex="-1" aria-live="polite">
-            @if (submitNotice(); as notice) {
-              <div class="alert" [class.alert--offline]="notice.tone === 'offline'">
-                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-                  @if (notice.tone === "offline") {
-                    <path d="M2 8.8a15 15 0 0 1 4.2-2.6M9.6 5.2A15 15 0 0 1 22 8.8M5.2 12.3a10 10 0 0 1 3.4-2.1M14 9.3a10 10 0 0 1 4.8 3M8.7 15.6a5 5 0 0 1 6.6 0M12 19.5h.01M3 3l18 18" />
-                  } @else {
-                    <circle cx="12" cy="12" r="9" /><path d="M12 7.5v5M12 16h.01" />
-                  }
-                </svg>
-                <span>{{ notice.message }}</span>
-              </div>
-            } @else if (draft().submission === "pending" && !sending()) {
-              <div class="alert alert--offline">
-                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-                  <circle cx="12" cy="12" r="9" /><path d="M12 7.5v5M12 16h.01" />
-                </svg>
-                <span>Tu envío anterior no se confirmó. Tus respuestas siguen guardadas: vuelve a intentarlo.</span>
-              </div>
+            @if (reward().status === "active") {
+              <aside class="anniversary-reward" aria-label="Tu regalo de aniversario">
+                <span class="anniversary-reward__label">Tu regalo de aniversario</span>
+                <p class="anniversary-reward__value" [class.anniversary-reward__value--long]="(reward().title?.length ?? 0) > 16">{{ reward().title }}</p>
+                @if (reward().description) {
+                  <p class="anniversary-reward__description">{{ reward().description }}</p>
+                }
+              </aside>
             }
+
+            @if (draft().legacySubmission) {
+              <p class="alert alert--offline" role="status">
+                Tu envío de la encuesta anterior quedó sin confirmar. Reinténtalo para registrar esas respuestas
+                y tu regalo; se conservará como una participación de la versión anterior.
+              </p>
+            }
+            <div class="field field--name">
+              <label class="field__label" for="gift-name">¿A qué nombre registramos tu regalo?</label>
+              <input
+                id="gift-name"
+                [readOnly]="!!draft().legacySubmission || sending()"
+                class="input"
+                type="text"
+                autocomplete="name"
+                autocapitalize="words"
+                enterkeyhint="send"
+                placeholder="Nombre con el que realizas tus pedidos"
+                [maxLength]="nameMaxLength"
+                [value]="draft().name"
+                [attr.aria-invalid]="visibleError() ? 'true' : null"
+                aria-describedby="gift-help step-error"
+                (input)="setName(nameInput.value)"
+                #nameInput
+              />
+              <p class="field__help" id="gift-help">
+                Así podremos identificarte al canjearlo.
+              </p>
+              <p class="field-error" id="step-error" tabindex="-1" aria-live="polite">
+                @if (visibleError(); as error) {
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="12" cy="12" r="9" /><path d="M12 7.5v5M12 16h.01" />
+                  </svg>
+                  {{ error.message }}
+                }
+              </p>
+            </div>
+
+            <div class="submit-notice-slot" id="submit-notice" tabindex="-1" aria-live="polite">
+              @if (submitNotice(); as notice) {
+                <div class="alert" [class.alert--offline]="notice.tone === 'offline'">
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                    @if (notice.tone === "offline") {
+                      <path d="M2 8.8a15 15 0 0 1 4.2-2.6M9.6 5.2A15 15 0 0 1 22 8.8M5.2 12.3a10 10 0 0 1 3.4-2.1M14 9.3a10 10 0 0 1 4.8 3M8.7 15.6a5 5 0 0 1 6.6 0M12 19.5h.01M3 3l18 18" />
+                    } @else {
+                      <circle cx="12" cy="12" r="9" /><path d="M12 7.5v5M12 16h.01" />
+                    }
+                  </svg>
+                  <span>{{ notice.message }}</span>
+                </div>
+              } @else if (draft().submission === "pending" && !sending()) {
+                <div class="alert alert--offline">
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="12" cy="12" r="9" /><path d="M12 7.5v5M12 16h.01" />
+                  </svg>
+                  <span>Tu envío anterior no se confirmó. Tus respuestas siguen guardadas: vuelve a intentarlo.</span>
+                </div>
+              }
+            </div>
+
+            <details class="privacy">
+              <summary>
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" />
+                </svg>
+                Aviso de privacidad
+              </summary>
+              <div class="privacy__body">
+                <p>
+                  Base Mayorista recibe tus respuestas y el nombre que escribas para conocer tu opinión, mejorar nuestro
+                  servicio e identificar tu regalo de aniversario contra nuestro registro de clientas afiliadas.
+                </p>
+                <p>
+                  No pedimos teléfono, correo ni contraseña. La información no se comparte con terceros y solo la
+                  consulta nuestro equipo. Mientras contestas, tu avance se guarda únicamente en este navegador.
+                </p>
+                <p>
+                  Para consultar o eliminar tus datos escribe a
+                  <a href="mailto:contacto@base-mayorista.com">contacto&#64;base-mayorista.com</a>.
+                </p>
+              </div>
+            </details>
           </div>
-
           <div class="actions">
-
             <button type="submit" class="btn btn--primary btn--cta" [disabled]="sending()" [attr.aria-busy]="sending()">
               @if (sending()) {
                 <span class="spinner" aria-hidden="true"></span>
@@ -315,29 +338,6 @@
               Anterior
             </button>
           </div>
-
-          <details class="privacy">
-            <summary>
-              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-                <rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" />
-              </svg>
-              Aviso de privacidad
-            </summary>
-            <div class="privacy__body">
-              <p>
-                Base Mayorista recibe tus respuestas y el nombre que escribas para conocer tu opinión, mejorar nuestro
-                servicio e identificar tu regalo de aniversario contra nuestro registro de clientas afiliadas.
-              </p>
-              <p>
-                No pedimos teléfono, correo ni contraseña. La información no se comparte con terceros y solo la
-                consulta nuestro equipo. Mientras contestas, tu avance se guarda únicamente en este navegador.
-              </p>
-              <p>
-                Para consultar o eliminar tus datos escribe a
-                <a href="mailto:contacto@base-mayorista.com">contacto&#64;base-mayorista.com</a>.
-              </p>
-            </div>
-          </details>
         </form>
       </main>
     }
@@ -355,49 +355,42 @@
                 <svg class="icon" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
               </span>
             </span>
-            <h1 id="step-title" class="step__title step__title--done" tabindex="-1">¡Gracias por participar!</h1>
-            <p class="step__text">
-              Recibimos tus respuestas. Tu opinión nos ayuda a preparar nuestro segundo año.
-            </p>
+            <h1 id="step-title" class="step__title step__title--done" tabindex="-1">
+              {{ receipt.reward.status === "active" ? "¡Tu regalo ya está registrado!" : "¡Gracias por participar!" }}
+            </h1>
           </section>
 
+          @if (receipt.reward.status === "active") {
+            <section class="anniversary-reward anniversary-reward--earned" aria-label="Tu regalo de aniversario">
+              <span class="anniversary-reward__label">Por celebrar con nosotros</span>
+              <p class="anniversary-reward__value" [class.anniversary-reward__value--long]="(receipt.reward.title?.length ?? 0) > 16">{{ receipt.reward.title }}</p>
+              @if (receipt.reward.description) {
+                <p class="anniversary-reward__description">{{ receipt.reward.description }}</p>
+              }
+              @if (receipt.reward.redeemInstructions) {
+                <p class="anniversary-reward__instructions">{{ receipt.reward.redeemInstructions }}</p>
+              }
+            </section>
+          } @else {
+            <p class="reward-pending">
+              <span class="chip chip--pending">Detalles por anunciar</span>
+              <span class="receipt__meta">Muy pronto te daremos a conocer tu regalo de aniversario.</span>
+            </p>
+          }
+
           <dl class="receipt">
-            <div class="receipt__row">
-              <dt>Participación</dt>
-              <dd>
-                <span class="chip chip--ok">
-                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
-                  Registrada
-                </span>
-                @if (receivedAtLabel(); as when) {
-                  <span class="receipt__meta">{{ when }}</span>
-                }
-              </dd>
-            </div>
             <div class="receipt__row">
               <dt>Regalo a nombre de</dt>
               <dd class="receipt__name">{{ receipt.registeredName }}</dd>
             </div>
             <div class="receipt__row">
-              <dt>Tu regalo</dt>
+              <dt>Folio</dt>
               <dd>
-                @if (receipt.reward.status === "active") {
-                  <span class="receipt__reward">{{ receipt.reward.title }}</span>
-                  @if (receipt.reward.description) {
-                    <span class="receipt__meta">{{ receipt.reward.description }}</span>
-                  }
-                  @if (receipt.reward.redeemInstructions) {
-                    <span class="receipt__meta">{{ receipt.reward.redeemInstructions }}</span>
-                  }
-                } @else {
-                  <span class="chip chip--pending">Detalles por anunciar</span>
-                  <span class="receipt__meta">Muy pronto te daremos a conocer tu regalo de aniversario.</span>
+                <span class="receipt__folio">{{ folio() }}</span>
+                @if (receivedAtLabel(); as when) {
+                  <span class="receipt__meta">{{ when }}</span>
                 }
               </dd>
-            </div>
-            <div class="receipt__row">
-              <dt>Folio</dt>
-              <dd class="receipt__folio">{{ folio() }}</dd>
             </div>
           </dl>
           <p class="fineprint fineprint--center">

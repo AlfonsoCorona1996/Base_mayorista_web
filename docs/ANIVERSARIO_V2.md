@@ -156,3 +156,36 @@ portada y preguntas 4/5/registro del regalo, botón inicial visible, sin overflo
 texto ampliado al 200% y bienvenida estática sincronizada. La integración real contra Firestore
 emulado confirmó respuesta 201 con el 10%, snapshot del regalo y reintento 200 sin duplicados.
 Evidencia local en `tmp/anniversary-cover/`. No se desplegó ni se cambiaron datos en producción.
+
+## Confirmación del beneficio y navegación visible
+
+- La confirmación destaca el beneficio del recibo: «10% extra» y «De descuento en tu próximo
+  pedido». Nombre, folio y fecha quedan debajo; se conserva la indicación de validación de afiliación.
+  Los recibos históricos muestran su regalo original o su estado pendiente, sin sustituirlo por el actual.
+- Preguntas y registro usan un contenedor de altura máxima equivalente a la pantalla visible
+  (`100vh` como respaldo y `100dvh`). Encabezado y acciones tienen espacio propio; solo el contenido
+  se desplaza. No hay botones superpuestos a las opciones ni scroll de página en estos pasos.
+- El aviso de recuperación, errores, campo Otro y privacidad pertenecen al contenido desplazable.
+  Cada pregunta nueva comienza arriba; el foco de validación revela el campo que necesita atención.
+- `VisualViewport` ajusta la altura disponible si el teclado reduce el área visible sin cambiar el
+  layout. Se respeta el zoom con dos dedos y se retira el listener al salir de la encuesta.
+  Referencia: [MDN VisualViewport](https://developer.mozilla.org/en-US/docs/Web/API/VisualViewport).
+- Los controles nativos ocultos quedan posicionados dentro de su opción para evitar que generen
+  desbordamiento fuera del área de scroll y para conservar la navegación por teclado.
+
+La portada, los contratos, las respuestas, la persistencia y las reglas del regalo conservan su comportamiento.
+Evidencia local de esta revisión: `tmp/anniversary-viewport/`.
+
+Validación final:
+
+- Build de producción correcto; permanecen los avisos previos de presupuesto y CommonJS.
+- Pruebas de encuesta y panel: **41/41**. Suite global: **504/506**, con los dos fallos previos de
+  `AppVersionService` por la versión esperada. Backend: **160/160**. No hay script de lint.
+- Chrome en **1440×900, 1024×768, 768×1024, 390×844, 360×800, 320×568 y 390×400**:
+  siete pasos, botones visibles al inicio/mitad/final del scroll, sin overflow de página ni
+  superposiciones, error de Otro, recuperación, privacidad expandida y confirmación persistente.
+- Capturas inspeccionadas; texto al **200%** en preguntas y registro con botones sin recorte,
+  encabezado adaptable, navegación por teclado, aviso offline y recibos con contenido largo o pendiente.
+- Reducción de `VisualViewport.height` emulada a 400 px con el layout intacto: acciones dentro del
+  área visible. Zoom con dos dedos emulado al 200% y restauración. No sustituye la validación en
+  teléfonos físicos o navegadores integrados de WhatsApp, que sigue pendiente.

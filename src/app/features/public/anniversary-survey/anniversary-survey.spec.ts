@@ -212,7 +212,9 @@ describe("AnniversarySurveyPage", () => {
     http.expectOne(`${BASE}/responses`).flush({ ok: true, participation_id: draft.participationId, registered_name: "Ana", reward });
     await settle();
     await settle();
-    expect(q(".receipt__reward").textContent).toContain("10% extra");
+    expect(q("h1").textContent).toContain("¡Tu regalo ya está registrado!");
+    expect(q(".anniversary-reward--earned").textContent).toContain("10% extra");
+    expect(q(".anniversary-reward--earned").textContent).toContain("De descuento en tu próximo pedido.");
     expect(q(".receipt").textContent).toContain("Ana");
   });
 
@@ -330,13 +332,15 @@ describe("AnniversarySurveyPage", () => {
           participationId: "8f14e45f-ceea-4e7b-9a3c-1d2b3c4d5e6f",
           receivedAt: "2026-10-28T18:00:00.000Z",
           registeredName: "Ana",
-          reward: { status: "active", title: "Regalo especial", description: "Detalle" },
+          reward: { status: "active", title: "Regalo especial", description: "Detalle", redeemInstructions: "Presenta tu folio al hacer tu pedido." },
         },
       }),
     );
     await render();
-    expect(q("h1").textContent).toContain("¡Gracias por participar!");
-    expect(root.textContent).toContain("Regalo especial");
+    expect(q("h1").textContent).toContain("¡Tu regalo ya está registrado!");
+    expect(q(".anniversary-reward--earned").textContent).toContain("Regalo especial");
+    expect(q(".anniversary-reward--earned").textContent).toContain("Presenta tu folio al hacer tu pedido.");
+    expect(q(".anniversary-reward--earned").textContent).not.toContain("10% extra");
     expect(root.textContent).toContain("8F14E45F");
   });
 });

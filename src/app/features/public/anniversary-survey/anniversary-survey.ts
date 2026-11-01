@@ -161,6 +161,19 @@ export default class AnniversarySurveyPage {
     const onVisibility = () => {
       if (document.visibilityState === "hidden") this.flushSave();
     };
+    // El teclado puede reducir el área visible sin cambiar 100dvh.
+    // El zoom con dos dedos conserva el tamaño del layout para permitir ampliarlo.
+    const viewport = window.visualViewport;
+    const onViewportResize = () => {
+      const style = this.host.nativeElement.style;
+      if (viewport && viewport.scale === 1 && viewport.height > 0) {
+        style.setProperty("--survey-viewport-height", `${viewport.height}px`);
+      } else {
+        style.removeProperty("--survey-viewport-height");
+      }
+    };
+    onViewportResize();
+    viewport?.addEventListener("resize", onViewportResize);
 
     window.addEventListener("popstate", onPopState);
     window.addEventListener("online", onOnline);
@@ -174,6 +187,7 @@ export default class AnniversarySurveyPage {
       window.removeEventListener("offline", onOffline);
       window.removeEventListener("pagehide", onHide);
       document.removeEventListener("visibilitychange", onVisibility);
+      viewport?.removeEventListener("resize", onViewportResize);
       this.restoreDocumentMeta();
     });
 
