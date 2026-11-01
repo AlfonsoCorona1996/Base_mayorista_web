@@ -4,6 +4,7 @@ import {
   DestroyRef,
   ElementRef,
   Injector,
+  afterEveryRender,
   afterNextRender,
   computed,
   inject,
@@ -175,6 +176,25 @@ export default class AnniversarySurveyPage {
     onViewportResize();
     viewport?.addEventListener("resize", onViewportResize);
 
+    let scrollContent: HTMLElement | null = null;
+    const updateScrollHint = () => {
+      const hasMore = !!scrollContent && scrollContent.scrollHeight - scrollContent.scrollTop - scrollContent.clientHeight > 1;
+      this.host.nativeElement.classList.toggle("has-more-options", hasMore);
+    };
+    const scrollResize = new ResizeObserver(updateScrollHint);
+    afterEveryRender(() => {
+      const next = this.host.nativeElement.querySelector<HTMLElement>(".step__scroll .step__content");
+      if (next !== scrollContent) {
+        scrollContent?.removeEventListener("scroll", updateScrollHint);
+        scrollResize.disconnect();
+        scrollContent = next;
+        scrollContent?.addEventListener("scroll", updateScrollHint, { passive: true });
+        if (scrollContent) scrollResize.observe(scrollContent);
+      }
+      // También recalcula al aparecer Otro, errores o el aviso de recuperación.
+      updateScrollHint();
+    });
+
     window.addEventListener("popstate", onPopState);
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
@@ -188,6 +208,8 @@ export default class AnniversarySurveyPage {
       window.removeEventListener("pagehide", onHide);
       document.removeEventListener("visibilitychange", onVisibility);
       viewport?.removeEventListener("resize", onViewportResize);
+      scrollContent?.removeEventListener("scroll", updateScrollHint);
+      scrollResize.disconnect();
       this.restoreDocumentMeta();
     });
 

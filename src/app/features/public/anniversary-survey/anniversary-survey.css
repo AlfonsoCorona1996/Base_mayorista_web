@@ -525,6 +525,28 @@
     var(--ui-space-16, 16px) max(var(--gutter), env(safe-area-inset-left));
 }
 
+.step__scroll {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Señal visual dentro del scroll: no intercepta clics ni ocupa espacio. */
+.step__scroll::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: var(--ui-space-16, 16px);
+  background: linear-gradient(transparent, rgb(29 29 31 / 16%));
+  pointer-events: none;
+  opacity: 0;
+}
+
+:host(.has-more-options) .step__scroll::after {
+  opacity: 1;
+}
+
 .step__set {
   min-width: 0;
   margin: 0;

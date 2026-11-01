@@ -176,6 +176,12 @@ Evidencia local en `tmp/anniversary-cover/`. No se desplegó ni se cambiaron dat
 La portada, los contratos, las respuestas, la persistencia y las reglas del regalo conservan su comportamiento.
 Evidencia local de esta revisión: `tmp/anniversary-viewport/`.
 
+Indicación de scroll: una sombra interior inferior aparece únicamente cuando quedan opciones
+por debajo. Se recalcula al desplazar, cambiar de pregunta, mostrar campos o redimensionar;
+desaparece al final o si todo cabe. No intercepta clics ni altera el espacio de las acciones.
+Verificada en los cinco tamaños mínimos (inicio, mitad, final y sin overflow), con build correcto
+y 37/37 pruebas de encuesta. Evidencia: `tmp/anniversary-shadow/`.
+
 Validación final:
 
 - Build de producción correcto; permanecen los avisos previos de presupuesto y CommonJS.

@@ -75,134 +75,136 @@
         @if (question(); as q) {
           <main class="stage" id="contenido">
             <form class="step" novalidate (submit)="$event.preventDefault(); next()">
-              <div class="step__content">
-                <ng-container *ngTemplateOutlet="resumeNotice" />
-                @if (q.kind === "single") {
-                  <aside class="initiative" aria-labelledby="initiative-title">
-                    <h2 id="initiative-title">{{ q.intro.title }}</h2>
-                    <p>{{ q.intro.description }}</p>
-                  </aside>
-                }
-                @if (q.kind === "text") {
-                  <div class="step__head">
-                    <p class="kicker">Pregunta {{ questionIndex() + 1 }} de {{ questionCount }}</p>
-                    <h1 id="step-title" class="step__title" tabindex="-1">{{ q.title }}</h1>
-                    <p class="hint" id="q-hint">Opcional. Puedes continuar sin escribir nada.</p>
-                  </div>
-                  <div class="field">
-                    <textarea
-                      id="comment-input"
-                      class="input input--area"
-                      rows="6"
-                      [maxLength]="commentMaxLength"
-                      [placeholder]="q.placeholder"
-                      aria-labelledby="step-title"
-                      aria-describedby="q-hint comment-count step-error"
-                      [value]="draft().answers.comment"
-                      (input)="setComment(commentArea.value)"
-                      #commentArea
-                    ></textarea>
-                    <p class="counter" id="comment-count">
-                      {{ draft().answers.comment.length }} / {{ commentMaxLength }}
-                    </p>
-                  </div>
-                } @else {
-                  <fieldset class="step__set" aria-describedby="q-hint step-error">
-                    <legend class="step__head">
-                      <span class="kicker">Pregunta {{ questionIndex() + 1 }} de {{ questionCount }}</span>
-                      <h1 id="step-title" class="step__title" tabindex="-1">{{ q.title }}</h1>
-                    </legend>
-
-                    @if (q.kind === "rating") {
-                      <p class="hint" id="q-hint">Elige una opción, del 1 (muy mala) al 5 (excelente).</p>
-                      <div class="scale">
-                        @for (option of q.options; track option.value) {
-                          <label class="scale__item" [class.is-selected]="draft().answers.satisfaction === option.value">
-                            <input
-                              class="sr-only"
-                              type="radio"
-                              name="satisfaction"
-                              [value]="option.value"
-                              [checked]="draft().answers.satisfaction === option.value"
-                              (change)="setRating(option.value)"
-                            />
-                            <span class="scale__num">{{ option.value }}</span>
-                            <span class="scale__label">{{ option.label }}</span>
-                            <svg class="icon scale__check" viewBox="0 0 24 24" aria-hidden="true">
-                              <path d="M5 12.5l4.5 4.5L19 7.5" />
-                            </svg>
-                          </label>
-                        }
-                      </div>
-                    } @else {
-                      <p class="hint" id="q-hint" aria-live="polite">
-                        @if (q.kind === "single") {
-                          Elige una opción.
-                        } @else if (selectedCount(q.id) >= q.max) {
-                          <strong>Ya elegiste {{ q.max }}.</strong> Para cambiar, desmarca una opción.
-                        } @else {
-                          Elige hasta {{ q.max }} opciones.
-                          <span class="hint__count">{{ selectedCount(q.id) }} de {{ q.max }}</span>
-                        }
-                      </p>
-                      <div class="options">
-                        @for (option of q.options; track option.id) {
-                          <label
-                            class="option"
-                            [class.is-selected]="isSelected(q.id, option.id)"
-                            [class.is-disabled]="isOptionDisabled(q, option.id)"
-                          >
-                            <input
-                              class="sr-only"
-                              [type]="q.kind === 'single' ? 'radio' : 'checkbox'"
-                              [name]="q.id"
-                              [value]="option.id"
-                              [checked]="isSelected(q.id, option.id)"
-                              [disabled]="isOptionDisabled(q, option.id)"
-                              (change)="toggleOption(q, option.id, box.checked)"
-                              #box
-                            />
-                            <span class="option__box" [class.option__box--radio]="q.kind === 'single'" aria-hidden="true">
-                              <svg class="icon" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
-                            </span>
-                            <span class="option__label">{{ option.label }}</span>
-                          </label>
-                        }
-                      </div>
-                      @if (q.kind === "single") {
-                        <p class="field__help">Solo registramos tu interés: no te inscribe ni autoriza compartir tus datos.</p>
-                      }
-                      @if (isSelected(q.id, otherId)) {
-                        <div class="other">
-                          <label class="other__label" for="other-input">Cuéntanos cuál</label>
-                          <input
-                            id="other-input"
-                            class="input"
-                            type="text"
-                            autocomplete="off"
-                            enterkeyhint="next"
-                            [maxLength]="otherMaxLength"
-                            [value]="otherText(q.id)"
-                            [attr.aria-invalid]="visibleError()?.code === 'other_required' ? 'true' : null"
-                            aria-describedby="step-error"
-                            (input)="setOther(q.id, otherInput.value)"
-                            #otherInput
-                          />
-                        </div>
-                      }
-                    }
-                  </fieldset>
-                }
-
-                <p class="field-error" id="step-error" tabindex="-1" aria-live="polite">
-                  @if (visibleError(); as error) {
-                    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-                      <circle cx="12" cy="12" r="9" /><path d="M12 7.5v5M12 16h.01" />
-                    </svg>
-                    {{ error.message }}
+              <div class="step__scroll">
+                <div class="step__content">
+                  <ng-container *ngTemplateOutlet="resumeNotice" />
+                  @if (q.kind === "single") {
+                    <aside class="initiative" aria-labelledby="initiative-title">
+                      <h2 id="initiative-title">{{ q.intro.title }}</h2>
+                      <p>{{ q.intro.description }}</p>
+                    </aside>
                   }
-                </p>
+                  @if (q.kind === "text") {
+                    <div class="step__head">
+                      <p class="kicker">Pregunta {{ questionIndex() + 1 }} de {{ questionCount }}</p>
+                      <h1 id="step-title" class="step__title" tabindex="-1">{{ q.title }}</h1>
+                      <p class="hint" id="q-hint">Opcional. Puedes continuar sin escribir nada.</p>
+                    </div>
+                    <div class="field">
+                      <textarea
+                        id="comment-input"
+                        class="input input--area"
+                        rows="6"
+                        [maxLength]="commentMaxLength"
+                        [placeholder]="q.placeholder"
+                        aria-labelledby="step-title"
+                        aria-describedby="q-hint comment-count step-error"
+                        [value]="draft().answers.comment"
+                        (input)="setComment(commentArea.value)"
+                        #commentArea
+                      ></textarea>
+                      <p class="counter" id="comment-count">
+                        {{ draft().answers.comment.length }} / {{ commentMaxLength }}
+                      </p>
+                    </div>
+                  } @else {
+                    <fieldset class="step__set" aria-describedby="q-hint step-error">
+                      <legend class="step__head">
+                        <span class="kicker">Pregunta {{ questionIndex() + 1 }} de {{ questionCount }}</span>
+                        <h1 id="step-title" class="step__title" tabindex="-1">{{ q.title }}</h1>
+                      </legend>
 
+                      @if (q.kind === "rating") {
+                        <p class="hint" id="q-hint">Elige una opción, del 1 (muy mala) al 5 (excelente).</p>
+                        <div class="scale">
+                          @for (option of q.options; track option.value) {
+                            <label class="scale__item" [class.is-selected]="draft().answers.satisfaction === option.value">
+                              <input
+                                class="sr-only"
+                                type="radio"
+                                name="satisfaction"
+                                [value]="option.value"
+                                [checked]="draft().answers.satisfaction === option.value"
+                                (change)="setRating(option.value)"
+                              />
+                              <span class="scale__num">{{ option.value }}</span>
+                              <span class="scale__label">{{ option.label }}</span>
+                              <svg class="icon scale__check" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M5 12.5l4.5 4.5L19 7.5" />
+                              </svg>
+                            </label>
+                          }
+                        </div>
+                      } @else {
+                        <p class="hint" id="q-hint" aria-live="polite">
+                          @if (q.kind === "single") {
+                            Elige una opción.
+                          } @else if (selectedCount(q.id) >= q.max) {
+                            <strong>Ya elegiste {{ q.max }}.</strong> Para cambiar, desmarca una opción.
+                          } @else {
+                            Elige hasta {{ q.max }} opciones.
+                            <span class="hint__count">{{ selectedCount(q.id) }} de {{ q.max }}</span>
+                          }
+                        </p>
+                        <div class="options">
+                          @for (option of q.options; track option.id) {
+                            <label
+                              class="option"
+                              [class.is-selected]="isSelected(q.id, option.id)"
+                              [class.is-disabled]="isOptionDisabled(q, option.id)"
+                            >
+                              <input
+                                class="sr-only"
+                                [type]="q.kind === 'single' ? 'radio' : 'checkbox'"
+                                [name]="q.id"
+                                [value]="option.id"
+                                [checked]="isSelected(q.id, option.id)"
+                                [disabled]="isOptionDisabled(q, option.id)"
+                                (change)="toggleOption(q, option.id, box.checked)"
+                                #box
+                              />
+                              <span class="option__box" [class.option__box--radio]="q.kind === 'single'" aria-hidden="true">
+                                <svg class="icon" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+                              </span>
+                              <span class="option__label">{{ option.label }}</span>
+                            </label>
+                          }
+                        </div>
+                        @if (q.kind === "single") {
+                          <p class="field__help">Solo registramos tu interés: no te inscribe ni autoriza compartir tus datos.</p>
+                        }
+                        @if (isSelected(q.id, otherId)) {
+                          <div class="other">
+                            <label class="other__label" for="other-input">Cuéntanos cuál</label>
+                            <input
+                              id="other-input"
+                              class="input"
+                              type="text"
+                              autocomplete="off"
+                              enterkeyhint="next"
+                              [maxLength]="otherMaxLength"
+                              [value]="otherText(q.id)"
+                              [attr.aria-invalid]="visibleError()?.code === 'other_required' ? 'true' : null"
+                              aria-describedby="step-error"
+                              (input)="setOther(q.id, otherInput.value)"
+                              #otherInput
+                            />
+                          </div>
+                        }
+                      }
+                    </fieldset>
+                  }
+
+                  <p class="field-error" id="step-error" tabindex="-1" aria-live="polite">
+                    @if (visibleError(); as error) {
+                      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="12" cy="12" r="9" /><path d="M12 7.5v5M12 16h.01" />
+                      </svg>
+                      {{ error.message }}
+                    }
+                  </p>
+
+                </div>
               </div>
               <div class="actions">
                 <button type="button" class="btn btn--ghost" (click)="back()">
