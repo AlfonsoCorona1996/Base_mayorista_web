@@ -35,12 +35,13 @@ describe("AnniversarySurveyPage", () => {
   let http: HttpTestingController;
   let root: HTMLElement;
 
-  async function render(): Promise<void> {
+  async function render(reward: { status: string; title?: string; description?: string } = { status: "pending_definition" }): Promise<void> {
     fixture = TestBed.createComponent(AnniversarySurveyPage);
     root = fixture.nativeElement as HTMLElement;
     http = TestBed.inject(HttpTestingController);
     await fixture.whenStable();
-    http.expectOne(BASE).flush({ ok: true, status: "active", reward: { status: "pending_definition" } });
+    http.expectOne(BASE).flush({ ok: true, status: "active", reward });
+    await fixture.whenStable();
     await fixture.whenStable();
   }
 
@@ -86,9 +87,9 @@ describe("AnniversarySurveyPage", () => {
   });
 
   it("muestra la bienvenida y avanza a la primera pregunta", async () => {
-    await render();
+    await render({ status: "active", title: "10% extra", description: "De descuento en tu próximo pedido." });
     expect(q("h1").textContent).toContain("¡Nuestro primer año se celebra contigo!");
-    expect(root.textContent).toContain("registrar tu regalo de aniversario");
+    expect(root.textContent).toContain("10% extra");
     buttonByText("Comenzar encuesta").click();
     await settle();
     expect(q(".kicker").textContent).toContain("Pregunta 1 de 6");
@@ -165,7 +166,7 @@ describe("AnniversarySurveyPage", () => {
   it("registra el regalo solo con confirmación del servidor", async () => {
     localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(completeDraft(GIFT_STEP)));
     await render();
-    expect(q("h1").textContent).toContain("¡Ahora sí, vamos por tu regalo!");
+    expect(q("h1").textContent).toContain("¡Este regalo es para ti!");
 
     await next();
     expect(q("#step-error").textContent).toContain("Escribe el nombre");
@@ -199,12 +200,28 @@ describe("AnniversarySurveyPage", () => {
     expect((saved["answers"] as Record<string, unknown>)["satisfaction"]).toBeNull();
   });
 
+  it("presenta el 10% aprobado y solo lo confirma después de registrar el regalo", async () => {
+    const reward = { status: "active", title: "10% extra", description: "De descuento en tu próximo pedido." };
+    const draft = { ...completeDraft(GIFT_STEP), name: "Ana" };
+    localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+    await render(reward);
+    expect(q(".anniversary-reward").textContent).toContain("10% extra");
+    expect(q(".anniversary-reward").textContent).toContain("De descuento en tu próximo pedido.");
+    expect(root.querySelector(".receipt")).toBeNull();
+    await next();
+    http.expectOne(`${BASE}/responses`).flush({ ok: true, participation_id: draft.participationId, registered_name: "Ana", reward });
+    await settle();
+    await settle();
+    expect(q(".receipt__reward").textContent).toContain("10% extra");
+    expect(q(".receipt").textContent).toContain("Ana");
+  });
+
   it("Facebook usa radios, exige Otro, conserva su texto y lo limpia al cambiar de opción", async () => {
     const draft = completeDraft(4);
     draft.answers.facebook_interest = { selected: [], other: "" };
     localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
     await render();
-    expect(root.textContent).toContain("Una idea que estamos preparando");
+    expect(root.textContent).toContain("Queremos llevar nuevas clientas hacia ti");
     expect(root.textContent).toContain("no te inscribe ni autoriza compartir tus datos");
     let radios = [...root.querySelectorAll<HTMLInputElement>(".option input[type=radio]")];
     expect(radios.length).toBe(4);
@@ -238,10 +255,10 @@ describe("AnniversarySurveyPage", () => {
     expect(root.querySelector("#gift-name")).not.toBeNull();
   });
 
-  it("explica el reinicio de un borrador anterior sin reutilizar respuestas", async () => {
+  it("recibe un borrador de pruebas anterior sin mostrar avisos de actualización ni reutilizar respuestas", async () => {
     localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify({ ...completeDraft(4), questionsVersion: 1 }));
     await render();
-    expect(root.textContent).toContain("Actualizamos las preguntas");
+    expect(root.textContent).not.toContain("Actualizamos las preguntas");
     expect(stored()["questionsVersion"]).toBe(2);
     expect((stored()["answers"] as Record<string, unknown>)["satisfaction"]).toBeNull();
   });

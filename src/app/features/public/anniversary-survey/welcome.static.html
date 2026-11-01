@@ -1,63 +1,131 @@
-<!--
-  Bienvenida estática de /aniversario. scripts/generate-anniversary-page.mjs la
-  inserta en aniversario.html como pantalla de arranque: la clienta ve el
-  contenido real mientras Angular descarga (en un teléfono lento son varios
-  segundos) y después la app la retira con un fundido.
-
-  Debe verse igual que el caso "welcome" de anniversary-survey.html. El
-  generador falla si los textos marcados con data-sync no aparecen también en
-  esa plantilla. Si el borrador guardado ya está en una pregunta, solo se
-  muestra el ícono para no enseñar una bienvenida que va a cambiar.
--->
+<!-- Bienvenida estática sincronizada con anniversary-survey.html y sus estilos. -->
 <style>
-  #app-shell-skeleton.bm-survey-splash { display: block; overflow-y: auto; opacity: 1; animation: none; background: #fdfbf8; color: #1d1d1f; font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; font-size: 16px; line-height: 1.5; letter-spacing: normal; -webkit-text-size-adjust: 100%; }
+  #app-shell-skeleton.bm-survey-splash { display: flex; flex-direction: column; overflow-y: auto; opacity: 1; animation: none; color: #1d1d1f; font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; font-size: 16px; line-height: 1.5; letter-spacing: normal; -webkit-text-size-adjust: 100%; }
   #app-shell-skeleton.bm-survey-splash.is-leaving { opacity: 0; transition: opacity 0.28s ease; pointer-events: none; }
-  /* Independiente de la hoja global (llega después): sin esto el texto cambia al cargarla. */
   .bm-survey-splash, .bm-survey-splash * { box-sizing: border-box; }
-  .bm-survey-splash p, .bm-survey-splash ul, .bm-survey-splash button { margin: 0; }
   .bm-survey-splash svg { width: 20px; height: 20px; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   .bms-splash-logo { display: none; }
-  html.bms-resume #app-shell-skeleton.bm-survey-splash { display: flex; align-items: center; justify-content: center; }
+  html.bms-resume #app-shell-skeleton.bm-survey-splash { align-items: center; justify-content: center; }
   html.bms-resume .bms-splash-logo { display: block; width: 96px; height: 60px; }
   html.bms-resume .bms-welcome { display: none; }
-  .bms-welcome { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
-  .bms-hero { position: relative; overflow: hidden; padding: calc(24px + env(safe-area-inset-top)) 16px 32px; color: #1d1d1f; border-radius: 0 0 28px 28px;
-    background: radial-gradient(90% 70% at 100% 0%, rgba(255, 177, 29, 0.24) 0%, rgba(255, 177, 29, 0) 60%), radial-gradient(80% 60% at 0% 100%, rgba(226, 19, 99, 0.12) 0%, rgba(226, 19, 99, 0) 60%), #fff8f1; }
-  .bms-hero > :not(.bms-numeral) { position: relative; }
-  .bms-numeral { position: absolute; right: -0.04em; bottom: -0.2em; font-size: 15rem; font-weight: 800; line-height: 1; color: transparent; background: linear-gradient(180deg, rgba(255, 134, 21, 0.2), rgba(226, 19, 99, 0.08)); -webkit-background-clip: text; background-clip: text; }
-  .bms-logo { display: block; width: 136px; height: auto; }
-  .bm-survey-splash .bms-eyebrow { display: inline-flex; align-items: center; gap: 8px; margin: 24px 0 8px; color: #c20c55; font-size: 0.8125rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
-  .bms-eyebrow::after { content: ""; width: 40px; height: 3px; border-radius: 2px; background: linear-gradient(90deg, #ffb11d 0%, #ff8615 30%, #eb500b 52%, #e21363 78%, #d50e5f 100%); }
-  .bms-title { max-width: 20rem; }
-  .bms-title-main { display: block; font-size: clamp(2rem, 9.5vw, 3rem); font-weight: 800; line-height: 1.05; letter-spacing: -0.025em; }
-  .bms-brand { color: #d50e5f; }
-  .bms-title-sub { display: block; margin-top: 12px; color: #55555c; font-size: clamp(1.0625rem, 4.6vw, 1.25rem); font-weight: 400; line-height: 1.35; }
-  .bms-body { width: 100%; max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; padding: 24px 16px calc(24px + env(safe-area-inset-bottom)); }
-  .bm-survey-splash .bms-lead { color: #55555c; font-size: 1rem; line-height: 1.6; }
-  .bms-gift { display: flex; align-items: flex-start; gap: 12px; padding: 16px; border-radius: 18px; border: 2px solid transparent; background-image: linear-gradient(#fff, #fff), linear-gradient(90deg, #ffb11d 0%, #ff8615 30%, #eb500b 52%, #e21363 78%, #d50e5f 100%); background-origin: border-box; background-clip: padding-box, border-box; }
-  .bms-gift-icon { width: 48px; height: 48px; flex-shrink: 0; display: grid; place-items: center; border-radius: 14px; color: #fff; background: linear-gradient(135deg, #ffb11d 0%, #eb500b 48%, #e21363 100%); }
-  .bms-gift-icon svg { width: 28px; height: 28px; stroke-width: 1.7; }
-  .bm-survey-splash .bms-gift-title { margin-bottom: 4px; font-size: 1.25rem; font-weight: 800; line-height: 1.2; }
-  .bm-survey-splash .bms-gift-text { color: #55555c; font-size: 0.9375rem; line-height: 1.5; }
-  .bms-meta { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 0; padding: 0; list-style: none; color: #55555c; font-size: 0.9375rem; font-weight: 400; }
-  .bms-meta li { display: inline-flex; align-items: center; gap: 8px; }
-  .bms-meta svg { width: 18px; height: 18px; color: #eb500b; }
-  .bms-cta { width: 100%; min-height: 52px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0 16px; border: 1.5px solid transparent; border-radius: 14px; color: #fff; background: #1d1d1f; font: inherit; font-size: 1.0625rem; font-weight: 600; line-height: 1.2; }
-  .bm-survey-splash .bms-fineprint { color: #55555c; font-size: 0.8125rem; line-height: 1.5; }
-  @media (min-width: 768px) {
-    .bms-hero { padding-top: calc(48px + env(safe-area-inset-top)); padding-bottom: 48px; }
-    .bms-numeral { font-size: 20rem; }
-    .bms-body { padding-left: 24px; padding-right: 24px; }
-  }
-  @media (min-width: 960px) {
-    .bms-welcome { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); align-items: stretch; width: 100%; max-width: 1120px; margin: 0 auto; padding: 32px; gap: 48px; }
-    .bms-hero { display: flex; flex-direction: column; justify-content: center; min-height: 560px; padding: 48px; border-radius: 28px; }
-    .bms-logo { width: 220px; }
-    .bms-body { max-width: 520px; justify-content: center; padding: 0; }
-  }
+#app-shell-skeleton.bm-survey-splash {
+  padding: max(16px, env(safe-area-inset-top))
+    max(16px, env(safe-area-inset-right))
+    max(16px, env(safe-area-inset-bottom))
+    max(16px, env(safe-area-inset-left));
+  background:
+    radial-gradient(ellipse at 0% 0%, rgba(255, 177, 29, 0.12), transparent 60%),
+    radial-gradient(ellipse at 100% 100%, rgba(226, 19, 99, 0.07), transparent 60%),
+    #fdfbf8;
+}
+
+.bms-welcome {
+  width: 100%;
+  max-width: 440px;
+  margin: auto;
+  padding: 24px 16px;
+  border: 1px solid #ece6df;
+  border-radius: 24px;
+  background: #ffffff;
+}
+
+.bms-hero {
+  text-align: center;
+}
+
+.bms-logo {
+  display: block;
+  width: 96px;
+  height: auto;
+  margin: 0 auto 24px;
+}
+
+.bms-title {
+  margin: 0;
+  font-family: inherit;
+  font-size: clamp(1.75rem, 7vw, 2.25rem);
+  font-weight: 800;
+  line-height: 1.12;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+
+
+.bms-brand {
+  display: block;
+  color: #d50e5f;
+}
+
+.bms-lead {
+  max-width: 30ch;
+  margin: 12px auto 0;
+  color: #55555c;
+  font-size: 1rem;
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+.bms-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 24px;
+}
+
+.bms-gift {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 12px;
+  background: #fff1f6;
+}
+
+.bms-gift-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  color: #d50e5f;
+  background: #ffffff;
+}
+
+
+.bms-gift-copy {
+  min-width: 0;
+}
+
+.bms-gift-title {
+  margin: 0 0 4px;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.bms-gift-text {
+  margin: 0;
+  color: #55555c;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.bms-meta {
+  margin: 0;
+  color: #55555c;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  text-align: center;
+}
+
+
+  .bms-cta { width: 100%; min-height: 52px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0 16px; border: 1.5px solid transparent; border-radius: 14px; color: #fff; background: #1d1d1f; font: inherit; font-size: 1.0625rem; font-weight: 600; line-height: 1.2; cursor: pointer; }
+  @media (min-width: 768px) { .bms-welcome { padding: 32px; } #app-shell-skeleton.bm-survey-splash { padding-left: max(24px, env(safe-area-inset-left)); padding-right: max(24px, env(safe-area-inset-right)); } }
 </style>
 <div id="app-shell-skeleton" class="bm-survey-splash" aria-hidden="true">
-  <script>
+<script>
     (function () {
       try {
         var draft = JSON.parse(localStorage.getItem("bm.survey.aniversario-2026") || "null");
@@ -69,40 +137,29 @@
   </script>
   <img class="bms-splash-logo" src="/aniversario/bm-icono.webp" width="96" height="60" alt="" decoding="async">
   <div class="bms-welcome">
-    <section class="bms-hero">
-      <span class="bms-numeral">1</span>
+    <div class="bms-hero">
       <img class="bms-logo" src="/aniversario/bm-logo.webp" width="136" height="118" alt="">
-      <p class="bms-eyebrow" data-sync>Primer aniversario</p>
-      <p class="bms-title">
-        <span class="bms-title-main" data-sync>¡Nuestro primer año <span class="bms-brand">se celebra contigo!</span></span>
-      </p>
-    </section>
+      <p class="bms-title" data-sync>¡Nuestro primer año <span class="bms-brand">se celebra contigo!</span></p>
+      <p class="bms-lead" data-sync>Elige qué te gustaría ver en nuestro segundo año.</p>
+    </div>
     <div class="bms-body">
-      <p class="bms-lead" data-sync>
-        Tenemos varias ideas para este segundo año de Base Mayorista, pero antes de ponerlas en marcha queremos
-        saber cuáles te servirían más para vender y cuáles te gustaría que hiciéramos realidad.
-      </p>
       <div class="bms-gift">
         <span class="bms-gift-icon">
           <svg viewBox="0 0 24 24"><path d="M4 11.5h16V20a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1zM3 7.5h18v4H3zM12 7.5V21M12 7.5C10.6 4.6 7 4.2 6.6 6.1 6.3 7.4 8.6 7.5 12 7.5zm0 0c1.4-2.9 5-3.3 5.4-1.4.3 1.3-2 1.4-5.4 1.4z"/></svg>
         </span>
-        <div>
-          <p class="bms-gift-title" data-sync>Tu regalo de aniversario</p>
-          <p class="bms-gift-text" data-sync>Son sólo 6 preguntas y al terminar podrás registrar tu regalo de aniversario.</p>
+        <div class="bms-gift-copy">
+          <p class="bms-gift-title" data-sync>10% extra</p>
+          <p class="bms-gift-text" data-sync>De descuento en tu próximo pedido.</p>
         </div>
       </div>
-      <ul class="bms-meta">
-        <li><svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/></svg>6 preguntas</li>
-        <li><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span data-sync>Aproximadamente 2 minutos</span></li>
-      </ul>
+      <p class="bms-meta" data-sync>6 preguntas · 2 minutos aprox.</p>
       <button type="button" class="bms-cta" id="bms-start" tabindex="-1">
         <span data-sync>Comenzar encuesta</span>
         <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
       </button>
-      <p class="bms-fineprint" data-sync>Tus respuestas se guardan en este celular mientras contestas, por si necesitas salir y volver.</p>
     </div>
   </div>
-  <script>
+<script>
     // Si tocan "Comenzar" antes de que cargue la app, se recuerda y la app avanza sola.
     document.getElementById("bms-start").addEventListener("click", function () {
       window.__bmSurveyStart = true;

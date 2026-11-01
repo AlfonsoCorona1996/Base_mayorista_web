@@ -328,77 +328,46 @@
 
 /* ---------- Bienvenida ---------- */
 
+.survey[data-view="welcome"] {
+  padding: max(var(--ui-space-16, 16px), env(safe-area-inset-top))
+    max(var(--gutter), env(safe-area-inset-right))
+    max(var(--ui-space-16, 16px), env(safe-area-inset-bottom))
+    max(var(--gutter), env(safe-area-inset-left));
+  background:
+    radial-gradient(ellipse at 0% 0%, rgba(255, 177, 29, 0.12), transparent 60%),
+    radial-gradient(ellipse at 100% 100%, rgba(226, 19, 99, 0.07), transparent 60%),
+    var(--surface);
+}
+
 .welcome {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
+  width: 100%;
+  max-width: var(--ui-form-max-width-compact, 440px);
+  margin: auto;
+  padding: var(--ui-space-24, 24px) var(--ui-space-16, 16px);
+  border: 1px solid var(--line);
+  border-radius: var(--ui-radius-xl, 24px);
+  background: var(--card);
 }
 
 .hero {
-  position: relative;
-  overflow: hidden;
-  padding: calc(var(--ui-space-24, 24px) + env(safe-area-inset-top)) var(--gutter) var(--ui-space-32, 32px);
-  color: var(--ink);
-  background:
-    radial-gradient(90% 70% at 100% 0%, rgba(255, 177, 29, 0.24) 0%, rgba(255, 177, 29, 0) 60%),
-    radial-gradient(80% 60% at 0% 100%, rgba(226, 19, 99, 0.12) 0%, rgba(226, 19, 99, 0) 60%),
-    var(--hero-bg);
-  border-radius: 0 0 28px 28px;
-}
-
-/* El numeral decorativo queda fuera del flujo; el resto se apila sobre él. */
-.hero > :not(.hero__numeral) {
-  position: relative;
-}
-
-.hero__numeral {
-  position: absolute;
-  right: -0.04em;
-  bottom: -0.2em;
-  font-family: var(--font-display);
-  font-size: 15rem;
-  font-weight: 800;
-  line-height: 1;
-  color: transparent;
-  background: linear-gradient(180deg, rgba(255, 134, 21, 0.2), rgba(226, 19, 99, 0.08));
-  -webkit-background-clip: text;
-  background-clip: text;
-  pointer-events: none;
-  user-select: none;
+  text-align: center;
 }
 
 .hero__logo {
   display: block;
-  width: 136px;
+  width: 96px;
   height: auto;
-}
-
-.eyebrow {
-  margin: var(--ui-space-24, 24px) 0 var(--ui-space-8, 8px);
-  font-size: 0.8125rem;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.eyebrow--brand {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--ui-space-8, 8px);
-  color: var(--accent-text);
-}
-
-.eyebrow--brand::after {
-  content: "";
-  width: 40px;
-  height: 3px;
-  border-radius: 2px;
-  background: var(--brand-gradient);
+  margin: 0 auto var(--ui-space-24, 24px);
 }
 
 .hero__title {
   margin: 0;
-  max-width: 20rem;
+  font-family: var(--font-display);
+  font-size: clamp(1.75rem, 7vw, 2.25rem);
+  font-weight: 800;
+  line-height: 1.12;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
 }
 
 .hero__title:focus,
@@ -406,61 +375,47 @@
   outline: none;
 }
 
-.hero__title-main {
-  display: block;
-  font-family: var(--font-display);
-  font-size: clamp(2rem, 9.5vw, 3rem);
-  font-weight: 800;
-  line-height: 1.05;
-  letter-spacing: -0.025em;
-}
-
 .hero__brand {
+  display: block;
   color: var(--magenta-deep);
 }
 
-.hero__title-sub {
-  display: block;
-  margin-top: var(--ui-space-12, 12px);
+.lead {
+  max-width: 30ch;
+  margin: var(--ui-space-12, 12px) auto 0;
   color: var(--muted);
-  font-size: clamp(1.0625rem, 4.6vw, 1.25rem);
-  font-weight: 400;
-  line-height: 1.35;
+  font-size: 1rem;
+  line-height: 1.5;
+  text-wrap: pretty;
 }
 
 .welcome__body {
-  width: 100%;
-  max-width: 640px;
-  margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: var(--ui-space-16, 16px);
-  padding: var(--ui-space-24, 24px) var(--gutter) calc(var(--ui-space-24, 24px) + env(safe-area-inset-bottom));
-}
-
-.lead {
-  margin: 0;
-  color: var(--muted);
-  font-size: 1rem;
-  line-height: 1.6;
+  padding-top: var(--ui-space-24, 24px);
 }
 
 .gift-card {
-  position: relative;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: var(--ui-space-12, 12px);
   padding: var(--ui-space-16, 16px);
-  border-radius: 18px;
-  background: var(--card);
-  /* Borde degradado sin sombras ni filtros. */
-  border: 2px solid transparent;
-  background-image: linear-gradient(var(--card), var(--card)), var(--brand-gradient);
-  background-origin: border-box;
-  background-clip: padding-box, border-box;
+  border-radius: var(--ui-radius-md, 12px);
+  background: var(--selected-bg);
 }
 
-.gift-card__icon,
+.gift-card__icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--ui-radius-sm, 8px);
+  color: var(--magenta-deep);
+  background: var(--card);
+}
+
 .gift-badge {
   width: 48px;
   height: 48px;
@@ -478,42 +433,25 @@
 
 .gift-card__title {
   margin: 0 0 var(--ui-space-4, 4px);
-  font-family: var(--font-display);
-  font-size: 1.25rem;
-  font-weight: 800;
-  line-height: 1.2;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.3;
   overflow-wrap: anywhere;
 }
 
 .gift-card__text {
   margin: 0;
   color: var(--muted);
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
   line-height: 1.5;
 }
 
 .meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--ui-space-8, 8px) var(--ui-space-16, 16px);
   margin: 0;
-  padding: 0;
-  list-style: none;
   color: var(--muted);
-  font-size: 0.9375rem;
-  font-weight: 400;
-}
-
-.meta li {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--ui-space-8, 8px);
-}
-
-.meta .icon {
-  width: 18px;
-  height: 18px;
-  color: var(--orange-deep);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  text-align: center;
 }
 
 .fineprint {
@@ -1146,46 +1084,8 @@
     padding-top: var(--ui-space-48, 48px);
   }
 
-  .hero {
-    padding-top: calc(var(--ui-space-48, 48px) + env(safe-area-inset-top));
-    padding-bottom: var(--ui-space-48, 48px);
-  }
-
-  .hero__numeral {
-    font-size: 20rem;
-  }
-}
-
-/* Escritorio: bienvenida en dos columnas, sin estirar el contenido. */
-@media (min-width: 960px) {
   .welcome {
-    display: grid;
-    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
-    align-items: stretch;
-    width: 100%;
-    max-width: 1120px;
-    margin: 0 auto;
     padding: var(--ui-space-32, 32px);
-    gap: var(--ui-space-48, 48px);
-  }
-
-  .hero {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    min-height: 560px;
-    padding: var(--ui-space-48, 48px);
-    border-radius: 28px;
-  }
-
-  .hero__logo {
-    width: 220px;
-  }
-
-  .welcome__body {
-    max-width: 520px;
-    justify-content: center;
-    padding: 0;
   }
 }
 
@@ -1234,4 +1134,51 @@
 
 .option__box--radio {
   border-radius: var(--ui-radius-pill, 999px);
+}
+
+/* El beneficio aprobado es el foco del último paso. */
+.anniversary-reward {
+  margin-top: var(--ui-space-24, 24px);
+  padding: var(--ui-space-24, 24px);
+  border: 1px solid var(--line);
+  border-radius: var(--ui-radius-lg, 16px);
+  background: var(--selected-bg);
+  text-align: center;
+}
+
+.anniversary-reward__label {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.anniversary-reward__value {
+  margin: var(--ui-space-8, 8px) 0;
+  color: var(--magenta-deep);
+  font-size: clamp(2.5rem, 12vw, 4rem);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.04em;
+  overflow-wrap: anywhere;
+}
+
+.anniversary-reward__value--long {
+  font-size: clamp(1.5rem, 6vw, 2rem);
+  letter-spacing: -0.02em;
+}
+
+.anniversary-reward__description {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.stage--gift .actions {
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--ui-space-4, 4px);
+  margin-top: var(--ui-space-16, 16px);
+}
+
+.stage--gift .privacy {
+  margin-top: var(--ui-space-8, 8px);
 }

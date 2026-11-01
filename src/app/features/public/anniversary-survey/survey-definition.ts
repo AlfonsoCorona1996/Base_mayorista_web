@@ -7,6 +7,14 @@
 export const SURVEY_CAMPAIGN_ID = "aniversario-2026";
 export const SURVEY_QUESTIONS_VERSION = 2;
 
+/** Beneficio de aniversario aprobado; el backend conserva su copia y admite configuración explícita. */
+export const SURVEY_DEFAULT_REWARD = {
+  status: "active",
+  title: "10% extra",
+  description: "De descuento en tu próximo pedido.",
+  redeemInstructions: null,
+} as const;
+
 export const OTHER_OPTION_ID = "other";
 export const OTHER_MIN_LENGTH = 2;
 export const OTHER_MAX_LENGTH = 120;
@@ -116,8 +124,8 @@ export const SURVEY_QUESTIONS: readonly SurveyQuestion[] = [
     kind: "single",
     id: "facebook_interest",
     intro: {
-      title: "Una idea que estamos preparando",
-      description: "Queremos aprovechar nuestra nueva página de Facebook para dar a conocer nuestros productos y ayudar a que las personas interesadas encuentren vendedoras en su localidad.",
+      title: "Queremos llevar nuevas clientas hacia ti",
+      description: "Estamos preparando una iniciativa en Facebook para atraer personas interesadas en nuestros productos y conectarlas con vendedoras de su zona, como tú.",
     },
     title: "¿Te gustaría participar en esta iniciativa y recibir posibles nuevas clientas de tu zona?",
     max: 1,
@@ -140,7 +148,7 @@ export const SURVEY_QUESTIONS: readonly SurveyQuestion[] = [
       { id: "footwear", label: "Calzado" },
       { id: "underwear", label: "Ropa interior" },
       { id: "bags_accessories", label: "Bolsas y accesorios" },
-      { id: "home", label: "Blancos y artículos para el hogar" },
+      { id: "home", label: "Artículos de cocina, blancos y más para el hogar" },
       { id: "beauty", label: "Belleza y cuidado personal" },
       { id: OTHER_OPTION_ID, label: "Otro" },
     ],

@@ -22,7 +22,7 @@ Se comparte por WhatsApp. Implementación: frontend Angular (este repo) + backen
    > 6 preguntas. Aproximadamente 2 minutos.
    > https://www.base-mayorista.com/aniversario
 
-Sin documento de configuración la campaña está **activa** y el regalo queda **pendiente de definir**.
+Sin documento de configuración la campaña está **activa** y usa el beneficio aprobado: **10% extra de descuento en el próximo pedido**. Una configuración explícita de `reward` en Firestore prevalece sobre este valor predeterminado.
 
 ## Configurar la promoción o cerrar la campaña
 
@@ -32,12 +32,11 @@ Firebase; el backend lo relee cada 60 s).
 ```json
 {
   "status": "active",
-  "closes_at": "2026-11-30T23:59:59-06:00",
   "reward": {
     "status": "active",
-    "title": "Nombre del regalo",
-    "description": "Detalle breve (opcional)",
-    "redeem_instructions": "Cómo canjearlo (opcional)"
+    "title": "10% extra",
+    "description": "De descuento en tu próximo pedido.",
+    "redeem_instructions": null
   }
 }
 ```
@@ -46,6 +45,7 @@ Firebase; el backend lo relee cada 60 s).
 - El regalo solo se muestra si `reward.status` es `"active"` **y** hay `title`. Si no, las clientas ven
   «Detalles por anunciar»: nunca se inventan montos ni condiciones.
 - Cada registro guarda una copia del regalo vigente en ese momento (`reward_snapshot`).
+- El registro no aplica descuentos automáticamente a pedidos. No se agregaron vigencias, mínimos de compra ni otras condiciones.
 
 ## Arquitectura
 
@@ -98,8 +98,7 @@ aplica las URLs sin `.html` (`/index` redirige a `/`), así que `/aniversario` s
 - Al reabrir el enlace en el mismo navegador retoma la pregunta y muestra «Retomamos tu encuesta donde
   la dejaste.» con la opción «Comenzar de nuevo» (pide confirmación). Nunca retoma más allá de una
   pregunta obligatoria vacía.
-- Un borrador v1 sin enviar se respalda en `bm.survey.aniversario-2026.previous` y se reinicia con
-  un aviso. Las respuestas antiguas no se reinterpretan como v2. Los comprobantes v1 se conservan.
+- Un borrador v1 sin enviar se respalda en `bm.survey.aniversario-2026.previous` y se reinicia sin mostrar un aviso de actualización en la portada de prelanzamiento. Las respuestas antiguas no se reinterpretan como v2. Los comprobantes v1 se conservan.
 - Un envío v1 pendiente se recupera como instantánea de solo lectura (`legacySubmission`) y se
   reintenta con su mismo identificador y versión. El backend mantiene la definición v1 para estos
   reintentos y navegadores que todavía tengan el bundle anterior en caché.

@@ -16,7 +16,7 @@ mantiene su propia definición y validación. Ya existía un panel administrativ
 
 Se conservan el logo BM en `public/aniversario/`, sus originales en `brand/`, la paleta, escala de
 satisfacción y demás patrones de interfaz. No se cambiaron autenticación, pedidos, clientas,
-promociones, reglas de Firestore ni condiciones del regalo.
+reglas de Firestore ni cálculo de pedidos. En la revisión de prelanzamiento se definió el regalo aprobado: 10% extra de descuento en el próximo pedido.
 
 ## Contenido y comportamiento
 
@@ -29,10 +29,10 @@ promociones, reglas de Firestore ni condiciones del regalo.
 | Catálogo del segundo año | `new_products` | Múltiple, hasta 3 |
 | Propuesta para el segundo año | `comment` | Opcional, sin mínimo, máximo existente de 1000 |
 
-La bienvenida y la pantalla de registro usan los textos solicitados. La bienvenida estática de
+La pantalla de registro conserva los textos solicitados. La portada se simplificó en la revisión de prelanzamiento: logo, título, una frase, regalo, duración y botón de inicio. La bienvenida estática de
 arranque rápido se actualizó junto con la plantilla Angular; el build comprueba su sincronización.
 El bloque de Facebook presenta una propuesta en preparación y aclara que responder no implica
-inscripción ni autorización para compartir datos. No hay promesas de clientas o beneficios.
+inscripción ni autorización para compartir datos. No se promete un número de clientas. El único beneficio presentado es el descuento aprobado.
 
 Otro cuenta dentro del límite, exige 2–120 caracteres, conserva su texto al navegar y se limpia
 al desmarcarlo. En Facebook se renderizan radios nativos y cambiar de opción reemplaza la selección,
@@ -46,8 +46,7 @@ Se mantiene `bm.survey.aniversario-2026`, el guardado inmediato de selecciones y
 distinguen por `questionsVersion`.
 
 - **Borrador v2:** retoma paso, opciones, Otro, comentario y nombre pendiente.
-- **Borrador v1 sin enviar:** se respalda en la clave `.previous`, comienza vacío en v2 y muestra un
-  aviso. Si el navegador impide escribir el respaldo, se conserva el funcionamiento en memoria.
+- **Borrador v1 sin enviar:** se respalda en la clave `.previous`, comienza vacío en v2, sin aviso de actualización en la portada de prelanzamiento. Si el navegador impide escribir el respaldo, se conserva el funcionamiento en memoria.
 - **Envío v1 pendiente:** se conserva una instantánea `legacySubmission` con respuestas originales,
   nombre e identificador. Solo se ofrece reintentar ese envío; los campos quedan en lectura y no se
   permite volver a reinterpretar sus respuestas en las preguntas nuevas. También sobrevive a nuevas
@@ -63,7 +62,7 @@ enviar su esquema antiguo; sus respuestas quedan explícitamente como v1.
 Se conservan los endpoints y la transacción que crea `survey_responses` y `survey_reward_claims`.
 Los registros v2 sustituyen `answers.sell_more` por `answers.facebook_interest`, con la misma forma
 `{ selected, other }`. Los IDs de interés son `very_interested`, `needs_information`,
-`not_interested` y `other`. El regalo sigue pendiente de definición salvo configuración real del backend.
+`not_interested` y `other`. El regalo predeterminado aprobado es «10% extra» / «De descuento en tu próximo pedido.». La configuración explícita del backend prevalece; cada registro guarda el beneficio vigente en su snapshot.
 
 El resumen administrativo devuelve `summary` de v2, `summaries_by_version` para v1/v2 y el conteo
 `unversioned_responses`. Cada resumen filtra primero las respuestas de esa versión y sus registros
@@ -116,7 +115,7 @@ Documentación: `docs/ANIVERSARIO.md` y este archivo.
   límites 2/2/3, Otro obligatorio y limpieza, retroceso, comentario opcional, nombre largo, registro
   y comprobante. Verificación de overflow, tamaño táctil, tipografía de inputs y acceso a acciones
   mediante scroll sin superposiciones.
-- Cierre de pestaña en pregunta 4, reapertura y recarga tras escribir Otro; reinicio informado de v1,
+- Cierre de pestaña en pregunta 4, reapertura y recarga tras escribir Otro; reinicio de v1,
   respaldo local, envío v1 pendiente tras dos reaperturas, comprobante persistente y reconexión con
   envío automático. Navegación por teclado y texto ampliado al 200 %.
 - Panel administrativo renderizado con sus componentes reales y resultados del emulador en los cinco
@@ -130,6 +129,30 @@ autorización de la aplicación. No se enviaron respuestas de prueba a producci�
 ## Pendientes y límites
 
 Publicar requiere autorización: desplegar primero el backend compatible con ambas versiones y luego
-el frontend. El beneficio concreto sigue pendiente de definición comercial. No se probó en un
+el frontend. El beneficio aprobado no aplica automáticamente descuentos al módulo de pedidos. No se probó en un
 teléfono físico, navegador integrado de WhatsApp ni WebKit en esta actualización, ni se hicieron
 nuevas mediciones de rendimiento. Los dos fallos globales de versión quedan fuera de este cambio.
+
+
+## Revisión de portada y mensaje comercial
+
+- Portada compacta en una columna: se eliminó el aviso de actualización de prelanzamiento, el numeral
+  gigante, la repetición de datos y la explicación normal de guardado. Se conserva el aviso si el
+  navegador no permite guardar. La bienvenida estática tiene las mismas dimensiones y textos.
+- Facebook: «Queremos llevar nuevas clientas hacia ti», con una explicación concreta de la iniciativa
+  que se está preparando y sin prometer ventas o inscribir automáticamente.
+- Categoría de productos: «Artículos de cocina, blancos y más para el hogar», con el mismo peso visual
+  que las demás opciones y el mismo identificador `home`.
+- Registro del regalo: «¡Este regalo es para ti!», el 10% extra destacado, nombre y botón de registro
+  de ancho completo. El comprobante muestra el beneficio real recibido del servidor.
+- Beneficio aprobado en la definición del backend y en la portada de arranque. La configuración
+  explícita de Firestore mantiene prioridad. Sin fechas de vencimiento, compras mínimas ni cambios
+  automáticos en el cálculo de pedidos.
+- Se mantiene el cuestionario v2: son ajustes de prelanzamiento al texto y al beneficio de la misma campaña.
+
+Validación de esta revisión: build de producción correcto; backend **160/160**; frontend **504/506**,
+con los mismos dos fallos previos de AppVersionService; seis tamaños de
+portada y preguntas 4/5/registro del regalo, botón inicial visible, sin overflow y acciones accesibles;
+texto ampliado al 200% y bienvenida estática sincronizada. La integración real contra Firestore
+emulado confirmó respuesta 201 con el 10%, snapshot del regalo y reintento 200 sin duplicados.
+Evidencia local en `tmp/anniversary-cover/`. No se desplegó ni se cambiaron datos en producción.

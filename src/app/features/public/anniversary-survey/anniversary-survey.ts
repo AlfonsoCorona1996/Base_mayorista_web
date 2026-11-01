@@ -19,6 +19,7 @@ import {
   OTHER_MAX_LENGTH,
   OTHER_OPTION_ID,
   SURVEY_LOGO,
+  SURVEY_DEFAULT_REWARD,
   SURVEY_QUESTIONS,
   SurveyQuestion,
 } from "./survey-definition";
@@ -88,13 +89,13 @@ export default class AnniversarySurveyPage {
   protected readonly draft = signal<SurveyDraft>(createDraft());
   protected readonly online = signal(typeof navigator === "undefined" ? true : navigator.onLine !== false);
   protected readonly resumed = signal(false);
-  protected readonly draftReset = signal(false);
   protected readonly confirmingRestart = signal(false);
   protected readonly showErrors = signal(false);
   protected readonly sending = signal(false);
   protected readonly submitNotice = signal<SubmitNotice | null>(null);
   protected readonly closedMessage = signal<string | null>(null);
   protected readonly campaign = signal<SurveyCampaign | null>(null);
+  protected readonly reward = computed(() => this.campaign()?.reward ?? SURVEY_DEFAULT_REWARD);
 
   protected readonly step = computed(() => this.draft().step);
   /** Clave para re-crear el contenido (y su animación de entrada) en cada paso. */
@@ -406,7 +407,6 @@ export default class AnniversarySurveyPage {
     this.clearSaveTimer();
     this.storage.clear();
     this.resumed.set(false);
-    this.draftReset.set(false);
     this.confirmingRestart.set(false);
     this.closedMessage.set(this.campaign()?.status === "closed" ? "La encuesta de aniversario ya cerró. Gracias por tu interés." : null);
     this.draft.set(createDraft());
@@ -448,7 +448,6 @@ export default class AnniversarySurveyPage {
 
   private restoreDraft(): void {
     const { draft, status } = this.storage.load();
-    this.draftReset.set(status === "discarded");
     if (draft) {
       this.draft.set(draft);
       this.resumed.set(status === "restored" && !draft.receipt && draft.step > WELCOME_STEP);

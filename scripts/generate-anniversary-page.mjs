@@ -52,7 +52,8 @@ function normalizeText(value) {
 /** La bienvenida estática no debe desviarse del texto real de la encuesta. */
 export function loadStaticWelcome(featureDir = FEATURE_DIR) {
   const partial = readFileSync(join(featureDir, "welcome.static.html"), "utf8").replace(/^\s*<!--[\s\S]*?-->\s*/, "");
-  const template = normalizeText(readFileSync(join(featureDir, "anniversary-survey.html"), "utf8"));
+  const template = normalizeText(readFileSync(join(featureDir, "anniversary-survey.html"), "utf8")) + " " +
+    readFileSync(join(featureDir, "survey-definition.ts"), "utf8");
   const synced = [...partial.matchAll(/<([a-z]+)[^>]*\bdata-sync\b[^>]*>([\s\S]*?)<\/\1>/g)].map((m) => normalizeText(m[2]));
   if (synced.length < 5) throw new Error("[aniversario] welcome.static.html perdió sus marcas data-sync.");
   const missing = synced.filter((text) => !template.includes(text));
