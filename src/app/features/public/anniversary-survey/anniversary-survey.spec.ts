@@ -6,6 +6,7 @@ import { environment } from "../../../../environments/environment";
 import AnniversarySurveyPage from "./anniversary-survey";
 import { DRAFT_STORAGE_KEY } from "./survey-draft-storage";
 import { GIFT_STEP, createDraft } from "./survey-state";
+import { SURVEY_DEFAULT_REWARD } from "./survey-definition";
 
 const BASE = `${environment.adminApiBaseUrl.replace(/\/+$/, "")}/api/surveys/aniversario-2026`;
 
@@ -22,7 +23,7 @@ function completeDraft(step: number) {
     answers: {
       satisfaction: 4,
       strengths: { selected: ["prices"], other: "" },
-      improvements: { selected: ["digital_catalog"], other: "" },
+      improvements: { selected: ["ready_media"], other: "" },
       new_products: { selected: ["footwear"], other: "" },
       facebook_interest: { selected: ["needs_information"], other: "" },
       comment: "",
@@ -87,9 +88,10 @@ describe("AnniversarySurveyPage", () => {
   });
 
   it("muestra la bienvenida y avanza a la primera pregunta", async () => {
-    await render({ status: "active", title: "10% extra", description: "De descuento en tu próximo pedido." });
+    await render(SURVEY_DEFAULT_REWARD);
     expect(q("h1").textContent).toContain("¡Nuestro primer año se celebra contigo!");
     expect(root.textContent).toContain("10% extra");
+    expect(root.textContent).toContain("Úsalo durante noviembre de 2026.");
     buttonByText("Comenzar encuesta").click();
     await settle();
     expect(q(".kicker").textContent).toContain("Pregunta 1 de 6");
@@ -201,12 +203,12 @@ describe("AnniversarySurveyPage", () => {
   });
 
   it("presenta el 10% aprobado y solo lo confirma después de registrar el regalo", async () => {
-    const reward = { status: "active", title: "10% extra", description: "De descuento en tu próximo pedido." };
+    const reward = SURVEY_DEFAULT_REWARD;
     const draft = { ...completeDraft(GIFT_STEP), name: "Ana" };
     localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
     await render(reward);
     expect(q(".anniversary-reward").textContent).toContain("10% extra");
-    expect(q(".anniversary-reward").textContent).toContain("De descuento en tu próximo pedido.");
+    expect(q(".anniversary-reward").textContent).toContain("Úsalo durante noviembre de 2026.");
     expect(root.querySelector(".receipt")).toBeNull();
     await next();
     http.expectOne(`${BASE}/responses`).flush({ ok: true, participation_id: draft.participationId, registered_name: "Ana", reward });
@@ -214,7 +216,7 @@ describe("AnniversarySurveyPage", () => {
     await settle();
     expect(q("h1").textContent).toContain("¡Tu regalo ya está registrado!");
     expect(q(".anniversary-reward--earned").textContent).toContain("10% extra");
-    expect(q(".anniversary-reward--earned").textContent).toContain("De descuento en tu próximo pedido.");
+    expect(q(".anniversary-reward--earned").textContent).toContain("Úsalo durante noviembre de 2026.");
     expect(q(".receipt").textContent).toContain("Ana");
   });
 
@@ -224,6 +226,9 @@ describe("AnniversarySurveyPage", () => {
     localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
     await render();
     expect(root.textContent).toContain("Queremos llevar nuevas clientas hacia ti");
+    expect(q("h1").textContent).toContain("Queremos llevar nuevas clientas hacia ti");
+    expect(q("legend").textContent).toContain("¿Te interesaría recibir estas posibles clientas?");
+    expect(root.querySelectorAll("h1").length).toBe(1);
     expect(root.textContent).toContain("no te inscribe ni autoriza compartir tus datos");
     let radios = [...root.querySelectorAll<HTMLInputElement>(".option input[type=radio]")];
     expect(radios.length).toBe(4);
@@ -261,8 +266,34 @@ describe("AnniversarySurveyPage", () => {
     localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify({ ...completeDraft(4), questionsVersion: 1 }));
     await render();
     expect(root.textContent).not.toContain("Actualizamos las preguntas");
-    expect(stored()["questionsVersion"]).toBe(2);
+    expect(stored()["questionsVersion"]).toBe(3);
     expect((stored()["answers"] as Record<string, unknown>)["satisfaction"]).toBeNull();
+  });
+
+  it("retira el catálogo digital de las propuestas que se pueden elegir", async () => {
+    localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(completeDraft(3)));
+    await render();
+    expect(root.textContent).not.toContain("Un catálogo digital");
+    expect(root.querySelector('input[value="digital_catalog"]')).toBeNull();
+    expect(root.querySelectorAll('.option input').length).toBe(6);
+  });
+
+  it("reintenta v2 sin modificar el envío ni atribuirlo al cuestionario nuevo", async () => {
+    const old = { ...completeDraft(GIFT_STEP), questionsVersion: 2, submission: "pending", name: "Ana",
+      answers: { ...completeDraft(GIFT_STEP).answers, improvements: { selected: ["digital_catalog"], other: "" } } };
+    localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(old));
+    await render(SURVEY_DEFAULT_REWARD);
+    expect(q<HTMLInputElement>("#gift-name").readOnly).toBeTrue();
+    expect(buttonByText("Anterior").disabled).toBeTrue();
+    await next();
+    const request = http.expectOne(`${BASE}/responses`);
+    expect(request.request.body.questions_version).toBe(2);
+    expect(request.request.body.participation_id).toBe(old.participationId);
+    expect(request.request.body.answers).toEqual(old.answers);
+    request.flush({ ok: true, participation_id: old.participationId, registered_name: "Ana", reward: SURVEY_DEFAULT_REWARD });
+    await settle();
+    await settle();
+    expect(q(".anniversary-reward--earned").textContent).toContain("noviembre de 2026");
   });
 
   it("reintenta un envío v1 pendiente con el mismo id y las respuestas originales", async () => {

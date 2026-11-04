@@ -1163,6 +1163,22 @@
   }
 }
 
+/* En pantallas bajas, deja sitio a la vigencia y al botón sin reducir el texto. */
+@media (max-height: 640px) {
+  .welcome {
+    padding: var(--ui-space-16, 16px);
+  }
+
+  .hero__logo {
+    width: 64px;
+    margin-bottom: var(--ui-space-16, 16px);
+  }
+
+  .welcome__body {
+    padding-top: var(--ui-space-16, 16px);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .stage,
   .other {
@@ -1184,26 +1200,19 @@
   }
 }
 
-/* Propuesta del segundo año: compacta y con la paleta BM existente. */
+/* Primero se presenta la iniciativa; la pregunta queda como siguiente paso de lectura. */
 .initiative {
-  margin-bottom: var(--ui-space-16, 16px);
-  padding: var(--ui-space-12, 12px) var(--ui-space-16, 16px);
-  border-left: 3px solid var(--magenta-deep);
-  border-radius: var(--ui-radius-sm, 8px);
-  background: var(--selected-bg);
+  margin-bottom: var(--ui-space-24, 24px);
 }
 
-.initiative h2 {
-  margin: 0 0 var(--ui-space-4, 4px);
-  font-size: 1rem;
-  line-height: 1.35;
+.initiative .step__title {
+  color: var(--magenta-deep);
 }
 
-.initiative p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.9375rem;
-  line-height: 1.5;
+.initiative__question {
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1.4;
 }
 
 .option__box--radio {

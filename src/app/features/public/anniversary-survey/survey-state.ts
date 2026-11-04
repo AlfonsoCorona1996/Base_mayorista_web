@@ -63,8 +63,8 @@ export interface SurveyDraft {
   name: string;
   submission: SubmissionStatus;
   receipt: SurveyReceipt | null;
-  /** Instantánea v1 pendiente: solo se reintenta; nunca se atribuye a preguntas v2. */
-  legacySubmission?: LegacySubmissionPayload;
+  /** Instantánea de una versión anterior pendiente: solo se reintenta con sus respuestas originales. */
+  legacySubmission?: PreviousSubmissionPayload;
   startedAt: string;
   updatedAt: string;
 }
@@ -254,7 +254,13 @@ export function parseStoredDraft(input: unknown): SurveyDraft | null {
   if (!raw) return null;
   if (raw.schema !== DRAFT_SCHEMA_VERSION) return null;
   if (raw.campaignId !== SURVEY_CAMPAIGN_ID) return null;
-  if (raw.questionsVersion !== SURVEY_QUESTIONS_VERSION) return readLegacyDraft(raw);
+  if (raw.questionsVersion !== SURVEY_QUESTIONS_VERSION) {
+    const previous = readLegacyDraft(raw);
+    if (previous) return previous;
+    // Un borrador v2 sin enviar conserva el avance y elimina solo la opción retirada.
+    // Los pendientes se recuperan como instantáneas; jamás se modifica un reintento.
+    if (raw.questionsVersion !== 2 || raw.submission !== "idle") return null;
+  }
   if (typeof raw.participationId !== "string" || !PARTICIPATION_ID_RE.test(raw.participationId)) return null;
 
   const rawAnswers: Unchecked<SurveyAnswers> = asUnchecked<SurveyAnswers>(raw.answers) ?? {};
@@ -345,28 +351,30 @@ export interface LegacySubmissionPayload {
   };
 }
 
+type VersionTwoSubmissionPayload = Omit<ReturnType<typeof buildSubmissionPayload>, "questions_version"> & { questions_version: 2 };
+type PreviousSubmissionPayload = LegacySubmissionPayload | VersionTwoSubmissionPayload;
 export type SurveySubmissionPayload = ReturnType<typeof buildSubmissionPayload> | LegacySubmissionPayload;
 
-/** Solo conserva el envío v1 pendiente o su comprobante; nunca migra respuestas a v2. */
+/** Conserva los envíos anteriores pendientes y sus comprobantes sin alterar lo registrado. */
 function readLegacyDraft(raw: Unchecked<SurveyDraft>): SurveyDraft | null {
-  if (raw.questionsVersion !== 1 || typeof raw.participationId !== "string" || !PARTICIPATION_ID_RE.test(raw.participationId)) return null;
+  if ((raw.questionsVersion !== 1 && raw.questionsVersion !== 2) || typeof raw.participationId !== "string" || !PARTICIPATION_ID_RE.test(raw.participationId)) return null;
   const receipt = raw.submission === "confirmed" ? readReceipt(raw.receipt) : null;
-  if (receipt) return { ...createDraft(), questionsVersion: 1, participationId: raw.participationId,
+  if (receipt) return { ...createDraft(), questionsVersion: raw.questionsVersion, participationId: raw.participationId,
     step: DONE_STEP, submission: "confirmed", receipt };
   if (raw.submission !== "pending") return null;
-  const payload = readLegacyPayload({ campaign_id: raw.campaignId, questions_version: 1,
+  const payload = readLegacyPayload({ campaign_id: raw.campaignId, questions_version: raw.questionsVersion,
     participation_id: raw.participationId, started_at: raw.startedAt,
     registered_name: raw.name, answers: raw.answers });
   return payload ? { ...createDraft(), participationId: payload.participation_id,
     step: GIFT_STEP, submission: "pending", name: payload.registered_name, legacySubmission: payload } : null;
 }
 
-function readLegacyPayload(input: unknown): LegacySubmissionPayload | null {
-  const raw = asUnchecked<LegacySubmissionPayload>(input);
-  if (!raw || raw.questions_version !== 1 || raw.campaign_id !== SURVEY_CAMPAIGN_ID ||
+function readLegacyPayload(input: unknown): PreviousSubmissionPayload | null {
+  const raw = asUnchecked<PreviousSubmissionPayload>(input);
+  if (!raw || (raw.questions_version !== 1 && raw.questions_version !== 2) || raw.campaign_id !== SURVEY_CAMPAIGN_ID ||
       typeof raw.participation_id !== "string" || !PARTICIPATION_ID_RE.test(raw.participation_id) ||
       typeof raw.registered_name !== "string" || validateName(raw.registered_name)) return null;
-  const answers = asUnchecked<LegacySubmissionPayload["answers"]>(raw.answers);
+  const answers = asUnchecked<SurveyAnswers & { sell_more?: MultiAnswer }>(raw.answers);
   if (!answers || typeof answers.satisfaction !== "number" || !Number.isInteger(answers.satisfaction) ||
       answers.satisfaction < 1 || answers.satisfaction > 5) return null;
   const legacyMulti = (value: unknown, max: number): MultiAnswer | null => {
@@ -378,10 +386,15 @@ function readLegacyPayload(input: unknown): LegacySubmissionPayload | null {
   const strengths = legacyMulti(answers.strengths, 2);
   const improvements = legacyMulti(answers.improvements, 2);
   const new_products = legacyMulti(answers.new_products, 3);
-  const sell_more = legacyMulti(answers.sell_more, 2);
-  if (!strengths || !improvements || !new_products || !sell_more) return null;
-  return { campaign_id: SURVEY_CAMPAIGN_ID, questions_version: 1, participation_id: raw.participation_id,
+  if (!strengths || !improvements || !new_products) return null;
+  const common = { campaign_id: SURVEY_CAMPAIGN_ID, participation_id: raw.participation_id,
     started_at: readIso(raw.started_at) ?? new Date().toISOString(), registered_name: raw.registered_name,
-    answers: { satisfaction: answers.satisfaction, strengths, improvements, new_products, sell_more,
+    answers: { satisfaction: answers.satisfaction, strengths, improvements, new_products,
       comment: readString(answers.comment, COMMENT_MAX_LENGTH) } };
+  if (raw.questions_version === 2) {
+    const facebook_interest = legacyMulti(answers.facebook_interest, 1);
+    return facebook_interest ? { ...common, questions_version: 2, answers: { ...common.answers, facebook_interest } } : null;
+  }
+  const sell_more = legacyMulti(answers.sell_more, 2);
+  return sell_more ? { ...common, questions_version: 1, answers: { ...common.answers, sell_more } } : null;
 }

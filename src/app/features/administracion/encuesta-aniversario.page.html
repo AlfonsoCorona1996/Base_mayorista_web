@@ -30,6 +30,7 @@
   <div class="sv-search">
     <label for="sv-version">Versión del cuestionario</label>
     <select id="sv-version" [value]="selectedVersion()" (change)="setVersion(versionInput.value)" #versionInput>
+      <option value="3">Versión 3 · Noviembre</option>
       <option value="2">Versión 2 · Segundo año</option>
       <option value="1">Versión 1 · Encuesta anterior</option>
     </select>

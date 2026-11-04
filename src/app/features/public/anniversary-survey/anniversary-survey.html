@@ -79,10 +79,11 @@
                 <div class="step__content">
                   <ng-container *ngTemplateOutlet="resumeNotice" />
                   @if (q.kind === "single") {
-                    <aside class="initiative" aria-labelledby="initiative-title">
-                      <h2 id="initiative-title">{{ q.intro.title }}</h2>
-                      <p>{{ q.intro.description }}</p>
-                    </aside>
+                    <header class="initiative">
+                      <p class="kicker">Pregunta {{ questionIndex() + 1 }} de {{ questionCount }}</p>
+                      <h1 id="step-title" class="step__title" tabindex="-1">{{ q.intro.title }}</h1>
+                      <p class="step__text" id="initiative-description">{{ q.intro.description }}</p>
+                    </header>
                   }
                   @if (q.kind === "text") {
                     <div class="step__head">
@@ -108,10 +109,14 @@
                       </p>
                     </div>
                   } @else {
-                    <fieldset class="step__set" aria-describedby="q-hint step-error">
+                    <fieldset class="step__set" [attr.aria-describedby]="q.kind === 'single' ? 'initiative-description q-hint step-error' : 'q-hint step-error'">
                       <legend class="step__head">
-                        <span class="kicker">Pregunta {{ questionIndex() + 1 }} de {{ questionCount }}</span>
-                        <h1 id="step-title" class="step__title" tabindex="-1">{{ q.title }}</h1>
+                        @if (q.kind === "single") {
+                          <span class="initiative__question">{{ q.title }}</span>
+                        } @else {
+                          <span class="kicker">Pregunta {{ questionIndex() + 1 }} de {{ questionCount }}</span>
+                          <h1 id="step-title" class="step__title" tabindex="-1">{{ q.title }}</h1>
+                        }
                       </legend>
 
                       @if (q.kind === "rating") {

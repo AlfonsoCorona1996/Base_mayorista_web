@@ -2,16 +2,16 @@
  * Encuesta del primer aniversario. El backend valida con su propia copia
  * (survey_definitions.js en el repo del backend): si cambian opciones o
  * límites, sube QUESTIONS_VERSION en ambos lados. Un cambio de versión
- * reinicia con aviso los borradores incompatibles; conserva comprobantes y envíos pendientes.
+ * conserva los borradores compatibles, comprobantes y envíos pendientes de versiones anteriores.
  */
 export const SURVEY_CAMPAIGN_ID = "aniversario-2026";
-export const SURVEY_QUESTIONS_VERSION = 2;
+export const SURVEY_QUESTIONS_VERSION = 3;
 
 /** Beneficio de aniversario aprobado; el backend conserva su copia y admite configuración explícita. */
 export const SURVEY_DEFAULT_REWARD = {
   status: "active",
   title: "10% extra",
-  description: "De descuento en tu próximo pedido.",
+  description: "De descuento en tu próximo pedido. Úsalo durante noviembre de 2026.",
   redeemInstructions: null,
 } as const;
 
@@ -111,7 +111,6 @@ export const SURVEY_QUESTIONS: readonly SurveyQuestion[] = [
     title: "¿Cuál de estas opciones te ayudaría más a hacer tus pedidos o vender nuestros productos?",
     max: 2,
     options: [
-      { id: "digital_catalog", label: "Un catálogo digital fácil de consultar y compartir" },
       { id: "ready_media", label: "Fotos y videos listos para publicar" },
       { id: "order_tracking", label: "Poder consultar más fácilmente el avance de mis pedidos" },
       { id: "early_news", label: "Conocer las novedades con anticipación" },
@@ -125,9 +124,9 @@ export const SURVEY_QUESTIONS: readonly SurveyQuestion[] = [
     id: "facebook_interest",
     intro: {
       title: "Queremos llevar nuevas clientas hacia ti",
-      description: "Estamos preparando una iniciativa en Facebook para atraer personas interesadas en nuestros productos y conectarlas con vendedoras de su zona, como tú.",
+      description: "Estamos preparando una iniciativa en Facebook para que más personas conozcan nuestros productos. La idea es conectar a quienes se interesen con una vendedora de su zona, como tú.",
     },
-    title: "¿Te gustaría participar en esta iniciativa y recibir posibles nuevas clientas de tu zona?",
+    title: "¿Te interesaría recibir estas posibles clientas?",
     max: 1,
     options: [
       { id: "very_interested", label: "¡Sí, me interesa mucho!" },

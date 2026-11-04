@@ -1,5 +1,7 @@
 # Encuesta de aniversario: actualización estratégica v2
 
+Documento histórico. La revisión vigente es [v3 · Noviembre](ANIVERSARIO_V3.md).
+
 Implementada el 31 de octubre de 2026. Campaña `aniversario-2026`, URL pública `/aniversario`,
 `SURVEY_QUESTIONS_VERSION = 2` y `questions_version: 2` en backend. Sin despliegue a producción.
 

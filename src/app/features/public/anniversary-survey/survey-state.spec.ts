@@ -3,6 +3,7 @@ import {
   DONE_STEP,
   GIFT_STEP,
   SurveyAnswers,
+  SurveyReceipt,
   buildSubmissionPayload,
   createDraft,
   createParticipationId,
@@ -17,7 +18,7 @@ function completeAnswers(): SurveyAnswers {
   return {
     satisfaction: 4,
     strengths: { selected: ["prices"], other: "" },
-    improvements: { selected: ["digital_catalog", "other"], other: "Más tallas" },
+    improvements: { selected: ["ready_media", "other"], other: "Más tallas" },
     new_products: { selected: ["footwear", "beauty", "home"], other: "" },
     facebook_interest: { selected: ["needs_information"], other: "" },
     comment: "",
@@ -68,7 +69,7 @@ describe("survey-state", () => {
   it("rechaza opciones desconocidas y los tres límites excedidos", () => {
     for (const [id, index, selected] of [
       ["strengths", 1, ["prices", "quality", "service"]],
-      ["improvements", 2, ["digital_catalog", "ready_media", "early_news"]],
+      ["improvements", 2, ["ready_media", "order_tracking", "early_news"]],
       ["new_products", 4, ["footwear", "home", "underwear", "beauty"]],
       ["improvements", 2, ["delivery_times"]],
     ] as const) {
@@ -92,10 +93,49 @@ describe("survey-state", () => {
   });
 
   describe("parseStoredDraft", () => {
+    it("retoma v2 sin perder el avance y retira únicamente la propuesta del catálogo", () => {
+      const old = storedDraft({ questionsVersion: 2, step: GIFT_STEP, name: "Ana", answers: {
+        ...completeAnswers(), improvements: { selected: ["digital_catalog", "ready_media"], other: "" },
+      } });
+      const draft = parseStoredDraft(old);
+      expect(draft?.questionsVersion).toBe(3);
+      expect(draft?.participationId).toBe(old["participationId"] as string);
+      expect(draft?.step).toBe(GIFT_STEP);
+      expect(draft?.answers.improvements.selected).toEqual(["ready_media"]);
+      expect(draft?.answers.facebook_interest).toEqual(completeAnswers().facebook_interest);
+      expect(draft?.name).toBe("Ana");
+      const onlyCatalog = parseStoredDraft({ ...old, answers: {
+        ...completeAnswers(), improvements: { selected: ["digital_catalog"], other: "" },
+      } });
+      expect(onlyCatalog?.step).toBe(3);
+      expect(onlyCatalog?.answers.strengths).toEqual(completeAnswers().strengths);
+    });
+
+    it("reintenta v2 con el mismo id y contenido, incluso tras dos reaperturas", () => {
+      const old = storedDraft({ questionsVersion: 2, step: GIFT_STEP, submission: "pending", name: "Ana", answers: {
+        ...completeAnswers(), improvements: { selected: ["digital_catalog"], other: "" },
+      } });
+      const draft = parseStoredDraft(old);
+      expect(draft?.step).toBe(GIFT_STEP);
+      expect(draft?.legacySubmission?.questions_version).toBe(2);
+      expect(draft?.legacySubmission?.participation_id).toBe(old["participationId"] as string);
+      expect(draft?.legacySubmission?.answers.improvements.selected).toEqual(["digital_catalog"]);
+      expect(parseStoredDraft(JSON.parse(JSON.stringify(draft)))?.legacySubmission).toEqual(draft?.legacySubmission);
+    });
+
+    it("conserva el regalo v2 confirmado sin añadir condiciones nuevas", () => {
+      const receipt: SurveyReceipt = { participationId: createParticipationId(), receivedAt: null, registeredName: "Ana",
+        reward: { status: "active", title: "10% extra", description: "De descuento en tu próximo pedido.", redeemInstructions: null } };
+      const draft = parseStoredDraft(storedDraft({ questionsVersion: 2, submission: "confirmed", receipt }));
+      expect(draft?.questionsVersion).toBe(2);
+      expect(draft?.receipt).toEqual(receipt);
+      expect(parseStoredDraft(draft)?.receipt).toEqual(receipt);
+    });
+
     it("recupera un borrador compatible tal como estaba", () => {
       const draft = parseStoredDraft(JSON.parse(JSON.stringify(storedDraft({ step: 4, name: "Ana" }))));
       expect(draft?.step).toBe(4);
-      expect(draft?.answers.improvements).toEqual({ selected: ["digital_catalog", "other"], other: "Más tallas" });
+      expect(draft?.answers.improvements).toEqual({ selected: ["ready_media", "other"], other: "Más tallas" });
       expect(draft?.name).toBe("Ana");
     });
 
@@ -187,7 +227,7 @@ describe("survey-state", () => {
     const payload = buildSubmissionPayload(draft);
     expect(payload.registered_name).toBe("Ana López");
     expect(payload.answers.strengths).toEqual({ selected: ["prices"], other: "" });
-    expect(payload.answers.improvements).toEqual({ selected: ["digital_catalog", "other"], other: "Más tallas" });
+    expect(payload.answers.improvements).toEqual({ selected: ["ready_media", "other"], other: "Más tallas" });
     expect(payload.answers.comment).toBe("Gracias");
     expect(payload.participation_id).toBe(draft.participationId);
   });

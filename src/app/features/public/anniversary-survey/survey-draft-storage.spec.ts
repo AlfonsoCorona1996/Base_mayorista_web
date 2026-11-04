@@ -67,7 +67,7 @@ describe("SurveyDraftStorage", () => {
     expect(storage.load().status).toBe("discarded");
     storage.save(createDraft());
     expect(memory.getItem(`${DRAFT_STORAGE_KEY}.previous`)).toBe(old);
-    expect(storage.load().draft?.questionsVersion).toBe(2);
+    expect(storage.load().draft?.questionsVersion).toBe(3);
   });
 
   it("sin almacenamiento disponible funciona en memoria sin fallar", () => {
