@@ -207,7 +207,7 @@ export default class EncuestaAniversarioPage {
 
   protected setVersion(value: string): void {
     const version = Number(value);
-    if (version === 1 || version === SURVEY_QUESTIONS_VERSION) {
+    if (version === 1 || version === 2 || version === SURVEY_QUESTIONS_VERSION) {
       this.selectedVersion.set(version);
       this.search.set("");
     }

@@ -4,6 +4,10 @@ Encuesta pública (sin login) para las clientas afiliadas, con registro del rega
 Se comparte por WhatsApp. Implementación: frontend Angular (este repo) + backend Express
 (`Base Mayorista Backend/Base_Mayorista`).
 
+Cuestionario actual: **versión 3** (noviembre de 2026). Retira la propuesta del catálogo digital,
+presenta primero la iniciativa de Facebook y especifica el mes de uso del regalo.
+Compatibilidad y validación: [actualización de noviembre](ANIVERSARIO_V3.md).
+
 ## Cómo activar la campaña
 
 1. **Backend**: desplegar `survey_definitions.js`, `survey_helpers.js`, `survey_routes.js` y los
@@ -22,7 +26,7 @@ Se comparte por WhatsApp. Implementación: frontend Angular (este repo) + backen
    > 6 preguntas. Aproximadamente 2 minutos.
    > https://www.base-mayorista.com/aniversario
 
-Sin documento de configuración la campaña está **activa** y usa el beneficio aprobado: **10% extra de descuento en el próximo pedido**. Una configuración explícita de `reward` en Firestore prevalece sobre este valor predeterminado.
+Sin documento de configuración la campaña está **activa** y usa el beneficio aprobado: **10% extra de descuento en el próximo pedido, para usar durante noviembre de 2026**. Una configuración explícita de `reward` en Firestore prevalece sobre este valor predeterminado.
 
 ## Configurar la promoción o cerrar la campaña
 
@@ -35,7 +39,7 @@ Firebase; el backend lo relee cada 60 s).
   "reward": {
     "status": "active",
     "title": "10% extra",
-    "description": "De descuento en tu próximo pedido.",
+    "description": "De descuento en tu próximo pedido. Úsalo durante noviembre de 2026.",
     "redeem_instructions": null
   }
 }
@@ -45,7 +49,8 @@ Firebase; el backend lo relee cada 60 s).
 - El regalo solo se muestra si `reward.status` es `"active"` **y** hay `title`. Si no, las clientas ven
   «Detalles por anunciar»: nunca se inventan montos ni condiciones.
 - Cada registro guarda una copia del regalo vigente en ese momento (`reward_snapshot`).
-- El registro no aplica descuentos automáticamente a pedidos. No se agregaron vigencias, mínimos de compra ni otras condiciones.
+- La vigencia aprobada para registros nuevos es noviembre de 2026 y queda guardada en el regalo.
+  El registro no aplica ni valida descuentos automáticamente en pedidos. No hay mínimos de compra nuevos.
 
 ## Arquitectura
 

@@ -11,7 +11,7 @@ function summaryResponse(total: number) {
     generated_at: "2026-10-28T18:00:00.000Z",
     config: { status: "active", reward: { status: "pending_definition", title: null, description: null } },
     summary: {
-      questions_version: 2,
+      questions_version: 3,
       total_responses: total,
       satisfaction: {
         counts: { 1: 0, 2: 0, 3: 1, 4: 0, 5: total ? total - 1 : 0 },
@@ -95,7 +95,7 @@ describe("EncuestaAniversarioPage", () => {
     previous.satisfaction.average = 2;
     previous.options = {} as typeof previous.options;
     previous.comments = [{ response_id: "old", text: "Comentario anterior", satisfaction: 2, registered_name: "Bea", received_at: null }];
-    const root = await render(() => of({ ...current, summaries_by_version: { 1: previous, 2: current.summary } }));
+    const root = await render(() => of({ ...current, summaries_by_version: { 1: previous, 3: current.summary } }));
     const select = root.querySelector<HTMLSelectElement>("#sv-version");
     expect(root.textContent).toContain("Iniciativa Facebook");
     if (!select) throw new Error("Falta selector de versión");
@@ -106,5 +106,20 @@ describe("EncuestaAniversarioPage", () => {
     expect(root.textContent).toContain("Comentario anterior");
     expect(root.textContent).not.toContain("Iniciativa Facebook");
     expect(root.textContent).not.toContain("Muy bien");
+  });
+
+  it("conserva las respuestas históricas del catálogo al consultar v2", async () => {
+    const current = summaryResponse(1);
+    const v2 = { ...summaryResponse(2).summary, questions_version: 2,
+      options: { improvements: { counts: { digital_catalog: 2 }, labels: { digital_catalog: "Un catálogo digital fácil de consultar y compartir" },
+        other_texts: [], max: 2, kind: "multi" } } };
+    const root = await render(() => of({ ...current, summaries_by_version: { 2: v2, 3: current.summary } }));
+    const select = root.querySelector<HTMLSelectElement>("#sv-version");
+    if (!select) throw new Error("Falta selector de versión");
+    expect(root.textContent).not.toContain("Un catálogo digital");
+    select.value = "2";
+    select.dispatchEvent(new Event("change"));
+    TestBed.inject(ApplicationRef).tick();
+    expect(root.textContent).toContain("Un catálogo digital fácil de consultar y compartir");
   });
 });
