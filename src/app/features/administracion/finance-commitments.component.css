@@ -1,0 +1,23 @@
+.commitment-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: var(--ui-space-16); padding: var(--ui-space-16); margin: 0 0 var(--ui-space-16); background: #f7f9fc; }
+.commitment-metrics dt { color: var(--audit-muted); font-size: .85rem; }
+.commitment-metrics dd { margin: var(--ui-space-8) 0 0; font-size: 1.5rem; font-weight: 750; overflow-wrap: anywhere; }
+.row-actions { display: grid; gap: var(--ui-space-8); }
+.row-actions button { font-size: .8rem; }
+.payment-reference { border-top: 1px solid var(--audit-line); padding-block: var(--ui-space-8); }
+.feedback { padding: var(--ui-space-16); color: var(--audit-green); }
+.commitment-dialog { width: 100%; max-width: 100%; max-height: 100dvh; margin: auto; padding: var(--ui-space-16); border: 1px solid var(--audit-line); color: var(--audit-ink); background: white; overflow-y: auto; }
+.commitment-dialog::backdrop { background: rgb(23 32 51 / .6); }
+.commitment-dialog header { display: flex; align-items: start; gap: var(--ui-space-16); justify-content: space-between; margin-bottom: var(--ui-space-24); }
+.commitment-dialog header > div { min-width: 0; overflow-wrap: anywhere; }
+.commitment-dialog header p { color: var(--audit-muted); font-size: .85rem; margin-top: var(--ui-space-8); }
+.commitment-dialog fieldset { min-width: 0; display: grid; gap: var(--ui-space-16); padding: 0; margin: 0; border: 0; }
+.commitment-dialog legend { margin-bottom: var(--ui-space-16); font-weight: 650; }
+.form-help { font-size: .85rem; color: var(--audit-muted); }
+.commitment-dialog footer { display: flex; flex-wrap: wrap; justify-content: end; gap: var(--ui-space-12); padding-top: var(--ui-space-24); }
+.commitment-dialog .period-error { padding: var(--ui-space-16) 0 0; }
+@media (min-width: 768px) {
+  .commitment-dialog { width: calc(100% - var(--ui-space-48)); max-width: var(--ui-modal-max-width-form); max-height: calc(100dvh - var(--ui-space-48)); border-radius: var(--ui-radius-lg); padding: var(--ui-space-24); }
+  .commitment-dialog fieldset { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .wide { grid-column: 1 / -1; }
+}
+@media (min-width: 1024px) { .commitments-table th:first-child { width: 25%; } .commitments-table th:nth-child(2) { width: 16%; } }

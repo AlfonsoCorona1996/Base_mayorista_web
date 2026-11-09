@@ -1,5 +1,9 @@
 # Utilidades y socios: criterio y trazabilidad
 
+La consulta tabular, los pagos a socios y la planeación de gastos se describen
+en [Compromisos y pagos](PARTNER_COMMITMENTS.md), incluyendo persistencia,
+permisos y requisitos de publicación.
+
 La vista de **Utilidades y socios** es un reporte vivo de pedidos por mes de
 creación, separado de los cierres contables por entrega y del flujo mensual de
 caja. Incluye pedidos en proceso, sin esperar a su entrega o liquidación.

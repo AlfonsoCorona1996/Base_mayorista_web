@@ -538,7 +538,11 @@
       [business]="activeBusinessLabel()"
       [context]="routeScope() === 'general' ? 'Todas las rutas' : routeName(routeScope())"
       [customers]="auditCustomers()" [accounts]="auditAccounts()" [canEdit]="canEditMovements()"
-      (openOrder)="openOrder($event)" (retry)="reload()" (editMovement)="editAuditMovement($event)" />
+      (openOrder)="openOrder($event)" (retry)="reload()" (editMovement)="editAuditMovement($event)">
+      <app-finance-commitments commitments [businessId]="activeBusinessId()" [routeId]="selectedRouteId()"
+        [accounts]="accounts()" [expenses]="expenses()" [profits]="auditMonthProfits()"
+        [canCreate]="canCreateMovements()" [canEdit]="canEditMovements()" />
+    </app-profit-audit>
   }
 </main>
 
@@ -560,6 +564,7 @@
           <form id="movement-form" (ngSubmit)="saveMovement()" [attr.aria-busy]="movementSaving()">
             <fieldset class="admin-form movement-fields" [disabled]="movementSaving()">
               <legend class="movement-form__legend">Datos del egreso</legend>
+              <label class="admin-form__wide"><span>Beneficiario <span class="field-optional">(opcional)</span></span><input name="expenseRecipient" [ngModel]="expenseRecipient()" (ngModelChange)="expenseRecipient.set($event)" maxlength="240" /></label>
               <label class="admin-form__wide"><span>Categoría</span><select name="expenseCategory" aria-describedby="expense-category-hint" [ngModel]="expenseCategory()" (ngModelChange)="setExpenseCategory($event)">@for (option of expenseCategoryOptions; track option.id) {<option [value]="option.id">{{ option.label }}</option>}</select><small id="expense-category-hint" class="field-hint">{{ expenseCategoryHint(expenseCategory()) }}</small></label>
               <label><span>Monto del egreso (MXN)</span><input name="expenseAmount" inputmode="decimal" autocomplete="off" placeholder="0.00" [ngModel]="expenseAmountInput()" (ngModelChange)="setExpenseAmountInput($event)" required /></label>
               <label><span>Fecha del egreso</span><input name="expenseDate" type="date" [ngModel]="expenseDate()" (ngModelChange)="setExpenseDate($event)" required /></label>
@@ -571,8 +576,8 @@
         } @else if (movementDialogKind() === 'withdrawal') {
           <form id="movement-form" (ngSubmit)="saveMovement()" [attr.aria-busy]="movementSaving()">
             <fieldset class="admin-form movement-fields" [disabled]="movementSaving()">
-              <legend class="movement-form__legend">Datos del retiro</legend>
-              <label><span>Socio o destino del retiro</span><select name="withdrawalPurpose" [ngModel]="withdrawalPurpose()" (ngModelChange)="setWithdrawalPurpose($event)"><option value="socio_blanca">Blanca Trejo</option><option value="socio_andrea_pepe">Andrea y Pepe</option><option value="persona">Persona</option><option value="sueldo">Sueldo</option><option value="gasto">Gasto</option><option value="inversion">Inversión</option><option value="ahorro">Ahorro</option><option value="otro">Otro</option></select></label>
+              <legend class="movement-form__legend">Datos del retiro</legend><p class="field-hint admin-form__wide">Para sueldos, paquetería y otros gastos, selecciona Egreso. Un retiro de socio registra un pago de su participación.</p>
+              <label><span>Socio o destino del retiro</span><select name="withdrawalPurpose" [ngModel]="withdrawalPurpose()" (ngModelChange)="setWithdrawalPurpose($event)"><option value="socio_blanca">Blanca Trejo</option><option value="socio_andrea_pepe">Andrea y Pepe</option>@if (withdrawalEditingId()) {<option value="persona">Persona</option><option value="sueldo">Sueldo</option><option value="gasto">Gasto</option><option value="inversion">Inversión</option><option value="ahorro">Ahorro</option><option value="otro">Otro</option>}</select></label>
               <label><span>Fecha del retiro</span><input name="withdrawalDate" type="date" [ngModel]="withdrawalDate()" (ngModelChange)="setWithdrawalDate($event)" required /></label>
               <div class="withdrawal-availability admin-form__wide" role="status" aria-atomic="true">
                 <div class="withdrawal-availability__heading"><span>{{ withdrawalPurpose() === 'socio_blanca' ? 'Disponible para Blanca Trejo' : withdrawalPurpose() === 'socio_andrea_pepe' ? 'Disponible para Andrea y Pepe' : 'Disponible para retirar' }}</span><strong>{{ formatMoney(withdrawalAvailableForSelectedPartner()) }} <small>MXN</small></strong></div>

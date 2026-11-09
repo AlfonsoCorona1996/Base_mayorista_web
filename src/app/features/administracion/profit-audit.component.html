@@ -1,7 +1,7 @@
 <section class="audit" aria-labelledby="profit-title" [attr.aria-busy]="busy()">
   <header class="audit-heading">
     <div><p class="eyebrow">Resultados y distribución · 50 / 50</p><h2 id="profit-title">Utilidades y socios</h2><p>Lo que hemos ganado, lo que retiramos y lo que nos corresponde.</p></div>
-    <div class="heading-actions"><span class="scope-label"><span class="material-symbols-rounded" aria-hidden="true">history</span>Histórico completo · {{ context() }}</span><button type="button" [disabled]="busy() || !!error()" (click)="inspect()"><span class="material-symbols-rounded" aria-hidden="true">picture_as_pdf</span>Preparar reporte para socios</button></div>
+    <div class="heading-actions"><span class="scope-label"><span class="material-symbols-rounded" aria-hidden="true">history</span>Histórico completo · {{ context() }}</span><button type="button" [disabled]="busy() || !!error()" (click)="prepareReport()"><span class="material-symbols-rounded" aria-hidden="true">picture_as_pdf</span>Preparar reporte para socios</button></div>
   </header>
   @if (busy()) {
     <div class="empty" role="status">Cargando pedidos y movimientos. Los importes estarán disponibles al terminar.</div>
@@ -22,22 +22,28 @@
       @for (p of partners(); track p.id) {
         <article class="partner-card" [class.partner-card--second]="p.id === 'socio_andrea_pepe'">
           <header><span class="avatar">{{ p.initials }}</span><div><h3>{{ p.name }}</h3><p>Participación del 50%</p></div><span class="material-symbols-rounded" aria-hidden="true">handshake</span></header>
-          <dl class="partner-equation"><div><dt>Ha ganado</dt><dd>{{ money(p.share) }}</dd></div><div><dt>Retiros registrados</dt><dd>{{ money(p.withdrawn) }}</dd></div></dl>
-          <div class="remaining"><span>{{ p.remaining < 0 ? 'Saldo a compensar' : 'Falta por retirar' }}</span><strong>{{ money(p.remaining < 0 ? -p.remaining : p.remaining) }}</strong><small>Ganancia generada menos retiros acumulados</small>@if (p.withdrawn === 0) {<small>No hay retiros registrados para este socio.</small>}</div>
-          <div class="collection-note"><span class="material-symbols-rounded" aria-hidden="true">schedule</span><p><strong>{{ money(p.pendingCollection) }} de su ganancia por cobrar</strong><small>Es un dato de cobranza; no se vuelve a restar del saldo por retirar. No representa efectivo disponible.</small></p></div>
-          <footer><button type="button" (click)="inspect('all', 'orders')">Ver ganancia<span class="material-symbols-rounded" aria-hidden="true">receipt_long</span></button><button type="button" (click)="inspect('all', 'movements', p.id)">Ver sus retiros<span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span></button></footer>
+          <dl class="partner-equation"><div><dt>Ganancia que le corresponde</dt><dd>{{ money(p.share) }}</dd></div><div><dt>Ya pagado al socio</dt><dd>{{ money(p.withdrawn) }}</dd></div></dl>
+          <div class="remaining"><span>{{ p.remaining < 0 ? 'Saldo a compensar' : 'Pendiente de pagar al socio' }}</span><strong>{{ money(p.remaining < 0 ? -p.remaining : p.remaining) }}</strong><small>Ganancia que le corresponde menos lo ya recibido</small>@if (p.withdrawn === 0) {<small>Todavía no hay pagos registrados a este socio.</small>}</div>
+          <div class="collection-note"><span class="material-symbols-rounded" aria-hidden="true">schedule</span><p><strong>Cobranza de clientas</strong><span>{{ money(p.share - p.pendingCollection) }} de resultado neto asociado a ventas cobradas</span><span>{{ money(p.pendingCollection) }} de ganancia pendiente de cobro</span><small>La parte cobrada ya considera los gastos y puede ser negativa. Es una atribución de utilidad, no efectivo disponible; no se vuelve a restar del saldo del socio.</small></p></div>
+          <footer><button type="button" (click)="inspect('all', 'orders')">Ver ganancia<span class="material-symbols-rounded" aria-hidden="true">receipt_long</span></button><button type="button" (click)="inspect('all', 'movements', p.id)">Ver pagos al socio<span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span></button></footer>
         </article>
       }
     </div>
 
     @if (report().issueCount > 0) {
-      <div class="notice"><span class="material-symbols-rounded" aria-hidden="true">fact_check</span><div><strong>Hay {{ report().issueCount }} registros para revisar</strong><p>{{ report().incompleteOrders }} pedidos incompletos y {{ report().estimatedItems }} productos con costo estimado. Todos permanecen visibles. La utilidad de pedidos incompletos está sin determinar; los totales son provisionales.</p><button class="link" type="button" (click)="inspect('all', 'quality')">Revisar datos y estimaciones<span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span></button></div></div>
+      <div class="notice"><span class="material-symbols-rounded" aria-hidden="true">fact_check</span><div><strong>{{ report().issueCount }} {{ report().issueCount === 1 ? 'registro por revisar' : 'registros por revisar' }}</strong><p>@if (report().incompleteOrders || report().estimatedItems) { {{ report().incompleteOrders }} pedidos incompletos y {{ report().estimatedItems }} productos con costo estimado. }Revisa los registros señalados para confirmar los saldos. Los totales permanecen provisionales.</p><button class="link" type="button" (click)="inspect('all', 'quality')">Revisar datos y estimaciones<span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span></button></div></div>
     }
     @if (report().totals.unclassified !== 0) {
       <div class="notice"><span class="material-symbols-rounded" aria-hidden="true">help</span><div><strong>{{ money(report().totals.unclassified) }} con destino por clasificar</strong><p>Estos movimientos aún no se descuentan de la utilidad ni de un socio. Revisa su destino para confirmar los saldos.</p><button class="link" type="button" (click)="inspect('all', 'quality')">Consultar movimientos sin clasificar</button></div></div>
     }
 
-    <section class="panel" aria-labelledby="history-title">
+    <nav class="workspace-nav" aria-label="Consulta de utilidades y socios">
+      <button type="button" [attr.aria-pressed]="workspace() === 'movements'" (click)="workspace.set('movements')">Movimientos</button>
+      <button type="button" [attr.aria-pressed]="workspace() === 'commitments'" (click)="workspace.set('commitments')">Compromisos del mes</button>
+      <button type="button" [attr.aria-pressed]="workspace() === 'history'" (click)="workspace.set('history')">Historial de utilidades</button>
+    </nav>
+    <div [hidden]="workspace() !== 'commitments'"><ng-content select="[commitments]" /></div>
+    <section class="panel" [hidden]="workspace() !== 'history'" aria-labelledby="history-title">
       <header class="panel-heading"><div><p class="eyebrow">Ventas, cobranza y reparto</p><h3 id="history-title">Historial mensual auditable</h3><p>Los pedidos permanecen en su mes de creación. Su cobranza se actualiza hasta hoy.</p></div><span class="scope-label">MXN · {{ report().months.length }} periodos</span></header>
       <div class="legend"><span><i class="dot dot--profit"></i>Utilidad generada, sin importar el cobro</span><span><i class="dot dot--pending"></i>Cobranza pendiente, informada por separado</span></div>
       <p class="scroll-hint">Desliza la tabla para consultar todas las columnas. Selecciona un mes para ver su origen.</p>
@@ -56,16 +62,87 @@
       <details class="method"><summary>Cómo se calcula este reporte</summary><div><p><strong>Venta:</strong> precio clienta × unidades vigentes, menos descuentos, más envío. Incluye pedidos en proceso. Las unidades canceladas, sin existencia o devueltas se descuentan; los pedidos cancelados o totalmente devueltos permanecen visibles con venta cero.</p><p><strong>Utilidad:</strong> venta − costo de mercancía. Si falta el costo, se usa precio público / 2 y se identifica el producto. Un costo cero explícito se respeta. Sin precio clienta, cantidad o costo estimable, la utilidad del pedido queda sin determinar y no se suma como ganancia.</p><p><strong>Cobranza de utilidad:</strong> utilidad × (cobrado / venta), con el cobro limitado a la venta. Es una asignación proporcional del margen, no una medición del saldo bancario. La cobranza posterior permanece vinculada al mes del pedido.</p><p><strong>Socios:</strong> (utilidad de ventas − gastos operativos) / 2 − retiros de cada socio. La compra de mercancía no se descuenta otra vez como gasto. Los retiros sin destino explícito requieren clasificación. Las devoluciones actualizan el mes de origen; esta vista no sustituye un cierre contable congelado.</p><p><strong>Fechas:</strong> calendario de Ciudad de México. Sin fecha comprobable, el registro se conserva en “Sin fecha”. Los movimientos pertenecen al mes en que ocurrieron y no indican qué mes de ganancia se retiró.</p></div></details>
     </section>
 
-    <section class="panel detail-panel" aria-labelledby="audit-detail-title">
-      <header class="panel-heading"><div><p class="eyebrow">Consulta, analiza y comparte</p><h3 #detailHeading id="audit-detail-title" tabindex="-1">Reporte para socios</h3><p>Selecciona un mes o un rango y revisa el origen de cada importe antes de exportar.</p></div><span class="scope-label">{{ business() }} · {{ context() }}</span></header>
+    <section [hidden]="workspace() !== 'movements'" class="panel detail-panel" aria-labelledby="audit-detail-title">
+      <header class="panel-heading"><div><p class="eyebrow">Consulta del periodo</p><h3 #detailHeading id="audit-detail-title" tabindex="-1">Movimientos y detalle</h3><p>Encuentra sueldos, gastos y pagos a socios. Consulta sus fechas y el origen de cada importe.</p></div><span class="scope-label">{{ business() }} · {{ context() }}</span></header>
       <div class="detail-controls"><label>Periodo<select [ngModel]="month()" (ngModelChange)="month.set($event); page.set(1)"><option value="all">Todo el historial</option><option value="custom">Rango de fechas</option>@for (m of report().months; track m.id) {<option [value]="m.id">{{ m.label }}</option>}</select></label>
         @if (month() === 'custom') {
           <label>Desde<input type="date" [ngModel]="dateFrom()" (ngModelChange)="dateFrom.set($event); page.set(1)" [attr.aria-invalid]="!!selection().error" aria-describedby="period-help period-error" /></label>
           <label>Hasta<input type="date" [ngModel]="dateTo()" (ngModelChange)="dateTo.set($event); page.set(1)" [attr.aria-invalid]="!!selection().error" aria-describedby="period-help period-error" /></label>
         }
+<label>Mostrar<select [ngModel]="detail()" (ngModelChange)="detail.set($event); page.set(1); partner.set('all')"><option value="orders">Pedidos y utilidad</option><option value="movements">Gastos y retiros</option><option value="quality">Datos por revisar</option></select></label>@if (detail() !== 'orders') {<label>Destino<select [ngModel]="partner()" (ngModelChange)="partner.set($event); page.set(1)"><option value="all">Todos los movimientos</option><option value="socio_blanca">Blanca Trejo</option><option value="socio_andrea_pepe">Andrea y Pepe</option></select></label>}<label class="search">Buscar<input type="search" placeholder="Pedido, clienta o concepto" [ngModel]="search()" (ngModelChange)="search.set($event); page.set(1)" /></label>
       </div>
-      <p id="period-help" class="report-help">Fechas de creación de los pedidos, con ambos días incluidos. Gastos y retiros por fecha del movimiento. Cobranza acumulada hasta hoy, incluso si se cobró después del periodo.</p>
+      <p id="period-help" class="report-help">{{ detail() === 'movements' ? 'Filtra por la fecha del movimiento. Los rangos incluyen ambos días. La fecha de pago a un socio no indica el mes en que generó su ganancia.' : 'Pedidos por fecha de creación; gastos y retiros por fecha del movimiento. Cobranza acumulada hasta hoy, incluso si se cobró después del periodo.' }}</p>
       <p id="period-error" class="period-error" role="alert">{{ selection().error }}</p>
+      <p class="result-count" role="status">{{ detail() === 'movements' ? movements().length + ' movimientos' : detail() === 'orders' ? orders().length + ' pedidos' : orders().length + ' pedidos y ' + movements().length + ' movimientos por revisar' }} visibles. El buscador filtra el detalle, no los totales del periodo.</p>
+      @if (detail() !== 'movements') {
+        <div class="order-list">@for (r of visibleOrders(); track r.id) {
+          <details class="order-row"><summary><div><strong>{{ r.id }}</strong><span>{{ customer(r.customerId) }}</span><small>{{ dateLabel(r.date) }} · {{ r.status }}</small></div><div><small>Venta clienta</small><strong>{{ money(r.sale) }}</strong></div><div><small>Utilidad</small><strong>{{ r.incomplete ? 'Sin determinar' : money(r.profit) }}</strong></div><span class="row-hint">{{ r.issues.length ? 'Ver datos y observaciones' : 'Ver productos y cálculo' }}<span class="material-symbols-rounded" aria-hidden="true">expand_more</span></span></summary>
+            <div class="order-detail"><div class="detail-summary"><span>Venta cobrada <strong>{{ money(r.collected) }}</strong></span><span>Venta por cobrar <strong>{{ money(r.pending) }}</strong></span><span>Utilidad cobrada <strong>{{ r.incomplete ? 'Sin determinar' : money(r.collectedProfit) }}</strong></span><span>Utilidad por cobrar <strong>{{ r.incomplete ? 'Sin determinar' : money(r.pendingProfit) }}</strong></span></div>
+              @if (r.issues.length) {<ul class="issues">@for (issue of r.issues; track $index) {<li>{{ issue }}</li>}</ul>}
+              <div class="table-scroll" tabindex="0" role="region" [attr.aria-label]="'Productos del pedido ' + r.id"><table class="items-table"><caption>Precios unitarios y cálculo del pedido {{ r.id }}</caption><thead><tr><th scope="col">Producto</th><th scope="col">Unidades / devueltas</th><th scope="col">Precio clienta</th><th scope="col">Costo unitario</th><th scope="col">Origen del costo</th><th scope="col">Venta vigente</th><th scope="col">Costo total</th></tr></thead><tbody>@for (item of r.items; track $index) {<tr><th scope="row">{{ item.title }}</th><td>{{ item.quantity }} / {{ item.returned }}</td><td>{{ item.client === null ? 'Sin dato' : money(item.client) }}</td><td>{{ item.cost === null ? 'Sin dato' : money(item.cost) }}</td><td>{{ item.costSource === 'estimated' ? 'Estimado · público / 2' : item.costSource === 'missing' ? 'Por completar' : 'Registrado' }}</td><td>{{ money(item.sale) }}</td><td>{{ money(item.totalCost) }}</td></tr>} @empty {<tr><td colspan="7">Este pedido no tiene productos registrados.</td></tr>}</tbody></table></div>
+              <p class="calculation">Descuento: {{ money(r.discount) }} · Envío: {{ money(r.shipping) }} · Costo de mercancía: {{ money(r.cost) }}. El costo conserva las pérdidas por productos devueltos dañados.</p>
+              @if (r.returnedSale > 0) {<p class="calculation">{{ money(r.returnedSale) }} de devoluciones ya descontadas de la venta. No se restan otra vez de la utilidad.</p>}
+              @if (r.overpayment > 0) {<p class="calculation">{{ money(r.overpayment) }} de cobro excedente no incluido como venta ni ganancia. Revisar saldo a favor o reembolso.</p>}
+              @if (r.recordedSale !== null && r.recordedSale !== r.sale) {<p class="calculation">Total guardado: {{ money(r.recordedSale) }} · Venta recalculada por productos: {{ money(r.sale) }}. Este reporte utiliza el detalle de productos y no modifica el total original.</p>}
+              @if (r.paymentDate) {<p class="calculation">Fecha de pago: {{ r.paymentDate }}{{ r.paymentDateEstimated ? ' · Estimada a partir de la creación del pedido, según la normalización histórica autorizada.' : ' · Registrada en el pedido.' }}</p>}
+              <button type="button" (click)="openOrder.emit(r.id)">Abrir pedido<span class="material-symbols-rounded" aria-hidden="true">arrow_outward</span></button>
+            </div>
+          </details>
+        } @empty {<div class="empty">No hay pedidos que coincidan con esta consulta.</div>}</div>
+      }
+      @if (detail() !== 'orders') {
+        <div class="quick-filters" role="group" aria-label="Filtrar movimientos por tipo">
+          @for (option of quickOptions; track option.id) {<button type="button" [attr.aria-pressed]="quick() === option.id" (click)="setQuick(option.id)">{{ option.label }}</button>}
+        </div>
+        <details class="method filter-options">
+          <summary>Más filtros{{ activeFilters().length ? ' · ' + activeFilters().length + ' activos' : '' }}</summary>
+          <div class="detail-controls">
+            <label>Categoría<select [ngModel]="category()" (ngModelChange)="category.set($event); page.set(1)"><option value="">Todas las categorías</option>@for (c of categories(); track c.id) {<option [value]="c.id">{{ c.label }}</option>}</select></label>
+            <label>Beneficiario<select [ngModel]="recipientFilter()" (ngModelChange)="recipientFilter.set($event); page.set(1)"><option value="">Todos los beneficiarios</option>@for (r of recipients(); track r) {<option [value]="r">{{ r }}</option>}</select></label>
+            <label>Cuenta de salida<select [ngModel]="accountFilter()" (ngModelChange)="accountFilter.set($event); page.set(1)"><option value="">Todas las cuentas</option>@for (a of movementAccounts(); track a.id) {<option [value]="a.id">{{ a.label }}</option>}</select></label>
+            <label>Importe mínimo (MXN)<input type="number" min="0" step="0.01" [ngModel]="minAmount()" (ngModelChange)="minAmount.set($event); page.set(1)" aria-describedby="amount-error" /></label>
+            <label>Importe máximo (MXN)<input type="number" min="0" step="0.01" [ngModel]="maxAmount()" (ngModelChange)="maxAmount.set($event); page.set(1)" aria-describedby="amount-error" /></label>
+          </div>
+        </details>
+        @if (activeFilters().length) {<div class="active-filters" aria-label="Filtros activos">@for (filter of activeFilters(); track $index) {<span>{{ filter }}</span>}<button type="button" (click)="clearFilters()">Limpiar filtros</button></div>}
+        <p id="amount-error" class="period-error" role="alert">{{ amountError() }}</p>
+        <div class="movement-toolbar">
+          <label>Ordenar por<select [ngModel]="sort()" (ngModelChange)="sort.set($event); page.set(1)"><option value="date">Fecha del movimiento</option><option value="amount">Importe</option><option value="category">Categoría</option><option value="recipient">Beneficiario</option></select></label>
+          <button type="button" (click)="direction.set(direction() === 'asc' ? 'desc' : 'asc'); page.set(1)">{{ direction() === 'asc' ? 'Ascendente ↑' : 'Descendente ↓' }}</button>
+          <button type="button" [disabled]="!!selection().error || !!amountError() || !movements().length" (click)="exportCsv(true)">Exportar resultados filtrados</button>
+        </div>
+        <table class="movements-table" role="table">
+          <caption>Gastos y pagos registrados · Fechas del movimiento · MXN</caption>
+          <thead><tr>
+            <th scope="col" [attr.aria-sort]="ariaSort('date')"><button type="button" (click)="sortBy('date')">Fecha {{ sort() === 'date' ? (direction() === 'asc' ? '↑' : '↓') : '↕' }}</button></th>
+            <th scope="col">Concepto</th>
+            <th scope="col" [attr.aria-sort]="ariaSort('category')"><button type="button" (click)="sortBy('category')">Categoría ↕</button></th>
+            <th scope="col" [attr.aria-sort]="ariaSort('recipient')"><button type="button" (click)="sortBy('recipient')">Beneficiario ↕</button></th>
+            <th scope="col">Cuenta de salida</th>
+            <th scope="col" [attr.aria-sort]="ariaSort('amount')"><button type="button" (click)="sortBy('amount')">Importe {{ sort() === 'amount' ? (direction() === 'asc' ? '↑' : '↓') : '↕' }}</button></th>
+          </tr></thead>
+          <tbody>@for (r of visibleMovements(); track r.source + r.id) {
+            <tr>
+              <td data-label="Fecha del movimiento"><time [attr.datetime]="r.date">{{ dateLabel(r.date) }}</time></td>
+              <td data-label="Concepto"><strong>{{ r.notes || 'Sin concepto registrado' }}</strong><details class="movement-details"><summary>Ver detalle</summary><p>{{ movementLabel(r) }}</p><p>Referencia: {{ r.id }}</p><p>{{ r.kind === 'expense' ? 'Resta utilidad del negocio' : r.kind === 'withdrawal' ? 'Pago recibido por el socio; reduce su saldo pendiente' : r.kind === 'unclassified' ? 'Requiere clasificación; aún no afecta utilidad ni saldo del socio' : 'Compra de mercancía; no se descuenta otra vez de la utilidad' }}</p>@if (r.issues.length) {<ul class="issues">@for (issue of r.issues; track $index) {<li>{{ issue }}</li>}</ul>}@if (canEdit()) {<button type="button" (click)="editMovement.emit({ source: r.source, id: r.id })">Editar movimiento</button>}</details></td>
+              <td data-label="Categoría"><span class="movement-type">{{ categoryLabel(r.category) }}</span>@if (r.issues.length) {<small class="pending">Por revisar</small>}</td>
+              <td data-label="Beneficiario">{{ recipientLabel(r) }}</td>
+              <td data-label="Cuenta de salida">{{ account(r.accountId) }}</td>
+              <td data-label="Importe" class="numeric"><strong>{{ money(r.amount) }}</strong></td>
+            </tr>
+          } @empty {<tr><td colspan="6" class="empty">{{ report().movements.length ? 'No hay movimientos que coincidan con estos filtros.' : 'No hay movimientos registrados para este negocio y ruta.' }}</td></tr>}</tbody>
+        </table>
+        <p class="filtered-total" role="status"><strong>{{ movements().length }} movimientos · {{ money(movementTotal()) }}</strong><span>Total de resultados filtrados, incluye todas sus páginas. Los saldos históricos de socios no cambian.</span></p>
+      }
+      @if (pageCount() > 1) {
+        <nav class="pagination" aria-label="Páginas del detalle">
+          <button type="button" [disabled]="currentPage() === 1" (click)="movePage(-1)">Anterior</button>
+          <span aria-live="polite">Página {{ currentPage() }} de {{ pageCount() }} · hasta {{ pageSize }} registros por lista</span>
+          <button type="button" [disabled]="currentPage() === pageCount()" (click)="movePage(1)">Siguiente</button>
+        </nav>
+      }
+      <details #reportOptions class="method report-options" [open]="reportOpen()" (toggle)="reportOpen.set(reportOptions.open)">
+        <summary>Preparar informe del periodo · Resumen y exportación</summary>
       @if (!selection().error) {
         <div class="report-overview">
           <div class="report-title"><div><p class="eyebrow">Vista del periodo · MXN</p><h4>{{ selection().label }}</h4></div><span>{{ selection().orders.length }} pedidos · {{ selection().movements.length }} movimientos</span></div>
@@ -85,40 +162,12 @@
       }
       <div class="report-export">
         <label class="checkbox-label"><input type="checkbox" [ngModel]="includeProducts()" (ngModelChange)="includeProducts.set($event)" />Incluir desglose de productos en el PDF</label>
-        <div class="export-actions"><button #pdfTrigger class="primary-button" type="button" [disabled]="pdfBusy() || !!selection().error" (click)="previewPdf()"><span class="material-symbols-rounded" aria-hidden="true">picture_as_pdf</span>{{ pdfBusy() ? 'Preparando documento…' : 'Ver y descargar PDF' }}</button><button type="button" [disabled]="!!selection().error" (click)="exportCsv()"><span class="material-symbols-rounded" aria-hidden="true">download</span>Exportar detalle CSV</button></div>
+        <div class="export-actions"><button #pdfTrigger class="primary-button" type="button" [disabled]="pdfBusy() || !!selection().error" (click)="previewPdf()"><span class="material-symbols-rounded" aria-hidden="true">picture_as_pdf</span>{{ pdfBusy() ? 'Preparando documento…' : 'Ver y descargar PDF' }}</button><button type="button" [disabled]="!!selection().error" (click)="exportCsv()"><span class="material-symbols-rounded" aria-hidden="true">download</span>Exportar periodo completo CSV</button></div>
         <p>El PDF incluye el resumen, los saldos históricos de socios, todos los pedidos y movimientos del periodo y las observaciones. La búsqueda, el socio y la página del detalle no limitan la exportación.</p>
         @if (pdfBusy()) {<p role="status">Generando todas las páginas del reporte. Puede tardar unos segundos.</p>}
         @if (pdfError()) {<p class="period-error" role="alert">{{ pdfError() }}</p>}
       </div>
-      <h4 class="detail-subheading">Origen de los importes</h4>
-      <div class="detail-controls"><label>Mostrar<select [ngModel]="detail()" (ngModelChange)="detail.set($event); page.set(1); partner.set('all')"><option value="orders">Pedidos y utilidad</option><option value="movements">Gastos y retiros</option><option value="quality">Datos por revisar</option></select></label>@if (detail() !== 'orders') {<label>Destino<select [ngModel]="partner()" (ngModelChange)="partner.set($event); page.set(1)"><option value="all">Todos los movimientos</option><option value="socio_blanca">Blanca Trejo</option><option value="socio_andrea_pepe">Andrea y Pepe</option></select></label>}<label class="search">Buscar<input type="search" placeholder="Pedido, clienta o concepto" [ngModel]="search()" (ngModelChange)="search.set($event); page.set(1)" /></label></div>
-      <p class="result-count" role="status">{{ detail() === 'movements' ? movements().length + ' movimientos' : detail() === 'orders' ? orders().length + ' pedidos' : orders().length + ' pedidos y ' + movements().length + ' movimientos por revisar' }} visibles. El buscador filtra el detalle, no los totales del periodo.</p>
-      @if (detail() !== 'movements') {
-        <div class="order-list">@for (r of visibleOrders(); track r.id) {
-          <details class="order-row"><summary><div><strong>{{ r.id }}</strong><span>{{ customer(r.customerId) }}</span><small>{{ r.date || 'Sin fecha' }} · {{ r.status }}</small></div><div><small>Venta clienta</small><strong>{{ money(r.sale) }}</strong></div><div><small>Utilidad</small><strong>{{ r.incomplete ? 'Sin determinar' : money(r.profit) }}</strong></div><span class="row-hint">{{ r.issues.length ? 'Ver datos y observaciones' : 'Ver productos y cálculo' }}<span class="material-symbols-rounded" aria-hidden="true">expand_more</span></span></summary>
-            <div class="order-detail"><div class="detail-summary"><span>Venta cobrada <strong>{{ money(r.collected) }}</strong></span><span>Venta por cobrar <strong>{{ money(r.pending) }}</strong></span><span>Utilidad cobrada <strong>{{ r.incomplete ? 'Sin determinar' : money(r.collectedProfit) }}</strong></span><span>Utilidad por cobrar <strong>{{ r.incomplete ? 'Sin determinar' : money(r.pendingProfit) }}</strong></span></div>
-              @if (r.issues.length) {<ul class="issues">@for (issue of r.issues; track $index) {<li>{{ issue }}</li>}</ul>}
-              <div class="table-scroll" tabindex="0" role="region" [attr.aria-label]="'Productos del pedido ' + r.id"><table class="items-table"><caption>Precios unitarios y cálculo del pedido {{ r.id }}</caption><thead><tr><th scope="col">Producto</th><th scope="col">Unidades / devueltas</th><th scope="col">Precio clienta</th><th scope="col">Costo unitario</th><th scope="col">Origen del costo</th><th scope="col">Venta vigente</th><th scope="col">Costo total</th></tr></thead><tbody>@for (item of r.items; track $index) {<tr><th scope="row">{{ item.title }}</th><td>{{ item.quantity }} / {{ item.returned }}</td><td>{{ item.client === null ? 'Sin dato' : money(item.client) }}</td><td>{{ item.cost === null ? 'Sin dato' : money(item.cost) }}</td><td>{{ item.costSource === 'estimated' ? 'Estimado · público / 2' : item.costSource === 'missing' ? 'Por completar' : 'Registrado' }}</td><td>{{ money(item.sale) }}</td><td>{{ money(item.totalCost) }}</td></tr>} @empty {<tr><td colspan="7">Este pedido no tiene productos registrados.</td></tr>}</tbody></table></div>
-              <p class="calculation">Descuento: {{ money(r.discount) }} · Envío: {{ money(r.shipping) }} · Costo de mercancía: {{ money(r.cost) }}. El costo conserva las pérdidas por productos devueltos dañados.</p>
-              @if (r.returnedSale > 0) {<p class="calculation">{{ money(r.returnedSale) }} de devoluciones ya descontadas de la venta. No se restan otra vez de la utilidad.</p>}
-              @if (r.overpayment > 0) {<p class="calculation">{{ money(r.overpayment) }} de cobro excedente no incluido como venta ni ganancia. Revisar saldo a favor o reembolso.</p>}
-              @if (r.recordedSale !== null && r.recordedSale !== r.sale) {<p class="calculation">Total guardado: {{ money(r.recordedSale) }} · Venta recalculada por productos: {{ money(r.sale) }}. Este reporte utiliza el detalle de productos y no modifica el total original.</p>}
-              @if (r.paymentDate) {<p class="calculation">Fecha de pago: {{ r.paymentDate }}{{ r.paymentDateEstimated ? ' · Estimada a partir de la creación del pedido, según la normalización histórica autorizada.' : ' · Registrada en el pedido.' }}</p>}
-              <button type="button" (click)="openOrder.emit(r.id)">Abrir pedido<span class="material-symbols-rounded" aria-hidden="true">arrow_outward</span></button>
-            </div>
-          </details>
-        } @empty {<div class="empty">No hay pedidos que coincidan con esta consulta.</div>}</div>
-      }
-      @if (detail() !== 'orders') {
-        <div class="movement-list">@for (r of visibleMovements(); track r.source + r.id) {<article class="movement-row"><div><span class="movement-type" [class.movement-type--withdrawal]="r.kind === 'withdrawal'">{{ movementLabel(r) }}</span><h4>{{ r.notes || 'Sin concepto registrado' }}</h4><p>{{ r.date || 'Sin fecha' }} · {{ r.category }} · {{ account(r.accountId) }}</p><small>Referencia: {{ r.id }}</small>@if (r.issues.length) {<ul class="issues">@for (issue of r.issues; track $index) {<li>{{ issue }}</li>}</ul>}</div><div class="movement-amount"><strong>{{ money(r.amount) }}</strong><small>{{ r.kind === 'expense' ? 'Resta utilidad' : r.kind === 'withdrawal' ? 'Resta al saldo del socio' : 'No resta utilidad' }}</small>@if (canEdit()) {<button type="button" (click)="editMovement.emit({ source: r.source, id: r.id })">Ver / editar</button>}</div></article>} @empty {<div class="empty">No hay movimientos que coincidan con esta consulta.</div>}</div>
-      }
-      @if (pageCount() > 1) {
-        <nav class="pagination" aria-label="Páginas del detalle">
-          <button type="button" [disabled]="currentPage() === 1" (click)="movePage(-1)">Anterior</button>
-          <span aria-live="polite">Página {{ currentPage() }} de {{ pageCount() }} · hasta {{ pageSize }} registros por lista</span>
-          <button type="button" [disabled]="currentPage() === pageCount()" (click)="movePage(1)">Siguiente</button>
-        </nav>
-      }
+      </details>
     </section>
   }
 </section>

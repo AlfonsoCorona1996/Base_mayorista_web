@@ -29,6 +29,7 @@ describe('ProfitAuditComponent', () => {
   it('pagina el detalle sin perder pedidos del reporte ni modificar los totales al buscar', async () => {
     const fixture = await setup(25);
     const component = fixture.componentInstance;
+    component.detail.set('orders');
     expect(component.visibleOrders().length).toBe(20);
     component.movePage(1);
     expect(component.visibleOrders().length).toBe(5);
@@ -39,6 +40,7 @@ describe('ProfitAuditComponent', () => {
   });
   it('permite navegar al pedido original desde su desglose', async () => {
     const fixture = await setup();
+    fixture.componentInstance.detail.set('orders'); fixture.detectChanges();
     const emit = spyOn(fixture.componentInstance.openOrder, 'emit');
     const buttons = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button'));
     buttons.find(button => button.textContent?.includes('Abrir pedido'))?.click();

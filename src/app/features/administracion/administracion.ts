@@ -29,6 +29,7 @@ import { BusinessPosition, calculateBusinessPosition } from "../../core/business
 import { calculateAccountingPeriodOutcome, originalOrderFinancials } from "../../core/accounting-period";
 import { buildProfitAudit } from "../../core/profit-audit";
 import { ProfitAuditComponent } from "./profit-audit.component";
+import { FinanceCommitmentsComponent } from './finance-commitments.component';
 
 type MoneyBucketId =
   | "openDrafts"
@@ -386,7 +387,7 @@ const DRILLDOWN_COLUMN_DEFAULT_DIRECTION: Record<DrilldownColumn, "asc" | "desc"
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   selector: "app-administracion",
-  imports: [FormsModule, ProfitAuditComponent],
+  imports: [FormsModule, ProfitAuditComponent, FinanceCommitmentsComponent],
   templateUrl: "./administracion.html",
   styleUrls: ["./administracion-redesign-prototype.component.css", "./administracion.css"],
 })
@@ -465,6 +466,7 @@ export default class AdministracionPage {
   expenseInstallmentTotal = signal<number | null>(null);
   expenseInstallmentIndex = signal<number | null>(null);
   expenseNotes = signal("");
+  expenseRecipient = signal('');
 
   withdrawalEditingId = signal<string | null>(null);
   withdrawalAmount = signal(0);
@@ -553,6 +555,7 @@ export default class AdministracionPage {
   });
 
   profitAudit = computed(() => buildProfitAudit(this.filteredOrders(), this.filteredExpenses(), this.filteredWithdrawals()));
+  auditMonthProfits = computed(() => Object.fromEntries(this.profitAudit().months.map(m => [m.id, m.netProfit])));
   auditCustomers = computed(() => Object.fromEntries(this.customers().map(row => [row.customer_id, [row.first_name, row.last_name].filter(Boolean).join(' ')])));
   auditAccounts = computed(() => Object.fromEntries(this.accounts().map(row => [row.account_id, row.name])));
   auditError = computed(() => this.error() || this.ordersService.loadError());
@@ -1514,6 +1517,7 @@ export default class AdministracionPage {
     this.expenseInstallmentTotal.set(row.installment_total);
     this.expenseInstallmentIndex.set(row.installment_index);
     this.expenseNotes.set(row.notes || "");
+    this.expenseRecipient.set(row.recipient || '');
   }
 
   resetExpenseForm() {
@@ -1527,6 +1531,7 @@ export default class AdministracionPage {
     this.expenseInstallmentTotal.set(null);
     this.expenseInstallmentIndex.set(null);
     this.expenseNotes.set("");
+    this.expenseRecipient.set('');
   }
 
   setExpenseCategory(value: unknown) {
@@ -1596,6 +1601,7 @@ export default class AdministracionPage {
         installment_total: this.expenseInstallmentTotal(),
         installment_index: this.expenseInstallmentIndex(),
         notes: this.expenseNotes().trim() || null,
+        recipient: this.expenseRecipient().trim() || null,
       });
       this.resetExpenseForm();
       this.movementDialogOpen.set(false);

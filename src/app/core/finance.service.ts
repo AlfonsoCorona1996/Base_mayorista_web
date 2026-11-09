@@ -15,6 +15,7 @@ import {
 } from "./finance-ledger";
 import { FIREBASE_AUTH } from "./firebase.providers";
 import { auditDate } from "./profit-audit";
+import { FinanceCommitment, commitmentDates, termsFor } from './finance-commitments';
 
 export type FinanceExpenseCategory =
   | "compra_inversion"
@@ -131,6 +132,9 @@ export interface FinanceExpense {
   installment_total: number | null;
   installment_index: number | null;
   notes: string | null;
+  recipient?: string | null;
+  commitment_id?: string | null;
+  commitment_due_date?: string | null;
   created_at?: unknown;
   updated_at?: unknown;
 }
@@ -399,6 +403,13 @@ export class FinanceService {
       this.assertOpenPeriod(periodSnap.data() as Record<string, unknown> | undefined, payload.occurred_at);
       const previous = expenseSnap.exists() ? this.normalizeExpense(expenseSnap.id, expenseSnap.data() as Record<string, unknown>) : null;
       if (previous && previous.business_id !== businessId) throw new Error("El egreso pertenece a otro negocio.");
+      payload.recipient = input.recipient === undefined ? previous?.recipient || null : this.toOptionalText(input.recipient);
+      payload.commitment_id = input.commitment_id === undefined ? previous?.commitment_id || null : this.toOptionalText(input.commitment_id);
+      payload.commitment_due_date = input.commitment_due_date === undefined ? previous?.commitment_due_date || null : this.toOptionalText(input.commitment_due_date);
+      if (payload.commitment_id) {
+        const planSnap = await tx.get(doc(FIRESTORE, 'finance_commitments', payload.commitment_id));
+        this.validateCommitmentPayment(planSnap.data() as FinanceCommitment | undefined, payload, !previous || previous.commitment_id !== payload.commitment_id || previous.commitment_due_date !== payload.commitment_due_date);
+      }
       if (previous && previous.occurred_at !== payload.occurred_at) {
         const previousPeriod = await tx.get(doc(this.periodsCol, financePeriodDocumentId(businessId, monthIdFromDateInput(previous.occurred_at))));
         this.assertOpenPeriod(previousPeriod.data() as Record<string, unknown> | undefined, previous.occurred_at);
@@ -437,6 +448,32 @@ export class FinanceService {
     });
     await Promise.all([this.loadExpenses(), this.loadAccounts(), this.loadLedgerEntries()]);
     return expenseId;
+  }
+
+  private validateCommitmentPayment(plan: FinanceCommitment | undefined, expense: FinanceExpense, newLink: boolean): void {
+    const due = expense.commitment_due_date || '';
+    const terms = plan && termsFor(plan, due);
+    if (!plan || plan.business_id !== expense.business_id || plan.route_id !== expense.route_id || !commitmentDates(plan, due.slice(0, 7)).includes(due) || !terms) throw new Error('El compromiso no corresponde al negocio, ruta o vencimiento de este egreso.');
+    if (newLink && (terms.cancelled || terms.category !== expense.category)) throw new Error('El compromiso está cancelado o tiene otra categoría.');
+  }
+
+  async linkCommitmentExpense(expenseId: string, commitmentId: string | null, dueDate: string | null, businessId: BusinessId): Promise<void> {
+    const ref = doc(this.expensesCol, expenseId);
+    await runTransaction(FIRESTORE, async tx => {
+      const snap = await tx.get(ref);
+      if (!snap.exists() || snap.data()['voided_at']) throw new Error('El egreso ya no está disponible.');
+      const expense = this.normalizeExpense(snap.id, snap.data() as Record<string, unknown>);
+      if (expense.business_id !== businessId) throw new Error('El egreso pertenece a otro negocio.');
+      const period = await tx.get(doc(this.periodsCol, financePeriodDocumentId(businessId, monthIdFromDateInput(expense.occurred_at))));
+      this.assertOpenPeriod(period.data() as Record<string, unknown> | undefined, expense.occurred_at);
+      if (commitmentId) {
+        if (expense.commitment_id && (expense.commitment_id !== commitmentId || expense.commitment_due_date !== dueDate)) throw new Error('Este egreso ya está vinculado a otro vencimiento.');
+        const plan = await tx.get(doc(FIRESTORE, 'finance_commitments', commitmentId));
+        this.validateCommitmentPayment(plan.data() as FinanceCommitment | undefined, { ...expense, commitment_id: commitmentId, commitment_due_date: dueDate }, true);
+      }
+      tx.update(ref, { commitment_id: commitmentId, commitment_due_date: commitmentId ? dueDate : null, updated_at: serverTimestamp() });
+    });
+    await this.loadExpenses();
   }
 
   async deleteExpense(expenseId: string): Promise<void> {
@@ -666,6 +703,9 @@ export class FinanceService {
 
   private normalizeExpense(id: string, data: Record<string, unknown>): FinanceExpense {
     return {
+      recipient: this.toOptionalText(data['recipient']),
+      commitment_id: this.toOptionalText(data['commitment_id']),
+      commitment_due_date: this.toOptionalText(data['commitment_due_date']),
       expense_id: String(data["expense_id"] || id),
       business_id: normalizeBusinessId(data["business_id"]),
       category: this.normalizeExpenseCategory(data["category"]),

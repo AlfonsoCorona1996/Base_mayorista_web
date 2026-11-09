@@ -15,7 +15,7 @@ export interface AuditOrder extends FinancialOrderLike {
 export interface AuditExpense {
   expense_id: string; category: string; amount: number; occurred_at: unknown;
   audit_occurred_at?: string | null;
-  notes?: string | null; account_id?: string | null;
+  notes?: string | null; account_id?: string | null; recipient?: string | null;
 }
 export interface AuditWithdrawal {
   withdrawal_id: string; purpose: string; amount: number; occurred_at: unknown;
@@ -41,7 +41,7 @@ export type AuditMovementKind = 'expense' | 'capital' | 'withdrawal' | 'unclassi
 export interface AuditMovement {
   id: string; source: 'expense' | 'withdrawal'; date: string | null; month: string;
   kind: AuditMovementKind; category: string; amount: number; partner: AuditPartner | null;
-  notes: string; accountId: string | null; issues: string[];
+  notes: string; accountId: string | null; issues: string[]; recipient?: string | null;
 }
 export interface AuditTotals {
   sale: number; cost: number; profit: number; collected: number; pending: number;
@@ -156,7 +156,7 @@ function movementsFor(expenses: AuditExpense[], withdrawals: AuditWithdrawal[]):
     const estimated = row.category === 'ajuste' || /aprox|estimad|%.*devoluci/i.test(row.notes || '');
     return { id: row.expense_id, source: 'expense', date, month: date?.slice(0, 7) || 'undated',
       kind: row.category === 'compra_inversion' ? 'capital' : 'expense', category: row.category,
-      amount: money(row.amount), partner: null, notes: row.notes || '', accountId: row.account_id || null,
+      amount: money(row.amount), partner: null, notes: row.notes || '', accountId: row.account_id || null, recipient: row.recipient || null,
       issues: [...(!date ? ['Sin fecha comprobable'] : []), ...(suspicious ? ['Revisar si es gasto o retiro de socio; se conserva la categoría registrada'] : []), ...(estimated ? ['Gasto estimado: conciliar contra devoluciones registradas para evitar descontarlas dos veces'] : [])],
     };
   });
@@ -165,7 +165,7 @@ function movementsFor(expenses: AuditExpense[], withdrawals: AuditWithdrawal[]):
     const partner = row.purpose === 'socio_blanca' || row.purpose === 'socio_andrea_pepe' ? row.purpose : null;
     rows.push({ id: row.withdrawal_id, source: 'withdrawal', date, month: date?.slice(0, 7) || 'undated',
       kind: partner ? 'withdrawal' : 'unclassified', category: row.purpose, amount: money(row.amount), partner,
-      notes: [row.recipient, row.notes].filter(Boolean).join(' · '), accountId: row.account_id || null,
+      notes: row.notes || '', recipient: row.recipient || null, accountId: row.account_id || null,
       issues: [...(!date ? ['Sin fecha comprobable'] : []), ...(!partner ? ['Destino por clasificar: no se asigna a un socio por sus notas'] : [])],
     });
   }

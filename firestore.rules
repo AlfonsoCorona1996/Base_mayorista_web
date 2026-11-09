@@ -319,45 +319,88 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Finance transactions read several documents and write a ledger entry plus
+    // a balance. The business guard already verifies the active user; do not
+    // repeat that verification for each alternative capability (rules limit).
+    function financeCapability(key) {
+      return userDoc().data.get("capabilities", {}).get(key, false) == true;
+    }
+
+    function financeSection() {
+      return userDoc().data.get("sections", {}).get("sections.administracion",
+        userDoc().data.get("sections", {}).get("administracion", false)) == true;
+    }
+
+    function financeUpdateBusiness() {
+      return incomingBusinessId() == resourceBusinessId() && hasBusiness(resourceBusinessId());
+    }
+
     match /finance_accounts/{accountId} {
       allow read: if canReadBusinessResource()
         && (
-          hasSection("sections.administracion")
-          || hasCapability("cap.finance.accounts.view")
-          || hasCapability("cap.payments.refund")
+          financeSection()
+          || financeCapability("cap.finance.accounts.view")
+          || financeCapability("cap.payments.refund")
         );
-      allow create: if canCreateBusinessResource() && hasCapability("cap.finance.accounts.create");
-      allow update: if canUpdateBusinessResource()
+      allow create: if canCreateBusinessResource() && financeCapability("cap.finance.accounts.create");
+      allow update: if financeUpdateBusiness()
         && (
-          hasCapability("cap.finance.accounts.edit")
+          financeCapability("cap.finance.accounts.edit")
           || (
-            (hasCapability("cap.payments.register") || hasCapability("cap.finance.movements.create") || hasCapability("cap.finance.movements.edit") || hasCapability("cap.finance.movements.delete"))
+            (financeCapability("cap.payments.register") || financeCapability("cap.finance.movements.create") || financeCapability("cap.finance.movements.edit") || financeCapability("cap.finance.movements.delete"))
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["balance", "updated_at"])
             && request.resource.data.balance is number
           )
           || (
-            hasCapability("cap.payments.refund")
+            financeCapability("cap.payments.refund")
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["balance", "updated_at"])
             && request.resource.data.balance is number
             && resource.data.balance is number
             && request.resource.data.balance <= resource.data.balance
           )
         );
-      allow delete: if canReadBusinessResource() && hasCapability("cap.finance.accounts.delete");
+      allow delete: if canReadBusinessResource() && financeCapability("cap.finance.accounts.delete");
+    }
+
+    match /finance_commitments/{commitmentId} {
+      // Transactions check a new ID before creating it. No existing data is exposed.
+      allow get: if !exists(/databases/$(database)/documents/finance_commitments/$(commitmentId))
+        && isActiveUser() && financeCapability("cap.finance.movements.create");
+      allow read: if canReadBusinessResource() && (financeSection() || financeCapability("cap.finance.movements.view"));
+      allow create: if canCreateBusinessResource() && financeCapability("cap.finance.movements.create")
+        && request.resource.data.commitment_id == commitmentId
+        && request.resource.data.revision == 1
+        && request.resource.data.frequency in ["once", "monthly", "semimonthly"]
+        && request.resource.data.revisions is list && request.resource.data.revisions.size() > 0
+        && request.resource.data.overrides is map;
+      allow update: if financeUpdateBusiness() && financeCapability("cap.finance.movements.edit")
+        && request.resource.data.commitment_id == commitmentId
+        && request.resource.data.revision == resource.data.revision + 1
+        && request.resource.data.frequency == resource.data.frequency
+        && request.resource.data.start_date == resource.data.start_date
+        && request.resource.data.end_date == resource.data.end_date
+        && request.resource.data.route_id == resource.data.route_id
+        && request.resource.data.revisions is list && request.resource.data.revisions.size() > 0
+        && request.resource.data.overrides is map;
+      allow delete: if false;
     }
 
     match /finance_expenses/{expenseId} {
-      allow read: if canReadBusinessResource() && (hasSection("sections.administracion") || hasCapability("cap.finance.movements.view"));
-      allow create: if canCreateBusinessResource() && hasCapability("cap.finance.movements.create");
-      allow update: if canUpdateBusinessResource() && hasCapability("cap.finance.movements.edit");
-      allow delete: if canReadBusinessResource() && hasCapability("cap.finance.movements.delete");
+      allow get: if !exists(/databases/$(database)/documents/finance_expenses/$(expenseId))
+        && isActiveUser() && financeCapability("cap.finance.movements.create");
+      allow read: if canReadBusinessResource() && (financeSection() || financeCapability("cap.finance.movements.view"));
+      allow create: if canCreateBusinessResource() && financeCapability("cap.finance.movements.create");
+      allow update: if financeUpdateBusiness() && financeCapability("cap.finance.movements.edit");
+      allow delete: if canReadBusinessResource() && financeCapability("cap.finance.movements.delete");
     }
 
     match /finance_withdrawals/{withdrawalId} {
-      allow read: if canReadBusinessResource() && (hasSection("sections.administracion") || hasCapability("cap.finance.movements.view"));
-      allow create: if canCreateBusinessResource() && hasCapability("cap.finance.movements.create");
-      allow update: if canUpdateBusinessResource() && hasCapability("cap.finance.movements.edit");
-      allow delete: if canReadBusinessResource() && hasCapability("cap.finance.movements.delete");
+      allow get: if !exists(/databases/$(database)/documents/finance_withdrawals/$(withdrawalId))
+        && isActiveUser() && financeCapability("cap.finance.movements.create");
+      allow read: if canReadBusinessResource() && (financeSection() || financeCapability("cap.finance.movements.view"));
+      allow create: if canCreateBusinessResource() && financeCapability("cap.finance.movements.create");
+      allow update: if financeUpdateBusiness() && financeCapability("cap.finance.movements.edit");
+      allow delete: if canReadBusinessResource() && financeCapability("cap.finance.movements.delete");
     }
 
     match /finance_cuts/{cutId} {
@@ -368,34 +411,39 @@ service cloud.firestore {
 
     match /finance_ledger_entries/{entryId} {
       allow read: if canReadBusinessResource()
-        && (hasSection("sections.administracion") || hasCapability("cap.finance.movements.view"));
+        && (financeSection() || financeCapability("cap.finance.movements.view"));
       allow create: if canCreateBusinessResource()
         && request.resource.data.entry_id == entryId
         && request.resource.data.cash_effect is number
         && request.resource.data.amount is number
         && request.resource.data.period_id is string
         && (
-          hasCapability("cap.payments.register")
-          || hasCapability("cap.payments.refund")
-          || hasCapability("cap.returns.create")
-          || hasCapability("cap.finance.accounts.create")
-          || hasCapability("cap.finance.accounts.edit")
-          || hasCapability("cap.finance.movements.create")
-          || hasCapability("cap.finance.movements.edit")
-          || hasCapability("cap.finance.movements.delete")
+          financeCapability("cap.payments.register")
+          || financeCapability("cap.payments.refund")
+          || financeCapability("cap.returns.create")
+          || financeCapability("cap.finance.accounts.create")
+          || financeCapability("cap.finance.accounts.edit")
+          || financeCapability("cap.finance.movements.create")
+          || financeCapability("cap.finance.movements.edit")
+          || financeCapability("cap.finance.movements.delete")
         );
       allow update, delete: if false;
     }
 
     match /finance_periods/{periodId} {
+      // An absent period is open; limit this check to the caller's business.
+      allow get: if !exists(/databases/$(database)/documents/finance_periods/$(periodId))
+        && (financeSection() || financeCapability("cap.finance.reports.view"))
+        && ((periodId.matches('bm_[0-9]{4}-[0-9]{2}') && hasBusiness('bm'))
+          || (periodId.matches('catalogo_[0-9]{4}-[0-9]{2}') && hasBusiness('catalogo')));
       allow read: if canReadBusinessResource()
-        && (hasSection("sections.administracion") || hasCapability("cap.finance.reports.view"));
-      allow create: if canCreateBusinessResource() && hasCapability("cap.finance.reports.view");
-      allow update: if canUpdateBusinessResource()
+        && (financeSection() || financeCapability("cap.finance.reports.view"));
+      allow create: if canCreateBusinessResource() && financeCapability("cap.finance.reports.view");
+      allow update: if financeUpdateBusiness()
         && (
           isSuperAdmin()
           || (
-            hasCapability("cap.finance.reports.view")
+            financeCapability("cap.finance.reports.view")
             && resource.data.status != "closed"
             && request.resource.data.status == "closed"
           )

@@ -1,5 +1,6 @@
 import { PDFDocument, PDFFont, PDFPage, StandardFonts, rgb } from 'pdf-lib';
 import { AuditMovement, AuditOrderRow, ProfitAudit, auditPartners } from '../../core/profit-audit';
+import { movementCategory, movementRecipient } from '../../core/finance-movement-query';
 import { ProfitReportSelection } from '../../core/profit-report';
 
 export interface ProfitPdfInput {
@@ -128,7 +129,7 @@ export async function createProfitReportPdf(input: ProfitPdfInput): Promise<Uint
   table(['Socio', '50% de utilidad neta del periodo', 'Retiros ocurridos en el periodo', 'Parte de utilidad de ventas por cobrar'], [188, 180, 180, 180], auditPartners(t).map(p => [p.name, currency(p.share), currency(p.withdrawn), currency(p.pendingCollection)]), 10);
   paragraph('Los retiros del periodo pueden corresponder a ganancias de meses anteriores. No se presentan como saldo pendiente de este periodo.');
   paragraph('Saldos históricos actuales · mismo negocio y ruta · todos los meses', { bold: true, size: 11 });
-  table(['Socio', 'Ha ganado', 'Ha retirado', 'Falta por retirar / saldo', 'Ganancia por cobrar'], [168, 140, 140, 140, 140], auditPartners(input.history.totals).map(p => [p.name, currency(p.share), currency(p.withdrawn), p.remaining < 0 ? `${currency(-p.remaining)} a compensar` : currency(p.remaining), currency(p.pendingCollection)]), 9);
+  table(['Socio', 'Le corresponde', 'Ya pagado al socio', 'Pendiente / saldo', 'Ganancia por cobrar'], [168, 140, 140, 140, 140], auditPartners(input.history.totals).map(p => [p.name, currency(p.share), currency(p.withdrawn), p.remaining < 0 ? `${currency(-p.remaining)} a compensar` : currency(p.remaining), currency(p.pendingCollection)]), 9);
   paragraph('Falta por retirar = participación en la utilidad neta histórica menos retiros registrados. La ganancia por cobrar es informativa: NO se vuelve a restar del saldo por retirar. Estos saldos no representan efectivo disponible ni saldos al final del periodo seleccionado.');
   if (input.history.issueCount) paragraph(`El historial contiene ${input.history.issueCount} registros por revisar; sus saldos también son provisionales.`, { bold: true });
 
@@ -146,7 +147,7 @@ export async function createProfitReportPdf(input: ProfitPdfInput): Promise<Uint
     if (!movements.length) { paragraph('No hay movimientos en esta selección.'); return; }
     table(['Fecha / referencia / origen', 'Tipo / categoría', 'Concepto / cuenta / observaciones', 'Importe'], [172, 154, 300, 102], movements.map(r => [
       `${r.date || 'Sin fecha'} · ${r.id} · ${r.source === 'expense' ? 'Registro de gasto' : 'Registro de retiro'}`,
-      `${movement(r)} · ${r.category}`, `${r.notes || 'Sin concepto'} · ${r.accountId ? input.accounts[r.accountId] || r.accountId : 'Cuenta sin identificar'}${r.issues.length ? ' · ' + r.issues.join(' · ') : ''}`, currency(r.amount),
+      `${movement(r)} · ${movementCategory(r.category)}`, `${movementRecipient(r)} · ${r.notes || 'Sin concepto'} · ${r.accountId ? input.accounts[r.accountId] || r.accountId : 'Cuenta sin identificar'}${r.issues.length ? ' · ' + r.issues.join(' · ') : ''}`, currency(r.amount),
     ]));
   };
   startSection('04 / Gastos, retiros y otros movimientos'); movementLedger(s.movements);

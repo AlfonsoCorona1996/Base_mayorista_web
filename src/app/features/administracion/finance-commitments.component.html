@@ -1,0 +1,63 @@
+<section class="panel" aria-labelledby="commitments-title" [attr.aria-busy]="loading()">
+  <header class="panel-heading"><div><p class="eyebrow">Planeación de gastos · MXN</p><h3 id="commitments-title">Compromisos del mes</h3><p>Prepara sueldos, paquetería y otros gastos. Registra cada pago cuando ocurra.</p></div>@if (canCreate()) {<button type="button" class="primary-button" [disabled]="loading() || !!loadError() || saving()" (click)="openPlan()">Agregar compromiso</button>}</header>
+  <div class="detail-controls"><label>Mes de vencimiento<input type="month" [ngModel]="month()" (ngModelChange)="month.set($event)" /></label><label>Estado<select [ngModel]="status()" (ngModelChange)="status.set($event)"><option value="all">Todos los estados</option><option value="Pendiente">Pendiente</option><option value="Parcial">Parcial</option><option value="Pagado">Pagado</option><option value="Cancelado">Cancelado</option><option value="overdue">Vencidos</option></select></label><label>Buscar compromiso<input type="search" placeholder="Concepto o beneficiario" [ngModel]="search()" (ngModelChange)="search.set($event)" /></label></div>
+  @if (loading()) {<p class="empty" role="status">Cargando compromisos…</p>}
+  @else if (loadError()) {<div class="notice" role="alert"><div><strong>No se pudieron cargar los compromisos</strong><p>{{ loadError() }}</p><button type="button" (click)="load()">Volver a intentar</button></div></div>}
+  @else if (!validMonth(month())) {<p class="period-error" role="alert">Selecciona un mes válido.</p>}
+  @else {
+    <dl class="commitment-metrics"><div><dt>Previsto del mes</dt><dd>{{ money(totals().expected / 100) }}</dd></div><div><dt>Pagado a estos compromisos</dt><dd>{{ money(totals().paid / 100) }}</dd></div><div><dt>Pendiente por pagar</dt><dd>{{ money(totals().pending / 100) }}</dd></div></dl>
+    <p class="report-help">Pagos vinculados a los vencimientos del mes, aunque se hayan realizado en otra fecha. Los importes previstos no se registran como egresos hasta que se pagan.</p>
+    <table class="movements-table commitments-table" role="table"><caption>Vencimientos de {{ month() }} · {{ rows().length }} resultados</caption><thead><tr><th scope="col">Concepto / beneficiario</th><th scope="col">Vencimiento</th><th scope="col">Previsto</th><th scope="col">Pagado / pendiente</th><th scope="col">Estado y acciones</th></tr></thead><tbody>
+      @for (r of rows(); track r.commitment_id + r.due_date) {<tr>
+        <td data-label="Concepto / beneficiario"><strong>{{ r.title }}</strong><span>{{ r.recipient }}</span><small>{{ categoryLabel(r.category) }} · {{ frequencyLabel(r.frequency) }}</small></td>
+        <td data-label="Vencimiento"><time [attr.datetime]="r.due_date">{{ date(r.due_date) }}</time>@if (r.overdue) {<small class="pending">Vencido</small>}</td>
+        <td data-label="Previsto"><strong>{{ money(r.amount) }}</strong><small>{{ r.estimated ? 'Estimado' : 'Acordado' }}{{ r.cancelled ? ' · Cancelado, fuera del previsto' : '' }}</small></td>
+        <td data-label="Pagado / pendiente"><span>{{ money(r.paid) }} pagado</span><strong>{{ money(r.remaining) }} pendiente</strong>@if (r.excess) {<small class="pending">{{ money(r.excess) }} por encima de lo previsto</small>}@if (r.payments.length) {<details class="movement-details"><summary>Ver pagos ({{ r.payments.length }})</summary>@for (p of r.payments; track p.expense_id) {<div class="payment-reference"><p>{{ date(p.occurred_at) }} · {{ money(p.amount) }}</p><small>{{ p.notes || 'Sin concepto' }} · {{ p.expense_id }}</small>@if (canEdit()) {<button type="button" [disabled]="saving()" (click)="unlink(p)">Quitar vínculo</button>}</div>}</details>}</td>
+        <td data-label="Estado y acciones"><span class="movement-type">{{ r.status }}</span><div class="row-actions">@if (!r.cancelled && r.remaining > 0) {@if (canCreate()) {<button type="button" [disabled]="saving()" (click)="openPayment(r)">Registrar pago</button>}@if (canEdit()) {<button type="button" [disabled]="saving()" (click)="openPayment(r, true)">Vincular egreso</button>}}@if (canEdit()) {<button type="button" [disabled]="saving()" (click)="openPlan(r)">Editar compromiso</button>}</div></td>
+      </tr>} @empty {<tr><td colspan="5" class="empty">{{ allRows().length ? 'No hay compromisos que coincidan con estos filtros.' : 'No hay compromisos para este mes. Agrega un gasto previsto o consulta otro mes.' }}</td></tr>}
+    </tbody></table>
+    <details class="method"><summary>Proyección después de compromisos pendientes</summary><div><p>Utilidad registrada en el mes: <strong>{{ money(profits()[month()] || 0) }}</strong></p><p>Menos compromisos pendientes: <strong>{{ money(totals().pending / 100) }}</strong></p><p>Resultado proyectado: <strong>{{ money((profits()[month()] || 0) - totals().pending / 100) }}</strong></p><p>Estimación basada en los datos registrados y los compromisos pendientes de este mes. No representa efectivo disponible ni modifica el saldo acumulado de los socios.</p></div></details>
+  }
+  @if (success()) {<p class="feedback" role="status">{{ success() }}</p>}
+  @if (error() && !dialogMode()) {<p class="period-error" role="alert">{{ error() }}</p>}
+</section>
+
+@if (dialogMode()) {
+  <dialog #commitmentDialog class="commitment-dialog" aria-labelledby="commitment-dialog-title" (cancel)="$event.preventDefault(); close()">
+    <header><div><h3 id="commitment-dialog-title">{{ dialogMode() === 'plan' ? selected() ? 'Editar compromiso' : 'Agregar compromiso' : dialogMode() === 'link' ? 'Vincular egreso existente' : 'Registrar pago del compromiso' }}</h3>@if (selected(); as row) {<p>{{ row.title }} · Vence {{ date(row.due_date) }}</p>}</div><button type="button" [disabled]="saving()" (click)="close()" aria-label="Cerrar">✕</button></header>
+    <form (ngSubmit)="submit()">
+      <fieldset [disabled]="saving()"><legend>{{ dialogMode() === 'plan' ? 'Datos del compromiso' : 'Datos del pago' }}</legend>
+      @if (dialogMode() === 'plan') {
+        <label>Concepto<input name="title" [(ngModel)]="title" required maxlength="240" autofocus /></label>
+        <label>Beneficiario<input name="recipient" [(ngModel)]="recipient" required maxlength="240" /></label>
+        <label>Categoría<select name="category" [(ngModel)]="category">@for (c of categoryOptions; track c.id) {<option [value]="c.id">{{ c.label }}</option>}</select></label>
+        <label>Importe por vencimiento (MXN)<input name="amount" type="number" min="0.01" step="0.01" [(ngModel)]="amount" required /></label>
+        <label class="checkbox-label wide"><input type="checkbox" name="estimated" [(ngModel)]="estimated" />Es un importe estimado</label>
+        @if (!selected()) {
+          <label>Frecuencia<select name="frequency" [(ngModel)]="frequency"><option value="once">Una vez</option><option value="monthly">Mensual</option><option value="semimonthly">Quincenal · 15 y último día</option></select></label>
+          <label>{{ frequency === 'semimonthly' ? 'Generar vencimientos a partir del' : 'Primer vencimiento' }}<input name="start" type="date" [(ngModel)]="start" required /></label>
+          @if (frequency !== 'once') {<label>Termina el (opcional)<input name="end" type="date" [(ngModel)]="end" [min]="start" /></label>}
+          <p class="form-help wide">{{ frequency === 'semimonthly' ? 'El importe se repetirá dos veces por mes: el día 15 y el último día. Para un sueldo de $12,000 al mes, escribe $6,000 por vencimiento.' : frequency === 'monthly' ? 'Se repetirá el día elegido. En meses más cortos se usará su último día.' : 'Se generará un solo vencimiento.' }} Se guarda en el negocio y la ruta que estás consultando.</p>
+        } @else {
+          <label class="wide">Aplicar cambios a<select name="scope" [(ngModel)]="editScope"><option value="one">Solo este vencimiento</option><option value="future">Este y los siguientes</option></select></label>
+          <label class="checkbox-label wide"><input name="cancelled" type="checkbox" [(ngModel)]="cancelled" />Cancelar {{ editScope === 'one' ? 'este vencimiento' : 'este y los siguientes' }}</label>
+          <p class="form-help wide">Los cambios no alteran pagos registrados ni vencimientos anteriores. Para reactivar, desmarca la cancelación. “Este y los siguientes” también sustituye ajustes futuros de esta recurrencia.</p>
+        }
+      } @else if (dialogMode() === 'payment') {
+        <label>Importe pagado (MXN)<input name="paymentAmount" type="number" min="0.01" step="0.01" [(ngModel)]="paymentAmount" required autofocus /></label>
+        <label>Fecha del pago<input name="paymentDate" type="date" [(ngModel)]="paymentDate" [max]="today()" required /></label>
+        <label class="wide">Cuenta de salida<select name="paymentAccount" [(ngModel)]="paymentAccount" required><option value="" disabled>Selecciona una cuenta</option>@for (a of accounts(); track a.account_id) {<option [value]="a.account_id">{{ a.name }} · {{ money(a.balance) }}</option>}</select></label>
+        <p class="form-help wide">El pago se registrará como gasto y se descontará de la cuenta seleccionada. Puedes registrar pagos parciales.</p>
+        @if (!accounts().length) {<p class="period-error wide">No hay cuentas disponibles. Crea una desde Registrar movimiento → Cuenta.</p>}
+        @if ((paymentAmount || 0) > (selected()?.remaining || 0)) {<p class="pending wide">El pago supera lo pendiente. Se mostrará la diferencia sobre lo previsto.</p>}
+      } @else {
+        <label class="wide">Egreso ya registrado<select name="expenseId" [(ngModel)]="expenseId" required autofocus><option value="" disabled>Selecciona un egreso</option>@for (e of candidates(); track e.expense_id) {<option [value]="e.expense_id">{{ date(e.occurred_at) }} · {{ money(e.amount) }} · {{ e.recipient || e.notes || e.expense_id }}</option>}</select></label>
+        <p class="form-help wide">Solo se muestran egresos sin vínculo, de la misma categoría, negocio y ruta. Se vincula el importe completo sin crear otro gasto.</p>
+        @if (!candidates().length) {<p class="pending wide">No hay egresos disponibles. Registra el pago si todavía no existe.</p>}
+      }
+      </fieldset>
+      @if (error()) {<p class="period-error" role="alert">{{ error() }}</p>}
+      <footer><button type="button" [disabled]="saving()" (click)="close()">Cancelar</button><button type="submit" class="primary-button" [disabled]="saving() || (dialogMode() === 'link' && !candidates().length) || (dialogMode() === 'payment' && !accounts().length)">{{ saving() ? 'Guardando…' : dialogMode() === 'plan' ? 'Guardar compromiso' : dialogMode() === 'link' ? 'Vincular egreso' : 'Registrar pago' }}</button></footer>
+    </form>
+  </dialog>
+}
