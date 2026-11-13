@@ -221,7 +221,7 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
       component.editTargetItemId.set(item.item_id);
       component.onPriceInputChange("costo", "120.50");
       await component.updateExistingItem(order);
-      expect(updateOrderItems).toHaveBeenCalledWith(order.order_id, [jasmine.objectContaining({ price_cost: 120.5, price_cost_override: true, price_clienta: 149.25, price_public: 199 })]);
+      expect(updateOrderItems).toHaveBeenCalledWith(order.order_id, [jasmine.objectContaining({ price_cost: 120.5, price_cost_override: true, price_clienta: 149.25, price_public: 199 })], jasmine.any(Array));
       expect(component.newItemCostError()).toBeNull();
     });
 
@@ -374,7 +374,7 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
       expect(updateOrderItems).toHaveBeenCalledWith("PED-REGALO", [jasmine.objectContaining({
         item_id: "regalo", quantity: 2, price_clienta: 0, price_cost: 109,
         price_override_reason: "Regalo sin cargo",
-      })]);
+      })], jasmine.any(Array));
     });
 
     it("limpia la marca de regalo al cambiarlo a una venta normal", async () => {
@@ -387,7 +387,7 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
       expect(component.popupConfirmOpen()).toBeFalse();
       expect(updateOrderItems).toHaveBeenCalledWith("PED-REGALO", [jasmine.objectContaining({
         price_clienta: 150, price_cost: 109, price_override_reason: null, price_override_below_cost: null,
-      })]);
+      })], jasmine.any(Array));
     });
 
     it("muestra el aviso completo sin desbordar el modal en los cinco tamaños requeridos", async () => {
@@ -590,7 +590,10 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
 
       await component.updateExistingItem(order);
 
-      expect(updateOrderItems).toHaveBeenCalledWith('PED-MK', [jasmine.objectContaining({ item_id: 'edit', quantity: 3, color: 'gris', catalog_option_status: 'pending_review' })]);
+      expect(updateOrderItems).toHaveBeenCalledWith('PED-MK', [jasmine.objectContaining({ item_id: 'edit', quantity: 3, color: 'gris', catalog_option_status: 'pending_review' })], jasmine.any(Array));
+      // FIX 03A-2: la base incluye los renglones fusionados; así el backend sabe que se quitaron a propósito.
+      const baseIds = (updateOrderItems.calls.mostRecent().args[2] as { item_id: string }[]).map((item) => item.item_id);
+      expect(baseIds).toEqual(jasmine.arrayContaining(['edit', 'gris-1', 'gris-2']));
       expect(logOrderEvent).toHaveBeenCalledWith('PED-MK', 'ITEM_UPDATED', jasmine.any(String), jasmine.objectContaining({ mergedItemIds: ['gris-1', 'gris-2'], savedQty: 3 }));
       expect(reserveStock).not.toHaveBeenCalled();
       expect(releaseReservation).not.toHaveBeenCalled();
@@ -616,7 +619,7 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
       await component.addItem(order);
 
       expect(addOrderItem).not.toHaveBeenCalled();
-      expect(updateOrderItems).toHaveBeenCalledWith('PED-MK', [jasmine.objectContaining({ item_id: 'gris', quantity: 3, catalog_option_status: 'pending_review' })]);
+      expect(updateOrderItems).toHaveBeenCalledWith('PED-MK', [jasmine.objectContaining({ item_id: 'gris', quantity: 3, catalog_option_status: 'pending_review' })], jasmine.any(Array));
     });
   });
 

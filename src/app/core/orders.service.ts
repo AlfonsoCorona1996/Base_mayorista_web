@@ -38,11 +38,55 @@ import {
   isSupplierReceiptComplete,
   supplierOperationReservedForOrderId,
 } from "./supplier-operation-state";
-import { financePeriodDocumentId, ledgerEntryPayload, monthIdFromDateInput } from "./finance-ledger";
+import { businessDateKey, financePeriodDocumentId, ledgerEntryPayload, monthIdFromDateInput } from "./finance-ledger";
 import { LONG_TASK_MS, OrdersSnapshotInference, PerfMetricsService, firebaseErrorCode, roundMs } from "./perf-metrics.service";
 import { OrdersSnapshotEvent, OrdersSnapshotIndex } from "./orders-snapshot-index";
 import { normalizeOrderCreator, OrderCreator } from "./order-creator";
 import { canCloseBySettlement, statusAfterCollection, statusAfterDelivery } from "./order-closure";
+import {
+  DeliveryInventorySyncState,
+  deliverableQty,
+  normalizeDeliveryInventorySync,
+  pendingDeliveryInventorySync,
+  planPackageDelivery,
+} from "./delivery-inventory";
+
+/**
+ * Resultado del ajuste de inventario que acompaña una entrega (FIX 03B-1). La entrega se
+ * guarda primero; si el inventario no se pudo ajustar, `ok` es false, queda un evento
+ * `INVENTORY_DELIVERY_SYNC_FAILED` y `retryDeliveryInventorySync` lo completa sin duplicar
+ * (todas las llaves son deterministas).
+ */
+export interface DeliveryInventorySyncResult {
+  ok: boolean;
+  consumed: number;
+  released: number;
+  /** Piezas entregadas que su línea no tenía apartadas (no se tomaron de otro pedido). */
+  shortfall: number;
+  error: string | null;
+  /** Movimientos comprobados en el servidor antes de marcar el ajuste como completo. */
+  verified: number;
+  /**
+   * FIX 03B-1.1: otra sesión ya había registrado la entrega. No se reescribió el pedido
+   * (fecha, etapa e historial se conservan); solo se corrió el ajuste idempotente.
+   */
+  alreadyDelivered?: boolean;
+}
+
+/** Algún movimiento esperado no aparece en el servidor: el ajuste no se marca como completo. */
+export class DeliveryInventoryVerificationError extends Error {
+  constructor(readonly missing: string[]) {
+    super(`No se pudo comprobar ${missing.length} movimiento(s) de inventario de la entrega.`);
+    this.name = "DeliveryInventoryVerificationError";
+  }
+}
+
+export class PackageDeliveryEvidenceError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PackageDeliveryEvidenceError";
+  }
+}
 
 export type { OrdersSnapshotChange, OrdersSnapshotDoc, OrdersSnapshotEvent } from "./orders-snapshot-index";
 
@@ -191,6 +235,8 @@ export interface OrderItem {
   returned_qty?: number | null;
   returned_restockable_qty?: number | null;
   returned_damaged_qty?: number | null;
+  /** FIX 03B-1.1: devueltas sin inventario comprobado (pendientes de conteo físico). */
+  returned_unverified_qty?: number | null;
   confirmed_qty?: number | null;
   source: "catalogo" | "inventario" | "manual";
   product_ref_type?: "normalized_listing" | "catalog_product" | "inventory_item" | "manual" | null;
@@ -377,6 +423,8 @@ export interface Order {
   collection_reminder_at?: string | null;
   collection_note?: string | null;
   sales_note_last_generated_at?: string | null;
+  /** Ajuste de inventario de la entrega (FIX 03B-1.1). Ver `DeliveryInventorySyncState`. */
+  inventory_sync?: DeliveryInventorySyncState | null;
   totals: OrderTotals;
 }
 
@@ -916,6 +964,8 @@ export class OrdersService {
   async updateStatus(orderId: string, status: OrderStatus, note?: string) {
     const now = new Date().toISOString();
     const marksDelivered = status === "entregado" || status === "closed";
+    // FIX 03B-1.1: la entrega deja el ajuste de inventario pendiente en la misma escritura.
+    const pendingSync = marksDelivered ? pendingDeliveryInventorySync("close", now, this.getById(orderId)?.inventory_sync) : null;
     this.rows.update((current) =>
       current.map((order) => {
         if (order.order_id !== orderId) return order;
@@ -924,6 +974,7 @@ export class OrdersService {
           status,
           updated_at: now,
           delivered_at: marksDelivered ? (order.delivered_at || now) : order.delivered_at,
+          ...(pendingSync ? { inventory_sync: pendingSync } : {}),
           timeline: [
             ...order.timeline,
             {
@@ -942,11 +993,10 @@ export class OrdersService {
       updated_at: serverTimestamp(),
       timeline: this.getById(orderId)?.timeline || [],
       notes: note ?? this.getById(orderId)?.notes ?? "",
-      ...(marksDelivered ? { delivered_at: serverTimestamp() } : {}),
+      ...(marksDelivered ? { delivered_at: serverTimestamp(), inventory_sync: pendingSync } : {}),
     });
     if (marksDelivered) {
-      await this.consumeInventoryForDelivery(orderId);
-      await this.closeSupplierLinesOnDelivery(orderId);
+      await this.syncDeliveryInventory(orderId);
     } else if (status === "cancelado") {
       await this.releaseInventoryForOrder(orderId);
     }
@@ -985,55 +1035,228 @@ export class OrdersService {
     await this.logEvent(orderId, "ORDER_OPERATION_UPDATED", message, cleanPatch);
   }
 
-  async markOrderDelivered(orderId: string, note?: string): Promise<void> {
+  async markOrderDelivered(orderId: string, note?: string): Promise<DeliveryInventorySyncResult> {
     const now = new Date().toISOString();
-    // La entrega no borra un cobro previo: un pedido ya liquidado queda `pagado`.
-    // Se guarda siempre el nombre canónico (`entregado`), nunca `delivered`.
-    const nextStatus = statusAfterDelivery(this.getById(orderId)?.customer_payment_status);
+    const orderRef = doc(this.colRef, orderId);
+    // FIX 03B-1.1: la entrega se decide sobre el pedido VIVO (transacción). Si otra sesión ya
+    // la registró, no se reescriben fecha, etapa ni historial: solo se corre el ajuste
+    // idempotente. Entrega e "inventario pendiente" van en UNA escritura: si la pestaña se
+    // cierra o el ajuste falla después, el pedido queda marcado desde cualquier dispositivo.
+    const applied = await runTransaction(FIRESTORE, async (tx) => {
+      const snap = await tx.get(orderRef);
+      if (!snap.exists()) throw new Error("Pedido no encontrado");
+      const live = snap.data() as Record<string, any>;
+      if (live["delivery_status"] === "delivered" && live["delivered_at"]) return null;
+      // La entrega no borra un cobro previo: un pedido ya liquidado queda `pagado`.
+      // Se guarda siempre el nombre canónico (`entregado`), nunca `delivered`.
+      const nextStatus = statusAfterDelivery(live["customer_payment_status"] || this.getById(orderId)?.customer_payment_status);
+      const pendingSync = pendingDeliveryInventorySync("close", now, normalizeDeliveryInventorySync(live["inventory_sync"]));
+      const timeline = [
+        ...(Array.isArray(live["timeline"]) ? live["timeline"] : []),
+        { id: `t-${Date.now()}`, label: "Pedido entregado", created_at: now },
+      ];
+      tx.update(orderRef, {
+        status: nextStatus,
+        delivery_status: "delivered",
+        current_holder_location: "customer",
+        delivered_at: serverTimestamp(),
+        updated_at: serverTimestamp(),
+        timeline,
+        inventory_sync: pendingSync,
+        ...(note ? { notes: note } : {}),
+      });
+      return { nextStatus, pendingSync, timeline };
+    });
     this.rows.update((current) =>
-      current.map((order) =>
-        order.order_id === orderId
-          ? {
-              ...order,
-              status: nextStatus,
-              delivery_status: "delivered",
-              current_holder_location: "customer",
-              delivered_at: order.delivered_at || now,
-              updated_at: now,
-              timeline: [
-                ...order.timeline,
-                { id: `t-${Date.now()}`, label: "Pedido entregado", created_at: now },
-              ],
-            }
-          : order,
-      ),
+      current.map((order) => {
+        if (order.order_id !== orderId) return order;
+        if (!applied) {
+          // Ya entregado por otra sesión: la copia local se alinea sin inventar datos nuevos.
+          return { ...order, delivery_status: "delivered", delivered_at: order.delivered_at || now };
+        }
+        return {
+          ...order,
+          status: applied.nextStatus,
+          delivery_status: "delivered",
+          current_holder_location: "customer",
+          delivered_at: order.delivered_at || now,
+          updated_at: now,
+          inventory_sync: applied.pendingSync,
+          timeline: applied.timeline,
+          ...(note ? { notes: note } : {}),
+        };
+      }),
     );
-    await updateDoc(doc(this.colRef, orderId), {
-      status: nextStatus,
-      delivery_status: "delivered",
-      current_holder_location: "customer",
-      delivered_at: serverTimestamp(),
-      updated_at: serverTimestamp(),
-      timeline: this.getById(orderId)?.timeline || [],
-      ...(note ? { notes: note } : {}),
-    });
-    await this.consumeInventoryForDelivery(orderId).catch((error) => {
-      console.error("[OrdersService] No se pudo consumir inventario al entregar", error);
-    });
-    await this.closeSupplierLinesOnDelivery(orderId);
-    await this.logEvent(orderId, "ORDER_DELIVERED", note || "Pedido marcado como entregado");
+    const inventoryResult = await this.syncDeliveryInventory(orderId);
+    if (applied) {
+      await this.logEvent(orderId, "ORDER_DELIVERED", note || "Pedido marcado como entregado");
+    }
+    return { ...inventoryResult, alreadyDelivered: !applied };
   }
 
   /**
-   * La mercancía de proveedor recibida para un pedido entregado sale del inventario.
-   * Antes se borraban las líneas liberando su reserva: lo entregado volvía a "disponible".
+   * Ajusta el inventario de un pedido entregado (completo o por cajas): consume lo apartado
+   * por cada línea y libera solo el sobrante. Es idempotente (llaves deterministas) y sirve
+   * de reintento. Nunca lanza.
+   *
+   * FIX 03B-1.1: el resultado queda en `orders.inventory_sync`. Solo se marca `synced`
+   * después de comprobar en el servidor cada movimiento esperado; si algo falla queda
+   * `failed` (o sigue `pending` si ni eso se pudo guardar) y bloquea el cierre del pedido.
+   * Qué ajustar se decide con la evidencia guardada del pedido, no con la memoria de la
+   * pestaña: entrega completa → todas las líneas; si no, cada caja marcada como entregada.
    */
-  private async closeSupplierLinesOnDelivery(orderId: string): Promise<void> {
+  async syncDeliveryInventory(orderId: string): Promise<DeliveryInventorySyncResult> {
+    const result: DeliveryInventorySyncResult = { ok: true, consumed: 0, released: 0, shortfall: 0, error: null, verified: 0 };
     const order = this.getById(orderId);
-    if (!order) return;
-    await this.supplierOperations.closeOnDelivery(order).catch((error) => {
-      console.error("[OrdersService] No se pudieron cerrar las líneas de proveedor al entregar", error);
+    if (!order) return { ...result, ok: false, error: "Pedido no encontrado" };
+    const previous = order.inventory_sync || null;
+    const attemptAt = new Date().toISOString();
+    const attempts = (previous?.attempts || 0) + 1;
+    const fullDelivery = order.delivery_status === "delivered" || Boolean(order.delivered_at);
+    const base = previous || pendingDeliveryInventorySync(fullDelivery ? "close" : "packages", attemptAt);
+    const keys: Array<{ inventoryId: string; key: string }> = [];
+    try {
+      let touchedInventory = false;
+      if (fullDelivery) {
+        // Una sola recarga de inventario al final de toda la entrega (antes: una por artículo).
+        const own = await this.consumeInventoryForDelivery(orderId, null, { refreshInventory: false });
+        result.consumed += own.consumed;
+        result.shortfall += own.shortfall;
+        keys.push(...own.keys);
+        touchedInventory = own.touchedInventory;
+        // La mercancía de proveedor recibida para un pedido entregado sale del inventario.
+        const supplier = await this.supplierOperations.closeOnDelivery(order, { refreshInventory: false });
+        result.consumed += supplier.consumed;
+        result.released += supplier.released;
+        result.shortfall += supplier.shortfall;
+        keys.push(...supplier.keys);
+        touchedInventory = touchedInventory || supplier.touchedInventory;
+      } else {
+        for (const pkg of (order.packages || []).filter((row) => row.state === "entregado")) {
+          const box = await this.consumeInventoryForDelivery(orderId, pkg.package_id, { refreshInventory: false });
+          result.consumed += box.consumed;
+          result.shortfall += box.shortfall;
+          keys.push(...box.keys);
+          touchedInventory = touchedInventory || box.touchedInventory;
+        }
+      }
+      // No se declara completo sin comprobar en el servidor cada movimiento esperado.
+      const check = await this.inventory.verifyAppliedKeys(keys);
+      if (check.missing.length > 0) throw new DeliveryInventoryVerificationError(check.missing);
+      result.verified = check.verified;
+      if (touchedInventory) await this.inventory.refreshAfterExternalMutation();
+      try {
+        await this.saveInventorySync(orderId, {
+          ...base,
+          status: "synced",
+          attempts,
+          last_attempt_at: attemptAt,
+          last_error: null,
+          last_error_code: null,
+          synced_at: attemptAt,
+          verified_keys: check.verified,
+          consumed: result.consumed,
+          released: result.released,
+          shortfall: result.shortfall,
+        });
+      } catch (error) {
+        // El inventario sí quedó ajustado y comprobado; solo falta la marca. El pedido sigue
+        // pendiente y el siguiente reintento la pone sin volver a descontar (mismas llaves).
+        console.error("[OrdersService] Inventario ajustado, pero no se guardó la verificación", error);
+        result.ok = false;
+        result.error = "El inventario se ajustó, pero no se pudo guardar la verificación. Reintenta.";
+      }
+    } catch (error) {
+      console.error("[OrdersService] No se pudo ajustar el inventario de la entrega", error);
+      result.ok = false;
+      result.error = error instanceof Error ? error.message : "Error desconocido";
+      const code = (error as { code?: string } | null)?.code
+        || (error instanceof DeliveryInventoryVerificationError ? "verification" : null);
+      await this.saveInventorySync(orderId, {
+        ...base,
+        status: "failed",
+        attempts,
+        last_attempt_at: attemptAt,
+        last_error: result.error.slice(0, 300),
+        last_error_code: code,
+        synced_at: null,
+      }).catch(() => undefined);
+      await this.logEvent(orderId, "INVENTORY_DELIVERY_SYNC_FAILED", "La entrega se guardó, pero el inventario no se pudo ajustar. Reintenta el ajuste desde el pedido.", {
+        error_code: code,
+        attempts,
+      }).catch(() => undefined);
+    }
+    if (result.ok && result.shortfall > 0) {
+      await this.logEvent(orderId, "INVENTORY_DELIVERY_SHORTFALL", `Se entregaron ${result.shortfall} pieza(s) que no estaban apartadas para este pedido. Revisa el inventario.`, {
+        shortfall: result.shortfall,
+      }).catch(() => undefined);
+    }
+    return result;
+  }
+
+  /** Reintento explícito desde la interfaz. Mismas llaves: no descuenta dos veces. */
+  async retryDeliveryInventorySync(orderId: string): Promise<DeliveryInventorySyncResult> {
+    const result = await this.syncDeliveryInventory(orderId);
+    if (result.ok) {
+      await this.logEvent(orderId, "INVENTORY_DELIVERY_SYNCED", "Inventario de la entrega ajustado y comprobado.", {
+        consumed: result.consumed,
+        released: result.released,
+        verified: result.verified,
+      }).catch(() => undefined);
+    }
+    return result;
+  }
+
+  /**
+   * Resolución supervisada (solo administración): el ajuste no se puede completar
+   * automáticamente (p. ej. el inventario ya se corrigió a mano tras un conteo). No mueve
+   * inventario; deja nota, autor y evento, y permite volver a cerrar el pedido.
+   */
+  async resolveDeliveryInventoryManually(orderId: string, note: string): Promise<void> {
+    const order = this.getById(orderId);
+    const cleanNote = String(note || "").trim();
+    if (!order?.inventory_sync) throw new Error("Este pedido no tiene un ajuste de inventario pendiente.");
+    if (cleanNote.length < 5) throw new Error("Escribe qué se revisó (al menos 5 caracteres).");
+    const actor = this.currentActor();
+    const resolvedAt = new Date().toISOString();
+    await this.saveInventorySync(orderId, {
+      ...order.inventory_sync,
+      status: "resolved_manual",
+      last_attempt_at: resolvedAt,
+      resolved_by: actor.name,
+      resolution_note: cleanNote.slice(0, 500),
     });
+    await this.logEvent(orderId, "INVENTORY_DELIVERY_RESOLVED_MANUAL", `Ajuste de inventario resuelto manualmente: ${cleanNote.slice(0, 200)}`, {
+      previous_status: order.inventory_sync.status,
+      attempts: order.inventory_sync.attempts,
+    }).catch(() => undefined);
+  }
+
+  private async saveInventorySync(orderId: string, state: DeliveryInventorySyncState): Promise<void> {
+    await updateDoc(doc(this.colRef, orderId), { inventory_sync: state, updated_at: serverTimestamp() });
+    this.rows.update((current) =>
+      current.map((order) => (order.order_id === orderId ? { ...order, inventory_sync: state } : order)),
+    );
+  }
+
+  /**
+   * Entrega de una caja (FIX 03B-1.1): estado de la caja e "inventario pendiente" en una sola
+   * escritura; después, el ajuste comprobado. Sin cantidades por artículo no se escribe nada
+   * (`PackageDeliveryEvidenceError`).
+   */
+  async deliverPackage(orderId: string, packageId: string): Promise<DeliveryInventorySyncResult> {
+    const order = this.getById(orderId);
+    if (!order) throw new Error("Pedido no encontrado");
+    const plan = planPackageDelivery(order.packages || [], order.items || [], packageId);
+    if (!plan.ok) throw new PackageDeliveryEvidenceError(plan.reason);
+    const now = new Date().toISOString();
+    const pendingSync = pendingDeliveryInventorySync("packages", now, order.inventory_sync);
+    const packages = (order.packages || []).map((pkg) => (pkg.package_id === packageId ? { ...pkg, state: "entregado" as PackageRecord["state"] } : pkg));
+    await updateDoc(doc(this.colRef, orderId), { packages, inventory_sync: pendingSync, updated_at: serverTimestamp() });
+    this.rows.update((current) =>
+      current.map((row) => (row.order_id === orderId ? { ...row, packages, inventory_sync: pendingSync, updated_at: now } : row)),
+    );
+    return this.syncDeliveryInventory(orderId);
   }
 
   async markOrderDeliveryIssue(orderId: string, deliveryStatus: Extract<OrderDeliveryStatus, "not_delivered" | "incident">, note?: string) {
@@ -1058,6 +1281,8 @@ export class OrdersService {
     const paymentReceived = Math.max(0, Number.isFinite(amount) ? amount : 0);
     if (paymentReceived <= 0) throw new Error("El cobro debe ser mayor a cero.");
     const now = new Date().toISOString();
+    // Día y mes contable en hora de CDMX (no UTC): un cobro de las 20:00 del 31 no cae en el mes siguiente.
+    const cashDate = businessDateKey();
     const actor = this.currentActor(collectedByName || undefined);
     const eventId = ulid();
     const eventRef = doc(FIRESTORE, "order_collection_events", eventId);
@@ -1076,7 +1301,7 @@ export class OrdersService {
       savedBusinessId = businessId;
       const accountId = options.accountId || (businessId === "bm" ? "acc_caja_general" : `acc_${businessId}_general`);
       const accountRef = doc(FIRESTORE, "finance_accounts", accountId);
-      const periodId = monthIdFromDateInput(now);
+      const periodId = monthIdFromDateInput(cashDate);
       const periodRef = doc(FIRESTORE, "finance_periods", financePeriodDocumentId(businessId, periodId));
       const [accountSnap, periodSnap] = await Promise.all([tx.get(accountRef), tx.get(periodRef)]);
       if (periodSnap.exists() && periodSnap.data()["status"] === "closed") {
@@ -1134,7 +1359,7 @@ export class OrdersService {
         reported_by: this.currentActor(options.reportedByName || collectedByName || undefined),
         verified_by: verificationStatus === "reported" ? null : this.currentActor(),
         verified_at: verificationStatus === "reported" ? null : serverTimestamp(),
-        cash_occurred_at: verificationStatus === "reported" ? null : now.slice(0, 10),
+        cash_occurred_at: verificationStatus === "reported" ? null : cashDate,
         note: note || null,
         created_at: serverTimestamp(),
       });
@@ -1146,7 +1371,7 @@ export class OrdersService {
           account_id: accountId,
           kind: "collection",
           cash_effect: paymentReceived,
-          occurred_at: now.slice(0, 10),
+          occurred_at: cashDate,
           source: "order_collection",
           source_id: eventId,
           order_id: orderId,
@@ -1213,7 +1438,7 @@ export class OrdersService {
   }
 
   async confirmReportedCollection(event: OrderCollectionEvent, note?: string | null): Promise<void> {
-    const occurredAt = new Date().toISOString().slice(0, 10);
+    const occurredAt = businessDateKey();
     await runTransaction(FIRESTORE, async (tx) => {
       const eventRef = doc(FIRESTORE, "order_collection_events", event.event_id);
       const eventSnap = await tx.get(eventRef);
@@ -1425,7 +1650,7 @@ export class OrdersService {
     this.rows.update((current) => current.filter((order) => order.order_id !== targetOrderId));
     try {
       await this.releaseInventoryForOrder(targetOrderId, orderSnapshot).catch(() => null);
-      await this.supplierOperations.removeByOrder(targetOrderId).catch(() => null);
+      await this.supplierOperations.removeByOrder(targetOrderId, orderSnapshot?.business_id).catch(() => null);
       const nestedCollections = ["incidents", "events", "supplierOrders"];
       for (const nested of nestedCollections) {
         const snap = await getDocs(collection(FIRESTORE, "orders", targetOrderId, nested));
@@ -1486,46 +1711,91 @@ export class OrdersService {
     });
   }
 
-  async consumeInventoryForDelivery(orderId: string, packageId?: string | null): Promise<void> {
+  /**
+   * Consume en inventario lo entregado. Sin `packageId`: todo lo pendiente del pedido. Con
+   * `packageId`: solo las piezas que la caja registra (si no hay evidencia por artículo, lanza
+   * `PackageDeliveryEvidenceError` antes de escribir). Cada consumo está acotado a lo que la
+   * línea tiene apartado, así que entregar por caja y después el pedido completo no descuenta
+   * dos veces (FIX 03B-1). Una sola recarga de inventario al final.
+   */
+  async consumeInventoryForDelivery(
+    orderId: string,
+    packageId?: string | null,
+    options: { refreshInventory?: boolean } = {},
+  ): Promise<{ consumed: number; shortfall: number; touchedInventory: boolean; keys: Array<{ inventoryId: string; key: string }> }> {
+    const summary = { consumed: 0, shortfall: 0, touchedInventory: false, keys: [] as Array<{ inventoryId: string; key: string }> };
     const order = this.getById(orderId);
-    if (!order) return;
-    const packageRow = packageId ? (order.packages || []).find((pkg) => pkg.package_id === packageId) : null;
-    const qtyByItem = new Map<string, number>();
-    for (const entry of packageRow?.items || []) {
-      qtyByItem.set(entry.orderItemId, Math.max(0, Math.trunc(Number(entry.qty || 0))));
+    if (!order) return summary;
+    let packageQty: Map<string, number> | null = null;
+    if (packageId) {
+      const plan = planPackageDelivery(order.packages || [], order.items || [], packageId);
+      if (!plan.ok) throw new PackageDeliveryEvidenceError(plan.reason);
+      packageQty = plan.qtyByItem;
     }
+    let touched = false;
     for (const item of order.items || []) {
-      const inventoryId = String(item.inventory_id || "").trim();
+      const inventoryId = this.deliveryInventoryIdForItem(order, item, !!packageId);
       if (!inventoryId) continue;
-      const qty = packageRow
-        ? Math.max(0, qtyByItem.get(item.item_id) ?? ((packageRow.item_ids || []).includes(item.item_id) ? Number(item.confirmed_qty ?? item.quantity ?? 0) : 0))
-        : Math.max(0, Number(item.confirmed_qty ?? item.quantity ?? 0) - Number(item.returned_qty || 0));
+      const qty = packageQty ? Math.min(packageQty.get(item.item_id) || 0, deliverableQty(item)) : deliverableQty(item);
       if (qty <= 0) continue;
-      await this.inventory.consumeOnDelivery({
+      const key = `delivery_${order.order_id}_${packageId || "close"}_${item.item_id}`;
+      const result = await this.inventory.consumeOnDelivery({
         sku: inventoryId,
         qty,
         orderId: order.order_id,
         orderItemId: item.item_id,
-        idempotencyKey: `delivery_${order.order_id}_${packageId || "close"}_${item.item_id}`,
-      });
+        idempotencyKey: key,
+        // Total de la línea: lo que ya salió (por caja o entrega completa) no se vuelve a pedir
+        // ni cuenta como faltante, sin importar el orden en que lleguen las sesiones.
+        lineQty: deliverableQty(item),
+      }, { refreshCache: false });
+      touched = true;
+      summary.keys.push({ inventoryId, key });
+      summary.consumed += result.applied;
+      if (!result.skipped) summary.shortfall += result.shortfall;
     }
+    summary.touchedInventory = touched;
+    if (touched && options.refreshInventory !== false) await this.inventory.refreshAfterExternalMutation();
+    return summary;
+  }
+
+  /**
+   * Documento de inventario donde la línea tiene su reserva. Propio/manual: `inventory_id`.
+   * Proveedor, solo en entrega por caja: el documento donde se recibió (`supplier_operations`).
+   * En la entrega completa la mercancía de proveedor la consume `closeOnDelivery`.
+   */
+  private deliveryInventoryIdForItem(order: Order, item: OrderItem, includeSupplier: boolean): string | null {
+    const own = String(item.inventory_id || "").trim();
+    if (own) return own;
+    if (!includeSupplier) return null;
+    const op = this.supplierOperations.rows().find((row) =>
+      row.order_id === order.order_id
+      && row.order_item_id === item.item_id
+      && row.received_to_inventory
+      && (row.reserved_for_order_id || "") === order.order_id,
+    );
+    return (op?.inventory_item_id || "").trim() || null;
   }
 
   async releaseInventoryForOrder(orderId: string, orderOverride?: Order | null): Promise<void> {
     const order = orderOverride ?? this.getById(orderId);
     if (!order) return;
+    let touched = false;
     for (const item of order.items || []) {
       const inventoryId = String(item.inventory_id || "").trim();
       const qty = Math.max(0, Number(item.confirmed_qty ?? item.quantity ?? 0) - Number(item.returned_qty || 0));
       if (!inventoryId || qty <= 0) continue;
+      // Acotado a lo apartado por la línea: lo ya entregado no se "libera" (FIX 03B-1).
       await this.inventory.releaseReservation({
         sku: inventoryId,
         qty,
         orderId,
         orderItemId: item.item_id,
         idempotencyKey: `cancel_${orderId}_${item.item_id}`,
-      });
+      }, { refreshCache: false });
+      touched = true;
     }
+    if (touched) await this.inventory.refreshAfterExternalMutation();
   }
 
   async setDiscountAmount(orderId: string, discountAmount: number): Promise<void> {
@@ -1556,7 +1826,12 @@ export class OrdersService {
   async syncDerivedStatus(orderId: string, options: ComputeOrderStatusOptions = {}): Promise<OrderStatus | null> {
     const order = this.getById(orderId);
     if (!order) return null;
-    const supplierOpsSnap = await getDocs(query(collection(FIRESTORE, "supplier_operations"), where("order_id", "==", orderId)));
+    // Acotado por negocio: las reglas no autorizan consultar solo por `order_id` (FIX 03B-1.1).
+    const supplierOpsSnap = await getDocs(query(
+      collection(FIRESTORE, "supplier_operations"),
+      where("business_id", "==", normalizeBusinessId(order.business_id)),
+      where("order_id", "==", orderId),
+    ));
     const supplierOps = supplierOpsSnap.docs
       .map((entry) => {
         const data = entry.data() as Record<string, unknown>;
@@ -1619,7 +1894,9 @@ export class OrdersService {
           (user
             ? { uid: user.uid, name: user.displayName || user.email || "Usuario" }
             : { uid: "system", name: "Sistema" });
-    const eventId = `evt-${Date.now()}`;
+    // Sufijo aleatorio: dos eventos en el mismo milisegundo (entrega + ajuste de inventario)
+    // ya no se sobrescriben entre sí. Mismo formato que SupplierOperationsService.
+    const eventId = `evt-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const event: OrderEvent = {
       id: eventId,
       orderId,
@@ -1638,10 +1915,13 @@ export class OrdersService {
         order.order_id === orderId ? { ...order, last_event_at: now, updated_at: now } : order
       ),
     );
+    // El evento ya es el registro. Marcar `last_event_at` en el pedido es secundario: antes,
+    // con las reglas reales, solo un admin podía hacerlo y la acción (ya guardada) se reportaba
+    // como fallida a cualquier otro rol (FIX 03B-1.1).
     await updateDoc(doc(this.colRef, orderId), {
       last_event_at: serverTimestamp(),
       updated_at: serverTimestamp(),
-    });
+    }).catch((error) => console.warn("[OrdersService] No se pudo marcar last_event_at", firebaseErrorCode(error)));
   }
 
   async createIncident(
@@ -1903,12 +2183,17 @@ export class OrdersService {
       await this.mergeAuthoritativeItems(orderId, result.order);
     } catch (error) {
       if (!this.isIncrementalItemsEndpointUnavailable(error)) throw error;
-      await this.persistItemsAuthoritatively(orderId, [...order.items, nextItem]);
+      await this.persistItemsAuthoritatively(orderId, [...order.items, nextItem], order.items);
     }
   }
 
-  async updateItems(orderId: string, items: OrderItem[]) {
-    await this.persistItemsAuthoritatively(orderId, items);
+  /**
+   * Reemplaza los artículos del pedido. `baseItems` es el arreglo del que se derivó `items`
+   * (por omisión, el que esta sesión tiene a la vista ahora). Si otra sesión agregó o quitó
+   * artículos después, el backend rechaza el cambio en lugar de perder los suyos.
+   */
+  async updateItems(orderId: string, items: OrderItem[], baseItems?: readonly OrderItem[] | null) {
+    await this.persistItemsAuthoritatively(orderId, items, baseItems ?? this.getById(orderId)?.items ?? null);
   }
 
   async updateItemConfirmationState(orderId: string, itemId: string, confirmation_state: OrderItem["confirmation_state"]) {
@@ -1932,9 +2217,14 @@ export class OrdersService {
     });
   }
 
-  private async persistItemsAuthoritatively(orderId: string, items: OrderItem[]): Promise<void> {
+  private async persistItemsAuthoritatively(
+    orderId: string,
+    items: OrderItem[],
+    baseItems: readonly OrderItem[] | null,
+  ): Promise<void> {
+    const baseItemIds = baseItems ? baseItems.map((item) => item.item_id) : null;
     const result = await lastValueFrom(this.adminApi.put<OrderItemsMutationResponse>(`/api/admin/orders/${encodeURIComponent(orderId)}/items`, {
-      ...buildOrderItemsUpdateRequest(items),
+      ...buildOrderItemsUpdateRequest(items, baseItemIds),
     }));
     await this.mergeAuthoritativeItems(orderId, result.order);
   }
@@ -1955,7 +2245,7 @@ export class OrdersService {
       const order = this.getById(orderId);
       if (!order) throw new Error("Pedido no encontrado.");
       const items = order.items.map((item) => item.item_id === itemId ? { ...item, ...patch, item_id: itemId } : item);
-      await this.persistItemsAuthoritatively(orderId, items);
+      await this.persistItemsAuthoritatively(orderId, items, order.items);
     }
   }
 
@@ -2180,6 +2470,7 @@ export class OrdersService {
       collection_reminder_at: data.collection_reminder_at ? toIso(data.collection_reminder_at) : null,
       collection_note: data.collection_note ? String(data.collection_note) : null,
       sales_note_last_generated_at: data.sales_note_last_generated_at ? toIso(data.sales_note_last_generated_at) : null,
+      inventory_sync: normalizeDeliveryInventorySync(data.inventory_sync),
       totals: {
         total_amount: Number(data.totals?.total_amount ?? 0),
         paid_amount: Number(data.totals?.paid_amount ?? 0),

@@ -87,14 +87,24 @@ export class SupplierOperationsService {
   }
 
   /**
+   * Líneas de un pedido. Lleva SIEMPRE el negocio: las reglas de Firestore solo autorizan
+   * consultas acotadas por `business_id` (FIX 03B-1.1). Solo por `order_id`, la consulta se
+   * denegaba a todo rol distinto de super_admin (entrega, alta de líneas, etapa derivada).
+   */
+  private orderLinesQuery(orderId: string, businessId?: string | null) {
+    const scoped = normalizeBusinessId(businessId || this.businessScope.writeBusinessId());
+    return query(this.colRef, where("business_id", "==", scoped), where("order_id", "==", orderId));
+  }
+
+  /**
    * Carga solo las líneas de un pedido y las mezcla con las ya cargadas. El detalle de
    * pedido no necesita las operaciones de todo el negocio para decidir sus botones.
    */
-  async loadForOrder(orderId: string): Promise<void> {
+  async loadForOrder(orderId: string, businessId?: string | null): Promise<void> {
     const target = String(orderId || "").trim();
     if (!target) return;
     const requestId = ++this.loadRequestId;
-    const snap = await getDocs(query(this.colRef, where("order_id", "==", target)));
+    const snap = await getDocs(this.orderLinesQuery(target, businessId));
     if (requestId !== this.loadRequestId) return;
     const fresh = snap.docs.map((entry) => this.normalize(entry.id, entry.data() as Record<string, any>));
     this.rowsSignal.update((current) => [
@@ -208,7 +218,7 @@ export class SupplierOperationsService {
     });
 
     if (transition.updated) {
-      await this.syncOrderStatus(transition.row.order_id);
+      await this.syncOrderStatus(transition.row.order_id, transition.row.business_id);
       await this.logOrderEvent(transition.row.order_id, "SUPPLIER_OP_STATUS_CHANGED", `Proveedor: ${lineId} -> ${newState}`, {
         opId: lineId,
         nextStatus: newState,
@@ -262,6 +272,18 @@ export class SupplierOperationsService {
     const stepSuffix = alreadyReceived > 0 ? `_from${alreadyReceived}_to${targetQty}` : "";
     const reserveSuffix = alreadyReserved > 0 ? `_from${alreadyReserved}_to${targetQty}` : "";
 
+    const reserveForOrderId = String(row.reserved_for_order_id || "").trim();
+    const canReserveForOrder = !!reserveForOrderId && !!String(row.order_item_id || "").trim() && targetQty > 0;
+    const reserveKey = this.safeIdempotencyKey(`reserve_${safeRoot}${reserveSuffix}`);
+    const allocationMeta = {
+      source: "supplier_receipt" as const,
+      supplierId: row.supplier_id || null,
+      supplierOperationId: row.op_id,
+    };
+    // FIX 03B-1: la entrada y la reserva van en UNA transacción. Antes eran dos: otra sesión
+    // podía apartar las piezas recién ingresadas para otro pedido entre ambas, y un fallo
+    // intermedio dejaba la mercancía "disponible" sin su pedido. Las llaves son las mismas
+    // que antes, así que un intento viejo a medias se completa sin duplicar.
     if (qty > 0) await this.inventory.receiveInbound(
       {
         sku: inventoryId,
@@ -278,6 +300,9 @@ export class SupplierOperationsService {
         variant_name: row.variant || null,
         color_name: row.color || null,
         image_url: row.image_url || null,
+        reserveFor: canReserveForOrder && reserveQty > 0
+          ? { orderId: reserveForOrderId, orderItemId: row.order_item_id, qty: reserveQty, idempotencyKey: reserveKey, allocation: allocationMeta }
+          : null,
       },
       { refreshCache: options.refreshInventory !== false },
     );
@@ -289,16 +314,16 @@ export class SupplierOperationsService {
       idempotencyKey: `inbound_${safeRoot}${stepSuffix}`,
     }).catch(() => undefined);
 
-    const reserveForOrderId = String(row.reserved_for_order_id || "").trim();
-    const canReserveForOrder = !!reserveForOrderId && !!String(row.order_item_id || "").trim() && targetQty > 0;
     if (canReserveForOrder && reserveQty > 0) {
-      await this.inventory.reserveStock(
+      // Solo falta la reserva (p. ej. la entrada ya estaba aplicada): misma llave.
+      if (qty <= 0) await this.inventory.reserveStock(
         {
           sku: inventoryId,
           qty: reserveQty,
           orderId: reserveForOrderId,
           orderItemId: row.order_item_id,
-          idempotencyKey: this.safeIdempotencyKey(`reserve_${safeRoot}${reserveSuffix}`),
+          idempotencyKey: reserveKey,
+          allocation: allocationMeta,
         },
         { refreshCache: options.refreshInventory !== false },
       );
@@ -356,7 +381,7 @@ export class SupplierOperationsService {
       idempotencyKey: safeRoot,
     }).catch(() => undefined);
     if (options.syncOrderStatus !== false) {
-      await this.syncOrderStatus(row.order_id);
+      await this.syncOrderStatus(row.order_id, row.business_id);
     }
 
     if (options.reloadSupplierOperations !== false) {
@@ -364,8 +389,8 @@ export class SupplierOperationsService {
     }
   }
 
-  async removeByOrder(orderId: string): Promise<void> {
-    const q = query(this.colRef, where("order_id", "==", orderId));
+  async removeByOrder(orderId: string, businessId?: string | null): Promise<void> {
+    const q = this.orderLinesQuery(orderId, businessId);
     const snap = await getDocs(q);
     const rows = snap.docs.map((entry) => this.normalize(entry.id, entry.data() as Record<string, any>));
     for (const row of rows) {
@@ -383,10 +408,14 @@ export class SupplierOperationsService {
    * Antes, la entrega borraba la linea liberando la reserva: lo entregado volvia a
    * "disponible" (inventario fantasma, Auditoria 03 P0-02).
    */
-  async closeOnDelivery(order: Pick<Order, "order_id" | "items">): Promise<void> {
+  async closeOnDelivery(
+    order: Pick<Order, "order_id" | "items"> & { business_id?: string | null },
+    options: { refreshInventory?: boolean } = {},
+  ): Promise<{ consumed: number; released: number; shortfall: number; touchedInventory: boolean; keys: Array<{ inventoryId: string; key: string }> }> {
     const orderId = order.order_id;
-    const snap = await getDocs(query(this.colRef, where("order_id", "==", orderId)));
+    const snap = await getDocs(this.orderLinesQuery(orderId, order.business_id));
     const itemsById = new Map((order.items || []).map((item) => [item.item_id, item]));
+    const summary = { consumed: 0, released: 0, shortfall: 0, touchedInventory: false, keys: [] as Array<{ inventoryId: string; key: string }> };
     for (const entry of snap.docs) {
       const row = this.normalize(entry.id, entry.data() as Record<string, any>);
       const inventoryId = (row.inventory_item_id || "").trim();
@@ -398,34 +427,57 @@ export class SupplierOperationsService {
           ? Math.max(0, this.safeQty(item.confirmed_qty ?? item.quantity) - this.safeQty(item.returned_qty))
           : 0;
         const consume = Math.min(reserved, delivered);
+        let consumedNow = 0;
         if (consume > 0) {
           // Misma llave que OrdersService.consumeInventoryForDelivery usa para el articulo:
-          // si el articulo ya apuntaba a este inventario, el consumo no se duplica.
-          await this.inventory.consumeOnDelivery({
+          // si el articulo ya apuntaba a este inventario, el consumo no se duplica. Además
+          // el consumo está acotado a lo que ESTA línea tiene apartado (FIX 03B-1): lo ya
+          // entregado por caja no se vuelve a descontar.
+          const consumeKey = `delivery_${orderId}_close_${row.order_item_id}`;
+          const result = await this.inventory.consumeOnDelivery({
             sku: inventoryId,
             qty: consume,
             orderId,
             orderItemId: row.order_item_id,
-            idempotencyKey: `delivery_${orderId}_close_${row.order_item_id}`,
-          });
+            idempotencyKey: consumeKey,
+            lineQty: consume,
+          }, { refreshCache: false });
+          summary.touchedInventory = true;
+          summary.keys.push({ inventoryId, key: consumeKey });
+          consumedNow = result.applied;
+          summary.consumed += result.applied;
+          if (!result.skipped) summary.shortfall += result.shortfall;
         }
-        const leftover = reserved - consume;
+        const leftover = Math.max(0, reserved - consume);
+        let releasedNow = 0;
         if (leftover > 0) {
-          await this.inventory.releaseReservation({
+          const releaseKey = this.safeIdempotencyKey(`supplier_release_${row.op_id}_delivery_leftover`);
+          const result = await this.inventory.releaseReservation({
             sku: inventoryId,
             qty: leftover,
             orderId,
             orderItemId: row.order_item_id,
-            idempotencyKey: this.safeIdempotencyKey(`supplier_release_${row.op_id}_delivery_leftover`),
-          });
+            idempotencyKey: releaseKey,
+          }, { refreshCache: false });
+          summary.touchedInventory = true;
+          summary.keys.push({ inventoryId, key: releaseKey });
+          releasedNow = result.applied;
+          summary.released += result.applied;
         }
         await this.logOrderEvent(orderId, "SUPPLIER_LINE_DELIVERED", `Entrega de linea de proveedor: ${row.title}`, {
-          opId: row.op_id, inventoryId, consumed: consume, released: leftover,
+          opId: row.op_id, inventoryId, consumed: consumedNow, released: releasedNow,
         }).catch(() => undefined);
       }
       await deleteDoc(entry.ref);
     }
-    await this.loadFromFirestore();
+    // Una sola recarga al final (antes: inventario completo por cada línea y todas las
+    // operaciones de proveedor del negocio). El detalle solo necesita las de este pedido.
+    if (summary.touchedInventory && options.refreshInventory !== false) await this.inventory.refreshAfterExternalMutation();
+    // FIX 03B-1.1: cada línea leída arriba se acaba de borrar; volver a consultarlas
+    // (loadForOrder) repetía la misma consulta en cada entrega y en cada reintento.
+    const closedIds = new Set(snap.docs.map((entry) => entry.id));
+    this.rowsSignal.update((current) => current.filter((row) => row.order_id !== orderId || !closedIds.has(row.op_id)));
+    return summary;
   }
 
   async getByOrderItem(orderId: string, orderItemId: string): Promise<SupplierOperationRow | null> {
@@ -459,7 +511,7 @@ export class SupplierOperationsService {
       supplierId: row.supplier_id,
     });
 
-    await this.syncOrderStatus(row.order_id);
+    await this.syncOrderStatus(row.order_id, row.business_id);
     await this.loadFromFirestore();
   }
 
@@ -485,7 +537,7 @@ export class SupplierOperationsService {
       supplierId: row.supplier_id,
       rollbackReceivedInventory: options?.rollbackReceivedInventory === true,
     });
-    await this.syncOrderStatus(row.order_id);
+    await this.syncOrderStatus(row.order_id, row.business_id);
     await this.loadFromFirestore();
   }
 
@@ -622,9 +674,9 @@ export class SupplierOperationsService {
     if (failure) throw failure.reason;
   }
 
-  private async syncOrderStatus(orderId: string): Promise<void> {
+  private async syncOrderStatus(orderId: string, businessId?: string | null): Promise<void> {
     if (!orderId) return;
-    const snap = await getDocs(query(this.colRef, where("order_id", "==", orderId)));
+    const snap = await getDocs(this.orderLinesQuery(orderId, businessId));
     const statuses = snap.docs
       .map((entry) => {
         const data = entry.data() as Record<string, unknown>;

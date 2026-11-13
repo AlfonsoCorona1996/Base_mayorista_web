@@ -411,6 +411,26 @@ describe("PedidosPage - cachés por pedido de la plantilla (R3)", () => {
       expect(component.tableRows().map((order) => order.order_id)).not.toContain(closedReturned.order_id);
     });
 
+    it("FIX 03A-2: las píldoras separan entrega, cobro, cierre y postventa sin 'Pagado' + 'Cobrado'", async () => {
+      const labels = (order: Order) => component.tableOrderStatusPills(order).map((pill) => pill.label);
+      // Histórico cobrado sin evidencia de entrega (183 casos en producción, lectura 09-nov).
+      const paidWithoutDelivery = makeOrder(11, { status: "pagado", delivered_at: null, delivery_status: undefined, customer_payment_status: "collected", totals: { total_amount: 100, paid_amount: 100, balance_due: 0 } });
+      const paidDelivered = makeOrder(12, { status: "pagado", delivered_at: "2026-10-02T12:00:00.000Z", delivery_status: "delivered", customer_payment_status: "collected", totals: { total_amount: 100, paid_amount: 100, balance_due: 0 } });
+      const prepaidInPacking = makeOrder(13, { status: "recibido_qa", delivered_at: null, delivery_status: "pending", current_holder_location: "gdl", customer_payment_status: "collected", totals: { total_amount: 100, paid_amount: 100, balance_due: 0 } });
+      const closedReturned = closedOrder(14, { has_returns: true });
+      const closedWithoutDelivery = closedOrder(15, { delivered_at: null });
+      component.includeClosed.set(true);
+      await showTable([paidWithoutDelivery, paidDelivered, prepaidInPacking, closedReturned, closedWithoutDelivery]);
+
+      expect(labels(paidWithoutDelivery)).toEqual(["Entrega sin registrar", "Cobrado"]);
+      expect(labels(paidWithoutDelivery)).not.toContain("Pagado");
+      expect(labels(paidDelivered)).toEqual(["Entregado"]);
+      expect(labels(prepaidInPacking)).toContain("Cobrado");
+      expect(labels(prepaidInPacking)).not.toContain("Entregado");
+      expect(labels(closedReturned)).toEqual(["Cerrado", "Con devolución"]);
+      expect(labels(closedWithoutDelivery)[0]).toBe("Cierre sin entrega");
+    });
+
     it("la selección masiva solo abarca lo visible con el filtro", async () => {
       const closed = closedOrder(8);
       const open = makeOrder(9, { status: "borrador" });

@@ -60,6 +60,9 @@ export function isDamagedReturn(row: AccountingReturnLike): boolean {
 
 export function returnedInventoryCost(row: AccountingReturnLike): number {
   if (isDamagedReturn(row)) return 0;
+  // FIX 03B-1.1: sin inventario comprobado no volvió nada a inventario (aún). El respaldo
+  // `qty × costo` de abajo lo contaba como capital recuperado.
+  if (row.status === "inventory_unverified") return 0;
   const direct = Math.max(0, money(row.returned_cost_amount));
   if (direct > 0) return direct;
   return money(Math.max(0, Number(row.qty || 0)) * returnUnitCost(row));

@@ -226,6 +226,39 @@
       </div>
     }
 
+    @if (deliveryInventoryPending(current)) {
+      <div class="dependency-alert delivery-sync-alert" role="alert">
+        <span class="delivery-sync-alert__text">
+          {{ deliveryInventoryPendingMessage(current) }} Reintentar no descuenta dos veces.
+          @if (current.inventory_sync?.last_error) {
+            <small class="delivery-sync-alert__detail">Último error: {{ current.inventory_sync?.last_error }}</small>
+          }
+        </span>
+        <div class="delivery-sync-alert__actions">
+          <button type="button" class="btn ghost" [disabled]="retryingDeliveryInventory() || resolvingDeliveryInventory()" [attr.aria-busy]="retryingDeliveryInventory()" (click)="retryDeliveryInventory(current)">
+            {{ retryingDeliveryInventory() ? "Ajustando…" : "Reintentar ajuste de inventario" }}
+          </button>
+          @if (canResolveDeliveryInventory() && current.inventory_sync) {
+            <button type="button" class="btn ghost" [attr.aria-expanded]="deliveryInventoryResolveOpen()" aria-controls="delivery-sync-resolve" [disabled]="retryingDeliveryInventory() || resolvingDeliveryInventory()" (click)="toggleDeliveryInventoryResolve()">
+              Resolver manualmente
+            </button>
+          }
+        </div>
+        @if (deliveryInventoryResolveOpen() && canResolveDeliveryInventory()) {
+          <form id="delivery-sync-resolve" class="delivery-sync-resolve" (submit)="$event.preventDefault(); resolveDeliveryInventory(current)">
+            <label for="delivery-sync-note">Qué revisaste (queda en el historial; no mueve inventario)</label>
+            <textarea id="delivery-sync-note" rows="3" maxlength="500" [value]="deliveryInventoryResolveNote()" (input)="deliveryInventoryResolveNote.set($any($event.target).value)" [attr.aria-invalid]="!!deliveryInventoryResolveError()" aria-describedby="delivery-sync-note-error"></textarea>
+            @if (deliveryInventoryResolveError()) {
+              <p id="delivery-sync-note-error" class="delivery-sync-resolve__error">{{ deliveryInventoryResolveError() }}</p>
+            }
+            <button type="submit" class="btn" [disabled]="resolvingDeliveryInventory()" [attr.aria-busy]="resolvingDeliveryInventory()">
+              {{ resolvingDeliveryInventory() ? "Guardando…" : "Confirmar resolución" }}
+            </button>
+          </form>
+        }
+      </div>
+    }
+
     @if (moreActionsSheetOpen()) {
       <div class="sheet-backdrop" (click)="closeMoreActionsSheet()">
         <div class="sheet more-actions-sheet" role="dialog" aria-modal="true" aria-labelledby="more-actions-title" (click)="$event.stopPropagation()">
@@ -1749,7 +1782,7 @@
         }
 
         @if (actionContext()?.actionId === "supplier_followup") {
-          <p class="muted">Todas las existencias ya fueron confirmadas. Marca cuando el proveedor pase a trÃƒÂ¡nsito.</p>
+          <p class="muted">Todas las existencias ya fueron confirmadas. Marca cuando el proveedor pase a tránsito.</p>
           <button type="button" class="btn primary" [disabled]="actionSaving()" (click)="openTransitConfirm()">
             {{ actionSaving() ? "Guardando..." : "Marcar en transito proveedor" }}
           </button>
@@ -1827,10 +1860,12 @@
                   <div class="package-top">
                     <div>
                       <p class="eyebrow">{{ pkg.title }}</p>
-                      <p class="muted">{{ pkg.rows.length }} productos</p>
+                      <p class="muted">{{ pkg.rows.length }} {{ pkg.rows.length === 1 ? "producto" : "productos" }}</p>
                     </div>
                   </div>
-                  <button type="button" class="btn primary" (click)="deliverPackage(current, pkg.pkg)">Registrar entrega</button>
+                  <button type="button" class="btn primary" [disabled]="!!deliveringPackageId()" [attr.aria-busy]="deliveringPackageId() === pkg.pkg.package_id" (click)="deliverPackage(current, pkg.pkg)">
+                    {{ deliveringPackageId() === pkg.pkg.package_id ? "Registrando…" : "Registrar entrega" }}
+                  </button>
                 </article>
               }
             </div>
@@ -1862,7 +1897,7 @@
         @if (readyForRouteLoading()) {
           <p class="muted">Buscando salidas de hoy...</p>
         } @else if (readyForRouteRun(); as run) {
-          <p class="muted">Salida: {{ run.scheduled_at | date: "shortTime" }} Â· {{ run.driver?.name || "Sin repartidor" }}</p>
+          <p class="muted">Salida: {{ run.scheduled_at | date: "shortTime" }} · {{ run.driver?.name || "Sin repartidor" }}</p>
         } @else {
           <p class="muted">No hay salida programada para hoy.</p>
         }
@@ -1929,7 +1964,7 @@
       <div class="sheet package-delete-sheet" role="dialog" aria-modal="true" aria-labelledby="delete-package-title" (click)="$event.stopPropagation()">
         <div class="sheet-handle" aria-hidden="true"></div>
         <h2 id="delete-package-title">Eliminar caja con productos</h2>
-        <p class="muted">Se eliminarÃƒÂ¡ la caja y sus productos volverÃƒÂ¡n a "sin empacar".</p>
+        <p class="muted">Se eliminará la caja y sus productos volverán a "sin empacar".</p>
         <div class="sheet-actions">
           <button type="button" class="btn primary" [disabled]="packingBusy()" (click)="confirmDeletePackageWithItems(current)">Eliminar caja</button>
           <button type="button" class="btn ghost" [disabled]="packingBusy()" (click)="closeDeletePackageConfirm()">Cancelar</button>

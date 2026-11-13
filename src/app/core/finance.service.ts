@@ -8,6 +8,7 @@ import {
   FinanceLedgerKind,
   FinanceLedgerSource,
   FinancePeriod,
+  businessDateKey,
   financePeriodDocumentId,
   ledgerEntryPayload,
   monthIdFromDateInput,
@@ -313,7 +314,7 @@ export class FinanceService {
   async saveAccount(input: SaveFinanceAccountInput): Promise<string> {
     const accountId = (input.account_id || "").trim() || this.createId("acc");
     const businessId = normalizeBusinessId(input.business_id || this.businessScope.writeBusinessId());
-    const occurredAt = new Date().toISOString().slice(0, 10);
+    const occurredAt = businessDateKey();
     const periodId = monthIdFromDateInput(occurredAt);
     const accountRef = doc(this.accountsCol, accountId);
     const payload: FinanceAccount = {
@@ -480,7 +481,7 @@ export class FinanceService {
     const target = (expenseId || "").trim();
     if (!target) return;
     const sourceRef = doc(this.expensesCol, target);
-    const occurredAt = new Date().toISOString().slice(0, 10);
+    const occurredAt = businessDateKey();
     await runTransaction(FIRESTORE, async (tx) => {
       const sourceSnap = await tx.get(sourceRef);
       if (!sourceSnap.exists() || sourceSnap.data()["voided_at"]) return;
@@ -575,7 +576,7 @@ export class FinanceService {
     const target = (withdrawalId || "").trim();
     if (!target) return;
     const sourceRef = doc(this.withdrawalsCol, target);
-    const occurredAt = new Date().toISOString().slice(0, 10);
+    const occurredAt = businessDateKey();
     await runTransaction(FIRESTORE, async (tx) => {
       const sourceSnap = await tx.get(sourceRef);
       if (!sourceSnap.exists() || sourceSnap.data()["voided_at"]) return;
@@ -1034,17 +1035,17 @@ export class FinanceService {
 
   private normalizeDateInput(value: unknown): string {
     if (typeof value === "string" && value.trim()) return value;
-    if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 10);
+    if (value instanceof Date && !Number.isNaN(value.getTime())) return businessDateKey(value);
     if (typeof value === "object" && value !== null) {
       const maybe = value as { toDate?: () => Date };
       if (typeof maybe.toDate === "function") {
         const date = maybe.toDate();
         if (date instanceof Date && !Number.isNaN(date.getTime())) {
-          return date.toISOString().slice(0, 10);
+          return businessDateKey(date);
         }
       }
     }
-    return new Date().toISOString().slice(0, 10);
+    return businessDateKey();
   }
 
   private createId(prefix: string): string {

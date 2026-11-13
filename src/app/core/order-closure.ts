@@ -1,4 +1,5 @@
 import { calculateOrderFinancials, type FinancialOrderLike } from "./order-financials";
+import { deliveryInventoryOpen } from "./delivery-inventory";
 
 /**
  * Reglas de entrega, cobro y cierre que no deben inferirse unas de otras (RC-01/RC-02).
@@ -10,6 +11,8 @@ export interface ClosureOrderLike extends FinancialOrderLike {
   status?: string | null;
   delivery_status?: string | null;
   delivered_at?: unknown;
+  /** Ajuste de inventario de la entrega (FIX 03B-1.1). */
+  inventory_sync?: unknown;
 }
 
 /** Estados que solo se alcanzan después de una entrega registrada. */
@@ -71,10 +74,15 @@ export function isTrulyClosed(order: ClosureOrderLike | null | undefined): boole
   return String(order.status || "") === "closed" && Boolean(order.delivered_at) && isFullySettled(order);
 }
 
-/** Elegible para cierre por conciliación: entrega real y liquidación completa (RC-02). */
+/**
+ * Elegible para cierre por conciliación: entrega real y liquidación completa (RC-02).
+ * FIX 03B-1.1: tampoco se cierra mientras el inventario de la entrega siga sin confirmar
+ * (`inventory_sync` pendiente o con error); se reintenta o lo resuelve un administrador.
+ */
 export function canCloseBySettlement(order: ClosureOrderLike, paymentStatus: string | null | undefined): boolean {
   return Boolean(order.delivered_at)
     && order.delivery_status === "delivered"
     && paymentStatus === "collected"
-    && isFullySettled(order);
+    && isFullySettled(order)
+    && !deliveryInventoryOpen(order);
 }

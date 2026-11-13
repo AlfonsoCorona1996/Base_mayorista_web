@@ -3238,6 +3238,9 @@ export default class AdministracionPage {
 
   private returnRecoverableCost(row: ReturnRecord): number {
     if (row.disposition === "damaged" || row.status === "damaged") return 0;
+    // FIX 03B-1.1: devolución sin inventario comprobado: el costo NO es capital recuperado
+    // hasta el conteo físico (sin esto, el respaldo `qty × costo` lo sumaba como inventario).
+    if (row.status === "inventory_unverified") return 0;
     const direct = Math.max(0, this.toSafeNumber(row.returned_cost_amount));
     if (direct > 0) return direct;
     const item = this.returnOrderItem(row);

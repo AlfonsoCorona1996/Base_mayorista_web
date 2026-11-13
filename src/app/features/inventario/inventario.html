@@ -491,6 +491,12 @@
           <p>{{ pendingReturns().length }} pieza(s) pendientes de decisión</p>
         </div>
       </div>
+      <!-- FIX 03B-1.1: resultado junto al panel; el aviso de arriba queda fuera de vista en móvil. -->
+      <div class="returns-feedback-region" aria-live="polite">
+        @if (returnFeedback(); as feedback) {
+          <p class="alert" [class.alert-success]="feedback.kind === 'success'" [class.alert-error]="feedback.kind === 'error'" [attr.role]="feedback.kind === 'error' ? 'alert' : 'status'">{{ feedback.text }}</p>
+        }
+      </div>
 
       @if (pendingReturns().length === 0) {
         <div class="empty-state">
@@ -512,17 +518,29 @@
                     <span class="business-badge" [ngClass]="returnBusinessClass(row)">{{ returnBusinessLabel(row) }}</span>
                   }
                 </div>
-                <span class="stock-tag tag-low">{{ returnStatusLabel(row) }}</span>
+                <span class="stock-tag" [class.tag-low]="row.status !== 'inventory_unverified'" [class.tag-unverified]="row.status === 'inventory_unverified'">{{ returnStatusLabel(row) }}</span>
               </div>
               <div class="return-metrics">
                 <span><small>Piezas</small><strong>{{ formatCount(row.qty) }}</strong></span>
-                <span><small>Destino</small><strong>{{ returnStatusLabel(row) }}</strong></span>
+                @if (row.status === 'inventory_unverified') {
+                  <!-- FIX 03B-1.1: no es capital recuperado hasta el conteo físico. -->
+                  <span><small>Costo sin confirmar</small><strong>{{ formatMoney(returnPendingCost(row)) }}</strong></span>
+                } @else {
+                  <span><small>Destino</small><strong>{{ returnStatusLabel(row) }}</strong></span>
+                }
               </div>
               @if (row.reason) { <p class="return-reason">{{ row.reason }}</p> }
               @if (row.status === 'pending_review') {
                 <div class="return-actions">
-                  <button type="button" class="btn btn-primary" (click)="restockReturn(row)">Enviar a stock</button>
-                  <button type="button" class="btn btn-danger" (click)="markReturnDamaged(row)">Marcar dañado</button>
+                  <button type="button" class="btn btn-primary" [disabled]="!!returnBusyId()" [attr.aria-busy]="returnBusyId() === row.return_id" (click)="restockReturn(row)">{{ returnBusyId() === row.return_id ? "Guardando…" : "Enviar a stock" }}</button>
+                  <button type="button" class="btn btn-danger" [disabled]="!!returnBusyId()" (click)="markReturnDamaged(row)">Marcar dañado</button>
+                </div>
+              }
+              @if (row.status === 'inventory_unverified') {
+                <p class="return-reason">{{ row.inventory_note || "No hay registro de en qué inventario estaba la pieza." }} Cuenta la pieza antes de decidir. Mientras tanto no suma existencias ni cuenta como costo recuperado.</p>
+                <div class="return-actions">
+                  <button type="button" class="btn btn-primary" [disabled]="!!returnBusyId()" [attr.aria-busy]="returnBusyId() === row.return_id" (click)="requestUnverifiedResolution(row, 'restock_after_count')">{{ returnBusyId() === row.return_id ? "Guardando…" : "Ingresar tras conteo" }}</button>
+                  <button type="button" class="btn btn-danger" [disabled]="!!returnBusyId()" (click)="requestUnverifiedResolution(row, 'not_found')">No se encontró</button>
                 </div>
               }
             </article>
@@ -863,6 +881,26 @@
         }
       </div>
     }
+  </aside>
+}
+
+@if (returnResolution(); as pendingResolution) {
+  <div class="overlay confirm-overlay" (click)="cancelUnverifiedResolution()"></div>
+  <aside class="confirm-sheet" role="dialog" aria-modal="true" aria-labelledby="resolve-return-title" aria-describedby="resolve-return-body">
+    <span class="confirm-icon" aria-hidden="true">!</span>
+    @if (pendingResolution.outcome === 'restock_after_count') {
+      <h3 id="resolve-return-title">Ingresar tras conteo</h3>
+      <p id="resolve-return-body">Se sumarán <strong>{{ formatCount(pendingResolution.row.qty) }} pieza(s)</strong> de <strong>{{ returnProductTitle(pendingResolution.row) }}</strong> al inventario. Confírmalo solo si las contaste físicamente. No se puede deshacer desde aquí.</p>
+    } @else {
+      <h3 id="resolve-return-title">La pieza no se encontró</h3>
+      <p id="resolve-return-body"><strong>{{ returnProductTitle(pendingResolution.row) }}</strong> no entrará al inventario y su costo ({{ formatMoney(returnPendingCost(pendingResolution.row)) }}) quedará como merma. No se puede deshacer desde aquí.</p>
+    }
+    <div class="confirm-actions">
+      <button type="button" class="btn btn-outline" [disabled]="!!returnBusyId()" (click)="cancelUnverifiedResolution()">Cancelar</button>
+      <button type="button" class="btn" [class.btn-primary]="pendingResolution.outcome === 'restock_after_count'" [class.btn-danger]="pendingResolution.outcome === 'not_found'" [disabled]="!!returnBusyId()" [attr.aria-busy]="!!returnBusyId()" (click)="confirmUnverifiedResolution()">
+        {{ returnBusyId() ? "Guardando…" : (pendingResolution.outcome === 'restock_after_count' ? "Sí, ingresar" : "Sí, sin ingreso") }}
+      </button>
+    </div>
   </aside>
 }
 

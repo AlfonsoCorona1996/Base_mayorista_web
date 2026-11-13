@@ -17,6 +17,15 @@ describe("order items authoritative API adapter", () => {
     });
   });
 
+  it("FIX 03A-2: envía los artículos base para que el backend detecte ediciones concurrentes", () => {
+    const items = [{ item_id: "a" }, { item_id: "b" }];
+    expect(buildOrderItemsUpdateRequest(items, ["a", "b", "b", ""])).toEqual({
+      items,
+      below_cost_confirmation: false,
+      base_item_ids: ["a", "b"],
+    });
+  });
+
   it("replaces local items and totals only with the authoritative response", () => {
     const previous = [{ order_id: "o-1", items: [{ item_id: "old" }], totals: { total_amount: 1 }, updated_at: "old" }];
     const next = mergeAuthoritativeOrderItems(previous, "o-1", {

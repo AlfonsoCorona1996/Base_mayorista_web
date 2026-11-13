@@ -22,6 +22,73 @@
   min-height: 44px;
 }
 
+/* FIX 03B-1.1: ajuste de inventario de la entrega pendiente (estado guardado en el pedido). */
+.delivery-sync-alert__text {
+  flex: 1 1 260px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.delivery-sync-alert__detail {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.78rem;
+  color: #7f1d1d;
+}
+
+.delivery-sync-alert__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.delivery-sync-resolve {
+  flex: 1 1 100%;
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.delivery-sync-resolve label {
+  font-weight: 600;
+}
+
+.delivery-sync-resolve textarea {
+  width: 100%;
+  min-height: 64px;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--danger-border);
+  border-radius: 8px;
+  font: inherit;
+  /* 16 px: iOS no hace zoom al enfocar. */
+  font-size: 1rem;
+  color: #1e293b;
+  background: #fff;
+  resize: vertical;
+}
+
+.delivery-sync-resolve textarea:focus-visible {
+  outline: 2px solid #1e293b;
+  outline-offset: 1px;
+}
+
+.delivery-sync-resolve__error {
+  margin: 0;
+  font-weight: 600;
+}
+
+.delivery-sync-resolve .btn {
+  justify-self: start;
+}
+
+/* FIX 03B-1.1: en el modal de devolución, Cerrar (38 px), Cancelar (33 px) y Registrar (36 px)
+   quedaban por debajo del área táctil mínima de 44 px (UI_GUIDELINES). */
+.return-sheet .sheet-header .btn,
+.return-sheet .sheet-actions .btn {
+  min-height: var(--ui-touch-target-min, 44px);
+}
+
 /* ── FIX 03A: resultados de "Agregar producto" ───────────────────────────── */
 .listbox-row {
   display: flex;
@@ -97,4 +164,19 @@
 .sheet-add-item-ios .sheet-footer .btn.primary:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+/* FIX 03B-1.1: entrega por caja. El botón medía 31 px y, mientras una caja se registraba,
+   las demás estaban deshabilitadas pero se veían activas. */
+.packages .package > .btn {
+  min-height: var(--ui-touch-target-min, 44px);
+}
+
+.packages .package > .btn:disabled:not([aria-busy="true"]) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.packages .package > .btn[aria-busy="true"] {
+  cursor: progress;
 }

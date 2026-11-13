@@ -74,6 +74,28 @@ export function financePeriodDocumentId(businessId: BusinessId, monthId: string)
   return `${businessId}_${monthId}`;
 }
 
+/** Zona horaria del negocio para fechas operativas (día y mes contable). */
+export const BUSINESS_TIME_ZONE = "America/Mexico_City";
+
+const businessDateFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: BUSINESS_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+/**
+ * Fecha calendario (YYYY-MM-DD) en hora de CDMX. Sustituye a
+ * `toISOString().slice(0, 10)`, que usa UTC y corre al día siguiente
+ * los movimientos registrados después de las 18:00 (y al mes siguiente
+ * el último día del mes).
+ */
+export function businessDateKey(value: Date | string | number = new Date()): string {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) throw new Error("La fecha del movimiento no es válida.");
+  return businessDateFormatter.format(date);
+}
+
 export function monthIdFromDateInput(value: string): string {
   const match = /^(\d{4})-(\d{2})/.exec(String(value || ""));
   if (!match) throw new Error("La fecha del movimiento no es válida.");

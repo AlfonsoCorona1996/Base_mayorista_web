@@ -32,7 +32,7 @@ import {
   catalogProductIdentifierLabel,
 } from "../../core/catalog-products.service";
 import { CatalogImportJobsService } from "../../core/catalog-import-jobs.service";
-import { ReturnsService, ReturnDisposition, ReturnPaymentResolution, ReturnRecord } from "../../core/returns.service";
+import { ReturnInventoryUnverifiedError, ReturnsService, ReturnDisposition, ReturnPaymentResolution, ReturnRecord } from "../../core/returns.service";
 import { availableReturnQty, calculateOrderFinancials, netItemQty, returnedItemQty } from "../../core/order-financials";
 import { FinanceAccount, FinanceService } from "../../core/finance.service";
 import { BusinessScopeService } from "../../core/business-scope.service";
@@ -61,6 +61,7 @@ import { ShipmentBusinessSummary, ShipmentItem, ShipmentsService } from "../../c
 import { OperationalExpenseReport, OperationalExpenseReportsService } from "../../core/operational-expense-reports.service";
 import { PerfMetricsService, firebaseErrorCode } from "../../core/perf-metrics.service";
 import { hasDeliveryEvidence } from "../../core/order-closure";
+import { deliveryInventoryOpen, planPackageDelivery } from "../../core/delivery-inventory";
 
 type SecondaryDependency =
   | "customers" | "suppliers" | "routes" | "localities" | "inventory"
@@ -404,6 +405,20 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   openIncidents = computed(() => this.incidents().filter((inc) => inc.status === "open"));
   resolvedIncidents = computed(() => this.incidents().filter((inc) => inc.status === "resolved"));
   events = signal<OrderEvent[]>([]);
+  /** FIX 03B-1: caja en proceso de entrega (evita doble registro por toques repetidos). */
+  deliveringPackageId = signal<string | null>(null);
+  /** Pedido cuya entrega se guardó en esta sesión sin poder ajustar el inventario. */
+  private deliveryInventorySyncFailedFor = signal<string | null>(null);
+  retryingDeliveryInventory = signal(false);
+  /** FIX 03B-1.1: resolución supervisada del ajuste de inventario (solo administración). */
+  deliveryInventoryResolveOpen = signal(false);
+  deliveryInventoryResolveNote = signal("");
+  resolvingDeliveryInventory = signal(false);
+  deliveryInventoryResolveError = signal<string | null>(null);
+  canResolveDeliveryInventory = computed(() => {
+    const roleId = this.authz.currentUserSig()?.roleId;
+    return roleId === "admin" || roleId === "super_admin";
+  });
   eventsCursor = signal<any>(null);
   eventsLoading = signal(false);
   eventsHasMore = signal(true);
@@ -1382,7 +1397,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       }, true),
       run("expense_reports", () => this.operationalExpenseReports.loadAll(), true),
       // Solo las líneas de este pedido; siempre frescas porque deciden botones de recepción.
-      run("supplier_operations", () => this.supplierOperations.loadForOrder(orderId), false),
+      run("supplier_operations", () => this.supplierOperations.loadForOrder(orderId, this.order()?.business_id), false),
       run("assignees", () => this.loadAssigneeOptions(), true),
     ]);
     if (this.dependencyState()["inventory"] === "error") this.inventorySourceError.set("No se pudo actualizar el inventario.");
@@ -2022,7 +2037,10 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       await this.orders.markSettlement(event.order_id, "reconciled", "Cobro Durango conciliado en GDL.");
       await this.orders.loadFromFirestore().catch(() => null);
       await this.loadCollectionEvents();
-      this.showActionToast("Cobro de Durango conciliado.");
+      // FIX 03B-1.1: conciliado, pero no se cierra con el inventario de la entrega sin confirmar.
+      this.showActionToast(deliveryInventoryOpen(this.orders.getById(event.order_id))
+        ? "Cobro conciliado. El pedido no se cerró: falta confirmar el inventario de la entrega."
+        : "Cobro de Durango conciliado.");
     } catch (error: any) {
       this.error.set(error?.message || "No se pudo conciliar el cobro.");
     } finally {
@@ -2169,14 +2187,112 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     if (!this.canMarkDelivered(order) || this.savingOperationalAction()) return;
     this.savingOperationalAction.set(true);
     this.error.set(null);
+    const startedAt = performance.now();
     try {
-      await this.orders.markOrderDelivered(order.order_id, "Marcado como entregado desde detalle de pedido");
+      const inventory = await this.orders.markOrderDelivered(order.order_id, "Marcado como entregado desde detalle de pedido");
       this.operationsSheetOpen.set(false);
-      this.showActionToast("Pedido marcado como entregado. Cobro y conciliación siguen separados.");
+      this.deliveryInventorySyncFailedFor.set(inventory.ok ? null : order.order_id);
+      this.perf.record("order_detail_action_ms", startedAt, { result: inventory.ok ? "success" : "error", action: "mark_delivered" });
+      if (inventory.alreadyDelivered && inventory.ok) {
+        // FIX 03B-1.1: otra sesión ya lo había entregado; no se reescribió la fecha ni el historial.
+        this.showActionToast("Este pedido ya estaba marcado como entregado. Se comprobó su inventario sin descontar de nuevo.");
+      } else if (!inventory.ok) {
+        this.showActionToast("Pedido entregado, pero el inventario no se ajustó. Quedó marcado como pendiente: usa «Reintentar ajuste de inventario».");
+      } else if (inventory.shortfall > 0) {
+        this.showActionToast(`Pedido entregado. ${inventory.shortfall} pieza(s) no estaban apartadas para este pedido: revisa el inventario.`);
+      } else {
+        this.showActionToast("Pedido marcado como entregado. Cobro y conciliación siguen separados.");
+      }
     } catch (error: any) {
+      this.perf.record("order_detail_action_ms", startedAt, { result: "error", action: "mark_delivered", error_code: firebaseErrorCode(error) });
       this.error.set(error?.message || "No se pudo marcar entregado.");
     } finally {
       this.savingOperationalAction.set(false);
+      await this.refreshEvents().catch(() => undefined);
+    }
+  }
+
+  /**
+   * La entrega quedó guardada pero su inventario no está confirmado. FIX 03B-1.1: la fuente es
+   * el estado guardado en el pedido (`inventory_sync`), escrito junto con la entrega: sobrevive
+   * a recargas, cambios de dispositivo y a cualquier cantidad de eventos posteriores.
+   * Compatibilidad: entregas anteriores a este cambio (sin `inventory_sync`) siguen usando la
+   * detección de FIX 03B-1 (evento de fallo reciente o líneas de proveedor aún apartadas).
+   */
+  deliveryInventoryPending(order: Order | null): boolean {
+    if (!order) return false;
+    if (deliveryInventoryOpen(order)) return true;
+    if (order.inventory_sync) return false;
+    if (!hasDeliveryEvidence(order)) return false;
+    if (this.deliveryInventorySyncFailedFor() === order.order_id) return true;
+    const lastSync = this.events().find((event) =>
+      event.type === "INVENTORY_DELIVERY_SYNC_FAILED" || event.type === "INVENTORY_DELIVERY_SYNCED" || event.type === "ORDER_DELIVERED",
+    );
+    if (lastSync?.type === "INVENTORY_DELIVERY_SYNC_FAILED") return true;
+    return this.supplierOperations.rows().some((row) =>
+      row.order_id === order.order_id
+      && row.reserved_for_order_id === order.order_id
+      && row.reservation_applied
+      && row.reserved_qty_for_order > 0,
+    );
+  }
+
+  /** Texto del aviso: qué pasó, cuántos intentos y qué bloquea. */
+  deliveryInventoryPendingMessage(order: Order): string {
+    const state = order.inventory_sync;
+    const what = state?.scope === "packages" ? "La entrega de una caja está registrada" : "La entrega está registrada";
+    if (!state) return `${what}, pero el inventario de este pedido no se terminó de ajustar.`;
+    if (state.status === "pending" && state.attempts === 0) {
+      return `${what}, pero el ajuste de inventario quedó pendiente (la sesión se interrumpió antes de terminar).`;
+    }
+    const attempts = state.attempts === 1 ? "1 intento" : `${state.attempts} intentos`;
+    return `${what}, pero el inventario no se pudo ajustar (${attempts}). Mientras siga pendiente, el pedido no se puede cerrar.`;
+  }
+
+  toggleDeliveryInventoryResolve(): void {
+    if (this.resolvingDeliveryInventory()) return;
+    this.deliveryInventoryResolveError.set(null);
+    this.deliveryInventoryResolveOpen.update((open) => !open);
+  }
+
+  async resolveDeliveryInventory(order: Order): Promise<void> {
+    if (this.resolvingDeliveryInventory() || !this.canResolveDeliveryInventory()) return;
+    const note = this.deliveryInventoryResolveNote().trim();
+    if (note.length < 5) {
+      this.deliveryInventoryResolveError.set("Escribe qué revisaste (al menos 5 caracteres).");
+      return;
+    }
+    this.resolvingDeliveryInventory.set(true);
+    this.deliveryInventoryResolveError.set(null);
+    try {
+      await this.orders.resolveDeliveryInventoryManually(order.order_id, note);
+      this.deliveryInventorySyncFailedFor.set(null);
+      this.deliveryInventoryResolveOpen.set(false);
+      this.deliveryInventoryResolveNote.set("");
+      this.showActionToast("Ajuste de inventario resuelto. Quedó registrado en el historial del pedido.");
+    } catch (error) {
+      // La nota se conserva para reintentar.
+      this.deliveryInventoryResolveError.set(error instanceof Error ? error.message : "No se pudo guardar la resolución.");
+    } finally {
+      this.resolvingDeliveryInventory.set(false);
+      await this.refreshEvents().catch(() => undefined);
+    }
+  }
+
+  async retryDeliveryInventory(order: Order): Promise<void> {
+    if (this.retryingDeliveryInventory()) return;
+    this.retryingDeliveryInventory.set(true);
+    const startedAt = performance.now();
+    try {
+      const result = await this.orders.retryDeliveryInventorySync(order.order_id);
+      this.deliveryInventorySyncFailedFor.set(result.ok ? null : order.order_id);
+      this.perf.record("order_detail_action_ms", startedAt, { result: result.ok ? "success" : "error", action: "retry_delivery_inventory" });
+      this.showActionToast(result.ok
+        ? "Inventario de la entrega ajustado y comprobado."
+        : "No se pudo ajustar el inventario. Sigue marcado como pendiente; revisa tu conexión e intenta de nuevo.");
+    } finally {
+      this.retryingDeliveryInventory.set(false);
+      await this.refreshEvents().catch(() => undefined);
     }
   }
 
@@ -2973,7 +3089,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         const nextItems = (liveOrder.items || []).map((item) => successfulIds.has(item.item_id)
           ? { ...item, state: "recibido_qa" as const }
           : item);
-        await this.orders.updateItems(order.order_id, nextItems);
+        await this.orders.updateItems(order.order_id, nextItems, liveOrder.items || []);
         await this.orders.syncDerivedStatus(order.order_id);
         await Promise.all(
           successful.map(({ item }) => this.logOrderEventBestEffort(
@@ -2987,7 +3103,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
       const cacheRefreshes = await Promise.allSettled([
         this.inventory.loadFromFirestore({ includeMovements: false }),
-        this.supplierOperations.loadForOrder(order.order_id),
+        this.supplierOperations.loadForOrder(order.order_id, order.business_id),
       ]);
       const cacheRefreshFailed = cacheRefreshes.some((result) => result.status === "rejected");
       await this.refreshEvents().catch(() => undefined);
@@ -3391,7 +3507,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
           ? this.linkManualItemToInventory(row, inventoryId, qty)
           : row,
       );
-      await this.orders.updateItems(order.order_id, nextItems);
+      await this.orders.updateItems(order.order_id, nextItems, current.items || []);
     } else {
       await this.orders.updateItemConfirmation(order.order_id, item.item_id, {
         confirmation_state: "confirmed",
@@ -3456,7 +3572,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         confirmed_qty: qty,
       };
     });
-    await this.orders.updateItems(order.order_id, nextItems);
+    await this.orders.updateItems(order.order_id, nextItems, current.items || []);
     await this.orders.logEvent(order.order_id, "existence_confirmed", "Confirmación masiva de existencias", {
       items: pending.map((item) => item.item_id),
       qty: pending.length,
@@ -5080,7 +5196,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
             }
           : row,
       );
-      await this.orders.updateItems(order.order_id, nextItems);
+      await this.orders.updateItems(order.order_id, nextItems, current.items || []);
       await this.orders.syncDerivedStatus(order.order_id).catch(() => null);
       return;
     }
@@ -6690,11 +6806,43 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   async deliverPackage(order: Order, pkg: PackageRecord) {
-    await this.orders.setPackageState(order.order_id, pkg.package_id, "entregado");
-    await this.orders.consumeInventoryForDelivery(order.order_id, pkg.package_id);
-    await this.orders.logEvent(order.order_id, "PACKAGE_DELIVERED", `Paquete entregado ${pkg.label}`, {
-      packageId: pkg.package_id,
-    });
+    if (this.deliveringPackageId()) return;
+    const live = this.orders.getById(order.order_id) || order;
+    // FIX 03B-1: sin cantidades por artículo no se sabe qué piezas salieron en esta caja.
+    // Se bloquea ANTES de escribir, en lugar de descontar el artículo completo.
+    const plan = planPackageDelivery(live.packages || [], live.items || [], pkg.package_id);
+    if (!plan.ok) {
+      await this.showPopupAlert(plan.reason, "No se puede registrar esta caja");
+      return;
+    }
+    this.deliveringPackageId.set(pkg.package_id);
+    const startedAt = performance.now();
+    try {
+      // FIX 03B-1.1: estado de la caja + "inventario pendiente" en una sola escritura; después
+      // el ajuste comprobado. Si el ajuste falla, la caja queda entregada y el pedido marcado.
+      const inventory = await this.orders.deliverPackage(order.order_id, pkg.package_id);
+      await this.orders.logEvent(order.order_id, "PACKAGE_DELIVERED", `Paquete entregado ${pkg.label}`, {
+        packageId: pkg.package_id,
+        inventory_ok: inventory.ok,
+      }).catch(() => undefined);
+      this.perf.record("order_detail_action_ms", startedAt, { result: inventory.ok ? "success" : "error", action: "deliver_package" });
+      if (!inventory.ok) {
+        this.showActionToast(`Caja ${pkg.label} entregada, pero el inventario no se ajustó. Quedó marcado como pendiente.`);
+      } else if (inventory.shortfall > 0) {
+        this.showActionToast(`Caja ${pkg.label} entregada. ${inventory.shortfall} pieza(s) no estaban apartadas: revisa el inventario.`);
+      } else {
+        this.showActionToast(`Caja ${pkg.label} entregada.`);
+      }
+    } catch (error) {
+      this.perf.record("order_detail_action_ms", startedAt, { result: "error", action: "deliver_package", error_code: firebaseErrorCode(error) });
+      await this.showPopupAlert(
+        error instanceof Error ? error.message : "No se pudo registrar la entrega de la caja.",
+        "Error al registrar la entrega",
+      );
+    } finally {
+      this.deliveringPackageId.set(null);
+      await this.refreshEvents().catch(() => undefined);
+    }
   }
 
   async registerPayment(order: Order) {
@@ -8784,7 +8932,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         late_addition_status: "arrived",
       };
     });
-    await this.orders.updateItems(order.order_id, nextItems);
+    await this.orders.updateItems(order.order_id, nextItems, current.items || []);
     await this.orders.syncDerivedStatus(order.order_id).catch(() => null);
     await this.orders.logEvent(order.order_id, "ITEM_LATE_ARRIVAL_CONFIRMED", `Llegada manual confirmada: ${item.title}`, {
       itemId: item.item_id,
@@ -8924,6 +9072,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   }
 
   returnDestination(row: ReturnRecord): string {
+    if (row.status === "inventory_unverified") return "Sin ingreso a inventario (pendiente de conteo)";
     if (row.status === "damaged" || row.disposition === "damaged") return "Dañada";
     if (row.status === "pending_review") return "Por revisar";
     return "Disponible en stock";
@@ -9019,26 +9168,54 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       return;
     }
     this.returnSaving.set(true);
+    const startedAt = performance.now();
+    const request = {
+      order,
+      item,
+      qty,
+      disposition: this.returnDisposition(),
+      reason: this.returnReason(),
+      createdBy: this.currentActorName(),
+      paymentResolution: this.returnPaymentResolution(),
+      refundAccountId: this.returnRefundAccountId() || null,
+      refundMethod: this.returnRefundMethod() || null,
+      refundReference: this.returnRefundReference() || null,
+      packageId: this.returnPackageId(order, item),
+      attemptId: this.returnAttemptId,
+    };
     try {
-      const record = await this.returnsService.registerReturn({
-        order,
-        item,
-        qty,
-        disposition: this.returnDisposition(),
-        reason: this.returnReason(),
-        createdBy: this.currentActorName(),
-        paymentResolution: this.returnPaymentResolution(),
-        refundAccountId: this.returnRefundAccountId() || null,
-        refundMethod: this.returnRefundMethod() || null,
-        refundReference: this.returnRefundReference() || null,
-        packageId: this.returnPackageId(order, item),
-        attemptId: this.returnAttemptId,
-      });
-      this.showActionToast(record.payment_resolution === "credit" ? "Devolución registrada y saldo a favor creado." : "Devolución registrada.");
+      let record: ReturnRecord;
+      try {
+        record = await this.returnsService.registerReturn(request);
+      } catch (error) {
+        if (!(error instanceof ReturnInventoryUnverifiedError)) throw error;
+        // FIX 03B-1: no hay evidencia de dónde estaba la pieza. No se crea existencia por
+        // suposición: la persona decide registrar la devolución sin ingreso y resolverla
+        // después con un conteo físico (Inventario → Devoluciones sin ingreso).
+        this.returnSaving.set(false);
+        const confirmed = await this.showPopupConfirm(
+          `${error.message} Para no duplicar inventario, la devolución se puede registrar sin ingresar la pieza; quedará en Inventario como «Sin ingreso, pendiente de conteo».`,
+          {
+            title: "Inventario sin comprobar",
+            confirmLabel: "Registrar sin ingreso",
+            cancelLabel: "Volver",
+          },
+        );
+        if (!confirmed) return;
+        this.returnSaving.set(true);
+        record = await this.returnsService.registerReturn({ ...request, inventoryMode: "hold_unverified" });
+      }
+      this.perf.record("order_detail_action_ms", startedAt, { result: "success", action: "register_return" });
+      const inventoryNote = record.status === "inventory_unverified" ? " Sin ingreso a inventario: pendiente de conteo." : "";
+      this.showActionToast(
+        (record.payment_resolution === "credit" ? "Devolución registrada y saldo a favor creado." : "Devolución registrada.") + inventoryNote,
+      );
       this.returnSaving.set(false);
       this.closeReturnModal();
       await this.refreshEvents();
     } catch (error: any) {
+      this.perf.record("order_detail_action_ms", startedAt, { result: "error", action: "register_return", error_code: firebaseErrorCode(error) });
+      // El formulario sigue abierto con lo capturado; el mismo intento se puede reintentar.
       await this.showPopupAlert(error?.message || "No se pudo registrar la devolución.", "Error en devolución");
     } finally {
       this.returnSaving.set(false);
@@ -9129,7 +9306,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       const nextItems = (live.items || []).map((row) =>
         row.item_id === item.item_id ? { ...row, price_clienta: value } : row,
       );
-      await this.orders.updateItems(order.order_id, nextItems);
+      await this.orders.updateItems(order.order_id, nextItems, live.items || []);
       await this.orders.logEvent(order.order_id, "ITEM_UPDATED", `Descuento actualizado: ${target.title}`, {
         itemId: target.item_id,
         previousClientaPrice: previousClienta,
@@ -9299,7 +9476,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         inventoryId: item.source === "inventario" ? item.inventory_id || null : null,
         itemTitle: item.title,
         qty,
-        mutateOrder: () => this.orders.updateItems(order.order_id, nextItems),
+        mutateOrder: () => this.orders.updateItems(order.order_id, nextItems, order.items),
       });
       await this.logOrderEventBestEffort(order.order_id, "ITEM_MERGED_QTY", `Cantidad actualizada: ${item.title}`, {
         itemId: existingMatch.item_id,
@@ -9417,7 +9594,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       inventoryId: converted.source === "inventario" ? converted.inventory_id || null : null,
       itemTitle: converted.title,
       qty,
-      mutateOrder: () => this.orders.updateItems(order.order_id, nextItems),
+      mutateOrder: () => this.orders.updateItems(order.order_id, nextItems, order.items || []),
     });
     if (reservation) {
       await this.logOrderEventBestEffort(order.order_id, "INVENTORY_RESERVED", `Reserva inventario: ${converted.title}`, {
@@ -9534,7 +9711,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         inventoryId,
         itemTitle: updated.title,
         qty: delta,
-        mutateOrder: () => this.orders.updateItems(order.order_id, nextItems),
+        mutateOrder: () => this.orders.updateItems(order.order_id, nextItems, live.items || []),
       });
       if (reservation) {
         await this.logOrderEventBestEffort(order.order_id, "INVENTORY_RESERVED", `Reserva inventario: ${updated.title}`, {
@@ -9544,7 +9721,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         });
       }
     } else {
-      await this.orders.updateItems(order.order_id, nextItems);
+      await this.orders.updateItems(order.order_id, nextItems, live.items || []);
       if (inventoryId && delta < 0) {
         const releaseQty = Math.abs(delta);
         const mutationToken = this.nextInventoryMutationToken();
@@ -9566,7 +9743,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
           });
         } catch (releaseError) {
           try {
-            await this.orders.updateItems(order.order_id, live.items || []);
+            await this.orders.updateItems(order.order_id, live.items || [], nextItems);
           } catch {
             throw new Error(
               "La cantidad del pedido cambió, pero no se pudo liberar el inventario. Revisa este artículo antes de continuar.",
@@ -9805,12 +9982,15 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
     const nextItems = (live.items || []).map((row) =>
       row.item_id === item.item_id ? { ...row, late_addition_status: status } : row,
     );
-    await this.orders.updateItems(order.order_id, nextItems);
+    await this.orders.updateItems(order.order_id, nextItems, live.items || []);
   }
 
   private async ensureManualItemReservedInInventory(order: Order, item: OrderItem, qty: number): Promise<string> {
     const inventoryId = (item.inventory_id || "").trim() || this.buildManualOrderInventoryId(item);
     const inboundKey = `manual_inbound_${order.order_id}_${item.item_id}_${inventoryId}_${qty}`;
+    const reserveKey = this.buildInventoryMutationKey("reserve", order.order_id, item.item_id, inventoryId, qty);
+    // Entrada y reserva en una sola transacción (FIX 03B-1): ninguna otra sesión puede
+    // apartar estas piezas para otro pedido entre ambos pasos.
     await this.inventory.receiveInbound({
       sku: inventoryId,
       qty,
@@ -9825,15 +10005,13 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       image_url: item.image_url || null,
       notes: `Alta automática desde artículo manual del pedido ${order.order_id}.`,
       receipt_reason: `Alta desde pedido manual ${order.order_id}`,
-    });
-
-    const reserveKey = this.buildInventoryMutationKey("reserve", order.order_id, item.item_id, inventoryId, qty);
-    await this.inventory.reserveStock({
-      sku: inventoryId,
-      qty,
-      orderId: order.order_id,
-      orderItemId: item.item_id,
-      idempotencyKey: reserveKey,
+      reserveFor: {
+        orderId: order.order_id,
+        orderItemId: item.item_id,
+        qty,
+        idempotencyKey: reserveKey,
+        allocation: { source: "manual_item" },
+      },
     });
     await this.orders.logEvent(order.order_id, "INVENTORY_RESERVED", `Artículo manual registrado y reservado: ${item.title}`, {
       itemId: item.item_id,
@@ -9880,7 +10058,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
           ? { ...row, confirmation_state: "confirmed" as const, confirmed_qty: qty }
           : row,
       );
-      await this.orders.updateItems(order.order_id, withConfirmed);
+      await this.orders.updateItems(order.order_id, withConfirmed, current.items || []);
       const refreshed = this.orders.getById(order.order_id) || { ...order, items: withConfirmed };
       await this.supplierOperations.upsertFromConfirmedOrder(refreshed, this.customerName(refreshed));
       await this.supplierOperations.updateStatus(this.supplierOpId(order, item), "recibido");
@@ -9890,6 +10068,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
     const inventoryId = (item.inventory_id || "").trim() || this.buildLateArrivalInventoryId(item);
     const inboundKey = `late_inbound_${order.order_id}_${item.item_id}_${inventoryId}_${qty}`;
+    const reserveKey = this.buildInventoryMutationKey("reserve", order.order_id, item.item_id, inventoryId, qty);
     await this.inventory.receiveInbound({
       sku: inventoryId,
       qty,
@@ -9902,14 +10081,13 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       variant_name: item.variant || null,
       color_name: item.color || null,
       image_url: item.image_url || null,
-    });
-    const reserveKey = this.buildInventoryMutationKey("reserve", order.order_id, item.item_id, inventoryId, qty);
-    await this.inventory.reserveStock({
-      sku: inventoryId,
-      qty,
-      orderId: order.order_id,
-      orderItemId: item.item_id,
-      idempotencyKey: reserveKey,
+      reserveFor: {
+        orderId: order.order_id,
+        orderItemId: item.item_id,
+        qty,
+        idempotencyKey: reserveKey,
+        allocation: { source: "late_arrival", supplierId: item.supplier_id ?? null },
+      },
     });
     await this.orders.logEvent(order.order_id, "INVENTORY_RESERVED", `Reserva inventario (llegada manual): ${item.title}`, {
       itemId: item.item_id,
@@ -10057,7 +10235,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
     const live = this.orders.getById(order.order_id) || order;
     const nextItems = (live.items || []).filter((row) => row.item_id !== item.item_id);
-    await this.orders.updateItems(order.order_id, nextItems);
+    await this.orders.updateItems(order.order_id, nextItems, live.items || []);
     await this.orders.syncDerivedStatus(order.order_id).catch(() => null);
     await this.orders.logEvent(order.order_id, "ITEM_REMOVED", `Item removido: ${item.title}`, {
       itemId: item.item_id,
@@ -11112,6 +11290,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
         orderId: input.orderId,
         orderItemId: input.orderItemId,
         idempotencyKey: reserveKey,
+        allocation: { source: "own_stock" },
       });
     } catch (error) {
       if (error instanceof InventoryStockInsufficientError) {
