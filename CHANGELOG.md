@@ -4,7 +4,36 @@ Todos los cambios relevantes del frontend se documentan aquí. El formato sigue
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa
 [Versionado Semántico](https://semver.org/lang/es/).
 
-## [2.3.0] - 2026-09-18
+## [2.4.0] - 2026-11-17
+
+Consolida FIX 03A-2, 03B-1 y 03B-1.1. **Requiere publicar `firestore.rules` antes que
+este frontend**; ver [docs/releases/2.4.0.md](docs/releases/2.4.0.md). Sin migraciones: los
+documentos anteriores se leen con compatibilidad.
+
+### Añadido
+
+- Asignaciones de inventario (`inventory_allocations`): cada línea de pedido queda ligada al documento de inventario donde tiene piezas apartadas, entregadas, devueltas o liberadas.
+- Estado del ajuste de inventario de una entrega en el pedido (`inventory_sync`): pendiente, fallido, comprobado o resuelto manualmente, con reintento desde el detalle y aviso «Inventario pendiente» en la lista.
+- Devoluciones sin inventario comprobado: se registran sin crear existencias y se resuelven tras un conteo físico desde Inventario.
+- Arnés versionado para probar las reglas reales en el emulador y la compatibilidad entre el cliente publicado y unas reglas nuevas (`scripts/emulator/`).
+
+### Cambiado
+
+- Entregar y liberar solo afectan lo apartado por la línea del pedido; ya no pueden tomar piezas apartadas para otro pedido del mismo producto.
+- Recibir mercancía de proveedor y apartarla para su pedido ocurre en una sola transacción.
+- La entrega se registra sobre el pedido vivo: si otra sesión ya lo entregó no se reescriben fecha ni historial.
+- Un pedido no se cierra mientras el inventario de su entrega esté pendiente o con error.
+- Las fechas operativas de cobros, gastos, retiros y devoluciones usan la hora de la Ciudad de México.
+- Al guardar artículos se envía la lista que la persona tenía a la vista para que el backend 2.3.1 rechace cambios sobre una versión anterior en lugar de perder artículos.
+- Reglas de Firestore con menor costo por solicitud; mismas capacidades por rol salvo las correcciones de abajo.
+
+### Corregido
+
+- Con las reglas reales y los permisos predeterminados de cada rol, recibir mercancía de proveedor solo funcionaba para super administrador, los repartidores no podían registrar entregas y nadie podía registrar devoluciones.
+- La entrega de mercancía de proveedor dejaba las piezas apartadas en inventario para los roles que no podían consultar las líneas del pedido.
+- Las devoluciones de piezas dañadas o sin comprobar ya no cuentan como capital recuperado.
+- El spec de versión dejó de depender de un número de versión fijo.
+
 
 ### Añadido
 
