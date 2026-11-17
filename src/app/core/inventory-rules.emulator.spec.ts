@@ -29,7 +29,7 @@ import { INVENTORY_ALLOCATIONS_COLLECTION, allocationDocId } from "./inventory-a
  * servicio con la identidad indicada; los datos se siembran con el acceso "owner" del
  * emulador (omite reglas, igual que el Admin SDK del backend para `users/{uid}`).
  *
- * NO corre en `npm test`. Ver tmp/fix-03b11/run-rules.cjs.
+ * NO corre en `npm test`. Ver scripts/emulator/README.md.
  */
 const FIRESTORE_PORT = 8597;
 const AUTH_PORT = 9697;

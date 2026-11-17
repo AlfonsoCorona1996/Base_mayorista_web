@@ -24,7 +24,7 @@ import { calculateOrderFinancials } from "./order-financials";
  * "Dos sesiones" = dos instancias independientes del servicio (cada una con su propia copia
  * del pedido, como dos pestañas o dos teléfonos) que escriben a la vez contra Firestore.
  *
- * NO corre en `npm test`. Ver tmp/fix-03b11/run-spec.cjs.
+ * NO corre en `npm test`. Ver scripts/emulator/README.md.
  */
 const FIRESTORE_PORT = 8597;
 const AUTH_PORT = 9697;

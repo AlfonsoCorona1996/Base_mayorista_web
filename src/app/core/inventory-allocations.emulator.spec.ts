@@ -24,9 +24,7 @@ import { INVENTORY_ALLOCATIONS_COLLECTION, allocationDocId } from "./inventory-a
 
 /**
  * FIX 03B-1 — integridad de inventario en pedidos nuevos, contra el emulador local.
- * NO corre en `npm test`. Ejecutar con (puertos del arnés de FIX 03B-1):
- *   npx firebase --config tmp/fix-03b1/firebase.emulator.json emulators:start --project demo-test --only firestore,auth
- *   npx ng test --include="**\/inventory-allocations.emulator.spec.ts" --watch=false --browsers=ChromeHeadless
+ * NO corre en `npm test`. Ver scripts/emulator/README.md (emulador permisivo, puertos 8297/9397).
  * Usa reglas permisivas solo del emulador (ver firestore.emulator-test.rules).
  */
 const FIRESTORE_PORT = 8297;
