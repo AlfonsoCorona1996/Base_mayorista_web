@@ -2050,19 +2050,29 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
 
   async markDurangoCollectionDifference(event: OrderCollectionEvent): Promise<void> {
     if (this.collectionDecisionSaving() || !this.canReviewDurangoMoney()) return;
-    const ok = await this.showPopupConfirm("Marcar este cobro como diferencia? El pedido quedara pendiente de aclaracion.", {
-      title: "Diferencia de cobro",
-      confirmLabel: "Marcar diferencia",
-      cancelLabel: "Cancelar",
-      danger: true,
-    });
+    // FIX 00: un cobro confirmado ya sumó su dinero a la cuenta; la diferencia se registra en la
+    // conciliación del pedido y el cobro no cambia.
+    const confirmed = event.verification_status === "confirmed";
+    const ok = await this.showPopupConfirm(
+      confirmed
+        ? "Registrar una diferencia en la conciliación de este pedido? El cobro confirmado y su ingreso no cambian. Si falta dinero, regístralo con un ajuste en Administración."
+        : "Marcar este cobro como diferencia? El pedido quedara pendiente de aclaracion.",
+      {
+        title: confirmed ? "Diferencia en la conciliación" : "Diferencia de cobro",
+        confirmLabel: "Marcar diferencia",
+        cancelLabel: "Cancelar",
+        danger: true,
+      },
+    );
     if (!ok) return;
     this.collectionDecisionSaving.set(true);
     try {
       await this.orders.markCollectionDifference(event, "Diferencia detectada al revisar dinero de Durango.");
       await this.orders.loadFromFirestore().catch(() => null);
       await this.loadCollectionEvents();
-      this.showActionToast("Cobro marcado con diferencia.");
+      this.showActionToast(confirmed
+        ? "Diferencia registrada en la conciliación. El cobro confirmado no cambió."
+        : "Cobro marcado con diferencia.");
     } catch (error: any) {
       this.error.set(error?.message || "No se pudo marcar diferencia.");
     } finally {

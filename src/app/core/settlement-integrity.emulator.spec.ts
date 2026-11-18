@@ -447,6 +447,177 @@ describe("FIX 00 — integridad de la conciliación con reglas reales (emulador)
     }
   });
 
+  // ---------------------------------------------------------------- transiciones del cobro
+  /** Cobro en un estado dado; un cobro confirmado trae su entrada del libro mayor ya contabilizada. */
+  async function seedCollectionIn(orderId: string, status: "reported" | "confirmed" | "rejected" | "difference" | "legacy"): Promise<OrderCollectionEvent> {
+    const event = await seedReportedCollection(orderId);
+    const path = `order_collection_events/${event.event_id}`;
+    const saved = await ownerGet(path);
+    const data: Record<string, unknown> = { ...(saved || {}) };
+    if (status === "legacy") delete data["verification_status"];
+    else data["verification_status"] = status;
+    await ownerDelete(path);
+    await ownerSet(path, data);
+    if (status === "confirmed" || status === "legacy") {
+      await ownerSet(`finance_ledger_entries/ledger_collection_${event.event_id}`, {
+        entry_id: `ledger_collection_${event.event_id}`, business_id: "bm", account_id: "acc_caja_general", kind: "collection",
+        cash_effect: 300, amount: 300, occurred_at: businessDateKey(), period_id: monthIdFromDateInput(businessDateKey()),
+        source: "order_collection", source_id: event.event_id, order_id: orderId,
+      });
+    }
+    return { ...event, verification_status: status === "legacy" ? "confirmed" : status };
+  }
+  const balance = async () => Number((await ownerGet("finance_accounts/acc_caja_general"))?.["balance"] || 0);
+  const collectionState = async (orderId: string, event: OrderCollectionEvent) => {
+    const [saved, collection, ledger] = await Promise.all([
+      ownerGet(`orders/${orderId}`),
+      ownerGet(`order_collection_events/${event.event_id}`),
+      ownerGet(`finance_ledger_entries/ledger_collection_${event.event_id}`),
+    ]);
+    return {
+      verification: (collection?.["verification_status"] ?? "(sin campo)") as string,
+      ledger: !!ledger,
+      ledgerAmount: Number(ledger?.["cash_effect"] || 0),
+      paid: Number(saved?.["totals"]?.["paid_amount"] || 0),
+      settlement: String(saved?.["settlement_status"] || ""),
+      settlementEvents: await settlementEvents(orderId),
+    };
+  };
+
+  it("transiciones de un cobro desde el servicio (super_admin)", async () => {
+    await as("super_admin");
+    const cases: Array<{
+      name: string; from: "reported" | "confirmed" | "rejected" | "difference" | "legacy"; paid?: number;
+      run: (event: OrderCollectionEvent, orderId: string) => Promise<unknown>;
+      allowed: boolean;
+      expect: Partial<Awaited<ReturnType<typeof collectionState>>> & { balanceDelta: number };
+    }> = [
+      { name: "T1 reported→confirmed", from: "reported", allowed: true, run: (e) => orders.confirmReportedCollection(e, "T1"),
+        expect: { verification: "confirmed", ledger: true, settlement: "received", settlementEvents: 1, paid: 300, balanceDelta: 300 } },
+      { name: "T2 reported→difference", from: "reported", allowed: true, run: (e) => orders.markCollectionDifference(e, "T2"),
+        expect: { verification: "difference", ledger: false, settlement: "difference", settlementEvents: 1, paid: 300, balanceDelta: 0 } },
+      { name: "T3 reported→rejected", from: "reported", allowed: true, run: (e) => orders.rejectReportedCollection(e, "T3"),
+        expect: { verification: "rejected", ledger: false, paid: 0, balanceDelta: 0 } },
+      { name: "T4 confirmed→difference (diferencia en la conciliación)", from: "confirmed", allowed: true, run: (e) => orders.markCollectionDifference(e, "T4"),
+        expect: { verification: "confirmed", ledger: true, ledgerAmount: 300, settlement: "difference", settlementEvents: 1, paid: 300, balanceDelta: 0 } },
+      { name: "T5 confirmed→rejected", from: "confirmed", allowed: false, run: (e) => orders.rejectReportedCollection(e, "T5"),
+        expect: { verification: "confirmed", ledger: true, ledgerAmount: 300, settlement: "pending", settlementEvents: 0, paid: 300, balanceDelta: 0 } },
+      { name: "T6 rejected→confirmed", from: "rejected", paid: 0, allowed: false, run: (e) => orders.confirmReportedCollection(e, "T6"),
+        expect: { verification: "rejected", ledger: false, settlementEvents: 0, paid: 0, balanceDelta: 0 } },
+      { name: "T7 difference→confirmed", from: "difference", allowed: false, run: (e) => orders.confirmReportedCollection(e, "T7"),
+        expect: { verification: "difference", ledger: false, settlementEvents: 0, paid: 300, balanceDelta: 0 } },
+      { name: "T8 rejected→difference", from: "rejected", paid: 0, allowed: false, run: (e) => orders.markCollectionDifference(e, "T8"),
+        expect: { verification: "rejected", ledger: false, settlementEvents: 0, paid: 0, balanceDelta: 0 } },
+      { name: "T9 cobro anterior (sin estado)→difference", from: "legacy", allowed: true, run: (e) => orders.markCollectionDifference(e, "T9"),
+        expect: { verification: "(sin campo)", ledger: true, ledgerAmount: 300, settlement: "difference", settlementEvents: 1, paid: 300, balanceDelta: 0 } },
+      { name: "T10 rejected→rejected", from: "rejected", paid: 0, allowed: false, run: (e) => orders.rejectReportedCollection(e, "T10"),
+        expect: { verification: "rejected", paid: 0, balanceDelta: 0 } },
+    ];
+    for (const row of cases) {
+      const orderId = next("PTRX");
+      await seedOrder(orderId, row.paid === undefined ? {} : {
+        totals: { total_amount: 300, paid_amount: row.paid, balance_due: 300 - row.paid, gross_amount: 300, net_amount: 300, discount_amount: 0 },
+        customer_payment_status: row.paid > 0 ? "collected" : "pending",
+      });
+      const event = await seedCollectionIn(orderId, row.from);
+      await loadAs(orderId);
+      const before = await balance();
+      const result = await attempt(() => row.run(event, orderId));
+      const state = await collectionState(orderId, event);
+      const delta = (await balance()) - before;
+      matrix.push({ identity: "super_admin", operation: row.name, ...result, state: JSON.stringify({ ...state, balanceDelta: delta }) });
+      check((result.outcome === "ALLOW") === row.allowed, `transicion ${row.name}: esperado ${row.allowed ? "ALLOW" : "bloqueo"}, obtenido ${result.outcome} ${result.detail}`);
+      for (const [key, value] of Object.entries(row.expect)) {
+        const actual = key === "balanceDelta" ? delta : (state as Record<string, unknown>)[key];
+        check(actual === value, `transicion ${row.name}: ${key} esperado ${value}, obtenido ${actual}`);
+      }
+      // Repetir una transición ya aplicada no registra nada nuevo.
+      if (row.allowed && row.name.startsWith("T4")) {
+        await attempt(() => row.run(event, orderId));
+        check((await settlementEvents(orderId)) === 1, `transicion ${row.name}: repetirla creó otro evento de conciliación`);
+      }
+    }
+    expect(failures.filter((line) => line.startsWith("transicion "))).toEqual([]);
+  });
+
+  it("transiciones de un cobro por escritura directa (reglas)", async () => {
+    const direct: Array<{ name: string; who: string; from: "reported" | "confirmed" | "rejected" | "difference" | "legacy"; to: Record<string, unknown>; allowed: boolean }> = [
+      { name: "D1 reported→confirmed", who: "admin", from: "reported", to: { verification_status: "confirmed" }, allowed: true },
+      { name: "D2 reported→difference", who: "admin", from: "reported", to: { verification_status: "difference" }, allowed: true },
+      { name: "D3 reported→rejected", who: "admin", from: "reported", to: { verification_status: "rejected" }, allowed: true },
+      { name: "D4 confirmed→difference", who: "admin", from: "confirmed", to: { verification_status: "difference" }, allowed: false },
+      { name: "D5 confirmed→rejected", who: "admin", from: "confirmed", to: { verification_status: "rejected" }, allowed: false },
+      { name: "D6 rejected→confirmed", who: "admin", from: "rejected", to: { verification_status: "confirmed" }, allowed: false },
+      { name: "D7 difference→confirmed", who: "admin", from: "difference", to: { verification_status: "confirmed" }, allowed: false },
+      { name: "D8 sin estado→difference", who: "admin", from: "legacy", to: { verification_status: "difference" }, allowed: false },
+      { name: "D9 confirmed: nota sin cambiar estado", who: "admin", from: "confirmed", to: { verification_note: "aclaración" }, allowed: true },
+      { name: "D10 reported→rejected sin permiso de conciliación", who: "administrativo", from: "reported", to: { verification_status: "rejected" }, allowed: true },
+      { name: "D11 reported→difference sin permiso de conciliación", who: "administrativo", from: "reported", to: { verification_status: "difference" }, allowed: false },
+    ];
+    for (const row of direct) {
+      const orderId = next("PDTX");
+      await seedOrder(orderId);
+      const event = await seedCollectionIn(orderId, row.from);
+      await as(row.who);
+      const result = await attempt(() => updateDoc(doc(FIRESTORE, "order_collection_events", event.event_id), row.to));
+      const saved = await ownerGet(`order_collection_events/${event.event_id}`);
+      matrix.push({ identity: row.who, operation: row.name, ...result, state: `cobro=${saved?.["verification_status"] ?? "(sin campo)"}` });
+      check((result.outcome === "ALLOW") === row.allowed, `directa ${row.name}: esperado ${row.allowed ? "ALLOW" : "DENY"}, obtenido ${result.outcome} ${result.detail}`);
+    }
+    expect(failures.filter((line) => line.startsWith("directa "))).toEqual([]);
+  });
+
+  it("confirmar y marcar diferencia a la vez dejan el dinero consistente con el cobro", async () => {
+    await as("super_admin");
+    // Arranques escalonados para que gane cada una de las dos operaciones en alguna ronda.
+    const winners = new Set<string>();
+    for (const delayMs of [0, 0, 60, 120, 250]) {
+      const round = winners.size + Math.random();
+      const orderId = next("PRACE");
+      await seedOrder(orderId);
+      const event = await seedReportedCollection(orderId);
+      await loadAs(orderId);
+      const before = await balance();
+      const results = await Promise.allSettled([
+        orders.confirmReportedCollection(event, "Sesión A"),
+        new Promise((resolve) => setTimeout(resolve, delayMs)).then(() => orders.markCollectionDifference(event, "Sesión B")),
+      ]);
+      const state = await collectionState(orderId, event);
+      const delta = (await balance()) - before;
+      winners.add(state.verification);
+      matrix.push({ identity: "super_admin", operation: `C1 confirmar‖diferencia +${delayMs}ms #${round.toFixed(2)}`, outcome: "ALLOW", detail: results.map((r) => r.status).join(","), state: JSON.stringify({ ...state, balanceDelta: delta }) });
+      expect(results.some((r) => r.status === "fulfilled")).toBeTrue();
+      if (state.verification === "confirmed") {
+        // Ganó confirmar: el dinero se contabilizó una vez; la diferencia, si llegó después, quedó en la conciliación.
+        expect(state.ledger).toBeTrue();
+        expect(delta).toBe(300);
+        expect(["received", "difference"]).toContain(state.settlement);
+      } else {
+        // Ganó la diferencia: no hay dinero contabilizado y confirmar se bloqueó.
+        expect(state.verification).toBe("difference");
+        expect(state.ledger).toBeFalse();
+        expect(delta).toBe(0);
+        expect(state.settlement).toBe("difference");
+        expect(results[0].status).toBe("rejected");
+      }
+      expect(state.paid).toBe(300);
+    }
+  });
+
+  it("dos diferencias simultáneas del mismo cobro registran un solo evento", async () => {
+    await as("super_admin");
+    const orderId = next("PDIF2");
+    await seedOrder(orderId);
+    const event = await seedReportedCollection(orderId);
+    await loadAs(orderId);
+    const results = await Promise.allSettled([
+      orders.markCollectionDifference(event, "Sesión A"),
+      orders.markCollectionDifference(event, "Sesión B"),
+    ]);
+    expect(results.map((row) => row.status)).toEqual(["fulfilled", "fulfilled"]);
+    expect(await settlementEvents(orderId)).toBe(1);
+  });
+
   it("dos confirmaciones simultáneas del mismo cobro lo registran una sola vez", async () => {
     await as("super_admin");
     const orderId = next("PDUP");

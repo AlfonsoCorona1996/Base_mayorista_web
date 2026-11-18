@@ -6,6 +6,7 @@ import {
   deleteDoc,
   doc,
   DocumentReference,
+  getDocFromServer,
   getDocs,
   limit,
   onSnapshot,
@@ -1452,7 +1453,11 @@ export class OrdersService {
       const eventRef = doc(FIRESTORE, "order_collection_events", event.event_id);
       const eventSnap = await tx.get(eventRef);
       if (!eventSnap.exists()) throw new Error("El cobro reportado ya no existe.");
-      if (eventSnap.data()["verification_status"] === "confirmed") return null;
+      const current = collectionVerificationStatus(eventSnap.data());
+      if (current === "confirmed") return null;
+      // Solo se confirma un cobro reportado. Uno rechazado ya restó el pago del pedido y uno en
+      // diferencia espera aclaración: confirmarlos sumaría dinero sin pago registrado.
+      if (current !== "reported") throw new CollectionTransitionError(current, "confirmar");
       const businessId = normalizeBusinessId(eventSnap.data()["business_id"]);
       const accountId = String(eventSnap.data()["account_id"] || (businessId === "bm" ? "acc_caja_general" : `acc_${businessId}_general`));
       const accountRef = doc(FIRESTORE, "finance_accounts", accountId);
@@ -1502,12 +1507,18 @@ export class OrdersService {
   }
 
   /**
-   * Marca diferencia en un cobro reportado: el evento de cobro y la conciliación `difference`
-   * del pedido con su evento, en UNA transacción (FIX 00). Antes el evento de cobro se marcaba
-   * primero y, si el pedido no se podía actualizar, quedaba en diferencia sin conciliación.
+   * Marca diferencia en un cobro (FIX 00), en UNA transacción con la conciliación `difference`
+   * del pedido y su evento:
+   * - Reportado: el cobro pasa a `difference`.
+   * - Confirmado: su ingreso ya está en el libro mayor y en la cuenta y NO se toca; el cobro sigue
+   *   `confirmed` y la diferencia queda en la conciliación del pedido, con nota. Si falta dinero,
+   *   se corrige con un ajuste nuevo en Administración. Antes el cobro pasaba a `difference` y los
+   *   reportes dejaban de contarlo como cobrado mientras el dinero seguía en la cuenta.
+   * - Rechazado: no aplica.
    */
   async markCollectionDifference(event: OrderCollectionEvent, note?: string | null): Promise<void> {
-    const settlementNote = note || "Diferencia en cobro reportado";
+    const baseNote = note || "Diferencia en cobro reportado";
+    let settlementNote = baseNote;
     const eventRef = doc(FIRESTORE, "order_collection_events", event.event_id);
     const orderRef = doc(this.colRef, event.order_id);
     const applied = await runTransaction(FIRESTORE, async (tx) => {
@@ -1515,14 +1526,22 @@ export class OrdersService {
       if (!eventSnap.exists()) throw new Error("El cobro reportado ya no existe.");
       if (!orderSnap.exists()) throw new Error("El pedido del cobro ya no existe.");
       if (String(eventSnap.data()["order_id"] || "") !== event.order_id) throw new Error("El cobro no pertenece a este pedido.");
-      if (eventSnap.data()["verification_status"] === "difference") return null;
-      tx.update(eventRef, {
-        verification_status: "difference",
-        verified_by: this.currentActor(),
-        verified_at: serverTimestamp(),
-        ...(note ? { verification_note: note } : {}),
-      });
-      return this.stageSettlement(tx, orderRef, this.normalize(orderSnap.id, orderSnap.data()), "difference", settlementNote);
+      const current = collectionVerificationStatus(eventSnap.data());
+      const liveOrder = this.normalize(orderSnap.id, orderSnap.data());
+      if (current === "difference") return null;
+      if (current === "rejected") throw new CollectionTransitionError(current, "marcar en diferencia");
+      if (current === "confirmed") {
+        if (liveOrder.settlement_status === "difference") return null;
+        settlementNote = `${baseNote} (cobro ya confirmado: su ingreso no se modificó)`;
+      } else {
+        tx.update(eventRef, {
+          verification_status: "difference",
+          verified_by: this.currentActor(),
+          verified_at: serverTimestamp(),
+          ...(note ? { verification_note: note } : {}),
+        });
+      }
+      return this.stageSettlement(tx, orderRef, liveOrder, "difference", settlementNote);
     });
     if (!applied) return;
     await this.afterSettlementCommitted(applied, settlementNote);
@@ -1531,6 +1550,13 @@ export class OrdersService {
   async rejectReportedCollection(event: OrderCollectionEvent, reason: string): Promise<void> {
     const order = this.getById(event.order_id);
     if (!order) throw new Error("Pedido no encontrado");
+    // FIX 00: solo se rechaza un cobro reportado, comprobado en el servidor ANTES de escribir.
+    // Rechazar uno ya confirmado restaba el pago del pedido con el dinero ya en la cuenta. (La
+    // atomicidad completa del rechazo queda para FIX 05; las reglas también bloquean el cambio.)
+    const liveEvent = await getDocFromServer(doc(FIRESTORE, "order_collection_events", event.event_id));
+    if (!liveEvent.exists()) throw new Error("El cobro reportado ya no existe.");
+    const current = collectionVerificationStatus(liveEvent.data());
+    if (current !== "reported") throw new CollectionTransitionError(current, "rechazar");
     const amount = Math.max(0, Number(event.amount || 0));
     const nextPaid = Math.max(0, Number((Number(order.totals?.paid_amount || 0) - amount).toFixed(2)));
     const recalculated = toPersistedOrderTotals({ ...order, totals: { ...order.totals, paid_amount: nextPaid } });
@@ -2692,6 +2718,30 @@ export interface OrderCollectionEvent {
   note?: string | null;
   rejected_reason?: string | null;
   created_at?: string | null;
+}
+
+/**
+ * Estado de verificación guardado. Un cobro sin el campo es anterior al flujo de reportes y se
+ * trata como confirmado, igual que `normalizeCollectionEvent`.
+ */
+function collectionVerificationStatus(data: Record<string, unknown> | undefined): OrderCollectionVerificationStatus {
+  const raw = data?.["verification_status"];
+  return raw === "reported" || raw === "rejected" || raw === "difference" ? raw : "confirmed";
+}
+
+const COLLECTION_STATUS_LABEL: Record<OrderCollectionVerificationStatus, string> = {
+  reported: "reportado",
+  confirmed: "confirmado",
+  difference: "en diferencia",
+  rejected: "rechazado",
+};
+
+/** Transición no permitida de un cobro (FIX 00): solo un cobro reportado se confirma, rechaza o pasa a diferencia. */
+export class CollectionTransitionError extends Error {
+  constructor(readonly current: OrderCollectionVerificationStatus, action: string) {
+    super(`Este cobro ya está ${COLLECTION_STATUS_LABEL[current]}; no se puede ${action}. Actualiza la página para ver su estado.`);
+    this.name = "CollectionTransitionError";
+  }
 }
 
 /** Conciliación confirmada en Firestore (FIX 00); solo entonces se refleja en memoria. */

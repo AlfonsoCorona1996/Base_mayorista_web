@@ -369,8 +369,13 @@ service cloud.firestore {
         // la conciliación del pedido. Rechazar un cobro conserva sus permisos.
         && (
           !request.resource.data.diff(resource.data).affectedKeys().hasAny(["verification_status"])
-          || !(request.resource.data.verification_status in ["confirmed", "difference"])
-          || canSettle()
+          || (
+            // Solo un cobro reportado cambia de estado. Uno confirmado ya está en el libro mayor y en
+            // la cuenta: corregirlo es un movimiento nuevo, no reescribir el cobro. Un cobro sin el
+            // campo es anterior a los reportes y cuenta como confirmado.
+            resource.data.get("verification_status", "confirmed") == "reported"
+            && (!(request.resource.data.verification_status in ["confirmed", "difference"]) || canSettle())
+          )
         );
       allow delete: if false;
     }

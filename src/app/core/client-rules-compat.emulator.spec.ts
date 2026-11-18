@@ -422,6 +422,35 @@ describe("Compatibilidad cliente ↔ reglas reales (emulador)", () => {
           return `cobro=${event?.["verification_status"]} libro=${ledger ? "si" : "no"} settlement=${saved?.["settlement_status"]}`;
         });
       }
+      // Cobro ya confirmado (su ingreso está en el libro mayor): marcar diferencia o rechazarlo,
+      // como haría una pantalla desactualizada o el botón «Diferencia» de un cobro confirmado.
+      for (const [operation, action] of [["diferencia_sobre_confirmado", "difference"], ["rechazo_sobre_confirmado", "reject"]] as const) {
+        const confirmedOrder = next(action === "difference" ? "PCDIF" : "PCREJ");
+        await seedOrder(confirmedOrder, {
+          status: "pagado", delivery_status: "delivered", delivered_at: nowIso(), customer_payment_status: "collected", settlement_status: "received",
+          totals: { total_amount: 300, paid_amount: 300, balance_due: 0, gross_amount: 300, net_amount: 300, discount_amount: 0 }, items: [item("k-1")],
+        });
+        const confirmedEvent: OrderCollectionEvent = {
+          event_id: `evt-${confirmedOrder}`, order_id: confirmedOrder, business_id: "bm", account_id: "acc_caja_general", amount: 300,
+          method: "efectivo", status_after: "collected", settlement_status_after: "pending", source_location: "durango",
+          verification_status: "confirmed", collected_by: { uid: "durango", name: "Durango" }, reported_by: { uid: "durango", name: "Durango" },
+          verified_by: { uid: "gdl", name: "GDL" }, verified_at: nowIso(), cash_occurred_at: nowIso().slice(0, 10), note: null, rejected_reason: null, created_at: nowIso(),
+        };
+        await ownerSet(`order_collection_events/${confirmedEvent.event_id}`, { ...confirmedEvent } as unknown as Record<string, unknown>);
+        await ownerSet(`finance_ledger_entries/ledger_collection_${confirmedEvent.event_id}`, {
+          entry_id: `ledger_collection_${confirmedEvent.event_id}`, business_id: "bm", account_id: "acc_caja_general", kind: "collection",
+          cash_effect: 300, amount: 300, source: "order_collection", source_id: confirmedEvent.event_id, order_id: confirmedOrder,
+        });
+        await record(key, operation, async () => {
+          await loadAs(confirmedOrder);
+          if (action === "difference") await orders.markCollectionDifference(confirmedEvent, "Compat");
+          else await orders.rejectReportedCollection(confirmedEvent, "Compat");
+        }, async () => {
+          const saved = await ownerGet(`orders/${confirmedOrder}`);
+          const event = await ownerGet(`order_collection_events/${confirmedEvent.event_id}`);
+          return `cobro=${event?.["verification_status"]} libro=si pagado=${saved?.["totals"]?.["paid_amount"]} settlement=${saved?.["settlement_status"]}`;
+        });
+      }
       await record(key, "registrar_devolucion", async () => {
         const order = await loadAs(returnOrder);
         await returns.registerReturn({ order, item: order.items[0], qty: 1, disposition: "available", attemptId: `att-${returnOrder}`, paymentResolution: "not_required" });
