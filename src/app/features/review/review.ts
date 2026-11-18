@@ -375,6 +375,8 @@ export default class ReviewPage {
   // Contexto RAW (solo lectura)
   rawText = signal<string>("");
   rawImages = signal<string[]>([]);
+  rawContextError = signal<string | null>(null);
+  rawContextLoading = signal(false);
 
   // UX: imágenes excluidas
   excludedImages = signal<string[]>([]);
@@ -539,6 +541,11 @@ export default class ReviewPage {
     try {
       this.loading.set(true);
       this.error.set(null);
+      this.rawText.set("");
+      this.rawImages.set([]);
+      this.rawContextError.set(null);
+      this.priceInputBuffers = {};
+      this.imageColors = {};
 
       const d = await this.svc.getById(this.id);
       if (!this.isRequiredSchema(d)) {
@@ -563,16 +570,12 @@ export default class ReviewPage {
       this.draft.set(clone);
       this.excludedImages.set(clone.review.excluded_image_urls || []);
 
-      // carga RAW para contexto (solo lectura)
-      await this.loadRawContext(d.raw_post_id);
-
-      // asegura cover si no hay
-      if (!this.draft()!.preview_image_url) {
-        const first = this.visibleRawImages()[0] || null;
-        this.draft.set({ ...this.draft()!, preview_image_url: first });
-      }
-
+      // Los datos editables no dependen del acceso al mensaje original.
       this.initializeSharedPriceInputs();
+      const colorSets = clone.listing.items.map(item => JSON.stringify(
+        [...new Set(item.color_stock.map(entry => entry.color_name.trim()))].sort()
+      ));
+      this.hasVariantColors.set(new Set(colorSets).size > 1);
 
       // Inicializar colores desde variantes existentes (ahora con product_colors si es v1.1)
       this.initializeImageColors();
@@ -592,6 +595,11 @@ export default class ReviewPage {
       this.editableCategoryProposal.set(
         String(clone.listing.category_proposed || "").trim()
       );
+
+      await this.retryRawContext();
+      if (!this.draft()!.preview_image_url) {
+        this.draft.set({ ...this.draft()!, preview_image_url: this.visibleRawImages()[0] || null });
+      }
 
     } catch (e: any) {
       this.error.set(e?.message || String(e));
@@ -1056,7 +1064,7 @@ export default class ReviewPage {
   private async loadRawContext(rawPostId: string) {
     const rawRef = doc(FIRESTORE, "raw_posts", rawPostId);
     const snap = await getDoc(rawRef);
-    if (!snap.exists()) return;
+    if (!snap.exists()) throw new Error("Mensaje original no disponible.");
 
     const raw = snap.data() as RawPost;
     this.rawText.set(raw?.message?.raw_text || "");
@@ -1067,6 +1075,22 @@ export default class ReviewPage {
         .filter((url): url is string => Boolean(url));
 
     this.rawImages.set(urls);
+  }
+
+  async retryRawContext(): Promise<void> {
+    if (this.rawContextLoading()) return;
+    const rawPostId = this.draft()?.raw_post_id;
+    if (!rawPostId) return;
+    this.rawContextLoading.set(true);
+    this.rawContextError.set(null);
+    try {
+      await this.loadRawContext(rawPostId);
+    } catch {
+      this.rawContextError.set("No se pudo cargar el mensaje original. Puedes continuar revisando los datos del producto.");
+    } finally {
+      this.syncProductColorsToRawImages();
+      this.rawContextLoading.set(false);
+    }
   }
   
   /**
@@ -1630,25 +1654,22 @@ export default class ReviewPage {
       return;
     }
 
+    // Precio compartido por defecto cuando no hay importes contradictorios.
+    // Una extracción parcial puede traer el precio solo en una de las tallas.
+    const costs = new Set(d.listing.items.map(item => this.toValidNumber(item.prices?.precio_costo)).filter(value => value !== null));
+    const sales = new Set(d.listing.items.map(item => this.toValidNumber(item.prices?.precio_final)).filter(value => value !== null));
+    const currencies = new Set(d.listing.items.map(item => item.prices?.currency || "MXN"));
+    const shared = costs.size <= 1 && sales.size <= 1 && currencies.size <= 1;
+    this.useSharedPrices.set(shared);
+    if (shared) {
+      this.applySharedPricesToAllVariants(costs.values().next().value ?? null, sales.values().next().value ?? null);
+      return;
+    }
     const first = d.listing.items[0];
     this.sharedPriceInputBuffers = {
       costo: this.formatNumberOnly(first.prices?.precio_costo),
       final: this.formatNumberOnly(first.prices?.precio_final),
     };
-    this.useSharedPrices.set(this.allVariantsShareSamePrices(d));
-  }
-
-  private allVariantsShareSamePrices(d: NormalizedListingDocV3): boolean {
-    if (!d.listing.items || d.listing.items.length === 0) return false;
-    const first = d.listing.items[0];
-    const firstCost = this.toValidNumber(first.prices?.precio_costo);
-    const firstFinal = this.toValidNumber(first.prices?.precio_final);
-
-    return d.listing.items.every((item) => {
-      const itemCost = this.toValidNumber(item.prices?.precio_costo);
-      const itemFinal = this.toValidNumber(item.prices?.precio_final);
-      return itemCost === firstCost && itemFinal === firstFinal;
-    });
   }
 
   toggleSharedPrices(checked: boolean): void {
@@ -2222,6 +2243,7 @@ export default class ReviewPage {
     if (this.doc() && colorMappingSignature(d.product_colors) !== colorMappingSignature(this.doc()!.product_colors || [])) {
       d.listing.extractionOverrides = { ...d.listing.extractionOverrides, colors: true };
     }
+    this.syncGlobalColorsToVariantsIfNeeded();
     this.normalizeColorReferencesForSave(d);
     this.ensureVariantSkus(d);
     this.draft.set({ ...d });

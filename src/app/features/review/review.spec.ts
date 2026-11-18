@@ -107,6 +107,122 @@ function listingWithVariants(
   return base;
 }
 
+describe("ReviewPage colores y precios con contexto original inaccesible", () => {
+  function setup(source: NormalizedListingDocV3) {
+    // El servicio conserva un tipo de retorno legacy; Review valida v3 al recibirlo.
+    type ReviewListings = Pick<NormalizedListingsService, "saveReviewDecision" | "invalidateAllValidated"> & {
+      getById(id: string): Promise<NormalizedListingDocV3>;
+    };
+    const listings = jasmine.createSpyObj<ReviewListings>("listings", ["getById", "saveReviewDecision", "invalidateAllValidated"]);
+    listings.getById.and.resolveTo(source);
+    listings.saveReviewDecision.and.resolveTo();
+    TestBed.configureTestingModule({ providers: [
+      ReviewPage,
+      { provide: ElementRef, useValue: new ElementRef(document.createElement("app-review")) },
+      { provide: ActivatedRoute, useValue: { snapshot: { paramMap: { get: () => source.normalized_id } } } },
+      { provide: Router, useValue: { navigateByUrl: async () => true } },
+      { provide: NormalizedListingsService, useValue: listings },
+      { provide: AuthService, useValue: { uid: () => "user-1" } },
+      { provide: CategoriesService, useValue: {} },
+      { provide: SuppliersService, useValue: { getActive: () => [] } },
+    ] });
+    const page = TestBed.inject(ReviewPage);
+    // Interceptar solo la lectura remota: ejecutar la inicialización real completa.
+    const rawRead = spyOn(page as unknown as { loadRawContext(id: string): Promise<void> }, "loadRawContext")
+      .and.rejectWith(new Error("Missing or insufficient permissions."));
+    return { page, listings, rawRead };
+  }
+
+  function partialListing() {
+    const source = listingWithVariants("listing-1", [
+      { name: "CH", sku: "CH", colors: ["rosa"] },
+      { name: "M", sku: "M", colors: ["rosa"] },
+      { name: "G", sku: "G", colors: ["rosa"] },
+    ]);
+    source.product_colors = ["rosa", "gris", "azul", "beige", "café"].map(name => ({ name, image_url: `https://example.test/${name}.jpg` }));
+    source.listing.items.forEach((item, index) => {
+      item.prices = { precio_final: index === 0 ? 360 : null, precio_costo: index === 0 ? 180 : null, precio_clienta: null, currency: "MXN" };
+    });
+    return source;
+  }
+
+  it("inicializa las 15 combinaciones y el precio compartido aunque raw_posts deniegue lectura", async () => {
+    const source = partialListing();
+    const { page } = setup(source);
+    await page.load();
+    expect(page.error()).toBeNull();
+    expect(page.rawContextError()).toContain("No se pudo cargar");
+    expect(page.loading()).toBeFalse();
+    expect(page.useSharedPrices()).toBeTrue();
+    expect(page.rawImages().length).toBe(5);
+    for (const item of page.draft()!.listing.items) {
+      expect(item.color_stock.map(color => color.color_name)).toEqual(["rosa", "gris", "azul", "beige", "café"]);
+      expect(item.prices).toEqual({ precio_final: 360, precio_costo: 180, precio_clienta: 270, currency: "MXN" });
+    }
+    expect(source.listing.items[1].prices.precio_final).toBeNull();
+  });
+
+  it("reconcilia colores antes de guardar y publica todas las combinaciones", async () => {
+    const { page, listings } = setup(partialListing());
+    await page.load();
+    page.draft()!.listing.items[1].color_stock = [];
+    page.confirmCategory();
+    await page.validate();
+    const patch = listings.saveReviewDecision.calls.mostRecent().args[1];
+    const listing = patch.listing as NormalizedListingDocV3["listing"];
+    expect(listing.items.every(item => item.color_stock.length === 5)).toBeTrue();
+    expect(listing.items.every(item => item.prices.precio_final === 360)).toBeTrue();
+  });
+
+  it("conserva precios diferentes y colores específicos por talla al guardar", async () => {
+    const source = partialListing();
+    source.listing.items[1].prices = { precio_final: 400, precio_costo: 200, precio_clienta: 300, currency: "MXN" };
+    source.listing.items[1].color_stock = [{ color_name: "azul", stock_state: "out_of_stock" }];
+    const { page, listings } = setup(source);
+    await page.load();
+    expect(page.useSharedPrices()).toBeFalse();
+    expect(page.hasVariantColors()).toBeTrue();
+    await page.save();
+    const listing = listings.saveReviewDecision.calls.mostRecent().args[1].listing as NormalizedListingDocV3["listing"];
+    const items = listing.items;
+    expect(items[1].prices.precio_final).toBe(400);
+    expect(items[2].prices.precio_final).toBeNull();
+    expect(items[1].color_stock).toEqual([{ color_name: "azul", stock_state: "out_of_stock" }]);
+    expect(items[0].color_stock.length).toBe(1);
+  });
+
+  it("encuentra el precio común aunque la primera variante no tenga precio", async () => {
+    const source = partialListing();
+    [source.listing.items[0].prices, source.listing.items[2].prices] = [source.listing.items[2].prices, source.listing.items[0].prices];
+    const { page } = setup(source);
+    await page.load();
+    expect(page.useSharedPrices()).toBeTrue();
+    expect(page.draft()!.listing.items.every(item => item.prices.precio_final === 360)).toBeTrue();
+  });
+
+  it("no inventa precios cuando ninguna variante tiene importe", async () => {
+    const source = partialListing();
+    source.listing.items[0].prices = { ...source.listing.items[1].prices };
+    const { page } = setup(source);
+    await page.load();
+    expect(page.useSharedPrices()).toBeTrue();
+    expect(page.getSharedPriceInputValue("final")).toBe("");
+    expect(page.draft()!.listing.items.every(item => item.prices.precio_final === null)).toBeTrue();
+  });
+
+  it("reintenta solo el contexto sin pisar precios editados ni imágenes por color", async () => {
+    const { page, rawRead } = setup(partialListing());
+    await page.load();
+    page.onSharedPriceInputChange("final", "500");
+    rawRead.and.callFake(async () => { page.rawText.set("Texto recuperado"); page.rawImages.set(["https://example.test/original.jpg"]); });
+    await page.retryRawContext();
+    expect(page.rawContextError()).toBeNull();
+    expect(page.rawText()).toBe("Texto recuperado");
+    expect(page.rawImages().length).toBe(6);
+    expect(page.draft()!.listing.items.every(item => item.prices.precio_final === 500)).toBeTrue();
+  });
+});
+
 describe("ReviewPage fusion controlada", () => {
   function buildPage(): ReviewPage {
     TestBed.configureTestingModule({

@@ -4,6 +4,16 @@ Todos los cambios relevantes del frontend se documentan aquí. El formato sigue
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa
 [Versionado Semántico](https://semver.org/lang/es/).
 
+## [2.4.1] - 2026-11-18
+
+Solo frontend; compatible con backend 2.3.1 y con las reglas publicadas para 2.4.0.
+
+### Corregido
+
+- Revisión de catálogo: si el mensaje original no se puede cargar, la pantalla sigue permitiendo revisar y guardar el producto, avisa del problema y ofrece «Reintentar mensaje original».
+- Revisión de catálogo: cuando las tallas no traen precios contradictorios (por ejemplo, el precio solo viene en una), se aplica el precio compartido a todas.
+- Revisión de catálogo: al guardar se sincronizan los colores globales con las variantes, y al abrir otro producto se limpian el texto, las imágenes y los precios del anterior.
+
 ## [2.4.0] - 2026-11-17
 
 Consolida FIX 03A-2, 03B-1 y 03B-1.1. **Requiere publicar `firestore.rules` antes que
@@ -11,6 +21,8 @@ este frontend**; ver [docs/releases/2.4.0.md](docs/releases/2.4.0.md). Sin migra
 documentos anteriores se leen con compatibilidad.
 
 ### Añadido
+
+- Pedidos: las acciones masivas (notas, bitácoras y embarques) muestran progreso y resultado por pedido, y permiten volver a seleccionar los que fallaron (integrado a `main` durante la ventana de 2.4.0).
 
 - Asignaciones de inventario (`inventory_allocations`): cada línea de pedido queda ligada al documento de inventario donde tiene piezas apartadas, entregadas, devueltas o liberadas.
 - Estado del ajuste de inventario de una entrega en el pedido (`inventory_sync`): pendiente, fallido, comprobado o resuelto manualmente, con reintento desde el detalle y aviso «Inventario pendiente» en la lista.

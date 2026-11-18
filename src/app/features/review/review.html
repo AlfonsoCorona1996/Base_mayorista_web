@@ -830,7 +830,16 @@
         </section>
         <details class="review-section">
           <summary>Mensaje original</summary>
-          <div class="raw-message">{{ rawText() || '(Sin texto)' }}</div>
+          @if (rawContextError()) {
+            <p class="field-error" role="status">{{ rawContextError() }}</p>
+            <button type="button" class="btn" (click)="retryRawContext()" [disabled]="rawContextLoading()">
+              Reintentar mensaje original
+            </button>
+          } @else if (rawContextLoading()) {
+            <p role="status">Cargando mensaje original…</p>
+          } @else {
+            <div class="raw-message">{{ rawText() || '(Sin texto)' }}</div>
+          }
         </details>
         <details class="review-section">
           <summary>Más acciones</summary>
