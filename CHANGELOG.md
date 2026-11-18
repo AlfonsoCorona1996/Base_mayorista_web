@@ -4,6 +4,14 @@ Todos los cambios relevantes del frontend se documentan aquí. El formato sigue
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa
 [Versionado Semántico](https://semver.org/lang/es/).
 
+## [2.4.2] - 2026-11-18
+
+Solo frontend; compatible con backend 2.3.1 y con las reglas publicadas para 2.4.0.
+
+### Corregido
+
+- Detalle del pedido: ya no aparece «No se pudo cargar: responsables». La lista de sugerencias de «Asignar a» se leía de la colección `admins`, que está vacía y no tiene reglas, por lo que Firestore siempre la negaba. Ahora sugiere los responsables ya usados en las incidencias del pedido y a la persona en sesión, sin consultas adicionales.
+
 ## [2.4.1] - 2026-11-18
 
 Solo frontend; compatible con backend 2.3.1 y con las reglas publicadas para 2.4.0.

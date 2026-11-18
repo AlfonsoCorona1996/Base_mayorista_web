@@ -168,6 +168,18 @@ describe("PedidoDetallePage - descuento Precio clienta y tabs", () => {
     expect(component).toBeTruthy();
   });
 
+  it("sugiere responsables sin consultar Firestore: los de las incidencias y la persona en sesión", () => {
+    TestBed.inject(AuthzService).currentUserSig = (() => ({ uid: "u1", displayName: "Alfonso Corona" })) as AuthzService["currentUserSig"];
+    component.incidents.set([
+      { assigneeId: " Jazmin " },
+      { assigneeId: null },
+      { assigneeId: "Blanca Trejo" },
+      { assigneeId: "Jazmin" },
+    ] as unknown as ReturnType<typeof component.incidents>);
+
+    expect(component.assigneeOptions()).toEqual(["Alfonso Corona", "Blanca Trejo", "Jazmin"]);
+  });
+
   describe("costo editable por pedido", () => {
     function costOrder(items: OrderItem[] = []): Order {
       return {
