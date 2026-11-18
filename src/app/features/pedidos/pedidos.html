@@ -428,8 +428,9 @@
           <button
             type="button"
             class="tfilter-bulk-trigger"
+            #tableBulkTrigger
             (click)="toggleTableBulkMenu($event)"
-            [disabled]="tableBulkActionLoading()"
+            [disabled]="tableBulkActionLoading() || tableBulkDownloading()"
             aria-label="Acciones masivas"
           >
             <span class="material-symbols-rounded" aria-hidden="true">more_vert</span>
@@ -542,29 +543,88 @@
             </button>
           }
         </div>
-        @if (tableBulkProgressVisible()) {
-          <div class="tfilter-progress" role="status" aria-live="polite">
-            <div class="tfilter-progress-head">
-              <span>{{ tableBulkProgressLabel() }}</span>
-              <span>{{ tableBulkProgressCurrent() }} / {{ tableBulkProgressTotal() }}</span>
-            </div>
-            <div class="tfilter-progress-track" aria-hidden="true">
-              <div class="tfilter-progress-fill" [style.width.%]="tableBulkProgressPercent()"></div>
-            </div>
-          </div>
-        }
-        @if (tableBulkResultVisible()) {
-          <div class="tfilter-result-row" role="status" aria-live="polite">
-            <div class="tfilter-result-chip">
-              <span class="material-symbols-rounded" aria-hidden="true">check_circle</span>
-              <span>{{ tableBulkResultText() }}</span>
-              <button type="button" class="tfilter-result-close" (click)="closeTableBulkResult($event)" aria-label="Cerrar mensaje">
-                <span class="material-symbols-rounded" aria-hidden="true">close</span>
-              </button>
-            </div>
-          </div>
-        }
       </div>
+
+      @if (tableSelectionMode() && tableSelectedCount() > 0) {
+        <p class="bulk-selection-summary">
+          <span class="material-symbols-rounded" aria-hidden="true">check_box</span>
+          {{ tableSelectedCount() }} pedidos seleccionados
+        </p>
+      }
+
+      @if (tableBulkProgressVisible() || tableBulkResultVisible()) {
+        <section class="bulk-progress" [attr.data-tone]="tableBulkTone()" aria-labelledby="bulk-progress-title">
+          <div class="bulk-progress__head">
+            <div class="bulk-progress__heading">
+              <span class="material-symbols-rounded bulk-progress__icon" aria-hidden="true">{{ tableBulkActionLoading() ? 'pending' : tableBulkTone() === 'success' ? 'check_circle' : tableBulkTone() === 'error' ? 'error' : 'warning' }}</span>
+              <div>
+                <h2 id="bulk-progress-title">{{ tableBulkHeading() }}</h2>
+                @if (!tableBulkActionLoading()) {
+                  <p class="bulk-progress__operation">{{ tableBulkProgressLabel() }}</p>
+                }
+              </div>
+            </div>
+            <span class="bulk-progress__count">{{ tableBulkProgressCurrent() }} de {{ tableBulkProgressTotal() }} {{ tableBulkUnit() }} · {{ tableBulkProgressPercent() }} %</span>
+          </div>
+          <div class="bulk-progress__track" role="progressbar" [attr.aria-label]="tableBulkUnit() === 'rutas' ? 'Rutas procesadas' : 'Pedidos procesados'" aria-valuemin="0" [attr.aria-valuemax]="tableBulkProgressTotal()" [attr.aria-valuenow]="tableBulkProgressCurrent()">
+            <div class="bulk-progress__fill" [style.width.%]="tableBulkProgressPercent()"></div>
+          </div>
+          <ul class="bulk-progress__counts" aria-label="Resultados de la operación">
+            <li><span class="material-symbols-rounded" aria-hidden="true">check_circle</span>{{ tableBulkSucceeded() }} {{ tableBulkSucceeded() === 1 ? 'completado' : 'completados' }}</li>
+            <li [class.has-errors]="tableBulkFailed() > 0"><span class="material-symbols-rounded" aria-hidden="true">error_outline</span>{{ tableBulkFailed() }} con error</li>
+            <li><span class="material-symbols-rounded" aria-hidden="true">remove_circle_outline</span>{{ tableBulkSkipped() }} {{ tableBulkSkipped() === 1 ? 'omitido' : 'omitidos' }}</li>
+            @if (tableBulkProgressCurrent() < tableBulkProgressTotal()) {
+              <li>{{ tableBulkProgressTotal() - tableBulkProgressCurrent() }} pendientes</li>
+            }
+          </ul>
+          <div class="bulk-progress__status" role="status" aria-live="polite" aria-atomic="true">
+            @if (tableBulkActionLoading()) {
+              <span>Operación en curso. Mantén esta página abierta.</span>
+            } @else {
+              <span>{{ tableBulkHeading() }}. {{ tableBulkResultText() }}</span>
+            }
+          </div>
+          @if (tableBulkCurrentItem()) {
+            <p class="bulk-progress__current">{{ tableBulkCurrentItem() }}</p>
+          }
+          @if (tableBulkError()) {
+            <p class="bulk-progress__error" role="alert">{{ tableBulkError() }}</p>
+          }
+          @if (tableBulkDownloadMessage()) {
+            <p class="bulk-progress__current" role="status">{{ tableBulkDownloadMessage() }}</p>
+          }
+          <div class="bulk-progress__actions">
+            @if (tableBulkIssues().length) {
+              <button type="button" class="btn ghost" (click)="tableBulkDetailsOpen.set(!tableBulkDetailsOpen())" [attr.aria-expanded]="tableBulkDetailsOpen()" aria-controls="bulk-progress-details">
+                <span class="material-symbols-rounded" aria-hidden="true">{{ tableBulkDetailsOpen() ? 'expand_less' : 'expand_more' }}</span>
+                {{ tableBulkDetailsOpen() ? 'Ocultar detalle' : 'Ver errores y omisiones' }} ({{ tableBulkIssues().length }})
+              </button>
+            }
+            @if (!tableBulkActionLoading()) {
+              @if (tableBulkFiles().length) {
+                <button type="button" class="btn primary" (click)="downloadTableBulkFiles()" [disabled]="tableBulkDownloading()">
+                  <span class="material-symbols-rounded" aria-hidden="true">download</span>
+                  {{ tableBulkDownloading() ? 'Preparando descarga…' : 'Descargar archivos' }} ({{ tableBulkFiles().length }})
+                </button>
+              }
+              @if (tableBulkFailedOrderIds().length) {
+                <button type="button" class="btn ghost" (click)="selectTableBulkFailures()">Seleccionar pedidos con error ({{ tableBulkFailedOrderIds().length }})</button>
+              }
+              <button type="button" class="btn ghost" (click)="closeTableBulkResult($event)" [disabled]="tableBulkDownloading()">Cerrar resultado</button>
+            }
+          </div>
+          <div id="bulk-progress-details" [hidden]="!tableBulkDetailsOpen()">
+            <ul class="bulk-progress__details">
+              @for (item of tableBulkIssues(); track $index) {
+                <li>
+                  <div><strong>{{ item.label }}</strong><p>{{ item.reason }}</p></div>
+                  <span class="bulk-progress__outcome" [class.has-errors]="item.status === 'error'">{{ item.status === 'error' ? 'Error' : 'Omitido' }}</span>
+                </li>
+              }
+            </ul>
+          </div>
+        </section>
+      }
 
       @if (tableRows().length === 0 && ordersListState() === 'ready') {
         <div class="table-empty-banner" role="status">

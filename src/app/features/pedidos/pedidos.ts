@@ -61,6 +61,12 @@ type TableMenuColumn = "route" | "status";
 type TableMenuOption = { value: string; label: string; count: number };
 type TableBulkAction = "create_bitacora" | "create_nota" | "create_embarque" | "mark_pagado" | "mark_entregado" | "mark_recibido" | "mark_listo_ruta" | "assign_run";
 type TableStatusPill = { label: string; className: string };
+type TableBulkOutcome = {
+  label: string;
+  orderIds: string[];
+  status: "success" | "error" | "skipped";
+  reason: string;
+};
 type BitacoraConfig = {
   includeProductCount: boolean;
   includeProductDetail: boolean;
@@ -189,6 +195,34 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   tableBulkProgressTotal = signal(0);
   tableBulkResultVisible = signal(false);
   tableBulkResultText = signal("");
+  tableBulkUnit = signal<"pedidos" | "rutas">("pedidos");
+  tableBulkCurrentItem = signal("");
+  tableBulkOutcomes = signal<TableBulkOutcome[]>([]);
+  tableBulkError = signal<string | null>(null);
+  tableBulkDetailsOpen = signal(false);
+  tableBulkFiles = signal<SalesNoteFile[]>([]);
+  tableBulkDownloading = signal(false);
+  tableBulkDownloadMessage = signal<string | null>(null);
+  private tableBulkZipLabel = "notas-tabla";
+  tableBulkSucceeded = computed(() => this.tableBulkOutcomes().filter((item) => item.status === "success").length);
+  tableBulkFailed = computed(() => this.tableBulkOutcomes().filter((item) => item.status === "error").length);
+  tableBulkSkipped = computed(() => this.tableBulkOutcomes().filter((item) => item.status === "skipped").length);
+  tableBulkIssues = computed(() => this.tableBulkOutcomes().filter((item) => item.status !== "success"));
+  tableBulkFailedOrderIds = computed(() => [...new Set(this.tableBulkOutcomes()
+    .filter((item) => item.status === "error").flatMap((item) => item.orderIds))]);
+  tableBulkTone = computed(() => {
+    if (this.tableBulkActionLoading()) return "running";
+    if (this.tableBulkError() || this.tableBulkFailed()) return this.tableBulkSucceeded() ? "warning" : "error";
+    return this.tableBulkSkipped() ? "warning" : "success";
+  });
+  tableBulkHeading = computed(() => {
+    if (this.tableBulkActionLoading()) return this.tableBulkProgressLabel();
+    switch (this.tableBulkTone()) {
+      case "error": return "No se pudo completar la operación";
+      case "warning": return "Finalizado con incidencias";
+      default: return "Completado";
+    }
+  });
   bulkDeliveryConfirmOpen = signal(false);
   bulkAssignRunOpen = signal(false);
   bulkAssignRunDate = signal("");
@@ -209,7 +243,6 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     if (total <= 0) return 0;
     return Math.max(0, Math.min(100, Math.round((this.tableBulkProgressCurrent() / total) * 100)));
   });
-  private tableBulkProgressHideTimer: ReturnType<typeof setTimeout> | null = null;
   private visiblePillsByOrder = signal<Record<string, number>>({});
   private pillsResizeObserver: ResizeObserver | null = null;
   private pillMeasureEl: HTMLSpanElement | null = null;
@@ -963,8 +996,33 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
 
   closeTableBulkResult(event?: Event): void {
     event?.stopPropagation();
+    if (this.tableBulkActionLoading() || this.tableBulkDownloading()) return;
     this.tableBulkResultVisible.set(false);
-    this.tableBulkResultText.set("");
+    this.tableBulkProgressVisible.set(false);
+    this.tableBulkDetailsOpen.set(false);
+    this.tableBulkTrigger()?.nativeElement.focus();
+  }
+
+  private readonly tableBulkTrigger = viewChild<ElementRef<HTMLButtonElement>>("tableBulkTrigger");
+
+  selectTableBulkFailures(): void {
+    if (this.tableBulkActionLoading()) return;
+    this.tableSelectionMode.set(true);
+    this.tableSelected.set(Object.fromEntries(this.tableBulkFailedOrderIds().map((id) => [id, true])));
+  }
+
+  async downloadTableBulkFiles(): Promise<void> {
+    if (this.tableBulkActionLoading() || this.tableBulkDownloading() || !this.tableBulkFiles().length) return;
+    this.tableBulkDownloading.set(true);
+    this.tableBulkDownloadMessage.set("Preparando descarga…");
+    try {
+      await this.downloadSalesNotesBundle(this.tableBulkFiles(), this.tableBulkZipLabel, (message) => this.tableBulkDownloadMessage.set(message));
+      if (this.tableBulkDownloadMessage() === "Preparando descarga…") this.tableBulkDownloadMessage.set("Descarga solicitada. Revisa las descargas del navegador.");
+    } catch {
+      this.tableBulkDownloadMessage.set("No se pudo preparar la descarga. Los archivos siguen disponibles para reintentar.");
+    } finally {
+      this.tableBulkDownloading.set(false);
+    }
   }
 
   openBitacoraConfig(event?: Event): void {
@@ -1040,6 +1098,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
 
   async confirmBitacoraConfig(event?: Event): Promise<void> {
     event?.stopPropagation();
+    if (this.tableBulkActionLoading() || this.tableBulkDownloading()) return;
     this.bitacoraConfigError.set(null);
 
     const orders = this.resolveBitacoraTargetOrders();
@@ -1069,17 +1128,20 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
       generated = result.generated;
       failed = result.failed;
       routes = result.routes;
+    } catch (error: unknown) {
+      this.tableBulkError.set(this.tableBulkFailureReason(error, "No se pudieron preparar las bitácoras."));
     } finally {
       this.tableBulkActionLoading.set(false);
+      this.finishTableBulkProgress();
       if (generated > 0 && this.tableSelectionMode()) {
-        this.tableSelected.set({});
+        this.tableSelected.set(Object.fromEntries(this.tableBulkFailedOrderIds().map((id) => [id, true])));
       }
     }
 
     const generatedLabel = `${generated} PDF${generated === 1 ? "" : "s"} creados`;
     const routesLabel = this.tableBulkCountLabel(routes, "ruta", "rutas");
     const errorLabel = failed > 0 ? ` | ${this.tableBulkCountLabel(failed, "ruta con error", "rutas con error")}` : "";
-    this.tableBulkResultText.set(`Bitacora creada, ${generatedLabel} para ${routesLabel}${errorLabel}`);
+    this.tableBulkResultText.set(`${generatedLabel} para ${routesLabel}${errorLabel}`);
     this.tableBulkResultVisible.set(true);
     this.bulkNotesMessage.set(null);
   }
@@ -1092,7 +1154,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   canApplyTableBulkAction(action: TableBulkAction): boolean {
-    if (this.tableBulkActionLoading()) return false;
+    if (this.tableBulkActionLoading() || this.tableBulkDownloading()) return false;
     if (action === "create_bitacora") {
       if (this.tableSelectionMode()) return this.tableSelectedCount() > 0;
       return this.bitacoraRouteOptions().length > 0;
@@ -1152,22 +1214,17 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     let failed = 0;
     let collectionReminders = 0;
     const generatedNoteFiles: SalesNoteFile[] = [];
-    if (action === "create_nota") {
-      this.tableBulkResultVisible.set(false);
-      this.tableBulkResultText.set("");
-    }
-    this.tableBulkProgressVisible.set(false);
-    this.tableBulkProgressLabel.set("");
-    this.tableBulkProgressCurrent.set(0);
-    this.tableBulkProgressTotal.set(0);
+    this.startTableBulkProgress(action === "create_nota" ? "Creando notas" : `${this.tableBulkActionLabel(action)}…`, selectedRows.length);
 
     try {
       if (action === "create_nota") {
         for (const order of selectedRows) {
+          this.tableBulkCurrentItem.set(`Procesando ${this.tableBulkOrderLabel(order)}`);
           try {
             const rows = this.salesNoteRows(order);
             if (rows.length === 0) {
               skipped += 1;
+              this.recordTableBulkOrder(order, "skipped", "Sin productos para generar una nota.");
               continue;
             }
             const blob = await this.buildSalesNoteImage(order, rows);
@@ -1189,29 +1246,39 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
               collectionReminders += 1;
             }
             updated += 1;
+            this.recordTableBulkOrder(order, "success");
             await this.sleep(120);
-          } catch {
+          } catch (error: unknown) {
             failed += 1;
+            this.recordTableBulkOrder(order, "error", this.tableBulkFailureReason(error, "No se pudo completar la acción. Revisa el pedido antes de reintentar."));
           }
         }
-        await this.downloadSalesNotesBundle(generatedNoteFiles, "notas-tabla");
+        this.tableBulkFiles.set(generatedNoteFiles);
+        if (generatedNoteFiles.length) this.tableBulkCurrentItem.set(generatedNoteFiles.length > 1 ? `Comprimiendo ${generatedNoteFiles.length} notas…` : "Preparando descarga…");
+        await this.downloadSalesNotesBundle(generatedNoteFiles, "notas-tabla", (message) => this.tableBulkDownloadMessage.set(message));
       } else if (action === "mark_entregado") {
         for (const order of selectedRows) {
+          this.tableBulkCurrentItem.set(`Procesando ${this.tableBulkOrderLabel(order)}`);
           if (!this.canMarkDeliveredFromBulk(order)) {
             skipped += 1;
+            this.recordTableBulkOrder(order, "skipped", "El pedido no cumple los requisitos para marcarlo como entregado.");
             continue;
           }
           try {
             await this.orders.markOrderDelivered(order.order_id);
             updated += 1;
-          } catch {
+            this.recordTableBulkOrder(order, "success");
+          } catch (error: unknown) {
             failed += 1;
+            this.recordTableBulkOrder(order, "error", this.tableBulkFailureReason(error, "No se pudo completar la acción. Revisa el pedido antes de reintentar."));
           }
         }
       } else if (action === "mark_pagado") {
         for (const order of selectedRows) {
+          this.tableBulkCurrentItem.set(`Procesando ${this.tableBulkOrderLabel(order)}`);
           if (!canMarkOrderAsPaidFromTable(order)) {
             skipped += 1;
+            this.recordTableBulkOrder(order, "skipped", "El pedido no cumple los requisitos para marcarlo como pagado.");
             continue;
           }
           try {
@@ -1235,14 +1302,18 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
               { source: "pedidos_table_selection", total_amount: total }
             ).catch(() => null);
             updated += 1;
-          } catch {
+            this.recordTableBulkOrder(order, "success");
+          } catch (error: unknown) {
             failed += 1;
+            this.recordTableBulkOrder(order, "error", this.tableBulkFailureReason(error, "No se pudo completar la acción. Revisa el pedido antes de reintentar."));
           }
         }
       } else if (action === "mark_recibido") {
         for (const order of selectedRows) {
+          this.tableBulkCurrentItem.set(`Procesando ${this.tableBulkOrderLabel(order)}`);
           if (!this.canMarkAsReceivedFromBulk(order.status)) {
             skipped += 1;
+            this.recordTableBulkOrder(order, "skipped", "El estado actual del pedido no permite marcarlo como recibido.");
             continue;
           }
           try {
@@ -1254,14 +1325,18 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
               { source: "pedidos_table_selection", previous_status: order.status }
             ).catch(() => null);
             updated += 1;
-          } catch {
+            this.recordTableBulkOrder(order, "success");
+          } catch (error: unknown) {
             failed += 1;
+            this.recordTableBulkOrder(order, "error", this.tableBulkFailureReason(error, "No se pudo completar la acción. Revisa el pedido antes de reintentar."));
           }
         }
       } else if (action === "mark_listo_ruta") {
         for (const order of selectedRows) {
+          this.tableBulkCurrentItem.set(`Procesando ${this.tableBulkOrderLabel(order)}`);
           if (!this.canMarkAsReadyForRouteFromBulk(order)) {
             skipped += 1;
+            this.recordTableBulkOrder(order, "skipped", "El pedido no cumple los requisitos de empaque para salir a ruta.");
             continue;
           }
           try {
@@ -1278,8 +1353,10 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
               }
             ).catch(() => null);
             updated += 1;
-          } catch {
+            this.recordTableBulkOrder(order, "success");
+          } catch (error: unknown) {
             failed += 1;
+            this.recordTableBulkOrder(order, "error", this.tableBulkFailureReason(error, "No se pudo completar la acción. Revisa el pedido antes de reintentar."));
           }
         }
       } else if (action === "assign_run") {
@@ -1288,8 +1365,10 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
         // Una salida por ruta: tras crear la primera, el resto de esa ruta se agrega a la misma.
         const runIdByRoute = new Map<string, string>();
         for (const order of selectedRows) {
+          this.tableBulkCurrentItem.set(`Procesando ${this.tableBulkOrderLabel(order)}`);
           if (!actor || !this.canAssignRunFromBulk(order)) {
             skipped += 1;
+            this.recordTableBulkOrder(order, "skipped", "El pedido no tiene una ruta válida o no está disponible para esta salida.");
             continue;
           }
           const routeId = order.route_id || "";
@@ -1304,15 +1383,20 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
             });
             runIdByRoute.set(routeId, runId);
             updated += 1;
-          } catch {
+            this.recordTableBulkOrder(order, "success");
+          } catch (error: unknown) {
             failed += 1;
+            this.recordTableBulkOrder(order, "error", this.tableBulkFailureReason(error, "No se pudo completar la acción. Revisa el pedido antes de reintentar."));
           }
         }
       }
+    } catch (error: unknown) {
+      this.tableBulkError.set(this.tableBulkFailureReason(error, "La operación se interrumpió. Revisa el resultado antes de continuar."));
     } finally {
       this.tableBulkActionLoading.set(false);
+      this.finishTableBulkProgress();
       if (updated > 0) {
-        this.tableSelected.set({});
+        this.tableSelected.set(Object.fromEntries(this.tableBulkFailedOrderIds().map((id) => [id, true])));
       }
     }
 
@@ -1337,7 +1421,8 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
       skipped > 0 ? this.tableBulkCountLabel(skipped, "omitido", "omitidos") : "",
       failed > 0 ? this.tableBulkCountLabel(failed, "con error", "con errores") : "",
     ].filter(Boolean).join(" | ");
-    this.bulkNotesMessage.set(summary);
+    this.tableBulkResultText.set(summary);
+    this.tableBulkResultVisible.set(true);
   }
 
   private updateColumnSelection(
@@ -2099,10 +2184,6 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     if (this.columnsFrame) cancelAnimationFrame(this.columnsFrame);
     this.pillsResizeObserver?.disconnect();
     this.pillsResizeObserver = null;
-    if (this.tableBulkProgressHideTimer) {
-      clearTimeout(this.tableBulkProgressHideTimer);
-      this.tableBulkProgressHideTimer = null;
-    }
     if (this.pillMeasureEl) {
       this.pillMeasureEl.remove();
       this.pillMeasureEl = null;
@@ -2167,7 +2248,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
 
   async confirmBulkShipment(event?: Event): Promise<void> {
     event?.stopPropagation();
-    if (this.tableBulkActionLoading()) return;
+    if (this.tableBulkActionLoading() || this.tableBulkDownloading()) return;
     this.bulkShipmentError.set(null);
 
     const selectedRows = this.tableShipmentEligibleRows();
@@ -2192,7 +2273,8 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     this.tableBulkActionLoading.set(true);
     this.tableBulkResultVisible.set(false);
     this.tableBulkResultText.set("");
-    this.startTableBulkProgress("Creando embarque...", Math.max(1, selectedRows.length + 1));
+    this.startTableBulkProgress("Creando embarque", selectedRows.length);
+    this.tableBulkCurrentItem.set("Preparando el embarque…");
 
     let shipmentId = "";
     let updated = 0;
@@ -2202,6 +2284,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
       const items = selectedRows.flatMap((order) => this.shipmentItemsForOrder(order));
       if (items.length === 0) {
         this.bulkShipmentError.set("No se encontraron paquetes o productos para embarcar.");
+        this.tableBulkError.set("No se encontraron paquetes o productos para embarcar.");
         return;
       }
       shipmentId = await this.shipments.createShipment({
@@ -2211,9 +2294,8 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
         items,
         business_summaries: this.shipmentBusinessSummariesFor(selectedRows),
       });
-      this.advanceTableBulkProgress(1);
-
       for (const order of selectedRows) {
+        this.tableBulkCurrentItem.set(`Agregando ${this.tableBulkOrderLabel(order)}`);
         try {
           await this.orders.updateOperationalState(
             order.order_id,
@@ -2221,24 +2303,25 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
             "Pedido agregado a embarque masivo",
           );
           updated += 1;
-        } catch {
+          this.recordTableBulkOrder(order, "success");
+        } catch (error: unknown) {
           failed += 1;
-        } finally {
-          this.advanceTableBulkProgress(1);
+          this.recordTableBulkOrder(order, "error", this.tableBulkFailureReason(error, "El embarque se creó, pero no se pudo actualizar su vínculo en este pedido. Revisa el embarque antes de repetir la acción."));
         }
       }
-    } catch (error: any) {
-      this.bulkShipmentError.set(error?.message || "No se pudo crear el embarque.");
+    } catch (error: unknown) {
+      this.tableBulkError.set(this.tableBulkFailureReason(error, "No se pudo crear el embarque. Revisa la lista de embarques antes de reintentar."));
+      this.bulkShipmentError.set(this.tableBulkError());
       this.tableBulkResultText.set("No se pudo crear el embarque.");
       this.tableBulkResultVisible.set(true);
       return;
     } finally {
       this.tableBulkActionLoading.set(false);
-      this.finishTableBulkProgressSoon();
+      this.finishTableBulkProgress();
     }
 
     if (updated > 0) {
-      this.tableSelected.set({});
+      this.tableSelected.set(Object.fromEntries(this.tableBulkFailedOrderIds().map((id) => [id, true])));
     }
     const destinationLabel = this.bulkShipmentDestinationLabel(destination);
     const failedLabel = failed > 0 ? ` | ${this.tableBulkCountLabel(failed, "pedido con error", "pedidos con error")}` : "";
@@ -3131,15 +3214,42 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
       .filter((row) => row.qty > 0);
   }
 
-  private startTableBulkProgress(label: string, total: number): void {
-    if (this.tableBulkProgressHideTimer) {
-      clearTimeout(this.tableBulkProgressHideTimer);
-      this.tableBulkProgressHideTimer = null;
-    }
+  private startTableBulkProgress(label: string, total: number, unit: "pedidos" | "rutas" = "pedidos"): void {
     this.tableBulkProgressLabel.set(label);
-    this.tableBulkProgressTotal.set(Math.max(1, Math.trunc(total)));
+    this.tableBulkProgressTotal.set(Math.max(0, Math.trunc(total)));
     this.tableBulkProgressCurrent.set(0);
     this.tableBulkProgressVisible.set(true);
+    this.tableBulkResultVisible.set(false);
+    this.tableBulkResultText.set("");
+    this.tableBulkUnit.set(unit);
+    this.tableBulkOutcomes.set([]);
+    this.tableBulkError.set(null);
+    this.tableBulkDetailsOpen.set(false);
+    this.tableBulkCurrentItem.set("");
+    this.tableBulkFiles.set([]);
+    this.tableBulkDownloadMessage.set(null);
+    this.tableBulkZipLabel = unit === "rutas" ? "bitacoras" : "notas-tabla";
+    this.bulkNotesMessage.set(null);
+  }
+
+  private tableBulkOrderLabel(order: Order): string {
+    return `${order.order_id} · ${this.customerName(order.customer_id)}`;
+  }
+
+  private recordTableBulkOrder(order: Order, status: TableBulkOutcome["status"], reason = ""): void {
+    this.recordTableBulkOutcome({ label: this.tableBulkOrderLabel(order), orderIds: [order.order_id], status, reason });
+  }
+
+  private recordTableBulkOutcome(outcome: TableBulkOutcome): void {
+    this.tableBulkOutcomes.update((items) => [...items, outcome]);
+    this.updateTableBulkProgress(this.tableBulkOutcomes().length);
+  }
+
+  private tableBulkFailureReason(error: unknown, fallback: string): string {
+    const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+    if (code.includes("permission-denied")) return "No tienes permiso para completar esta acción.";
+    if (code.includes("unavailable") || code.includes("network")) return "No se pudo conectar. Revisa tu conexión antes de reintentar.";
+    return fallback;
   }
 
   private updateTableBulkProgress(current: number): void {
@@ -3148,27 +3258,11 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     this.tableBulkProgressCurrent.set(Math.max(0, Math.min(total, Math.trunc(current))));
   }
 
-  private advanceTableBulkProgress(delta = 1): void {
-    this.updateTableBulkProgress(this.tableBulkProgressCurrent() + delta);
-  }
-
   private finishTableBulkProgress(): void {
-    const total = this.tableBulkProgressTotal();
-    if (total > 0) this.tableBulkProgressCurrent.set(total);
-    if (this.tableBulkProgressHideTimer) {
-      clearTimeout(this.tableBulkProgressHideTimer);
-    }
-    this.tableBulkProgressHideTimer = setTimeout(() => {
-      this.tableBulkProgressVisible.set(false);
-      this.tableBulkProgressLabel.set("");
-      this.tableBulkProgressCurrent.set(0);
-      this.tableBulkProgressTotal.set(0);
-      this.tableBulkProgressHideTimer = null;
-    }, 900);
-  }
-
-  private finishTableBulkProgressSoon(): void {
-    this.finishTableBulkProgress();
+    // El resultado permanece hasta cerrarlo; un fallo general no fuerza un 100 % ficticio.
+    this.tableBulkProgressVisible.set(false);
+    this.tableBulkResultVisible.set(true);
+    this.tableBulkCurrentItem.set("");
   }
 
   private async generateRouteBitacoraPdfs(
@@ -3191,20 +3285,22 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     const dateStamp = new Date().toISOString().slice(0, 10);
     let generated = 0;
     let failed = 0;
-    this.startTableBulkProgress("Generando bitacoras por ruta...", groups.length || 1);
+    this.startTableBulkProgress("Creando bitácoras", groups.length, "rutas");
 
     try {
       for (let idx = 0; idx < groups.length; idx += 1) {
         const group = groups[idx];
+        this.tableBulkCurrentItem.set(`Generando PDF · ${group.routeName} · ${group.orders.length} pedidos`);
         try {
           const blob = await this.buildRouteBitacoraPdf(group.routeName, group.orders, config);
           const fileName = `bitacora-${this.slugifyForFileName(group.routeName)}-${dateStamp}.pdf`;
+          this.tableBulkFiles.update((files) => [...files, { fileName, blob }]);
           this.downloadBlob(blob, fileName);
           generated += 1;
-        } catch {
+          this.recordTableBulkOutcome({ label: group.routeName, orderIds: group.orders.map((order) => order.order_id), status: "success", reason: "" });
+        } catch (error: unknown) {
           failed += 1;
-        } finally {
-          this.updateTableBulkProgress(idx + 1);
+          this.recordTableBulkOutcome({ label: group.routeName, orderIds: group.orders.map((order) => order.order_id), status: "error", reason: this.tableBulkFailureReason(error, "No se pudo generar o iniciar la descarga de la bitácora de esta ruta.") });
         }
       }
     } finally {
@@ -3967,7 +4063,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     }).format(Number(value || 0));
   }
 
-  private async downloadSalesNotesBundle(files: SalesNoteFile[], zipLabel: string): Promise<void> {
+  private async downloadSalesNotesBundle(files: SalesNoteFile[], zipLabel: string, onFallback?: (message: string) => void): Promise<void> {
     if (files.length <= 0) return;
     if (files.length === 1) {
       const only = files[0];
@@ -3989,6 +4085,7 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
       this.downloadBlob(zipBlob, `${zipLabel}-${Date.now()}.zip`);
     } catch (error) {
       console.warn("[pedidos] No se pudo generar zip de notas, se descargaran por separado", error);
+      onFallback?.("No se pudo preparar el ZIP. Se solicitaron las descargas por separado; revisa si el navegador las bloqueó.");
       for (const file of files) {
         this.downloadBlob(file.blob, file.fileName);
       }
