@@ -199,9 +199,29 @@ service cloud.firestore {
       allow delete: if isSuperAdmin();
     }
 
+    // FIX 00: conciliación. Registrarla (`settlement_status` distinto de pending/not_applicable)
+    // exige el mismo permiso que su evento obligatorio en `order_settlement_events`, por
+    // cualquier rama. Sin esto, quien tenía permisos de administración, cobro o embarque cambiaba
+    // el pedido y luego se le negaba el evento: la conciliación quedaba a medias.
+    function canSettle() {
+      return cap("cap.settlement.send") || cap("cap.settlement.reconcile");
+    }
+
+    function settlementChanged() {
+      return changedKeys().hasAny(["settlement_status"]);
+    }
+
+    // Registrar o rechazar un cobro reinicia la conciliación a pending/not_applicable. Es un efecto
+    // del cobro, no una conciliación: lo puede escribir quien registra cobros.
+    function settlementIsReset(data) {
+      return data.settlement_status in ["pending", "not_applicable"];
+    }
+
     match /orders/{orderId} {
       allow read: if canReadBusinessResource();
-      allow create: if (isAdmin() || isOperativo()) && canCreateBusinessResource();
+      allow create: if (isAdmin() || isOperativo())
+        && (!request.resource.data.keys().hasAny(["settlement_status"]) || settlementIsReset(request.resource.data) || canSettle())
+        && canCreateBusinessResource();
 
       // Operativo can request dispatch and mark packing done.
       // Admin/Super admin can also accept/reject request and assign to route_run.
@@ -212,6 +232,7 @@ service cloud.firestore {
           isAdmin()
           // Los cambios normales a items pasan por el backend autoritativo.
           && !changedKeys().hasAny(["items"])
+          && (!settlementChanged() || settlementIsReset(request.resource.data) || canSettle())
           && canUpdateBusinessResource()
         )
         // Excepcion temporal y acotada: ReturnsService actualiza items dentro de
@@ -231,6 +252,7 @@ service cloud.firestore {
         || (
           onlyChanges(["totals", "status", "paid_at", "closed_at", "delivered_at", "timeline", "customer_payment_status", "settlement_status", "collection_status", "collection_reminder_at", "collection_note", "sales_note_last_generated_at", "updated_at"])
           && cap("cap.payments.register")
+          && (!settlementChanged() || settlementIsReset(request.resource.data) || canSettle())
           && canUpdateBusinessResource()
         )
         || (
@@ -255,11 +277,13 @@ service cloud.firestore {
             || cap("cap.settlement.send")
             || cap("cap.settlement.reconcile")
           )
+          // Ningún flujo de embarque o entrega escribe la conciliación por esta rama.
+          && (!settlementChanged() || canSettle())
           && canUpdateBusinessResource()
         )
         || (
           onlyChanges(["settlement_status", "status", "closed_at", "updated_at"])
-          && (cap("cap.settlement.send") || cap("cap.settlement.reconcile"))
+          && canSettle()
           && canUpdateBusinessResource()
         )
         || (
@@ -339,6 +363,14 @@ service cloud.firestore {
         && (
           hasCapability("cap.settlement.reconcile")
           || hasSection("sections.administracion")
+        )
+        // FIX 00: confirmar el dinero o marcar diferencia es parte de la conciliación y exige su
+        // permiso propio. Sin esto, la sección Administración marcaba el cobro y luego se negaba
+        // la conciliación del pedido. Rechazar un cobro conserva sus permisos.
+        && (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(["verification_status"])
+          || !(request.resource.data.verification_status in ["confirmed", "difference"])
+          || canSettle()
         );
       allow delete: if false;
     }

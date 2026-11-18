@@ -5,12 +5,13 @@
 //   node scripts/emulator/matrix.cjs <log> --details        además, estado y detalle por celda
 //   node scripts/emulator/matrix.cjs --diff <a.log> <b.log>  celdas cuyo resultado o estado cambia
 //
-// Reconoce las marcas [FIX03B11-RULES] (inventory-rules) y [RULES-COMPAT] (client-rules-compat).
+// Reconoce las marcas [FIX03B11-RULES] (inventory-rules), [RULES-COMPAT] (client-rules-compat) y
+// [SETTLEMENT-INTEGRITY] (settlement-integrity).
 const fs = require("node:fs");
 
 function readMatrix(file) {
   const text = fs.readFileSync(file, "utf8").replace(/\x1b\[[0-9;]*[A-Za-z]/g, "");
-  for (const tag of ["[RULES-COMPAT]", "[FIX03B11-RULES]"]) {
+  for (const tag of ["[RULES-COMPAT]", "[FIX03B11-RULES]", "[SETTLEMENT-INTEGRITY]"]) {
     const line = text.split(/\r?\n/).find((row) => row.includes(tag));
     if (!line) continue;
     const start = line.indexOf("[", line.indexOf(tag) + tag.length);

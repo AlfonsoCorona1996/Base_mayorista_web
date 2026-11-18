@@ -5,6 +5,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  DocumentReference,
   getDocs,
   limit,
   onSnapshot,
@@ -14,6 +15,7 @@ import {
   serverTimestamp,
   setDoc,
   startAfter,
+  Transaction,
   Unsubscribe,
   updateDoc,
   where,
@@ -1437,27 +1439,39 @@ export class OrdersService {
       .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
   }
 
+  /**
+   * Confirma un cobro reportado (Durango): evento de cobro, libro mayor, saldo de la cuenta y la
+   * conciliación `received` del pedido con su evento, en UNA transacción (FIX 00). Antes la
+   * conciliación iba en una escritura aparte: si fallaba, el dinero quedaba confirmado sin
+   * conciliar. Un reintento o una segunda sesión encuentran el cobro confirmado y no hacen nada.
+   */
   async confirmReportedCollection(event: OrderCollectionEvent, note?: string | null): Promise<void> {
     const occurredAt = businessDateKey();
-    await runTransaction(FIRESTORE, async (tx) => {
+    const settlementNote = note || "Dinero recibido de Durango";
+    const applied = await runTransaction(FIRESTORE, async (tx) => {
       const eventRef = doc(FIRESTORE, "order_collection_events", event.event_id);
       const eventSnap = await tx.get(eventRef);
       if (!eventSnap.exists()) throw new Error("El cobro reportado ya no existe.");
-      if (eventSnap.data()["verification_status"] === "confirmed") return;
+      if (eventSnap.data()["verification_status"] === "confirmed") return null;
       const businessId = normalizeBusinessId(eventSnap.data()["business_id"]);
       const accountId = String(eventSnap.data()["account_id"] || (businessId === "bm" ? "acc_caja_general" : `acc_${businessId}_general`));
       const accountRef = doc(FIRESTORE, "finance_accounts", accountId);
       const ledgerId = `ledger_collection_${event.event_id}`;
-      const [accountSnap, ledgerSnap, periodSnap] = await Promise.all([
+      const orderRef = doc(this.colRef, String(eventSnap.data()["order_id"] || event.order_id));
+      const [accountSnap, ledgerSnap, periodSnap, orderSnap] = await Promise.all([
         tx.get(accountRef),
         tx.get(doc(FIRESTORE, "finance_ledger_entries", ledgerId)),
         tx.get(doc(FIRESTORE, "finance_periods", financePeriodDocumentId(businessId, monthIdFromDateInput(occurredAt)))),
+        tx.get(orderRef),
       ]);
       if (periodSnap.exists() && periodSnap.data()["status"] === "closed") {
         throw new Error(`El periodo ${monthIdFromDateInput(occurredAt)} está cerrado.`);
       }
       if (!accountSnap.exists()) throw new Error("No existe la cuenta General para recibir el cobro.");
       if (normalizeBusinessId(accountSnap.data()["business_id"]) !== businessId) throw new Error("La cuenta pertenece a otro negocio.");
+      if (!orderSnap.exists()) throw new Error("El pedido del cobro ya no existe.");
+      const liveOrder = this.normalize(orderSnap.id, orderSnap.data());
+      if (normalizeBusinessId(liveOrder.business_id) !== businessId) throw new Error("El cobro pertenece a otro negocio.");
       const amount = Math.max(0, Number(eventSnap.data()["amount"] || 0));
       tx.update(eventRef, {
         account_id: accountId,
@@ -1481,18 +1495,37 @@ export class OrdersService {
           updated_at: serverTimestamp(),
         });
       }
+      return this.stageSettlement(tx, orderRef, liveOrder, "received", settlementNote);
     });
-    await this.markSettlement(event.order_id, "received", note || "Dinero recibido de Durango");
+    if (!applied) return;
+    await this.afterSettlementCommitted(applied, settlementNote);
   }
 
+  /**
+   * Marca diferencia en un cobro reportado: el evento de cobro y la conciliación `difference`
+   * del pedido con su evento, en UNA transacción (FIX 00). Antes el evento de cobro se marcaba
+   * primero y, si el pedido no se podía actualizar, quedaba en diferencia sin conciliación.
+   */
   async markCollectionDifference(event: OrderCollectionEvent, note?: string | null): Promise<void> {
-    await updateDoc(doc(FIRESTORE, "order_collection_events", event.event_id), {
-      verification_status: "difference",
-      verified_by: this.currentActor(),
-      verified_at: serverTimestamp(),
-      ...(note ? { verification_note: note } : {}),
+    const settlementNote = note || "Diferencia en cobro reportado";
+    const eventRef = doc(FIRESTORE, "order_collection_events", event.event_id);
+    const orderRef = doc(this.colRef, event.order_id);
+    const applied = await runTransaction(FIRESTORE, async (tx) => {
+      const [eventSnap, orderSnap] = await Promise.all([tx.get(eventRef), tx.get(orderRef)]);
+      if (!eventSnap.exists()) throw new Error("El cobro reportado ya no existe.");
+      if (!orderSnap.exists()) throw new Error("El pedido del cobro ya no existe.");
+      if (String(eventSnap.data()["order_id"] || "") !== event.order_id) throw new Error("El cobro no pertenece a este pedido.");
+      if (eventSnap.data()["verification_status"] === "difference") return null;
+      tx.update(eventRef, {
+        verification_status: "difference",
+        verified_by: this.currentActor(),
+        verified_at: serverTimestamp(),
+        ...(note ? { verification_note: note } : {}),
+      });
+      return this.stageSettlement(tx, orderRef, this.normalize(orderSnap.id, orderSnap.data()), "difference", settlementNote);
     });
-    await this.markSettlement(event.order_id, "difference", note || "Diferencia en cobro reportado");
+    if (!applied) return;
+    await this.afterSettlementCommitted(applied, settlementNote);
   }
 
   async rejectReportedCollection(event: OrderCollectionEvent, reason: string): Promise<void> {
@@ -1546,47 +1579,80 @@ export class OrdersService {
     });
   }
 
+  /**
+   * Cambia la conciliación del pedido. El cambio y su evento obligatorio (`order_settlement_events`)
+   * se confirman en UNA transacción sobre el pedido vivo (FIX 00): antes eran dos escrituras y,
+   * si se negaba el evento, el pedido quedaba conciliado sin registro. La memoria local solo
+   * cambia después de confirmar.
+   */
   async markSettlement(orderId: string, settlementStatus: OrderSettlementStatus, note?: string | null): Promise<void> {
-    const currentOrder = this.getById(orderId);
-    const paymentStatus = currentOrder?.customer_payment_status || this.deriveCustomerPaymentStatus(currentOrder || null);
-    // Cierre explícito por conciliación, solo con entrega REAL (fecha guardada) y saldo cero (RC-02).
-    // Un pedido pagado sin entrega registrada no se cierra aunque se concilie su dinero.
-    const shouldClose = settlementStatus === "reconciled" && !!currentOrder && canCloseBySettlement(currentOrder, paymentStatus);
-    const now = new Date().toISOString();
+    const orderRef = doc(this.colRef, orderId);
+    const applied = await runTransaction(FIRESTORE, async (tx) => {
+      const snap = await tx.get(orderRef);
+      if (!snap.exists()) throw new Error("Pedido no encontrado");
+      return this.stageSettlement(tx, orderRef, this.normalize(snap.id, snap.data()), settlementStatus, note || null);
+    });
+    await this.afterSettlementCommitted(applied, note || null);
+  }
 
+  /**
+   * Escribe, dentro de una transacción ya abierta, el cambio de conciliación del pedido y su
+   * evento. El cierre se decide con el pedido leído en la transacción, no con la caché.
+   */
+  private stageSettlement(
+    tx: Transaction,
+    orderRef: DocumentReference,
+    liveOrder: Order,
+    settlementStatus: OrderSettlementStatus,
+    note: string | null,
+  ): SettlementCommit {
+    const paymentStatus = liveOrder.customer_payment_status || this.deriveCustomerPaymentStatus(liveOrder);
+    // Cierre explícito por conciliación, solo con entrega REAL (fecha guardada) y saldo cero (RC-02).
+    // Un pedido pagado sin entrega registrada no se cierra aunque se concilie su dinero. Un pedido
+    // ya cerrado conserva su fecha de cierre.
+    const shouldClose = settlementStatus === "reconciled"
+      && liveOrder.status !== "closed"
+      && canCloseBySettlement(liveOrder, paymentStatus);
+    tx.update(orderRef, {
+      settlement_status: settlementStatus,
+      ...(shouldClose ? { status: "closed", closed_at: serverTimestamp() } : {}),
+      updated_at: serverTimestamp(),
+    });
+    const eventId = ulid();
+    tx.set(doc(FIRESTORE, "order_settlement_events", eventId), {
+      event_id: eventId,
+      order_id: liveOrder.order_id,
+      business_id: normalizeBusinessId(liveOrder.business_id),
+      status: settlementStatus,
+      note,
+      created_by: this.currentActor(),
+      created_at: serverTimestamp(),
+    });
+    return { orderId: liveOrder.order_id, settlementStatus, shouldClose };
+  }
+
+  /** Refleja en memoria una conciliación ya confirmada y deja la bitácora (sin bloquear). */
+  private async afterSettlementCommitted(applied: SettlementCommit, note: string | null): Promise<void> {
+    const now = new Date().toISOString();
     this.rows.update((current) =>
       current.map((order) =>
-        order.order_id === orderId
+        order.order_id === applied.orderId
           ? {
               ...order,
-              settlement_status: settlementStatus,
-              status: shouldClose ? "closed" : order.status,
-              closed_at: shouldClose ? now : order.closed_at || null,
+              settlement_status: applied.settlementStatus,
+              status: applied.shouldClose ? "closed" : order.status,
+              closed_at: applied.shouldClose ? now : order.closed_at || null,
               updated_at: now,
             }
           : order,
       ),
     );
-    await updateDoc(doc(this.colRef, orderId), {
-      settlement_status: settlementStatus,
-      ...(shouldClose ? { status: "closed", closed_at: serverTimestamp() } : {}),
-      updated_at: serverTimestamp(),
-    });
-
-    const eventId = ulid();
-    await setDoc(doc(FIRESTORE, "order_settlement_events", eventId), {
-      event_id: eventId,
-      order_id: orderId,
-      business_id: currentOrder?.business_id || "bm",
-      status: settlementStatus,
-      note: note || null,
-      created_by: this.currentActor(),
-      created_at: serverTimestamp(),
-    });
-    await this.logEvent(orderId, "ORDER_SETTLEMENT_UPDATED", `Conciliación: ${settlementStatus}`, {
-      settlement_status: settlementStatus,
-      closed: shouldClose,
-    });
+    // La conciliación ya quedó registrada con su evento; la bitácora del pedido es secundaria.
+    await this.logEvent(applied.orderId, "ORDER_SETTLEMENT_UPDATED", `Conciliación: ${applied.settlementStatus}`, {
+      settlement_status: applied.settlementStatus,
+      closed: applied.shouldClose,
+      ...(note ? { note } : {}),
+    }).catch((error) => console.warn("[OrdersService] Conciliación guardada; no se pudo registrar la bitácora", firebaseErrorCode(error)));
   }
 
   async updatePlannedPackages(orderId: string, plannedPackages: number) {
@@ -2626,6 +2692,13 @@ export interface OrderCollectionEvent {
   note?: string | null;
   rejected_reason?: string | null;
   created_at?: string | null;
+}
+
+/** Conciliación confirmada en Firestore (FIX 00); solo entonces se refleja en memoria. */
+interface SettlementCommit {
+  orderId: string;
+  settlementStatus: OrderSettlementStatus;
+  shouldClose: boolean;
 }
 
 export type RegisterCollectionOptions = {

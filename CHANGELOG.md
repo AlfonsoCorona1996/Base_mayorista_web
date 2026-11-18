@@ -31,6 +31,7 @@ documentos anteriores se leen con compatibilidad.
 
 - Con las reglas reales y los permisos predeterminados de cada rol, recibir mercancía de proveedor solo funcionaba para super administrador, los repartidores no podían registrar entregas y nadie podía registrar devoluciones.
 - La entrega de mercancía de proveedor dejaba las piezas apartadas en inventario para los roles que no podían consultar las líneas del pedido.
+- Conciliación: registrarla, confirmar dinero recibido o marcar diferencia exige el permiso de conciliación por cualquier ruta (antes, permisos de administración, cobro o embarque cambiaban el pedido y luego se negaba su evento). El cambio, su evento y el evento de cobro que lo origina se guardan en una sola transacción; una negación o un fallo no deja nada a medias y la pantalla solo se actualiza tras confirmar. Confirmar dos veces el mismo cobro lo registra una sola vez.
 - Las devoluciones de piezas dañadas o sin comprobar ya no cuentan como capital recuperado.
 - El spec de versión dejó de depender de un número de versión fijo.
 

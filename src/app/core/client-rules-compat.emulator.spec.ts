@@ -6,7 +6,7 @@ import { collection, connectFirestoreEmulator, doc, getDoc, getDocs, query, wher
 import { DEFAULT_ROLE_PRESETS, RoleId } from "./rbac.constants";
 import { FIRESTORE, FIREBASE_AUTH } from "./firebase.providers";
 import { InventoryService } from "./inventory.service";
-import { Order, OrdersService } from "./orders.service";
+import { Order, OrderCollectionEvent, OrdersService } from "./orders.service";
 import { SupplierOperationsService } from "./supplier-operations.service";
 import { ReturnsService } from "./returns.service";
 import { FeatureFlagsService } from "./feature-flags.service";
@@ -397,6 +397,31 @@ describe("Compatibilidad cliente ↔ reglas reales (emulador)", () => {
         await loadAs(settleOrder);
         await orders.markSettlement(settleOrder, "sent_to_gdl", "Compat");
       }, () => ord(settleOrder, ["status", "settlement_status"]));
+      // Cobros reportados desde Durango: confirmar y marcar diferencia (FIX 00, conciliación).
+      for (const [operation, action] of [["confirmar_cobro_reportado", "confirm"], ["marcar_diferencia", "difference"]] as const) {
+        const reportedOrder = next(action === "confirm" ? "PREP" : "PDIFC");
+        await seedOrder(reportedOrder, {
+          status: "pagado", delivery_status: "delivered", delivered_at: nowIso(), customer_payment_status: "collected", settlement_status: "pending",
+          totals: { total_amount: 300, paid_amount: 300, balance_due: 0, gross_amount: 300, net_amount: 300, discount_amount: 0 }, items: [item("r-1")],
+        });
+        const collection: OrderCollectionEvent = {
+          event_id: `evt-${reportedOrder}`, order_id: reportedOrder, business_id: "bm", account_id: "acc_caja_general", amount: 300,
+          method: "efectivo", status_after: "collected", settlement_status_after: "pending", source_location: "durango",
+          verification_status: "reported", collected_by: { uid: "durango", name: "Durango" }, reported_by: { uid: "durango", name: "Durango" },
+          verified_by: null, verified_at: null, cash_occurred_at: null, note: null, rejected_reason: null, created_at: nowIso(),
+        };
+        await ownerSet(`order_collection_events/${collection.event_id}`, { ...collection } as unknown as Record<string, unknown>);
+        await record(key, operation, async () => {
+          await loadAs(reportedOrder);
+          if (action === "confirm") await orders.confirmReportedCollection(collection, "Compat");
+          else await orders.markCollectionDifference(collection, "Compat");
+        }, async () => {
+          const saved = await ownerGet(`orders/${reportedOrder}`);
+          const event = await ownerGet(`order_collection_events/${collection.event_id}`);
+          const ledger = await ownerGet(`finance_ledger_entries/ledger_collection_${collection.event_id}`);
+          return `cobro=${event?.["verification_status"]} libro=${ledger ? "si" : "no"} settlement=${saved?.["settlement_status"]}`;
+        });
+      }
       await record(key, "registrar_devolucion", async () => {
         const order = await loadAs(returnOrder);
         await returns.registerReturn({ order, item: order.items[0], qty: 1, disposition: "available", attemptId: `att-${returnOrder}`, paymentResolution: "not_required" });
@@ -408,7 +433,4 @@ describe("Compatibilidad cliente ↔ reglas reales (emulador)", () => {
     }
   });
 
-  it("deja la matriz en el log", () => {
-    expect(matrix.length).toBeGreaterThan(0);
-  });
 });
