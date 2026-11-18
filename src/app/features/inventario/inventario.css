@@ -780,6 +780,8 @@ a {
 .stock-tag.tag-low { border-color: #f0cf8f; color: #9a6100; background: #fff8e9; }
 .stock-tag.tag-out { border-color: #f2b2bb; color: #bd2138; background: #fff1f3; }
 .stock-tag.tag-reserved { border-color: #f0c47b; color: #b45f00; background: #fff6e8; }
+/* FIX 03B-1.1: pendiente de conteo ≠ por revisar. Borde punteado además del texto (no solo color). */
+.stock-tag.tag-unverified { border-style: dashed; border-color: #64748b; color: #334155; background: #f8fafc; }
 .stock-tag.tag-no-price { border-color: #f0cf8f; color: #a45700; background: #fff9e9; }
 
 .business-badge {
@@ -1095,6 +1097,9 @@ a {
   border-radius: var(--ui-radius-lg);
   padding: var(--ui-space-16);
   display: grid;
+  /* FIX 03B-1.1: en escritorio la tarjeta corta se estiraba a la altura de su fila y sus
+     métricas y botones crecían (~96 px); el contenido queda arriba con su tamaño natural. */
+  align-content: start;
   gap: var(--ui-space-12);
   background: #fff;
 }
@@ -1144,6 +1149,8 @@ a {
 }
 
 .return-metrics small { color: var(--inventory-muted); font-size: 0.72rem; }
+.returns-feedback-region:empty { display: none; }
+.returns-feedback-region .alert { margin: 0; }
 .return-metrics strong { font-size: 0.95rem; }
 
 .return-actions,

@@ -2,12 +2,23 @@ export interface PriceOverrideMarker {
   price_override_below_cost?: boolean | null;
 }
 
-export function buildOrderItemsUpdateRequest<T extends PriceOverrideMarker>(items: T[]) {
+/**
+ * PUT /items reemplaza el arreglo completo. `baseItemIds` son los artículos sobre los que
+ * el cliente calculó el cambio: el backend responde 409 `ORDER_ITEMS_CONFLICT` si el PUT
+ * borraría un artículo agregado por otra sesión o volvería a crear uno que otra sesión quitó.
+ */
+export function buildOrderItemsUpdateRequest<T extends PriceOverrideMarker & { item_id?: string | null }>(
+  items: T[],
+  baseItemIds?: readonly string[] | null,
+) {
   return {
     items,
     below_cost_confirmation: items.some((item) => item.price_override_below_cost === true),
+    ...(baseItemIds ? { base_item_ids: [...new Set(baseItemIds.filter(Boolean))] } : {}),
   };
 }
+
+export const ORDER_ITEMS_CONFLICT = "ORDER_ITEMS_CONFLICT";
 
 export function buildOrderItemMutationRequest<T extends object>(item: T) {
   return {

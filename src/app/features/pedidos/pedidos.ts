@@ -22,7 +22,8 @@ import { Shipment, ShipmentBusinessSummary, ShipmentItem, ShipmentsService } fro
 import { AuthzService } from "../../core/authz.service";
 import { DispatchOrderRow, RouteRunsService } from "../../services/route-runs.service";
 import { canMarkOrderAsPaidFromTable } from "./order-table-bulk-actions";
-import { isAtOrAfterDelivery, isTrulyClosed } from "../../core/order-closure";
+import { hasDeliveryEvidence, isAtOrAfterDelivery, isTrulyClosed } from "../../core/order-closure";
+import { deliveryInventoryOpen } from "../../core/delivery-inventory";
 import { PerfMetricsService } from "../../core/perf-metrics.service";
 import { CustomerPickerComponent, CustomerPickerOption } from "./customer-picker/customer-picker.component";
 import { VirtualGridController, VirtualListChange } from "./virtual-grid";
@@ -1716,6 +1717,8 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
       pagado: "Pagado",
       entregado: "Entregado",
       cancelado: "Cancelado",
+      devuelto: "Devuelto",
+      closed: "Cerrado",
     };
     return map[status] ?? status;
   }
@@ -1801,8 +1804,15 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
     const paymentStatus = order.customer_payment_status || null;
     const balanceDue = this.orderAmounts(order).balanceDue;
 
-    if (deliveryStatus === "delivered" || ["entregado", "entregado_parcial"].includes(order.status)) {
-      pills.push({ label: "Entregado", className: "trow-status--paid" });
+    // Etapa / entrega / cierre: `pagado` describe el cobro, no la entrega (RC-01). Un pedido
+    // histórico cobrado sin evidencia de entrega se muestra como tal en vez de "Pagado" + "Cobrado".
+    const delivered = deliveryStatus === "delivered" || hasDeliveryEvidence(order) || order.status === "entregado_parcial";
+    if (isTrulyClosed(order)) {
+      pills.push({ label: "Cerrado", className: "trow-status--paid" });
+    } else if (order.status === "closed") {
+      pills.push({ label: "Cierre sin entrega", className: "trow-status--partial" });
+    } else if (delivered) {
+      pills.push({ label: order.status === "entregado_parcial" ? "Entrega parcial" : "Entregado", className: "trow-status--paid" });
     } else if (deliveryStatus === "incident") {
       pills.push({ label: "Incidencia entrega", className: "trow-status--cancel" });
     } else if (deliveryStatus === "not_delivered") {
@@ -1815,6 +1825,8 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
       pills.push({ label: "En Durango", className: "trow-status--durango" });
     } else if (holderLocation === "delivery_staff") {
       pills.push({ label: "Con entrega", className: "trow-status--route" });
+    } else if (["pagado", "pagado_parcial", "pago_pendiente"].includes(order.status)) {
+      pills.push({ label: "Entrega sin registrar", className: "trow-status--partial" });
     } else {
       pills.push({
         label: this.tableStatusLabel(order.status),
@@ -1822,12 +1834,23 @@ export default class PedidosPage implements OnInit, AfterViewInit, OnDestroy {
       });
     }
 
+    // FIX 03B-1.1: entrega guardada con el inventario sin confirmar (estado guardado en el
+    // pedido; sin lecturas extra). Va antes del cobro para no perderse por el límite de 3.
+    if (deliveryInventoryOpen(order)) {
+      pills.push({ label: "Inventario pendiente", className: "trow-status--cancel" });
+    }
+
     if (paymentStatus === "partial") {
       pills.push({ label: "Cobro parcial", className: "trow-status--partial" });
     } else if (balanceDue > 0 && !["cancelado", "devuelto"].includes(order.status) && paymentStatus !== "collected") {
       pills.push({ label: "Por cobrar", className: "trow-status--pay-danger" });
-    } else if (paymentStatus === "collected" && deliveryStatus !== "delivered") {
+    } else if (paymentStatus === "collected" && !delivered && order.status !== "closed") {
       pills.push({ label: "Cobrado", className: "trow-status--paid" });
+    }
+
+    // Postventa: un cerrado con devolución posterior sigue cerrado y muestra ambas condiciones (RC-03).
+    if (order.has_returns) {
+      pills.push({ label: "Con devolución", className: "trow-status--partial" });
     }
 
     return pills.slice(0, 3);

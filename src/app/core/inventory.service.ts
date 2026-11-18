@@ -3,10 +3,23 @@ import { FIRESTORE } from "./firebase.providers";
 import { BusinessScopeService } from "./business-scope.service";
 import { BusinessId, normalizeBusinessId } from "./rbac.constants";
 import {
+  AllocationMeta,
+  INVENTORY_ALLOCATIONS_COLLECTION,
+  InventoryAllocation,
+  allocationDocId,
+  applyAllocationConsume,
+  applyAllocationRelease,
+  applyAllocationReserve,
+  emptyAllocation,
+  normalizeAllocation,
+  reservationCapForLine,
+} from "./inventory-allocations";
+import {
   collection,
   deleteDoc,
   doc,
   getDoc,
+  getDocFromServer,
   getDocs,
   limit,
   query,
@@ -115,6 +128,8 @@ export interface ReserveStockInput {
   orderId: string;
   orderItemId: string;
   idempotencyKey: string;
+  /** Origen de la asignación (FIX 03B-1). Solo descriptivo; no cambia cantidades. */
+  allocation?: AllocationMeta;
 }
 
 export class InventoryStockInsufficientError extends Error {
@@ -142,6 +157,26 @@ export interface ConsumeOnDeliveryInput {
   orderId: string;
   orderItemId: string;
   idempotencyKey: string;
+  /**
+   * Total entregable de la línea. Con asignación, lo pedido se acota a lo que la línea aún no
+   * entregó: caja de 2 + entrega completa de 3 = consumo 1 sin faltante, y una caja que llega
+   * después de la entrega completa no reporta faltante falso (FIX 03B-1.1).
+   */
+  lineQty?: number;
+}
+
+/**
+ * Resultado de una mutación acotada por línea. `applied` es lo que realmente se movió;
+ * `shortfall` lo que se pidió y la línea no tenía apartado en ese documento (no se toma de
+ * reservas ajenas ni de lo disponible). `skipped`: la llave ya estaba aplicada o no existe
+ * el documento.
+ */
+export interface InventoryLineMutationResult {
+  inventoryId: string;
+  requested: number;
+  applied: number;
+  shortfall: number;
+  skipped: boolean;
 }
 
 export interface ReceiveInboundInput {
@@ -161,6 +196,18 @@ export interface ReceiveInboundInput {
   image_url?: string | null;
   notes?: string | null;
   receipt_reason?: string | null;
+  /**
+   * Apartar para un pedido en la MISMA transacción que la entrada (FIX 03B-1). Evita que
+   * otra sesión aparte las piezas recién ingresadas entre la recepción y la reserva, y que
+   * un fallo entre ambas deje la mercancía disponible sin su pedido.
+   */
+  reserveFor?: {
+    orderId: string;
+    orderItemId: string;
+    qty: number;
+    idempotencyKey: string;
+    allocation?: AllocationMeta;
+  } | null;
 }
 
 export interface InventoryMutationOptions {
@@ -224,6 +271,7 @@ export interface ReceiveReturnInput {
 export class InventoryService {
   private colRef = collection(FIRESTORE, "inventory_items");
   private movementsColRef = collection(FIRESTORE, "inventory_movements");
+  private allocationsColRef = collection(FIRESTORE, INVENTORY_ALLOCATIONS_COLLECTION);
   private businessScope = inject(BusinessScopeService);
   private rows = signal<InventoryItem[]>([]);
   private movementRows = signal<InventoryMovement[]>([]);
@@ -387,8 +435,10 @@ export class InventoryService {
 
       const currentOnHand = this.toSafeQty(row.on_hand_qty);
       const reserved = this.toSafeQty(row.reserved_qty ?? 0);
-      const nextOnHand = Math.max(reserved, this.toSafeQty(currentOnHand + delta));
-      const nextAvailable = this.toSafeQty(nextOnHand - reserved);
+      const held = this.heldQty(row);
+      // Nunca por debajo de lo apartado, en revisión o dañado; disponible excluye todo eso (FIX 03B-1).
+      const nextOnHand = Math.max(reserved + held, this.toSafeQty(currentOnHand + delta));
+      const nextAvailable = this.toSafeQty(nextOnHand - reserved - held);
       const nowIso = new Date().toISOString();
       tx.update(ref, {
         on_hand_qty: nextOnHand,
@@ -412,23 +462,26 @@ export class InventoryService {
     if (qty <= 0) throw new Error("cantidad requerida para reservar");
     const idKey = this.safeIdempotencyKey(input.idempotencyKey);
     const ref = doc(this.colRef, inventoryId);
+    const allocationRef = this.allocationRef(input.orderId, input.orderItemId, inventoryId);
 
     await runTransaction(FIRESTORE, async (tx) => {
-      const snap = await tx.get(ref);
+      const [snap, allocationSnap] = await Promise.all([tx.get(ref), tx.get(allocationRef)]);
       if (!snap.exists()) throw new Error(`Inventario no encontrado para sku ${inventoryId}`);
       const row = this.normalizeItem(snap.data() as Partial<InventoryItem>, snap.id);
       if (row.idempotency_keys?.[idKey]) return;
 
       const onHand = this.toSafeQty(row.on_hand_qty);
       const reserved = this.toSafeQty(row.reserved_qty ?? 0);
-      const available = this.toSafeQty(row.available_qty ?? onHand - reserved);
+      const held = this.heldQty(row);
+      // Lo dañado o en revisión no se puede apartar aunque el campo guardado diga otra cosa.
+      const available = Math.min(this.toSafeQty(row.available_qty ?? onHand - reserved), Math.max(0, onHand - reserved - held));
       const reservations = this.normalizeReservations(row.reservations);
       if (qty > available) {
         throw new InventoryStockInsufficientError(inventoryId, available, qty);
       }
 
       const nextReserved = reserved + qty;
-      const nextAvailable = Math.max(0, onHand - nextReserved);
+      const nextAvailable = Math.max(0, onHand - nextReserved - held);
       const nextReservations = this.addReservation(reservations, input.orderId, qty);
       const nowIso = new Date().toISOString();
       tx.update(ref, {
@@ -442,6 +495,14 @@ export class InventoryService {
         available: -qty,
         reserved: qty,
       }, { orderId: input.orderId, orderItemId: input.orderItemId });
+      const allocation = this.readAllocation(allocationSnap) || emptyAllocation({
+        businessId: row.business_id,
+        orderId: input.orderId,
+        orderItemId: input.orderItemId,
+        inventoryId,
+        meta: input.allocation,
+      });
+      this.writeAllocation(tx, allocationRef, applyAllocationReserve(allocation, qty, idKey), !allocationSnap.exists());
     });
 
     if (options.refreshCache !== false) {
@@ -449,26 +510,40 @@ export class InventoryService {
     }
   }
 
-  async releaseReservation(input: ReleaseReservationInput): Promise<void> {
+  /**
+   * Libera lo apartado por UNA línea de pedido. El tope es lo que esa línea (o, en pedidos
+   * anteriores a FIX 03B-1, ese pedido) tiene apartado en el documento: antes se restaba del
+   * `reserved_qty` global y podía liberar reservas de otros pedidos del mismo SKU.
+   */
+  async releaseReservation(input: ReleaseReservationInput, options: InventoryMutationOptions = {}): Promise<InventoryLineMutationResult> {
     const inventoryId = (input.sku || "").trim();
     if (!inventoryId) throw new Error("sku requerido para liberar reserva");
     const qty = this.toSafeQty(input.qty);
     if (qty <= 0) throw new Error("cantidad requerida para liberar reserva");
     const idKey = this.safeIdempotencyKey(input.idempotencyKey);
     const ref = doc(this.colRef, inventoryId);
+    const allocationRef = this.allocationRef(input.orderId, input.orderItemId, inventoryId);
 
-    await runTransaction(FIRESTORE, async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists()) return;
+    const result = await runTransaction(FIRESTORE, async (tx): Promise<InventoryLineMutationResult> => {
+      const [snap, allocationSnap] = await Promise.all([tx.get(ref), tx.get(allocationRef)]);
+      if (!snap.exists()) return { inventoryId, requested: qty, applied: 0, shortfall: qty, skipped: true };
       const row = this.normalizeItem(snap.data() as Partial<InventoryItem>, snap.id);
-      if (row.idempotency_keys?.[idKey]) return;
+      if (row.idempotency_keys?.[idKey]) return { inventoryId, requested: qty, applied: 0, shortfall: 0, skipped: true };
 
       const onHand = this.toSafeQty(row.on_hand_qty);
       const reserved = this.toSafeQty(row.reserved_qty ?? 0);
-      const nextReserved = Math.max(0, reserved - qty);
-      const nextAvailable = Math.max(0, onHand - nextReserved);
       const reservations = this.normalizeReservations(row.reservations);
-      const nextReservations = this.removeReservation(reservations, input.orderId, qty);
+      const allocation = this.readAllocation(allocationSnap);
+      const cap = reservationCapForLine({
+        allocation,
+        orderReservedQty: this.orderReservationQty(reservations, input.orderId, input.orderItemId),
+        docReservedQty: reserved,
+        docOnHandQty: Math.max(onHand, reserved),
+      });
+      const releasedQty = Math.min(qty, cap);
+      const nextReserved = Math.max(0, reserved - releasedQty);
+      const nextAvailable = Math.max(0, onHand - nextReserved - this.heldQty(row));
+      const nextReservations = this.removeOrderReservation(reservations, input.orderId, input.orderItemId, releasedQty);
       const nowIso = new Date().toISOString();
       tx.update(ref, {
         reserved_qty: nextReserved,
@@ -477,37 +552,58 @@ export class InventoryService {
         updated_at: serverTimestamp(),
         idempotency_keys: this.withIdempotency(row.idempotency_keys || {}, idKey, nowIso),
       });
-      const releasedQty = reserved - nextReserved;
       this.writeMovement(tx, idKey, row.business_id, inventoryId, "release", {
         available: releasedQty,
         reserved: -releasedQty,
-      }, { orderId: input.orderId, orderItemId: input.orderItemId });
+      }, { orderId: input.orderId, orderItemId: input.orderItemId }, { requested_qty: qty, shortfall_qty: qty - releasedQty });
+      if (allocation && releasedQty > 0) {
+        this.writeAllocation(tx, allocationRef, applyAllocationRelease(allocation, releasedQty, idKey), false);
+      }
+      return { inventoryId, requested: qty, applied: releasedQty, shortfall: qty - releasedQty, skipped: false };
     });
 
-    await this.refreshCacheAfterMutation();
+    if (options.refreshCache !== false) {
+      await this.refreshCacheAfterMutation();
+    }
+    return result;
   }
 
-  async consumeOnDelivery(input: ConsumeOnDeliveryInput): Promise<void> {
+  /**
+   * Consume en la entrega lo apartado por UNA línea. Nunca toma la reserva de otro pedido
+   * ni lo disponible: si la línea no tiene apartado suficiente, el faltante queda en el
+   * movimiento (`shortfall_qty`) para revisión, en lugar de descontar piezas de otra clienta.
+   */
+  async consumeOnDelivery(input: ConsumeOnDeliveryInput, options: InventoryMutationOptions = {}): Promise<InventoryLineMutationResult> {
     const inventoryId = (input.sku || "").trim();
     if (!inventoryId) throw new Error("sku requerido para consumo en entrega");
     const qty = this.toSafeQty(input.qty);
     const idKey = this.safeIdempotencyKey(input.idempotencyKey);
     const ref = doc(this.colRef, inventoryId);
+    const allocationRef = this.allocationRef(input.orderId, input.orderItemId, inventoryId);
 
-    await runTransaction(FIRESTORE, async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists()) return;
+    const result = await runTransaction(FIRESTORE, async (tx): Promise<InventoryLineMutationResult> => {
+      const [snap, allocationSnap] = await Promise.all([tx.get(ref), tx.get(allocationRef)]);
+      if (!snap.exists()) return { inventoryId, requested: qty, applied: 0, shortfall: qty, skipped: true };
       const row = this.normalizeItem(snap.data() as Partial<InventoryItem>, snap.id);
-      if (row.idempotency_keys?.[idKey]) return;
+      if (row.idempotency_keys?.[idKey]) return { inventoryId, requested: qty, applied: 0, shortfall: 0, skipped: true };
 
       const onHand = this.toSafeQty(row.on_hand_qty);
       const reserved = this.toSafeQty(row.reserved_qty ?? 0);
-      const consumedQty = Math.min(qty, reserved, onHand);
+      const reservations = this.normalizeReservations(row.reservations);
+      const allocation = this.readAllocation(allocationSnap);
+      const cap = reservationCapForLine({
+        allocation,
+        orderReservedQty: this.orderReservationQty(reservations, input.orderId, input.orderItemId),
+        docReservedQty: reserved,
+        docOnHandQty: onHand,
+      });
+      const lineQty = input.lineQty === undefined ? null : this.toSafeQty(input.lineQty);
+      const requestedQty = allocation && lineQty !== null ? Math.min(qty, Math.max(0, lineQty - allocation.delivered_qty)) : qty;
+      const consumedQty = Math.min(requestedQty, cap);
       const nextOnHand = Math.max(0, onHand - consumedQty);
       const nextReserved = Math.max(0, reserved - consumedQty);
-      const nextAvailable = Math.max(0, nextOnHand - nextReserved);
-      const reservations = this.normalizeReservations(row.reservations);
-      const nextReservations = this.removeReservation(reservations, input.orderId, consumedQty);
+      const nextAvailable = Math.max(0, nextOnHand - nextReserved - this.heldQty(row));
+      const nextReservations = this.removeOrderReservation(reservations, input.orderId, input.orderItemId, consumedQty);
       const nowIso = new Date().toISOString();
       tx.update(ref, {
         on_hand_qty: nextOnHand,
@@ -520,10 +616,17 @@ export class InventoryService {
       this.writeMovement(tx, idKey, row.business_id, inventoryId, "sale", {
         onHand: -consumedQty,
         reserved: -consumedQty,
-      }, { orderId: input.orderId, orderItemId: input.orderItemId });
+      }, { orderId: input.orderId, orderItemId: input.orderItemId }, { requested_qty: requestedQty, shortfall_qty: requestedQty - consumedQty });
+      if (allocation && consumedQty > 0) {
+        this.writeAllocation(tx, allocationRef, applyAllocationConsume(allocation, consumedQty, idKey), false);
+      }
+      return { inventoryId, requested: requestedQty, applied: consumedQty, shortfall: requestedQty - consumedQty, skipped: false };
     });
 
-    await this.reloadAfterMutation();
+    if (options.refreshCache !== false) {
+      await this.reloadAfterMutation();
+    }
+    return result;
   }
 
   async receiveInbound(input: ReceiveInboundInput, options: InventoryMutationOptions = {}): Promise<void> {
@@ -535,18 +638,48 @@ export class InventoryService {
     const receiptNotes = String(input.notes || "").trim() || `Alta automática desde proveedor (${input.supplierOperationId}).`;
     const idKey = this.safeIdempotencyKey(input.idempotencyKey);
     const ref = doc(this.colRef, inventoryId);
+    const reserve = input.reserveFor && this.toSafeQty(input.reserveFor.qty) > 0 ? input.reserveFor : null;
+    const reserveKey = reserve ? this.safeIdempotencyKey(reserve.idempotencyKey) : null;
+    const allocationRef = reserve ? this.allocationRef(reserve.orderId, reserve.orderItemId, inventoryId) : null;
 
     await runTransaction(FIRESTORE, async (tx) => {
-      const snap = await tx.get(ref);
+      const [snap, allocationSnap] = await Promise.all([
+        tx.get(ref),
+        allocationRef ? tx.get(allocationRef) : Promise.resolve(null),
+      ]);
       const nowIso = new Date().toISOString();
+      const existing = snap.exists() ? this.normalizeItem(snap.data() as Partial<InventoryItem>, snap.id) : null;
+      const idMap = existing?.idempotency_keys || {};
+      // Cada parte conserva su propia llave: un intento anterior que solo alcanzó a
+      // ingresar (flujo previo de dos pasos) completa la reserva sin volver a ingresar.
+      const applyInbound = !idMap[idKey] && qty > 0;
+      const applyReserve = !!reserve && !!reserveKey && !idMap[reserveKey];
+      if (existing && !applyInbound && !applyReserve) return;
 
-      if (!snap.exists()) {
-        const onHand = qty;
-        const reserved = 0;
-        const available = onHand;
+      const businessId = existing?.business_id || normalizeBusinessId(input.business_id || this.businessScope.writeBusinessId());
+      const onHand = (existing ? this.toSafeQty(existing.on_hand_qty) : 0) + (applyInbound ? qty : 0);
+      let reserved = existing ? this.toSafeQty(existing.reserved_qty ?? 0) : 0;
+      const inReview = existing ? this.toSafeQty(existing.in_review_qty ?? 0) : 0;
+      const damaged = existing ? this.toSafeQty(existing.damaged_qty ?? 0) : 0;
+      let reservations = existing ? this.normalizeReservations(existing.reservations) : {};
+      let nextIdMap = applyInbound || !existing ? this.withIdempotency(idMap, idKey, nowIso) : idMap;
+      let reserveQty = 0;
+      if (applyReserve && reserve && reserveKey) {
+        reserveQty = this.toSafeQty(reserve.qty);
+        const availableBefore = Math.max(0, onHand - reserved - inReview - damaged);
+        if (reserveQty > availableBefore) {
+          throw new InventoryStockInsufficientError(inventoryId, availableBefore, reserveQty);
+        }
+        reserved += reserveQty;
+        reservations = this.addReservation(reservations, reserve.orderId, reserveQty);
+        nextIdMap = this.withIdempotency(nextIdMap, reserveKey, nowIso);
+      }
+      const available = Math.max(0, onHand - reserved - inReview - damaged);
+
+      if (!existing) {
         const created: InventoryItem = {
           inventory_id: inventoryId,
-          business_id: normalizeBusinessId(input.business_id || this.businessScope.writeBusinessId()),
+          business_id: businessId,
           title: (input.title || "Producto sin nombre").trim(),
           sku: inventoryId,
           product_id: input.product_id || null,
@@ -563,45 +696,98 @@ export class InventoryService {
           notes: receiptNotes,
           image_urls: input.image_url ? [input.image_url] : [],
           source_reason: "ajuste_manual",
-          reservations: {},
+          reservations,
           created_at: nowIso,
           updated_at: nowIso,
-          idempotency_keys: this.withIdempotency({}, idKey, nowIso),
+          idempotency_keys: nextIdMap,
         };
         tx.set(ref, { ...created, created_at: serverTimestamp(), updated_at: serverTimestamp() }, { merge: true });
-        this.writeMovement(tx, idKey, created.business_id, inventoryId, "receipt", {
+      } else {
+        tx.update(ref, {
+          product_id: existing.product_id || input.product_id || null,
+          variant_id: existing.variant_id || input.variant_id || null,
+          unit_price: existing.unit_price ?? incomingUnitPrice,
+          on_hand_qty: onHand,
+          reserved_qty: reserved,
+          available_qty: available,
+          reservations,
+          updated_at: serverTimestamp(),
+          idempotency_keys: nextIdMap,
+        });
+      }
+      if (applyInbound) {
+        this.writeMovement(tx, idKey, businessId, inventoryId, "receipt", {
           onHand: qty,
           available: qty,
         }, { reason: receiptReason });
-        return;
       }
-
-      const row = this.normalizeItem(snap.data() as Partial<InventoryItem>, snap.id);
-      if (row.idempotency_keys?.[idKey]) return;
-
-      const onHand = this.toSafeQty(row.on_hand_qty);
-      const reserved = this.toSafeQty(row.reserved_qty ?? 0);
-      const nextOnHand = onHand + qty;
-      const nextAvailable = Math.max(0, nextOnHand - reserved);
-      tx.update(ref, {
-        product_id: row.product_id || input.product_id || null,
-        variant_id: row.variant_id || input.variant_id || null,
-        unit_price: row.unit_price ?? incomingUnitPrice,
-        on_hand_qty: nextOnHand,
-        reserved_qty: reserved,
-        available_qty: nextAvailable,
-        updated_at: serverTimestamp(),
-        idempotency_keys: this.withIdempotency(row.idempotency_keys || {}, idKey, nowIso),
-      });
-      this.writeMovement(tx, idKey, row.business_id, inventoryId, "receipt", {
-        onHand: qty,
-        available: qty,
-      }, { reason: receiptReason });
+      if (applyReserve && reserve && reserveKey && allocationRef) {
+        this.writeMovement(tx, reserveKey, businessId, inventoryId, "reserve", {
+          available: -reserveQty,
+          reserved: reserveQty,
+        }, { orderId: reserve.orderId, orderItemId: reserve.orderItemId });
+        const allocation = this.readAllocation(allocationSnap) || emptyAllocation({
+          businessId,
+          orderId: reserve.orderId,
+          orderItemId: reserve.orderItemId,
+          inventoryId,
+          meta: reserve.allocation,
+        });
+        this.writeAllocation(tx, allocationRef, applyAllocationReserve(allocation, reserveQty, reserveKey), !allocationSnap?.exists());
+      }
     });
 
     if (options.refreshCache !== false) {
       await this.refreshCacheAfterMutation();
     }
+  }
+
+  /** Asignaciones de un pedido (una consulta acotada; no descarga el inventario completo). */
+  async loadAllocationsForOrder(orderId: string, businessId: BusinessId): Promise<InventoryAllocation[]> {
+    const target = String(orderId || "").trim();
+    if (!target) return [];
+    const snap = await getDocs(query(
+      this.allocationsColRef,
+      where("business_id", "==", normalizeBusinessId(businessId)),
+      where("order_id", "==", target),
+    ));
+    return snap.docs
+      .map((entry) => normalizeAllocation(entry.id, entry.data() as Record<string, unknown>))
+      .filter((row): row is InventoryAllocation => !!row);
+  }
+
+  /**
+   * Comprueba EN EL SERVIDOR que cada movimiento quedó aplicado: su llave de idempotencia
+   * está en el documento de inventario (se escribe en la misma transacción que la mutación).
+   * Un documento que no existe no puede tener movimiento: cuenta como `absent`, no como
+   * faltante de verificación. Lee una vez cada documento distinto (FIX 03B-1.1).
+   */
+  async verifyAppliedKeys(entries: ReadonlyArray<{ inventoryId: string; key: string }>): Promise<{ verified: number; missing: string[]; absent: string[] }> {
+    const byInventory = new Map<string, string[]>();
+    for (const entry of entries) {
+      const inventoryId = String(entry.inventoryId || "").trim();
+      if (!inventoryId) continue;
+      byInventory.set(inventoryId, [...(byInventory.get(inventoryId) || []), this.safeIdempotencyKey(entry.key)]);
+    }
+    const result = { verified: 0, missing: [] as string[], absent: [] as string[] };
+    for (const [inventoryId, keys] of byInventory) {
+      const snap = await getDocFromServer(doc(this.colRef, inventoryId));
+      if (!snap.exists()) {
+        result.absent.push(inventoryId);
+        continue;
+      }
+      const applied = this.normalizeIdempotencyMap((snap.data() as Record<string, unknown>)["idempotency_keys"]);
+      for (const key of keys) {
+        if (applied[key]) result.verified += 1;
+        else result.missing.push(`${inventoryId}:${key}`);
+      }
+    }
+    return result;
+  }
+
+  /** Recarga la caché tras una mutación hecha por otro servicio (devoluciones). */
+  refreshAfterExternalMutation(): Promise<void> {
+    return this.refreshCacheAfterMutation();
   }
 
   async receiveReturn(input: ReceiveReturnInput): Promise<void> {
@@ -783,6 +969,7 @@ export class InventoryService {
     type: InventoryMovementType,
     delta: { onHand?: number; available?: number; reserved?: number; inReview?: number; damaged?: number },
     refs: { orderId?: string | null; orderItemId?: string | null; returnId?: string | null; reason?: string | null; actor?: string | null } = {},
+    extra: Record<string, number> = {},
   ): void {
     const safeMovementId = this.safeIdempotencyKey(movementId);
     tx.set(doc(this.movementsColRef, safeMovementId), {
@@ -801,8 +988,67 @@ export class InventoryService {
       reason: refs.reason || null,
       actor: refs.actor || null,
       idempotency_key: safeMovementId,
+      ...extra,
       created_at: serverTimestamp(),
     });
+  }
+
+  /** Piezas en existencia que no se pueden vender: en revisión o dañadas. */
+  private heldQty(row: InventoryItem): number {
+    return this.toSafeQty(row.in_review_qty ?? 0) + this.toSafeQty(row.damaged_qty ?? 0);
+  }
+
+  private allocationRef(orderId: string, orderItemId: string, inventoryId: string) {
+    return doc(this.allocationsColRef, allocationDocId(orderId, orderItemId || "sin-linea", inventoryId));
+  }
+
+  private readAllocation(snap: { exists(): boolean; id: string; data(): unknown } | null): InventoryAllocation | null {
+    if (!snap || !snap.exists()) return null;
+    return normalizeAllocation(snap.id, snap.data() as Record<string, unknown>);
+  }
+
+  private writeAllocation(
+    tx: Transaction,
+    ref: ReturnType<InventoryService["allocationRef"]>,
+    allocation: InventoryAllocation,
+    isNew: boolean,
+  ): void {
+    const { created_at: _createdAt, updated_at: _updatedAt, ...rest } = allocation;
+    tx.set(ref, {
+      ...rest,
+      allocation_id: ref.id,
+      ...(isNew ? { created_at: serverTimestamp() } : {}),
+      updated_at: serverTimestamp(),
+    }, { merge: true });
+  }
+
+  /**
+   * Reserva viva del pedido en un documento. Las reservas se guardan por pedido
+   * (`reservations[orderId]`); versiones anteriores también usaron `orderId:itemId`.
+   */
+  private orderReservationQty(reservations: Record<string, InventoryReservation>, orderId: string, orderItemId: string): number {
+    return [orderId, `${orderId}:${orderItemId}`].reduce((sum, key) => {
+      const row = reservations[key];
+      return row && row.status === "reserved" ? sum + this.toSafeQty(row.qty) : sum;
+    }, 0);
+  }
+
+  private removeOrderReservation(
+    reservations: Record<string, InventoryReservation>,
+    orderId: string,
+    orderItemId: string,
+    qty: number,
+  ): Record<string, InventoryReservation> {
+    let remaining = this.toSafeQty(qty);
+    let next = reservations;
+    for (const key of [orderId, `${orderId}:${orderItemId}`]) {
+      if (remaining <= 0) break;
+      const take = Math.min(this.toSafeQty(next[key]?.qty), remaining);
+      if (take <= 0) continue;
+      next = this.removeReservation(next, key, take);
+      remaining -= take;
+    }
+    return next;
   }
 
   private normalizeMovementType(value: unknown): InventoryMovementType {

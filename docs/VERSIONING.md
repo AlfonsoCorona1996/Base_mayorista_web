@@ -33,3 +33,7 @@ del repositorio.
 - Frontend `2.1.x` funciona con backend `2.2.x` para mutaciones incrementales e identificación exacta en UI.
 - Frontend `2.2.x` requiere backend `2.3.x` para sellar en servidor la auditoría de opciones provisionales de catálogo.
 - Desplegar primero backend `2.3.x` y después frontend `2.2.x`; el cambio de contrato es aditivo y compatible.
+- Frontend `2.4.x` requiere las reglas de Firestore de `2.4.0` publicadas **antes** que el frontend: sin ellas fallan reservar, recibir y entregar. Las reglas de `2.4.0` admiten al frontend `2.3.x`.
+- Frontend `2.4.x` funciona con backend `2.3.0` y `2.3.1`; el control de artículos concurrentes (409) solo actúa con backend `2.3.1`.
+- Orden de `2.4.0`: reglas → backend `2.3.1` → frontend. Procedimiento, pruebas de humo y reversión en [releases/2.4.0.md](releases/2.4.0.md).
+- El hosting publica `main` automáticamente: no integrar un frontend que dependa de reglas nuevas antes de publicarlas.

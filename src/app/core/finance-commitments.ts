@@ -1,6 +1,7 @@
 import type { FinanceExpense, FinanceExpenseCategory } from './finance.service';
 import type { BusinessId } from './rbac.constants';
 import { auditDate } from './profit-audit';
+import { businessDateKey } from './finance-ledger';
 
 export type CommitmentFrequency = 'once' | 'monthly' | 'semimonthly';
 export interface CommitmentTerms {
@@ -36,7 +37,7 @@ export interface CommitmentOccurrence extends CommitmentTerms {
   overdue: boolean;
 }
 export const cents = (amount: number): number => Math.round(amount * 100);
-export const calendarToday = (): string => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Mexico_City', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+export const calendarToday = (): string => businessDateKey();
 export function validMonth(month: string): boolean { return /^\d{4}-\d{2}$/.test(month) && !!auditDate(`${month}-01`); }
 export function commitmentDates(plan: FinanceCommitment, month: string): string[] {
   if (!validMonth(month) || !auditDate(plan.start_date)) return [];

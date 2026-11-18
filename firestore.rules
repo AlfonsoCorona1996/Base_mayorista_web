@@ -50,10 +50,25 @@ service cloud.firestore {
         && userDoc().data.capabilities[capabilityKey] == true;
     }
 
+    // FIX 03B-1.1: las transacciones de inventario escriben 3-8 documentos y las reglas
+    // tienen un límite de 1000 expresiones por solicitud. `cap()` y `sectionOn()` no repiten
+    // isActiveUser(): usarlas SOLO detrás de una guarda que ya lo verifica (hasBusiness,
+    // canRead/Create/UpdateBusinessResource, canAccessOrder o isActiveUser()).
+    function cap(capabilityKey) {
+      return userDoc().data.get("capabilities", {}).get(capabilityKey, false) == true;
+    }
+
+    function sectionOn(sectionKey) {
+      return userDoc().data.get("sections", {}).get(
+        sectionKey, userDoc().data.get("sections", {}).get(sectionKey.replace("sections[.]", ""), false)
+      ) == true;
+    }
+
     function hasBusiness(businessId) {
       return isActiveUser()
         && (
-          isSuperAdmin()
+          // isActiveUser() ya se verificó: mismo resultado que isSuperAdmin() con la mitad del costo.
+          roleId() == "super_admin"
           || (
             userDoc().data.businessMemberships != null
             && userDoc().data.businessMemberships[businessId] != null
@@ -79,9 +94,9 @@ service cloud.firestore {
     }
 
     function canUpdateBusinessResource() {
-      return hasBusiness(resourceBusinessId())
-        && hasBusiness(incomingBusinessId())
-        && incomingBusinessId() == resourceBusinessId();
+      // Mismo resultado que hasBusiness(resource) && hasBusiness(incoming) && iguales.
+      return incomingBusinessId() == resourceBusinessId()
+        && hasBusiness(resourceBusinessId());
     }
 
     function orderBusinessId(orderId) {
@@ -90,7 +105,8 @@ service cloud.firestore {
     }
 
     function canAccessOrder(orderId) {
-      return isActiveUser() && hasBusiness(orderBusinessId(orderId));
+      // hasBusiness() ya incluye isActiveUser().
+      return hasBusiness(orderBusinessId(orderId));
     }
 
     function changedKeys() {
@@ -114,6 +130,10 @@ service cloud.firestore {
     }
 
     match /customers/{customerId} {
+      // FIX 03B-1.1: la devolución lee la clienta dentro de su transacción; si el documento no
+      // existe no se expone nada y la transacción decide (p. ej. rechaza el saldo a favor).
+      allow get: if resource == null && isActiveUser()
+        && (cap("cap.returns.create") || cap("cap.payments.register") || cap("cap.payments.refund"));
       allow read: if canReadBusinessResource() && hasSection("sections.clientes");
       allow create: if (isAdmin() || isOperativo()) && canCreateBusinessResource();
       allow update: if (isAdmin() || isOperativo()) && canUpdateBusinessResource();
@@ -179,62 +199,122 @@ service cloud.firestore {
       allow delete: if isSuperAdmin();
     }
 
+    // FIX 00: conciliación. Registrarla (`settlement_status` distinto de pending/not_applicable)
+    // exige el mismo permiso que su evento obligatorio en `order_settlement_events`, por
+    // cualquier rama. Sin esto, quien tenía permisos de administración, cobro o embarque cambiaba
+    // el pedido y luego se le negaba el evento: la conciliación quedaba a medias.
+    function canSettle() {
+      return cap("cap.settlement.send") || cap("cap.settlement.reconcile");
+    }
+
+    function settlementChanged() {
+      return changedKeys().hasAny(["settlement_status"]);
+    }
+
+    // Registrar o rechazar un cobro reinicia la conciliación a pending/not_applicable. Es un efecto
+    // del cobro, no una conciliación: lo puede escribir quien registra cobros.
+    function settlementIsReset(data) {
+      return data.settlement_status in ["pending", "not_applicable"];
+    }
+
     match /orders/{orderId} {
       allow read: if canReadBusinessResource();
-      allow create: if (isAdmin() || isOperativo()) && canCreateBusinessResource();
+      allow create: if (isAdmin() || isOperativo())
+        && (!request.resource.data.keys().hasAny(["settlement_status"]) || settlementIsReset(request.resource.data) || canSettle())
+        && canCreateBusinessResource();
 
       // Operativo can request dispatch and mark packing done.
       // Admin/Super admin can also accept/reject request and assign to route_run.
+      // FIX 03B-1.1: mismas ramas y mismos permisos que antes; cada rama compara primero los
+      // campos modificados (barato) y al final el negocio/usuario activo. Antes una devolución
+      // agotaba el límite de 1000 expresiones evaluando ramas que de todos modos fallaban.
       allow update: if (
           isAdmin()
-          && canUpdateBusinessResource()
           // Los cambios normales a items pasan por el backend autoritativo.
           && !changedKeys().hasAny(["items"])
+          && (!settlementChanged() || settlementIsReset(request.resource.data) || canSettle())
+          && canUpdateBusinessResource()
         )
         // Excepcion temporal y acotada: ReturnsService actualiza items dentro de
         // la misma transaccion que inventario/devolucion. Rules no puede probar
         // diffs arbitrarios dentro de arreglos; por eso se limita por capability
         // y por el conjunto exacto de campos que usa ese flujo.
         || (
-          canUpdateBusinessResource()
-          && (
-            hasCapability("cap.returns.create")
-            || hasCapability("cap.returns.approve")
-            || hasCapability("cap.returns.restock")
-          )
-          && changedKeys().hasAny(["items"])
+          changedKeys().hasAny(["items"])
           && onlyChanges(["items", "packages", "totals", "has_returns", "status", "timeline", "updated_at"])
-        )
-        || (
-          canUpdateBusinessResource()
-          && hasCapability("cap.payments.register")
-          && onlyChanges(["totals", "status", "paid_at", "closed_at", "delivered_at", "timeline", "customer_payment_status", "settlement_status", "collection_status", "collection_reminder_at", "collection_note", "sales_note_last_generated_at", "updated_at"])
-        )
-        || (
-          canUpdateBusinessResource()
-          && (hasCapability("cap.delivery.mark_delivered") || hasCapability("cap.delivery.mark_partial"))
-          && onlyChanges(["status", "delivery_status", "custody_status", "current_holder_location", "current_holder_user_id", "current_holder_name", "delivered_at", "timeline", "notes", "updated_at"])
-        )
-        || (
-          canUpdateBusinessResource()
           && (
-            hasCapability("cap.shipments.create")
-            || hasCapability("cap.shipments.edit")
-            || hasCapability("cap.shipments.send")
-            || hasCapability("cap.shipments.receive")
-            || hasCapability("cap.packing.finish")
-            || hasCapability("cap.delivery.mark_delivered")
-            || hasCapability("cap.delivery.mark_partial")
-            || hasCapability("cap.payments.register")
-            || hasCapability("cap.settlement.send")
-            || hasCapability("cap.settlement.reconcile")
+            cap("cap.returns.create")
+            || cap("cap.returns.approve")
+            || cap("cap.returns.restock")
           )
-          && onlyChanges(["fulfillment_status", "custody_status", "delivery_status", "customer_payment_status", "settlement_status", "current_holder_location", "current_holder_user_id", "current_holder_name", "shipment_id", "updated_at"])
+          && canUpdateBusinessResource()
         )
         || (
-          canUpdateBusinessResource()
-          && (hasCapability("cap.settlement.send") || hasCapability("cap.settlement.reconcile"))
-          && onlyChanges(["settlement_status", "status", "closed_at", "updated_at"])
+          onlyChanges(["totals", "status", "paid_at", "closed_at", "delivered_at", "timeline", "customer_payment_status", "settlement_status", "collection_status", "collection_reminder_at", "collection_note", "sales_note_last_generated_at", "updated_at"])
+          && cap("cap.payments.register")
+          && (!settlementChanged() || settlementIsReset(request.resource.data) || canSettle())
+          && canUpdateBusinessResource()
+        )
+        || (
+          // FIX 03B-1.1: la entrega guarda en la misma escritura el ajuste de inventario pendiente.
+          onlyChanges(["status", "delivery_status", "custody_status", "current_holder_location", "current_holder_user_id", "current_holder_name", "delivered_at", "timeline", "notes", "inventory_sync", "updated_at"])
+          // Junto con la entrega, el ajuste solo puede quedar "pendiente" (nunca "resuelto").
+          && (!changedKeys().hasAny(["inventory_sync"]) || request.resource.data.inventory_sync.status == "pending")
+          && (cap("cap.delivery.mark_delivered") || cap("cap.delivery.mark_partial"))
+          && canUpdateBusinessResource()
+        )
+        || (
+          onlyChanges(["fulfillment_status", "custody_status", "delivery_status", "customer_payment_status", "settlement_status", "current_holder_location", "current_holder_user_id", "current_holder_name", "shipment_id", "updated_at"])
+          && (
+            cap("cap.shipments.create")
+            || cap("cap.shipments.edit")
+            || cap("cap.shipments.send")
+            || cap("cap.shipments.receive")
+            || cap("cap.packing.finish")
+            || cap("cap.delivery.mark_delivered")
+            || cap("cap.delivery.mark_partial")
+            || cap("cap.payments.register")
+            || cap("cap.settlement.send")
+            || cap("cap.settlement.reconcile")
+          )
+          // Ningún flujo de embarque o entrega escribe la conciliación por esta rama.
+          && (!settlementChanged() || canSettle())
+          && canUpdateBusinessResource()
+        )
+        || (
+          onlyChanges(["settlement_status", "status", "closed_at", "updated_at"])
+          && canSettle()
+          && canUpdateBusinessResource()
+        )
+        || (
+          // FIX 03B-1.1: estado del ajuste de inventario de una entrega (reintento/verificación).
+          // Quien puede entregar o mover inventario; nunca toca artículos, cobro ni etapa.
+          onlyChanges(["inventory_sync", "updated_at"])
+          && request.resource.data.inventory_sync is map
+          // `resolved_manual` (resolución supervisada) solo por la rama de administración.
+          && request.resource.data.inventory_sync.status in ["pending", "failed", "synced"]
+          && (
+            cap("cap.delivery.mark_delivered")
+            || cap("cap.delivery.mark_partial")
+            || cap("cap.inventory.adjust")
+            || cap("cap.inventory.release")
+            || cap("cap.inventory.reserve")
+          )
+          && canUpdateBusinessResource()
+        )
+        || (
+          // FIX 03B-1.1: OrdersService.logEvent marca `last_event_at`; antes solo un admin podía,
+          // así que cualquier otro rol veía fallar la acción después de guardarla.
+          onlyChanges(["last_event_at", "updated_at"])
+          && (
+            roleId() in ["admin", "super_admin", "operativo"]
+            || cap("cap.shipments.receive")
+            || cap("cap.delivery.mark_delivered")
+            || cap("cap.payments.register")
+            || cap("cap.settlement.send")
+            || cap("cap.settlement.reconcile")
+          )
+          && canUpdateBusinessResource()
         )
         || (
           isOperativo()
@@ -256,15 +336,15 @@ service cloud.firestore {
 
       match /events/{eventId} {
         allow read: if canAccessOrder(orderId);
+        // canAccessOrder() ya verifica usuario activo: roleId()/cap() sin repetirlo.
         allow create: if canAccessOrder(orderId)
           && (
-            isAdmin()
-            || isOperativo()
-            || hasCapability("cap.shipments.receive")
-            || hasCapability("cap.delivery.mark_delivered")
-            || hasCapability("cap.payments.register")
-            || hasCapability("cap.settlement.send")
-            || hasCapability("cap.settlement.reconcile")
+            roleId() in ["admin", "super_admin", "operativo"]
+            || cap("cap.shipments.receive")
+            || cap("cap.delivery.mark_delivered")
+            || cap("cap.payments.register")
+            || cap("cap.settlement.send")
+            || cap("cap.settlement.reconcile")
           );
         allow update, delete: if isSuperAdmin();
       }
@@ -283,6 +363,19 @@ service cloud.firestore {
         && (
           hasCapability("cap.settlement.reconcile")
           || hasSection("sections.administracion")
+        )
+        // FIX 00: confirmar el dinero o marcar diferencia es parte de la conciliación y exige su
+        // permiso propio. Sin esto, la sección Administración marcaba el cobro y luego se negaba
+        // la conciliación del pedido. Rechazar un cobro conserva sus permisos.
+        && (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(["verification_status"])
+          || (
+            // Solo un cobro reportado cambia de estado. Uno confirmado ya está en el libro mayor y en
+            // la cuenta: corregirlo es un movimiento nuevo, no reescribir el cobro. Un cobro sin el
+            // campo es anterior a los reportes y cuenta como confirmado.
+            resource.data.get("verification_status", "confirmed") == "reported"
+            && (!(request.resource.data.verification_status in ["confirmed", "difference"]) || canSettle())
+          )
         );
       allow delete: if false;
     }
@@ -451,19 +544,121 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // FIX 03B-1.1: capacidades que mueven inventario (sin repetir isActiveUser; ver cap()).
+    function canMutateInventory() {
+      return cap("cap.inventory.adjust")
+        || cap("cap.inventory.receive")
+        || cap("cap.inventory.reserve")
+        || cap("cap.inventory.release")
+        || cap("cap.delivery.mark_delivered")
+        || cap("cap.returns.create")
+        || cap("cap.returns.approve");
+    }
+
+    // Cantidades que cambian en la escritura: número y nunca negativas. Solo se validan los
+    // campos modificados para no bloquear documentos antiguos con datos fuera de rango.
+    function validChangedQty(keys, data, field) {
+      return !keys.hasAny([field]) || (data[field] is number && data[field] >= 0);
+    }
+
+    function validInventoryQuantities() {
+      let data = request.resource.data;
+      let keys = resource == null ? data.keys().toSet() : data.diff(resource.data).affectedKeys();
+      return validChangedQty(keys, data, "on_hand_qty")
+        && validChangedQty(keys, data, "reserved_qty")
+        && validChangedQty(keys, data, "available_qty")
+        && validChangedQty(keys, data, "in_review_qty")
+        && validChangedQty(keys, data, "damaged_qty");
+    }
+
+    function deliveryConsumptionShape() {
+      let before = resource.data;
+      let after = request.resource.data;
+      return after.diff(before).affectedKeys().hasOnly(["on_hand_qty", "reserved_qty", "available_qty", "reservations", "idempotency_keys", "updated_at"])
+        && after.get("on_hand_qty", 0) <= before.get("on_hand_qty", 0)
+        && after.get("reserved_qty", 0) <= before.get("reserved_qty", 0)
+        && after.get("idempotency_keys", {}).size() == before.get("idempotency_keys", {}).size() + 1;
+    }
+
     match /inventory_items/{itemId} {
-      allow read: if canReadBusinessResource() && (hasSection("sections.inventario") || hasCapability("cap.inventory.view"));
-      allow create: if canCreateBusinessResource() && (hasCapability("cap.inventory.adjust") || hasCapability("cap.inventory.receive"));
-      allow update: if canUpdateBusinessResource() && (hasCapability("cap.inventory.adjust") || hasCapability("cap.inventory.receive") || hasCapability("cap.inventory.reserve") || hasCapability("cap.inventory.release") || hasCapability("cap.delivery.mark_delivered"));
+      // Leer un documento que aún no existe (recepción de un producto nuevo, conteo físico)
+      // no expone datos; la transacción lo necesita antes de crearlo.
+      allow get: if resource == null && isActiveUser() && canMutateInventory();
+      // Quien entrega lee (no lista) el documento que su entrega descuenta.
+      allow get: if canReadBusinessResource() && (cap("cap.delivery.mark_delivered") || cap("cap.delivery.mark_partial"));
+      allow read: if canReadBusinessResource() && (sectionOn("sections.inventario") || cap("cap.inventory.view"));
+      // Mismas capacidades que antes de FIX 03B-1.1; solo se agrega la validación de cantidades.
+      allow create: if (cap("cap.inventory.adjust") || cap("cap.inventory.receive"))
+        && validInventoryQuantities()
+        && canCreateBusinessResource();
+      allow update: if validInventoryQuantities()
+        && (
+          (cap("cap.inventory.adjust") || cap("cap.inventory.receive") || cap("cap.inventory.reserve") || cap("cap.inventory.release"))
+          // FIX 03B-1.1: quien SOLO entrega (sin permisos de inventario) puede leer el documento
+          // para descontarlo; su escritura debe tener forma de consumo o liberación: no sube
+          // existencia ni apartado y registra exactamente un movimiento nuevo (llave).
+          || (cap("cap.delivery.mark_delivered") && deliveryConsumptionShape())
+        )
+        && canUpdateBusinessResource();
       allow delete: if canReadBusinessResource() && (isSuperAdmin() || hasCapability("cap.inventory.override"));
     }
 
     match /inventory_movements/{movementId} {
-      allow read: if canReadBusinessResource() && (hasSection("sections.inventario") || hasCapability("cap.inventory.view"));
-      allow create: if canCreateBusinessResource()
-        && (hasCapability("cap.inventory.adjust") || hasCapability("cap.inventory.receive") || hasCapability("cap.inventory.reserve") || hasCapability("cap.inventory.release") || hasCapability("cap.delivery.mark_delivered") || hasCapability("cap.returns.create") || hasCapability("cap.returns.approve"))
+      allow read: if canReadBusinessResource() && (sectionOn("sections.inventario") || cap("cap.inventory.view"));
+      allow create: if canMutateInventory()
+        && canCreateBusinessResource()
         && getAfter(/databases/$(database)/documents/inventory_items/$(request.resource.data.inventory_id)).data.business_id == incomingBusinessId();
       allow update, delete: if false;
+    }
+
+    // FIX 03B-1: vínculo pedido + línea + documento de inventario. Se escribe en la misma
+    // transacción que el documento de inventario (reserva, entrega, liberación, devolución).
+    // Cada transacción lee la asignación antes de crearla: la lectura de un documento que aún
+    // no existe (`resource == null`) debe permitirse a quien puede mutar inventario.
+    //
+    // FIX 03B-1.1: además, toda escritura debe (a) ir acompañada de una escritura del documento
+    // de inventario en la MISMA solicitud (`updated_at == request.time`, que solo produce
+    // serverTimestamp() en esa escritura), (b) conservar las cantidades:
+    // apartado + entregado + liberado + liberado por devolución = total asignado, nunca negativas,
+    // devuelto ≤ entregado, y (c) no reducir contadores históricos.
+    function allocationQuantitiesValid(data) {
+      return data.reserved_qty is int && data.reserved_qty >= 0
+        && data.delivered_qty is int && data.delivered_qty >= 0
+        && data.returned_qty is int && data.returned_qty >= 0
+        && data.return_released_qty is int && data.return_released_qty >= 0
+        && data.released_qty is int && data.released_qty >= 0
+        && data.allocated_total_qty is int
+        && data.returned_qty <= data.delivered_qty
+        && data.reserved_qty + data.delivered_qty + data.released_qty + data.return_released_qty == data.allocated_total_qty;
+    }
+
+    function allocationWrittenWithInventory(data) {
+      let inventoryAfter = getAfter(/databases/$(database)/documents/inventory_items/$(data.inventory_id));
+      return inventoryAfter.data.business_id == incomingBusinessId()
+        && inventoryAfter.data.updated_at == request.time;
+    }
+
+    match /inventory_allocations/{allocationId} {
+      allow read: if (resource == null && isActiveUser() && (canMutateInventory() || sectionOn("sections.inventario") || cap("cap.inventory.view")))
+        || (resource != null && canReadBusinessResource() && (canMutateInventory() || sectionOn("sections.inventario") || cap("cap.inventory.view")));
+      allow create: if request.resource.data.allocation_id == allocationId
+        && allocationId.matches("alloc__.+")
+        && allocationQuantitiesValid(request.resource.data)
+        && canMutateInventory()
+        && canCreateBusinessResource()
+        && allocationWrittenWithInventory(request.resource.data);
+      allow update: if request.resource.data.allocation_id == resource.data.allocation_id
+        && request.resource.data.order_id == resource.data.order_id
+        && request.resource.data.order_item_id == resource.data.order_item_id
+        && request.resource.data.inventory_id == resource.data.inventory_id
+        && allocationQuantitiesValid(request.resource.data)
+        && request.resource.data.allocated_total_qty >= resource.data.allocated_total_qty
+        && request.resource.data.delivered_qty >= resource.data.delivered_qty
+        && request.resource.data.returned_qty >= resource.data.returned_qty
+        && canMutateInventory()
+        && canUpdateBusinessResource()
+        && allocationWrittenWithInventory(request.resource.data);
+      allow delete: if false;
     }
 
     match /suppliers/{supplierId} {
@@ -474,10 +669,24 @@ service cloud.firestore {
     }
 
     match /supplier_operations/{operationId} {
-      allow read: if canReadBusinessResource() && (hasSection("sections.proveedores") || hasCapability("cap.suppliers.ops.view"));
+      // FIX 03B-1.1: alta de líneas y recepción leen el id determinista antes de crearlo.
+      allow get: if resource == null && isActiveUser()
+        && (roleId() in ["admin", "super_admin", "operativo"] || cap("cap.suppliers.ops.advance_state") || cap("cap.suppliers.ops.partial_process"));
+      // Quien entrega lee las líneas de proveedor de su pedido para descontarlas.
+      allow read: if canReadBusinessResource() && (sectionOn("sections.proveedores") || cap("cap.suppliers.ops.view") || cap("cap.delivery.mark_delivered"));
       allow create: if canCreateBusinessResource() && (isAdmin() || isOperativo());
       allow update: if canUpdateBusinessResource() && (hasCapability("cap.suppliers.ops.advance_state") || hasCapability("cap.suppliers.ops.partial_process"));
-      allow delete: if canReadBusinessResource() && (isSuperAdmin() || hasCapability("cap.suppliers.ops.override"));
+      allow delete: if canReadBusinessResource()
+        && (
+          isSuperAdmin()
+          || hasCapability("cap.suppliers.ops.override")
+          // FIX 03B-1.1: al entregar, la línea de proveedor se cierra (closeOnDelivery). Solo si
+          // el pedido ya está entregado.
+          || (
+            cap("cap.delivery.mark_delivered")
+            && get(/databases/$(database)/documents/orders/$(resource.data.order_id)).data.get("delivery_status", "") == "delivered"
+          )
+        );
     }
 
     match /normalized_listings/{listingId} {
@@ -548,12 +757,15 @@ service cloud.firestore {
     }
 
     match /returns/{returnId} {
-      allow read: if canReadBusinessResource() && (hasCapability("cap.returns.view") || hasSection("sections.inventario"));
-      allow create: if canCreateBusinessResource()
-        && hasCapability("cap.returns.create")
+      // FIX 03B-1.1: registerReturn lee su id de intento dentro de la transacción (idempotencia,
+      // FIX 03A). Si aún no existe no se expone nada; antes se denegaba a todos salvo super_admin.
+      allow get: if resource == null && isActiveUser() && cap("cap.returns.create");
+      allow read: if canReadBusinessResource() && (cap("cap.returns.view") || sectionOn("sections.inventario"));
+      allow create: if cap("cap.returns.create")
+        && canCreateBusinessResource()
         && getAfter(/databases/$(database)/documents/orders/$(request.resource.data.order_id)).data.has_returns == true
         && getAfter(/databases/$(database)/documents/orders/$(request.resource.data.order_id)).data.business_id == incomingBusinessId();
-      allow update: if canUpdateBusinessResource() && (hasCapability("cap.returns.restock") || hasCapability("cap.returns.approve"));
+      allow update: if (cap("cap.returns.restock") || cap("cap.returns.approve")) && canUpdateBusinessResource();
       allow delete: if canReadBusinessResource() && isSuperAdmin();
     }
 

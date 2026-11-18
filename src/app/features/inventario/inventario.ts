@@ -140,7 +140,13 @@ export default class InventarioPage {
 
   rows = computed(() => this.inventory.items());
   returns = computed(() => this.returnsService.returns());
-  pendingReturns = computed(() => this.returns().filter((row) => row.status === "pending_review"));
+  /** Por revisar: en revisión de calidad y (FIX 03B-1) devoluciones sin ingreso a inventario pendientes de conteo. */
+  pendingReturns = computed(() => this.returns().filter((row) => row.status === "pending_review" || row.status === "inventory_unverified"));
+  returnBusyId = signal<string | null>(null);
+  /** FIX 03B-1.1: confirmación de "Ingresar tras conteo" / "No se encontró" (irreversibles). */
+  returnResolution = signal<{ row: ReturnRecord; outcome: "restock_after_count" | "not_found" } | null>(null);
+  /** Resultado visible junto al panel (el aviso global queda fuera de vista en móvil). */
+  returnFeedback = signal<{ kind: "success" | "error"; text: string } | null>(null);
   orderStatusById = computed(() => new Map(this.orders.list().map((order) => [order.order_id, order.status])));
   currentViewerImage = computed(() => this.imageViewerUrls()[this.imageViewerIndex()] || null);
   viewerHasMultipleImages = computed(() => this.imageViewerUrls().length > 1);
@@ -410,24 +416,88 @@ export default class InventarioPage {
   }
 
   async restockReturn(row: ReturnRecord) {
+    // FIX 03B-1.1: un solo clic por devolución (antes un doble clic lanzaba dos transacciones).
+    if (this.returnBusyId()) return;
+    this.returnBusyId.set(row.return_id);
     this.error.set(null);
     this.success.set(null);
+    this.returnFeedback.set(null);
     try {
       await this.returnsService.restockReturn(row);
       this.success.set("Devolución enviada a stock disponible");
+      this.returnFeedback.set({ kind: "success", text: "Devolución enviada a stock disponible." });
     } catch (error: any) {
       this.error.set(error?.message || "No se pudo restituir la devolución");
+      this.returnFeedback.set({ kind: "error", text: error?.message || "No se pudo restituir la devolución." });
+    } finally {
+      this.returnBusyId.set(null);
     }
   }
 
   async markReturnDamaged(row: ReturnRecord) {
+    if (this.returnBusyId()) return;
+    this.returnBusyId.set(row.return_id);
     this.error.set(null);
     this.success.set(null);
+    this.returnFeedback.set(null);
     try {
       await this.returnsService.markDamaged(row);
       this.success.set("Devolución marcada como dañada");
+      this.returnFeedback.set({ kind: "success", text: "Devolución marcada como dañada." });
     } catch (error: any) {
       this.error.set(error?.message || "No se pudo marcar como dañada");
+      this.returnFeedback.set({ kind: "error", text: error?.message || "No se pudo marcar como dañada." });
+    } finally {
+      this.returnBusyId.set(null);
+    }
+  }
+
+  requestUnverifiedResolution(row: ReturnRecord, outcome: "restock_after_count" | "not_found") {
+    if (this.returnBusyId()) return;
+    this.returnFeedback.set(null);
+    this.returnResolution.set({ row, outcome });
+  }
+
+  cancelUnverifiedResolution() {
+    if (this.returnBusyId()) return;
+    this.returnResolution.set(null);
+  }
+
+  async confirmUnverifiedResolution() {
+    const pending = this.returnResolution();
+    if (!pending) return;
+    await this.resolveUnverifiedReturn(pending.row, pending.outcome);
+    this.returnResolution.set(null);
+  }
+
+  /** Costo que solo cuenta como recuperado si el conteo encuentra la pieza. */
+  returnPendingCost(row: ReturnRecord): number {
+    if (row.disposition === "damaged") return 0;
+    return Math.max(0, Number(row.pending_recovery_cost_amount ?? (Number(row.unit_cost || 0) * Number(row.qty || 0))));
+  }
+
+  /**
+   * FIX 03B-1: devolución registrada sin ingreso porque no había evidencia de dónde estaba
+   * la pieza. Solo se reincorpora cuando alguien la contó físicamente.
+   */
+  async resolveUnverifiedReturn(row: ReturnRecord, outcome: "restock_after_count" | "not_found") {
+    if (this.returnBusyId()) return;
+    this.returnBusyId.set(row.return_id);
+    this.error.set(null);
+    this.success.set(null);
+    this.returnFeedback.set(null);
+    try {
+      await this.returnsService.resolveUnverifiedReturn(row, outcome);
+      const text = outcome === "restock_after_count"
+        ? "Devolución reincorporada al inventario tras el conteo."
+        : "Devolución cerrada sin ingreso: la pieza no se encontró.";
+      this.success.set(text);
+      this.returnFeedback.set({ kind: "success", text });
+    } catch (error: any) {
+      this.error.set(error?.message || "No se pudo resolver la devolución");
+      this.returnFeedback.set({ kind: "error", text: error?.message || "No se pudo resolver la devolución." });
+    } finally {
+      this.returnBusyId.set(null);
     }
   }
 
@@ -1114,6 +1184,7 @@ export default class InventarioPage {
   }
 
   returnStatusLabel(row: ReturnRecord): string {
+    if (row.status === "inventory_unverified") return "Sin ingreso · conteo pendiente";
     if (row.status === "restocked") return "Disponible";
     if (row.status === "damaged") return "Dañado";
     return "Revisión";
@@ -1441,6 +1512,10 @@ export default class InventarioPage {
     }
     if (this.deleteDialogItem()) {
       this.cancelRemove();
+      return;
+    }
+    if (this.returnResolution()) {
+      this.cancelUnverifiedResolution();
       return;
     }
     if (this.formDialogOpen()) {
