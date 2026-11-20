@@ -4,6 +4,20 @@ Todos los cambios relevantes del frontend se documentan aquí. El formato sigue
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa
 [Versionado Semántico](https://semver.org/lang/es/).
 
+## [2.4.4] - 2026-11-19
+
+Solo reglas de Firestore; sin cambios en la app. Compatible con backend 2.3.1 y 2.3.2 y con
+cualquier frontend 2.3.x/2.4.x. Las reglas se publican antes de integrar este cambio.
+
+### Corregido
+
+- Validación: vuelve a cargar «Mensaje original». Las reglas no tenían entrada para `raw_posts` y
+  Firestore negaba la lectura a todos, incluido super administrador. Ahora puede leer un mensaje por
+  su id quien pertenece al negocio y tiene la sección Validación o Catálogo; nadie puede listar,
+  consultar, crear, modificar ni borrar mensajes desde la app. Los mensajes sin `business_id`
+  cuentan como «bm».
+- Prueba con las reglas reales en el emulador: `raw-posts-rules.emulator.spec.ts`.
+
 ## [2.4.3] - 2026-11-19
 
 Solo frontend; compatible con backend 2.3.1 y 2.3.2 y con las reglas publicadas para 2.4.0.
