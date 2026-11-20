@@ -1,0 +1,43 @@
+:host { display: block; color: var(--text-main, #1e293b); font: inherit; }
+* { box-sizing: border-box; }
+dialog { width: calc(100% - 24px); max-width: var(--ui-modal-max-width-form, 640px); max-height: calc(100dvh - 24px); margin: auto; padding: 0; border: 1px solid var(--border-subtle, #e2e8f0); border-radius: var(--radius2, 18px); color: inherit; background: var(--card, #fff); box-shadow: var(--shadow, 0 8px 24px #0f172a1a); overflow: hidden; }
+dialog[open] { display: flex; flex-direction: column; }
+dialog::backdrop { background: rgb(15 23 42 / 45%); }
+header, footer { display: flex; align-items: center; gap: var(--ui-space-12, 12px); padding: var(--ui-space-16, 16px); flex: 0 0 auto; }
+header { border-bottom: 1px solid var(--border-subtle, #e2e8f0); }
+header h2 { flex: 1; font-size: 1.125rem; margin: 0; overflow-wrap: anywhere; }
+footer { border-top: 1px solid var(--border-subtle, #e2e8f0); display: grid; padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+.footer-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+footer p { margin: 0; }
+footer .primary { flex: 1; }
+.body { padding: var(--ui-space-16, 16px); overflow-y: auto; overscroll-behavior: contain; min-height: 0; }
+p { margin: 0 0 var(--ui-space-12, 12px); line-height: 1.5; }
+.muted { color: var(--text-muted, #64748b); font-size: .8125rem; line-height: 1.5; }
+fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+legend, .field { font-size: .875rem; font-weight: 600; }
+.presets { display: flex; gap: var(--ui-space-8, 8px); margin: 8px 0 16px; flex-wrap: wrap; }
+.btn { min-width: var(--ui-touch-target-min, 44px); min-height: var(--ui-touch-target-min, 44px); border: 1px solid var(--border-subtle, #e2e8f0); border-radius: var(--ui-radius-md, 12px); padding: 8px 12px; background: var(--card, #fff); color: var(--accent, #1e293b); font: inherit; font-size: .875rem; font-weight: 600; cursor: pointer; overflow-wrap: anywhere; }
+.btn.active, .btn.primary { background: var(--accent, #1e293b); border-color: var(--accent, #1e293b); color: #fff; }
+.btn.icon { padding: 8px; display: grid; place-items: center; }
+.btn:disabled, fieldset:disabled .btn { opacity: .55; cursor: not-allowed; }
+:is(button, input, select):focus-visible { outline: 3px solid var(--focus-ring, #94a3b8); outline-offset: 2px; }
+@media (hover: hover) { .btn:hover:not(:disabled) { box-shadow: inset 0 0 0 1px var(--accent-border, #94a3b8); } }
+.field { display: grid; gap: 8px; margin-bottom: 16px; }
+input[type=number], select { width: 100%; min-width: 0; min-height: var(--ui-control-height-comfortable, 48px); border: 1px solid var(--border-subtle, #e2e8f0); border-radius: 12px; padding: 8px; font: inherit; font-size: 1rem; color: inherit; background: var(--card, #fff); }
+input[type=checkbox] { width: 20px; height: 20px; flex: 0 0 auto; accent-color: var(--accent, #1e293b); }
+.preview-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+h3 { font-size: .875rem; margin: 8px 0; }
+.check { display: flex; gap: 8px; align-items: center; min-height: 44px; font-size: .875rem; cursor: pointer; }
+.preview-list { list-style: none; padding: 0; margin: 0; }
+.preview-list li { display: flex; flex-wrap: wrap; gap: 8px 16px; padding: 12px 0; border-top: 1px solid var(--border-subtle, #e2e8f0); font-size: .875rem; }
+.product { display: grid; gap: 4px; flex: 1 1 220px; min-width: 0; overflow-wrap: anywhere; }
+.product-check { font-weight: 600; }
+.prices { display: grid; align-content: center; gap: 4px; }
+.totals { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; font-size: .875rem; }
+.totals > span { display: grid; gap: 4px; }
+.error { color: #991b1b; background: var(--danger-soft, #fef2f2); padding: 12px; border-radius: 12px; }
+.notice, .empty { padding: 12px; border-radius: 12px; background: var(--accent-soft, #f1f5f9); font-size: .875rem; }
+.promotion-result { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; border: 1px solid var(--border-subtle, #e2e8f0); border-radius: 12px; padding: 12px; margin: 12px 0; background: var(--accent-soft, #f1f5f9); }
+.promotion-result p { flex: 1 1 200px; margin: 0; font-size: .875rem; overflow-wrap: anywhere; }
+progress { width: 100%; accent-color: var(--accent, #1e293b); }
+@media (min-width: 768px) { .body, header, footer { padding: var(--ui-space-24, 24px); } .prices { text-align: right; } }

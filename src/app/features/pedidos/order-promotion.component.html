@@ -1,0 +1,85 @@
+@if (result()) {
+  <div class="promotion-result">
+    <span class="material-symbols-rounded" aria-hidden="true">local_offer</span>
+    <p role="status">{{ result() }}</p>
+    @if (undoChanges().length && editable()) {
+      <button type="button" class="btn" [disabled]="saving()" (click)="save(true)">{{ saving() ? 'Restaurando…' : 'Deshacer' }}</button>
+    }
+  </div>
+}
+@if (error() && !open()) { <p class="error" role="alert">{{ error() }}</p> }
+<dialog #dialog aria-labelledby="promotion-title" aria-describedby="promotion-description" (cancel)="close($event)" (keydown)="onDialogKeydown($event)">
+  <header>
+    <h2 id="promotion-title">Aplicar promoción a productos</h2>
+    <button type="button" class="btn icon" aria-label="Cerrar promoción" [disabled]="saving()" (click)="close()"><span class="material-symbols-rounded" aria-hidden="true">close</span></button>
+  </header>
+  <div class="body" [attr.aria-busy]="saving()">
+    <p id="promotion-description" class="muted">Reemplaza el descuento actual sobre el precio público. Solo aplica a los productos de este pedido.</p>
+    <fieldset [disabled]="saving()">
+      <legend>Descuento de promoción</legend>
+      <div class="presets">
+        @for (value of [30, 35, 40]; track value) {
+          <button type="button" class="btn" [class.active]="preset() === value" [attr.aria-pressed]="preset() === value" (click)="choosePreset(value)">{{ value }} %</button>
+        }
+        <button type="button" class="btn" [class.active]="preset() === 'custom'" [attr.aria-pressed]="preset() === 'custom'" (click)="choosePreset('custom')">Otro</button>
+      </div>
+      @if (preset() === 'custom') {
+        <label class="field" for="promotion-percent">Porcentaje (%)
+          <input id="promotion-percent" type="number" min="0.01" max="99.99" step="0.01" inputmode="decimal" [ngModel]="percent()" (ngModelChange)="percent.set($event)" [attr.aria-invalid]="!validPercent()" aria-describedby="promotion-percent-help" />
+        </label>
+        <p id="promotion-percent-help" [class.error]="!validPercent()" class="muted">Ingresa un porcentaje mayor que 0 y menor que 100.</p>
+      }
+      <label class="field" for="promotion-scope">Aplicar a
+        <select id="promotion-scope" [ngModel]="scope()" (ngModelChange)="scope.set($event)">
+          <option value="standard">Productos con 25 % de descuento</option>
+          <option value="all">Todos los productos elegibles</option>
+          <option value="selected">Elegir productos</option>
+        </select>
+      </label>
+      @if (increases()) { <p class="notice">{{ increases() }} productos subirán de precio porque actualmente tienen un descuento mayor.</p> }
+      <div class="preview-head">
+        <h3>Vista previa · {{ changes().length }} cambios</h3>
+        @if (scope() === 'selected') {
+          <label class="check"><input #selectAll type="checkbox" [checked]="allSelected()" [disabled]="!eligible().length" (change)="toggleAll(selectAll.checked)" />Seleccionar todos</label>
+        }
+      </div>
+      <p class="muted">Precios por pieza. {{ skipped() }} productos no elegibles.</p>
+      @if (!rows().length) { <p class="empty">Este pedido no tiene productos.</p> }
+      @else {
+        <ul class="preview-list">
+          @for (row of rows(); track row.item.item_id) {
+            <li [class.excluded]="!row.selected">
+              <div class="product">
+                @if (scope() === 'selected') {
+                  <label class="check product-check"><input #selectItem type="checkbox" [checked]="row.selected" [disabled]="!!row.reason" (change)="toggleItem(row.item.item_id, selectItem.checked)" /><span>{{ row.item.title }}</span></label>
+                } @else { <strong>{{ row.item.title }}</strong> }
+                <span class="muted">{{ row.item.variant || 'Sin talla' }} · {{ row.item.color || 'Sin color' }} · {{ row.item.quantity }} piezas</span>
+                @if (row.reason) { <span class="muted">{{ row.reason }}</span> }
+                @else if (!row.selected) { <span class="muted">Fuera de la selección</span> }
+              </div>
+              <div class="prices">
+                <span class="muted">Actual {{ row.before | currency:'MXN':'symbol-narrow':'1.2-2' }}</span>
+                <strong>{{ row.selected ? 'Nuevo' : 'Sin cambio' }} {{ (row.selected ? row.after : row.before) | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong>
+              </div>
+            </li>
+          }
+        </ul>
+      }
+    </fieldset>
+    @if (!changes().length && rows().length) { <p class="empty">No hay precios que cambiar con esta selección. Prueba otro alcance o porcentaje.</p> }
+    <p class="muted">Paquetería: {{ (order().totals.shipping_fee || 0) | currency:'MXN':'symbol-narrow':'1.2-2' }} · Descuento global: {{ (order().totals.discount_amount || 0) | currency:'MXN':'symbol-narrow':'1.2-2' }}. El total considera las piezas confirmadas y las devoluciones; el descuento global se limita al importe de productos.</p>
+    @if (!editable()) { <p class="error">Este pedido ya no permite editar productos.</p> }
+  </div>
+  <footer>
+    <div class="totals">
+      <span>Total del pedido <span class="muted">{{ totals().before | currency:'MXN':'symbol-narrow':'1.2-2' }}</span></span>
+      <span>Con promoción <strong>{{ totals().after | currency:'MXN':'symbol-narrow':'1.2-2' }}</strong></span>
+    </div>
+    @if (error()) { <p class="error" role="alert">{{ error() }}</p> }
+    @if (saving()) { <p role="status">Guardando promoción en {{ savingCount() }} productos…</p><progress aria-label="Guardando promoción"></progress> }
+    <div class="footer-actions">
+      <button type="button" class="btn" [disabled]="saving()" (click)="close()">Cancelar</button>
+      <button type="button" class="btn primary" [disabled]="saving() || !editable() || !validPercent() || !changes().length" (click)="save()">{{ saving() ? 'Guardando…' : validPercent() ? 'Aplicar ' + percent() + ' % a ' + changes().length + ' productos' : 'Aplicar promoción' }}</button>
+    </div>
+  </footer>
+</dialog>

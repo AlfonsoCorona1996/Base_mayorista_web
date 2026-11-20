@@ -4,6 +4,15 @@ Todos los cambios relevantes del frontend se documentan aquí. El formato sigue
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa
 [Versionado Semántico](https://semver.org/lang/es/).
 
+## [2.5.0] - 2026-11-19
+
+### Añadido
+
+- Pedidos: promoción masiva desde el menú general de productos, con porcentajes 30/35/40 o personalizado, selección por descuento actual del 25 %, todos los elegibles o productos específicos, vista previa por pieza y total del pedido.
+- Guardado con estado visible, resumen del resultado y deshacer durante la sesión que recupera los precios anteriores sin sobrescribir cambios posteriores de precio. Los artículos sin precio público válido, cancelados, con devoluciones o cuyo precio quedaría debajo del costo se excluyen con su motivo.
+
+Solo frontend; reutiliza la actualización de artículos existente, sin cambios de API ni reglas de Firestore.
+
 ## [2.4.3] - 2026-11-19
 
 Solo frontend; compatible con backend 2.3.1 y 2.3.2 y con las reglas publicadas para 2.4.0.

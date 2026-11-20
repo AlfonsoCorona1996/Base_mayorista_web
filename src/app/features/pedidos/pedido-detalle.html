@@ -834,6 +834,12 @@
                 <button type="button" class="products-more-backdrop" aria-label="Cerrar más acciones" (click)="closeProductsMenu()"></button>
                 <div id="products-more-menu" class="products-more-menu" role="menu" aria-label="Más acciones de productos">
                   <p class="products-more-title">Más acciones</p>
+                  @if (vm.canEditItems) {
+                    <button type="button" role="menuitem" (click)="closeProductsMenu(); closeQuickDiscount(); promotionOpen.set(true)">
+                      <span class="material-symbols-rounded" aria-hidden="true">sell</span>
+                      <span>Aplicar promoción a productos</span>
+                    </button>
+                  }
                   @if (vm.canAddProducts && orderBusinessId(current) === "bm") {
                     <button type="button" role="menuitem" (click)="openCrossBusinessCatalogModal()">
                       <span class="material-symbols-rounded" aria-hidden="true">storefront</span>
@@ -864,6 +870,7 @@
           Puedes entregar la nota y despues sustituirlos por catalogo o inventario.
         </p>
       }
+      <app-order-promotion [order]="current" [editable]="vm.canEditItems" [(open)]="promotionOpen" />
       @if (current.items.length > 0) {
         <div class="products-toolbar" role="tablist" aria-label="Filtro de productos por stock">
           <button
