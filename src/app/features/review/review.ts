@@ -575,7 +575,11 @@ export default class ReviewPage {
       const colorSets = clone.listing.items.map(item => JSON.stringify(
         [...new Set(item.color_stock.map(entry => entry.color_name.trim()))].sort()
       ));
-      this.hasVariantColors.set(new Set(colorSets).size > 1);
+      // Colores distintos por talla solo si una persona ya guardó el producto así. En una
+      // extracción nueva la IA suele repartir los colores de las fotos entre las tallas
+      // (CH beige, M vino…); por defecto todas las tallas llevan todos los colores.
+      const reviewedByPerson = Boolean(clone.review?.edited_at);
+      this.hasVariantColors.set(reviewedByPerson && new Set(colorSets).size > 1);
 
       // Inicializar colores desde variantes existentes (ahora con product_colors si es v1.1)
       this.initializeImageColors();

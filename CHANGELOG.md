@@ -11,6 +11,7 @@ Solo frontend; compatible con backend 2.3.1 y con las reglas publicadas para 2.4
 ### Corregido
 
 - Detalle del pedido: ya no aparece «No se pudo cargar: responsables». La lista de sugerencias de «Asignar a» se leía de la colección `admins`, que está vacía y no tiene reglas, por lo que Firestore siempre la negaba. Ahora sugiere los responsables ya usados en las incidencias del pedido y a la persona en sesión, sin consultas adicionales.
+- Validación: en un producto recién extraído, todas las tallas vuelven a llevar todos los colores del producto (como en 2.3.0). En 2.4.1, si la IA repartía los colores de las fotos entre las tallas, se activaba sola la opción «Las variantes usan colores distintos» y se guardaba un color por talla. Ahora esa opción solo se activa sola en productos que una persona ya guardó con colores por talla.
 
 ## [2.4.1] - 2026-11-18
 

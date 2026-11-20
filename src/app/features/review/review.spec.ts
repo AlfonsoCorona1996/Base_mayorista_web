@@ -174,8 +174,26 @@ describe("ReviewPage colores y precios con contexto original inaccesible", () =>
     expect(listing.items.every(item => item.prices.precio_final === 360)).toBeTrue();
   });
 
-  it("conserva precios diferentes y colores específicos por talla al guardar", async () => {
+  it("en una extracción nueva no reparte colores por talla: todas las tallas llevan todos los colores", async () => {
+    const source = listingWithVariants("listing-bomber", [
+      { name: "CH", sku: "CH", colors: ["beige"] },
+      { name: "M", sku: "M", colors: ["vino"] },
+      { name: "G", sku: "G", colors: ["café"] },
+    ]);
+    source.product_colors = ["beige", "vino", "café", "camel"].map(name => ({ name, image_url: `https://example.test/${name}.jpg` }));
+    const { page, listings } = setup(source);
+    await page.load();
+    expect(page.hasVariantColors()).toBeFalse();
+    await page.save();
+    const items = (listings.saveReviewDecision.calls.mostRecent().args[1].listing as NormalizedListingDocV3["listing"]).items;
+    for (const item of items) {
+      expect(item.color_stock.map(color => color.color_name)).toEqual(["beige", "vino", "café", "camel"]);
+    }
+  });
+
+  it("conserva precios diferentes y colores específicos por talla que una persona ya guardó", async () => {
     const source = partialListing();
+    source.review = { preview_image_url: null, excluded_image_urls: [], edited_at: { seconds: 1 }, edited_by: "user-1" };
     source.listing.items[1].prices = { precio_final: 400, precio_costo: 200, precio_clienta: 300, currency: "MXN" };
     source.listing.items[1].color_stock = [{ color_name: "azul", stock_state: "out_of_stock" }];
     const { page, listings } = setup(source);
