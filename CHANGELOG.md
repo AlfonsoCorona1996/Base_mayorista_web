@@ -4,6 +4,14 @@ Todos los cambios relevantes del frontend se documentan aquí. El formato sigue
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa
 [Versionado Semántico](https://semver.org/lang/es/).
 
+## [2.4.3] - 2026-11-19
+
+Solo frontend; compatible con backend 2.3.1 y 2.3.2 y con las reglas publicadas para 2.4.0.
+
+### Corregido
+
+- Validación: en un producto recién extraído, todas las tallas vuelven a llevar todos los colores del producto (como en 2.3.0). En 2.4.1, si la IA repartía los colores de las fotos entre las tallas, se activaba sola la opción «Las variantes usan colores distintos» y se guardaba un color por talla. Ahora esa opción solo se activa sola en productos que una persona ya guardó con colores por talla.
+
 ## [2.4.2] - 2026-11-18
 
 Solo frontend; compatible con backend 2.3.1 y con las reglas publicadas para 2.4.0.
