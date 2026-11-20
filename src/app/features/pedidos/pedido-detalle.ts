@@ -43,6 +43,7 @@ import { ApiError, UserAdminApiService } from "../../services/user-admin-api.ser
 import { FIRESTORE, STORAGE } from "../../core/firebase.providers";
 import { ActivityLogComponent } from "../../shared/components/activity-log/activity-log.component";
 import { ClientaDiscountPanelComponent } from "../../shared/components/clienta-discount-panel/clienta-discount-panel.component";
+import { OrderPromotionComponent } from "./order-promotion.component";
 import {
   AddItemProductSelectionComponent,
   CatalogProductOption,
@@ -313,6 +314,7 @@ const CATALOG_QUERY_SYNONYMS: Record<string, string[]> = {
     NgStyle,
     ActivityLogComponent,
     ClientaDiscountPanelComponent,
+    OrderPromotionComponent,
     AddItemProductSelectionComponent,
     BarcodeScannerComponent,
     ImageZoomViewerComponent,
@@ -468,6 +470,7 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   imagePreviewLoading = signal(false);
   openProductMenuId = signal<string | null>(null);
   productsMenuOpen = signal(false);
+  promotionOpen = signal(false);
   generatingSalesNote = signal(false);
   sendingWaNote       = signal(false);
   waNoteSent          = signal<{ ok: boolean; msg?: string } | null>(null);
