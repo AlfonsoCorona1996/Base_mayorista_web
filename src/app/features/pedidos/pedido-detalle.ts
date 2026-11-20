@@ -65,7 +65,7 @@ import { deliveryInventoryOpen, planPackageDelivery } from "../../core/delivery-
 
 type SecondaryDependency =
   | "customers" | "suppliers" | "routes" | "localities" | "inventory"
-  | "finance_accounts" | "expense_reports" | "supplier_operations" | "assignees";
+  | "finance_accounts" | "expense_reports" | "supplier_operations";
 
 const SECONDARY_DEPENDENCY_LABELS: Record<SecondaryDependency, string> = {
   customers: "clientas",
@@ -76,7 +76,6 @@ const SECONDARY_DEPENDENCY_LABELS: Record<SecondaryDependency, string> = {
   finance_accounts: "cuentas de dinero",
   expense_reports: "reportes de gastos",
   supplier_operations: "recepciones de proveedor",
-  assignees: "responsables",
 };
 
 /** Ventana en la que el detalle reutiliza dependencias ya cargadas al volver a entrar. */
@@ -818,7 +817,19 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
   lockItemFields = signal(false);
   catalogVariantOptions = signal<string[]>([]);
   catalogColorOptions = signal<string[]>([]);
-  assigneeOptions = signal<string[]>([]);
+  /**
+   * Sugerencias para «Asignar a» (texto libre): responsables ya usados en las incidencias de
+   * este pedido y la persona en sesión. No consulta Firestore: la colección `admins` que se
+   * leía antes está vacía y sin reglas, y listar `users` solo lo permite super_admin.
+   */
+  assigneeOptions = computed(() => {
+    const user = this.authz.currentUserSig();
+    const names = [
+      ...this.incidents().map((incident) => incident.assigneeId ?? ""),
+      user?.displayName || user?.username || "",
+    ].map((name) => String(name).trim()).filter(Boolean);
+    return Array.from(new Set(names)).sort((a, b) => a.localeCompare(b, "es"));
+  });
   supplierOptions = computed(() => this.suppliers.getActive());
   inventoryById = computed(() => {
     const map = new Map<string, InventoryItem>();
@@ -1398,7 +1409,6 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       run("expense_reports", () => this.operationalExpenseReports.loadAll(), true),
       // Solo las líneas de este pedido; siempre frescas porque deciden botones de recepción.
       run("supplier_operations", () => this.supplierOperations.loadForOrder(orderId, this.order()?.business_id), false),
-      run("assignees", () => this.loadAssigneeOptions(), true),
     ]);
     if (this.dependencyState()["inventory"] === "error") this.inventorySourceError.set("No se pudo actualizar el inventario.");
     if (this.dependencyState()["finance_accounts"] === "error") this.financeAccountsLoadError.set("No se pudieron cargar las cuentas de dinero.");
@@ -1457,26 +1467,6 @@ export default class PedidoDetallePage implements OnInit, OnDestroy {
       this.incidents.update((current) => current.filter((row) => row.id !== optimisticId));
       throw error;
     }
-  }
-
-  async loadAssigneeOptions() {
-    const snap = await getDocs(collection(FIRESTORE, "admins"));
-    const names = snap.docs
-      .map((docSnap) => {
-        const data = docSnap.data() as Record<string, any>;
-        const fullName = `${data["first_name"] ?? ""} ${data["last_name"] ?? ""}`.trim();
-        return (
-          data["display_name"] ||
-          data["name"] ||
-          data["full_name"] ||
-          fullName ||
-          data["email"] ||
-          ""
-        ).toString().trim();
-      })
-      .filter(Boolean)
-      .sort((a, b) => a.localeCompare(b));
-    this.assigneeOptions.set(Array.from(new Set(names)));
   }
 
   itemHasOpenIncident(itemId: string): boolean {
