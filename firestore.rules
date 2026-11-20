@@ -696,6 +696,14 @@ service cloud.firestore {
       allow delete: if canReadBusinessResource() && isSuperAdmin();
     }
 
+    // Mensaje original de WhatsApp que muestra Validación. Lo escribe solo el backend (Admin SDK);
+    // la app lo lee por id. Los documentos reales no tienen business_id: cuentan como "bm".
+    // (resourceBusinessId() no sirve aquí: leer un campo inexistente es un error, no null.)
+    match /raw_posts/{rawPostId} {
+      allow get: if hasBusiness(resource.data.get("business_id", "bm"))
+        && (sectionOn("sections.validacion") || sectionOn("sections.catalogo"));
+    }
+
     match /catalog_products/{productId} {
       allow read: if canReadBusinessResource() && hasSection("sections.catalogo");
       // El catálogo v2 se escribe exclusivamente desde el backend con Admin SDK.
